@@ -159,17 +159,77 @@ const Dashboard = () => {
         transition={{ delay: 0.35 }}
         className="rounded-2xl border border-border bg-card p-6 shadow-card"
       >
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-info/10">
-            <BarChart3 className="h-4 w-4 text-info" />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-info/10">
+              <BarChart3 className="h-4 w-4 text-info" />
+            </div>
+            <h2 className="font-display text-lg font-semibold text-foreground">Performance Overview</h2>
           </div>
-          <h2 className="font-display text-lg font-semibold text-foreground">Performance Overview</h2>
+          <div className="flex items-center gap-2">
+            {metrics.map((m) => (
+              <button
+                key={m.key}
+                onClick={() => setActiveMetrics(prev => 
+                  prev.includes(m.key) 
+                    ? prev.filter(k => k !== m.key) 
+                    : [...prev, m.key]
+                )}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                  activeMetrics.includes(m.key)
+                    ? "ring-1 ring-border bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span className="h-2 w-2 rounded-full" style={{ background: m.color, opacity: activeMetrics.includes(m.key) ? 1 : 0.3 }} />
+                {m.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="mt-6 flex h-52 items-center justify-center rounded-xl bg-muted/30 border border-border/50 dot-pattern">
-          <div className="text-center">
-            <BarChart3 className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">กราฟแสดงผลประสิทธิภาพจะแสดงเมื่อเชื่อมต่อ Backend</p>
-          </div>
+        <div className="mt-6 h-72 sm:h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={analyticsData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gradViews" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradClicks" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="hsl(var(--info))" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="hsl(var(--info))" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradConversions" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="hsl(var(--success))" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="hsl(var(--success))" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+              <XAxis dataKey="date" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} />
+              <Tooltip
+                contentStyle={{
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "12px",
+                  boxShadow: "0 8px 32px -8px hsl(var(--foreground) / 0.15)",
+                  padding: "12px 16px",
+                }}
+                labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600, marginBottom: 4 }}
+                itemStyle={{ color: "hsl(var(--muted-foreground))", fontSize: 13 }}
+                formatter={(value: number) => [value.toLocaleString(), undefined]}
+              />
+              {activeMetrics.includes("views") && (
+                <Area type="monotone" dataKey="views" name="Views" stroke="hsl(var(--primary))" strokeWidth={2.5} fill="url(#gradViews)" dot={{ r: 4, fill: "hsl(var(--primary))", strokeWidth: 0 }} activeDot={{ r: 6, strokeWidth: 2, stroke: "hsl(var(--card))" }} />
+              )}
+              {activeMetrics.includes("clicks") && (
+                <Area type="monotone" dataKey="clicks" name="Clicks" stroke="hsl(var(--info))" strokeWidth={2.5} fill="url(#gradClicks)" dot={{ r: 4, fill: "hsl(var(--info))", strokeWidth: 0 }} activeDot={{ r: 6, strokeWidth: 2, stroke: "hsl(var(--card))" }} />
+              )}
+              {activeMetrics.includes("conversions") && (
+                <Area type="monotone" dataKey="conversions" name="Conversions" stroke="hsl(var(--success))" strokeWidth={2.5} fill="url(#gradConversions)" dot={{ r: 4, fill: "hsl(var(--success))", strokeWidth: 0 }} activeDot={{ r: 6, strokeWidth: 2, stroke: "hsl(var(--card))" }} />
+              )}
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       </motion.div>
     </div>
