@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Upload, Link2, Type, Sparkles, Image, Video, Wand2, ChevronRight } from "lucide-react";
+import { Upload, Link2, Type, Sparkles, Image, Video, Wand2, ChevronRight, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,10 +45,9 @@ const CreateReel = () => {
         ))}
       </div>
 
-      {/* Step 1: Input */}
+      {/* Step 1 */}
       {step === 1 && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-          {/* Input type selection */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {inputOptions.map(({ type, icon: Icon, label, desc }) => (
               <button
@@ -67,7 +66,6 @@ const CreateReel = () => {
             ))}
           </div>
 
-          {/* Input fields */}
           <div className="rounded-xl border border-border bg-card p-6 shadow-card">
             {inputType === "link" && (
               <div className="space-y-4">
@@ -119,7 +117,7 @@ const CreateReel = () => {
         </motion.div>
       )}
 
-      {/* Step 2: AI Processing */}
+      {/* Step 2 */}
       {step === 2 && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
           <div className="rounded-xl border border-border bg-card p-8 shadow-card">
@@ -142,7 +140,6 @@ const CreateReel = () => {
             </div>
           </div>
 
-          {/* AI Generated Caption Preview */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="rounded-xl border border-border bg-card p-6 shadow-card">
               <h3 className="font-display font-semibold text-foreground">📝 Generated Caption (Instagram)</h3>
@@ -170,11 +167,10 @@ const CreateReel = () => {
         </motion.div>
       )}
 
-      {/* Step 3: Preview */}
+      {/* Step 3 */}
       {step === 3 && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-            {/* Video Preview */}
             <div className="flex flex-col items-center">
               <div className="aspect-[9/16] w-full max-w-[300px] overflow-hidden rounded-2xl border border-border bg-muted shadow-card">
                 <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
@@ -186,23 +182,20 @@ const CreateReel = () => {
               </div>
             </div>
 
-            {/* Details */}
             <div className="space-y-6">
               <div className="rounded-xl border border-border bg-card p-6 shadow-card">
                 <h3 className="font-display font-semibold text-foreground">Reel Details</h3>
                 <div className="mt-4 space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Duration</span>
-                    <span className="text-foreground">30 seconds</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Style</span>
-                    <span className="text-foreground">Cinematic B-Roll</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Resolution</span>
-                    <span className="text-foreground">1080 × 1920</span>
-                  </div>
+                  {[
+                    ["Duration", "30 seconds"],
+                    ["Style", "Cinematic B-Roll"],
+                    ["Resolution", "1080 × 1920"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">{label}</span>
+                      <span className="text-foreground">{value}</span>
+                    </div>
+                  ))}
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Affiliate Link</span>
                     <span className="text-primary">Embedded ✓</span>
@@ -229,5 +222,4 @@ const CreateReel = () => {
   );
 };
 
-import { Send } from "lucide-react";
 export default CreateReel;
