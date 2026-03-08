@@ -1,0 +1,139 @@
+import { motion } from "framer-motion";
+import { Send, Instagram, Facebook, CheckCircle2, Clock, AlertCircle, Settings, ToggleLeft, ToggleRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+
+interface Platform {
+  id: string;
+  name: string;
+  icon: string;
+  connected: boolean;
+  reelsPosted: number;
+  status: "connected" | "disconnected" | "pending";
+}
+
+const initialPlatforms: Platform[] = [
+  { id: "ig", name: "Instagram", icon: "📸", connected: true, reelsPosted: 45, status: "connected" },
+  { id: "fb", name: "Facebook", icon: "📘", connected: true, reelsPosted: 32, status: "connected" },
+  { id: "tt", name: "TikTok", icon: "🎵", connected: false, reelsPosted: 0, status: "disconnected" },
+  { id: "yt", name: "YouTube Shorts", icon: "🎬", connected: false, reelsPosted: 0, status: "disconnected" },
+];
+
+const scheduledPosts = [
+  { id: 1, title: "Summer Collection Promo", platforms: ["Instagram", "Facebook"], scheduledAt: "Mar 9, 2026 — 18:00", status: "scheduled" },
+  { id: 2, title: "Watch Unboxing Reel", platforms: ["Instagram"], scheduledAt: "Mar 10, 2026 — 12:00", status: "scheduled" },
+  { id: 3, title: "Skincare Bundle", platforms: ["Facebook", "TikTok"], scheduledAt: "Mar 8, 2026 — 09:00", status: "posted" },
+];
+
+const Distribution = () => {
+  const [platforms, setPlatforms] = useState(initialPlatforms);
+
+  const togglePlatform = (id: string) => {
+    setPlatforms((prev) =>
+      prev.map((p) =>
+        p.id === id ? { ...p, connected: !p.connected, status: p.connected ? "disconnected" : "connected" } : p
+      )
+    );
+  };
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="font-display text-3xl font-bold text-foreground">Distribution</h1>
+        <p className="mt-1 text-muted-foreground">เชื่อมต่อแพลตฟอร์มและโพสต์ Reel อัตโนมัติ</p>
+      </div>
+
+      {/* Platform Connections */}
+      <div>
+        <h2 className="font-display text-lg font-semibold text-foreground">Connected Platforms</h2>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {platforms.map((platform, i) => (
+            <motion.div
+              key={platform.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              className={`rounded-xl border p-6 transition-all ${
+                platform.connected
+                  ? "border-primary/30 bg-card shadow-glow"
+                  : "border-border bg-card"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">{platform.icon}</span>
+                  <div>
+                    <h3 className="font-display font-semibold text-foreground">{platform.name}</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {platform.connected ? `${platform.reelsPosted} Reels posted` : "Not connected"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {platform.connected && (
+                    <span className="flex items-center gap-1 text-xs text-success">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Active
+                    </span>
+                  )}
+                  <button onClick={() => togglePlatform(platform.id)} className="text-muted-foreground">
+                    {platform.connected ? (
+                      <ToggleRight className="h-6 w-6 text-primary" />
+                    ) : (
+                      <ToggleLeft className="h-6 w-6" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* Scheduled Posts */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-lg font-semibold text-foreground">Scheduled Posts</h2>
+          <Button variant="outline" size="sm" className="gap-2">
+            <Settings className="h-4 w-4" />
+            Auto-Schedule Settings
+          </Button>
+        </div>
+        <div className="mt-4 rounded-xl border border-border bg-card shadow-card">
+          <div className="divide-y divide-border">
+            {scheduledPosts.map((post) => (
+              <div key={post.id} className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-muted/50">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                  <Send className="h-4 w-4 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-foreground">{post.title}</p>
+                  <p className="text-xs text-muted-foreground">{post.platforms.join(", ")}</p>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  {post.scheduledAt}
+                </div>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    post.status === "posted"
+                      ? "bg-success/10 text-success"
+                      : "bg-info/10 text-info"
+                  }`}
+                >
+                  {post.status === "posted" ? "Posted" : "Scheduled"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+export default Distribution;
