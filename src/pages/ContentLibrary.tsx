@@ -18,12 +18,12 @@ const ContentLibrary = () => {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-3xl font-bold text-foreground">Content Library</h1>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Content Library</h1>
           <p className="mt-1 text-muted-foreground">จัดการ Reel ทั้งหมดของคุณ</p>
         </div>
-        <Button className="gradient-primary gap-2 text-primary-foreground shadow-glow">
+        <Button className="gradient-primary gap-2 text-primary-foreground shadow-glow w-full sm:w-auto">
           <Video className="h-4 w-4" />
           Create New
         </Button>

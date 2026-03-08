@@ -39,16 +39,30 @@ const Dashboard = () => {
         </div>
         <div className="divide-y divide-border">
           {recentReels.map((reel) => (
-            <div key={reel.id} className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-muted/50">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
-                <Play className="h-5 w-5 text-primary" />
+            <div key={reel.id} className="flex items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4 transition-colors hover:bg-muted/50">
+              <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-lg bg-muted">
+                <Play className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">{reel.title}</p>
-                <p className="text-xs text-muted-foreground">{reel.platform}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">{reel.title}</p>
+                <div className="flex items-center gap-2 sm:hidden mt-1">
+                  <span className="text-xs text-muted-foreground">{reel.platform}</span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      reel.status === "Published"
+                        ? "bg-success/10 text-success"
+                        : reel.status === "Processing"
+                        ? "bg-warning/10 text-warning"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {reel.status}
+                  </span>
+                </div>
+                <p className="hidden sm:block text-xs text-muted-foreground">{reel.platform}</p>
               </div>
               <span
-                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                className={`hidden sm:inline-block rounded-full px-3 py-1 text-xs font-medium ${
                   reel.status === "Published"
                     ? "bg-success/10 text-success"
                     : reel.status === "Processing"
@@ -58,11 +72,11 @@ const Dashboard = () => {
               >
                 {reel.status}
               </span>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <div className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
                 <Eye className="h-3 w-3" />
                 {reel.views}
               </div>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 {reel.date}
               </div>
