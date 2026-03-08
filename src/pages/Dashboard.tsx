@@ -31,6 +31,7 @@ const recentReels = [
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const [activeMetrics, setActiveMetrics] = useState<string[]>(["views", "clicks", "conversions"]);
 
   return (
     <div className="space-y-8">
