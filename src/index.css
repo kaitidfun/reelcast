@@ -39,9 +39,13 @@
     --gradient-primary: linear-gradient(135deg, hsl(15 90% 58%), hsl(330 80% 60%));
     --gradient-surface: linear-gradient(180deg, hsl(220 18% 10%), hsl(220 20% 6%));
     --gradient-glow: radial-gradient(ellipse at 50% 0%, hsl(15 90% 58% / 0.15), transparent 60%);
+    --gradient-subtle: linear-gradient(135deg, hsl(220 18% 10%), hsl(220 20% 7%));
+    --gradient-card-hover: linear-gradient(135deg, hsl(15 90% 58% / 0.05), hsl(330 80% 60% / 0.05));
 
     --shadow-glow: 0 0 40px hsl(15 90% 58% / 0.15);
     --shadow-card: 0 4px 24px hsl(0 0% 0% / 0.3);
+    --shadow-elevated: 0 8px 32px hsl(0 0% 0% / 0.4), 0 0 0 1px hsl(220 14% 16% / 0.5);
+    --shadow-glow-lg: 0 0 60px hsl(15 90% 58% / 0.2), 0 0 20px hsl(330 80% 60% / 0.1);
 
     --sidebar-background: 220 20% 6%;
     --sidebar-foreground: 0 0% 80%;
@@ -90,12 +94,24 @@
     background: var(--gradient-glow);
   }
 
+  .gradient-subtle {
+    background: var(--gradient-subtle);
+  }
+
   .shadow-glow {
     box-shadow: var(--shadow-glow);
   }
 
   .shadow-card {
     box-shadow: var(--shadow-card);
+  }
+
+  .shadow-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .shadow-glow-lg {
+    box-shadow: var(--shadow-glow-lg);
   }
 
   .text-gradient {
@@ -109,5 +125,68 @@
     background: hsl(220 18% 8% / 0.7);
     backdrop-filter: blur(12px);
     border: 1px solid hsl(220 14% 16% / 0.5);
+  }
+
+  .glass-strong {
+    background: hsl(220 18% 8% / 0.85);
+    backdrop-filter: blur(20px);
+    border: 1px solid hsl(220 14% 18% / 0.6);
+  }
+
+  .border-gradient {
+    border: 1px solid transparent;
+    background-clip: padding-box;
+    position: relative;
+  }
+
+  .border-gradient::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--gradient-primary);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0.3;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+
+  .border-gradient:hover::before {
+    opacity: 0.6;
+  }
+
+  .card-shine {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card-shine::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      105deg,
+      transparent 40%,
+      hsl(0 0% 100% / 0.03) 45%,
+      hsl(0 0% 100% / 0.05) 50%,
+      hsl(0 0% 100% / 0.03) 55%,
+      transparent 60%
+    );
+    pointer-events: none;
+    transition: transform 0.5s ease;
+    transform: translateX(-100%);
+  }
+
+  .card-shine:hover::after {
+    transform: translateX(100%);
+  }
+
+  .dot-pattern {
+    background-image: radial-gradient(circle, hsl(220 14% 20%) 1px, transparent 1px);
+    background-size: 24px 24px;
   }
 }

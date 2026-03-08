@@ -1,6 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Video, Library, Link2, Send, Sparkles, Menu, X } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { LayoutDashboard, Video, Library, Link2, Send, Sparkles, Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useState } from "react";
 
@@ -23,8 +22,8 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
           <Sparkles className="h-5 w-5 text-primary-foreground" />
         </div>
         <div>
-          <h1 className="font-display text-lg font-bold text-foreground">ReelForge</h1>
-          <p className="text-xs text-muted-foreground">AI Content Studio</p>
+          <h1 className="font-display text-lg font-bold text-foreground tracking-tight">ReelForge</h1>
+          <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">AI Content Studio</p>
         </div>
       </div>
 
@@ -37,13 +36,13 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
               key={to}
               to={to}
               onClick={onNavigate}
-              className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200 ${
+              className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
                 isActive
                   ? "gradient-primary text-primary-foreground shadow-glow"
                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               }`}
             >
-              <Icon className="h-5 w-5" />
+              <Icon className={`h-[18px] w-[18px] transition-transform duration-200 ${!isActive ? "group-hover:scale-110" : ""}`} />
               {label}
             </NavLink>
           );
@@ -52,12 +51,15 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
 
       {/* Bottom */}
       <div className="border-t border-border p-4">
-        <div className="rounded-lg bg-muted p-4">
-          <p className="text-xs font-medium text-foreground">AI Credits</p>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-border">
-            <div className="h-full w-3/4 rounded-full gradient-primary" />
+        <div className="rounded-xl bg-muted/50 p-4 ring-1 ring-border">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-foreground">AI Credits</p>
+            <p className="text-xs font-medium text-primary">75%</p>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">750 / 1,000 remaining</p>
+          <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-border">
+            <div className="h-full w-3/4 rounded-full gradient-primary transition-all duration-500" />
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">750 / 1,000 remaining</p>
         </div>
       </div>
     </>
@@ -68,10 +70,10 @@ export const MobileHeader = () => {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-border bg-sidebar px-4 md:hidden">
+    <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-border bg-sidebar/95 backdrop-blur-md px-4 md:hidden">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
-          <button className="rounded-lg p-2 text-foreground hover:bg-muted">
+          <button className="rounded-lg p-2 text-foreground hover:bg-muted transition-colors">
             <Menu className="h-5 w-5" />
           </button>
         </SheetTrigger>
@@ -85,7 +87,7 @@ export const MobileHeader = () => {
         <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-primary shadow-glow">
           <Sparkles className="h-4 w-4 text-primary-foreground" />
         </div>
-        <span className="font-display text-sm font-bold text-foreground">ReelForge</span>
+        <span className="font-display text-sm font-bold text-foreground tracking-tight">ReelForge</span>
       </div>
     </header>
   );
