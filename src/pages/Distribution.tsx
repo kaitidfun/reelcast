@@ -106,27 +106,40 @@ const Distribution = () => {
         <div className="mt-4 rounded-xl border border-border bg-card shadow-card">
           <div className="divide-y divide-border">
             {scheduledPosts.map((post) => (
-              <div key={post.id} className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-muted/50">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <Send className="h-4 w-4 text-primary" />
+              <div key={post.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-6 sm:py-4 transition-colors hover:bg-muted/50">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                    <Send className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">{post.title}</p>
+                    <p className="text-xs text-muted-foreground">{post.platforms.join(", ")}</p>
+                  </div>
+                  <span
+                    className={`sm:hidden shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
+                      post.status === "posted"
+                        ? "bg-success/10 text-success"
+                        : "bg-info/10 text-info"
+                    }`}
+                  >
+                    {post.status === "posted" ? "Posted" : "Scheduled"}
+                  </span>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-foreground">{post.title}</p>
-                  <p className="text-xs text-muted-foreground">{post.platforms.join(", ")}</p>
+                <div className="flex items-center justify-between sm:ml-auto sm:gap-4">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    {post.scheduledAt}
+                  </div>
+                  <span
+                    className={`hidden sm:inline-block rounded-full px-3 py-1 text-xs font-medium ${
+                      post.status === "posted"
+                        ? "bg-success/10 text-success"
+                        : "bg-info/10 text-info"
+                    }`}
+                  >
+                    {post.status === "posted" ? "Posted" : "Scheduled"}
+                  </span>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  {post.scheduledAt}
-                </div>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    post.status === "posted"
-                      ? "bg-success/10 text-success"
-                      : "bg-info/10 text-info"
-                  }`}
-                >
-                  {post.status === "posted" ? "Posted" : "Scheduled"}
-                </span>
               </div>
             ))}
           </div>
