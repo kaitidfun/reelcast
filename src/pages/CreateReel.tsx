@@ -1,268 +1,418 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, Link2, Type, Sparkles, Image, Video, Wand2, ChevronRight, Send, Check, ArrowLeft } from "lucide-react";
+import { Upload, Link2, Type, Sparkles, Image, Video, Wand2, Send, Check, Loader2, Clock, Play, Instagram, Facebook } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 const CreateReel = () => {
-  const [step, setStep] = useState(1);
+  const navigate = useNavigate();
   const [inputType, setInputType] = useState<"link" | "image" | "text">("link");
+  const [productUrl, setProductUrl] = useState("");
+  const [productDesc, setProductDesc] = useState("");
+  const [videoStyle, setVideoStyle] = useState("cinematic");
+  const [duration, setDuration] = useState("30");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isGenerated, setIsGenerated] = useState(false);
+  const [generationStep, setGenerationStep] = useState(0);
+  const [captions, setCaptions] = useState({ instagram: "", facebook: "" });
 
   const inputOptions = [
-    { type: "link" as const, icon: Link2, label: "Product Link", desc: "วาง URL สินค้าเพื่อให้ AI วิเคราะห์" },
-    { type: "image" as const, icon: Image, label: "Product Image", desc: "อัปโหลดรูปสินค้าโดยตรง" },
-    { type: "text" as const, icon: Type, label: "Text Description", desc: "อธิบายสินค้าด้วยข้อความ" },
+    { type: "link" as const, icon: Link2, label: "Link", desc: "วาง URL สินค้า" },
+    { type: "image" as const, icon: Image, label: "Image", desc: "อัปโหลดรูป" },
+    { type: "text" as const, icon: Type, label: "Text", desc: "อธิบายสินค้า" },
   ];
 
-  const steps = [
-    { num: 1, label: "Input" },
-    { num: 2, label: "AI Generate" },
-    { num: 3, label: "Preview" },
+  const generationSteps = [
+    "วิเคราะห์สินค้า...",
+    "สร้าง Script & Caption...",
+    "สร้างวิดีโอ B-Roll...",
+    "ประมวลผลขั้นสุดท้าย...",
   ];
+
+  const canGenerate = inputType === "link" ? productUrl.trim() !== "" : inputType === "text" ? productDesc.trim() !== "" : false;
+
+  const handleGenerate = () => {
+    if (!canGenerate && inputType !== "image") {
+      toast.error("กรุณากรอกข้อมูลสินค้าก่อน");
+      return;
+    }
+    setIsGenerating(true);
+    setIsGenerated(false);
+    setGenerationStep(0);
+
+    // Simulate AI generation progress
+    const stepDuration = 800;
+    generationSteps.forEach((_, i) => {
+      setTimeout(() => setGenerationStep(i + 1), stepDuration * (i + 1));
+    });
+
+    setTimeout(() => {
+      setIsGenerating(false);
+      setIsGenerated(true);
+      setCaptions({
+        instagram: "✨ เปิดตัวคอลเลคชั่นใหม่! สินค้าที่จะเปลี่ยนไลฟ์สไตล์ของคุณ 🔥\n\n#Shopping #NewArrival #MustHave #ของดี",
+        facebook: "🛍️ สินค้าใหม่มาแรง! ดีไซน์สวย คุณภาพเกินราคา\n\n👉 สั่งซื้อได้ที่ลิงก์ใน bio",
+      });
+      toast.success("สร้าง Reel สำเร็จ!");
+    }, stepDuration * generationSteps.length + 400);
+  };
+
+  const handlePublish = () => {
+    toast.success("เผยแพร่ Reel สำเร็จ! 🎉");
+    setTimeout(() => navigate("/"), 1500);
+  };
+
+  const handleSave = () => {
+    toast.success("บันทึกไว้ใน Library แล้ว");
+    setTimeout(() => navigate("/library"), 1500);
+  };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Header */}
       <div>
         <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Create Reel</h1>
-        <p className="mt-1 text-muted-foreground">สร้างวิดีโอ Reel ด้วย AI อัตโนมัติ</p>
+        <p className="mt-1 text-muted-foreground">สร้างวิดีโอ Reel ด้วย AI — ทุกอย่างในหน้าเดียว</p>
       </div>
 
-      {/* Steps indicator */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        {steps.map((s, i) => (
-          <div key={s.num} className="flex items-center gap-2 sm:gap-3">
-            <button
-              onClick={() => s.num < step && setStep(s.num)}
-              className={`flex items-center gap-2 sm:gap-2.5 rounded-full px-3 py-1.5 sm:px-4 sm:py-2 text-sm font-medium transition-all duration-300 ${
-                s.num === step
-                  ? "gradient-primary text-primary-foreground shadow-glow"
-                  : s.num < step
-                  ? "bg-primary/15 text-primary ring-1 ring-primary/30 cursor-pointer hover:bg-primary/20"
-                  : "bg-muted text-muted-foreground"
-              }`}
-            >
-              <span className={`flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full text-xs font-bold ${
-                s.num < step ? "bg-primary/20" : s.num === step ? "bg-primary-foreground/20" : "bg-muted-foreground/20"
-              }`}>
-                {s.num < step ? <Check className="h-3 w-3" /> : s.num}
-              </span>
-              <span className="hidden sm:inline">{s.label}</span>
-            </button>
-            {i < steps.length - 1 && (
-              <div className={`h-px w-6 sm:w-10 transition-colors duration-300 ${
-                s.num < step ? "bg-primary/40" : "bg-border"
-              }`} />
-            )}
-          </div>
-        ))}
-      </div>
+      {/* Main Layout: Left (Input) + Right (Preview) */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        
+        {/* ===== LEFT PANEL — Input & Settings ===== */}
+        <div className="lg:col-span-3 space-y-5">
+          {/* Input Type Selector */}
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-primary">
+                <Sparkles className="h-4 w-4 text-primary-foreground" />
+              </div>
+              <h2 className="font-display text-base font-semibold text-foreground">ข้อมูลสินค้า</h2>
+            </div>
 
-      <AnimatePresence mode="wait">
-        {/* Step 1 */}
-        {step === 1 && (
-          <motion.div key="step1" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {inputOptions.map(({ type, icon: Icon, label, desc }) => (
+            {/* Input type tabs */}
+            <div className="flex gap-2">
+              {inputOptions.map(({ type, icon: Icon, label }) => (
                 <button
                   key={type}
                   onClick={() => setInputType(type)}
-                  className={`group relative rounded-2xl border p-6 text-left transition-all duration-300 card-shine ${
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
                     inputType === type
-                      ? "border-primary/40 bg-primary/5 shadow-glow ring-1 ring-primary/20"
-                      : "border-border bg-card hover:border-primary/20 hover:bg-muted/30"
+                      ? "gradient-primary text-primary-foreground shadow-glow"
+                      : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 ring-1 ring-border"
                   }`}
                 >
-                  <div className={`flex h-12 w-12 items-center justify-center rounded-xl transition-all duration-300 ${
-                    inputType === type 
-                      ? "gradient-primary shadow-glow" 
-                      : "bg-muted ring-1 ring-border group-hover:ring-primary/20"
-                  }`}>
-                    <Icon className={`h-5 w-5 ${inputType === type ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary"}`} />
-                  </div>
-                  <p className="mt-4 font-display font-semibold text-foreground">{label}</p>
-                  <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                  <Icon className="h-4 w-4" />
+                  {label}
                 </button>
               ))}
             </div>
 
-            <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
-              {inputType === "link" && (
-                <div className="space-y-3">
-                  <label className="text-sm font-medium text-foreground">Product URL</label>
-                  <Input placeholder="https://shopee.co.th/product/..." className="bg-muted/50 border-border h-11" />
-                </div>
-              )}
-              {inputType === "image" && (
-                <div className="flex flex-col items-center gap-4 rounded-xl border-2 border-dashed border-border/60 py-14 transition-colors hover:border-primary/30 hover:bg-primary/5 cursor-pointer">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted ring-1 ring-border">
-                    <Upload className="h-6 w-6 text-muted-foreground" />
+            {/* Input area */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={inputType}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.15 }}
+              >
+                {inputType === "link" && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Product URL</label>
+                    <Input
+                      placeholder="https://shopee.co.th/product/..."
+                      value={productUrl}
+                      onChange={(e) => setProductUrl(e.target.value)}
+                      className="bg-muted/50 border-border h-11"
+                    />
                   </div>
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-foreground">ลากไฟล์มาวาง หรือคลิกเพื่ออัปโหลด</p>
-                    <p className="mt-1 text-xs text-muted-foreground">PNG, JPG, WEBP up to 10MB</p>
+                )}
+                {inputType === "image" && (
+                  <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border/60 py-10 transition-colors hover:border-primary/30 hover:bg-primary/5 cursor-pointer">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted ring-1 ring-border">
+                      <Upload className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-foreground">ลากไฟล์มาวาง หรือคลิก</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">PNG, JPG, WEBP สูงสุด 10MB</p>
+                    </div>
+                    <Button variant="outline" size="sm">เลือกไฟล์</Button>
                   </div>
-                  <Button variant="outline" size="sm">เลือกไฟล์</Button>
-                </div>
-              )}
-              {inputType === "text" && (
-                <div className="space-y-3">
-                  <label className="text-sm font-medium text-foreground">Product Description</label>
-                  <Textarea placeholder="อธิบายสินค้าของคุณ เช่น จุดเด่น, กลุ่มเป้าหมาย, โปรโมชั่น..." rows={5} className="bg-muted/50 border-border resize-none" />
-                </div>
-              )}
+                )}
+                {inputType === "text" && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Product Description</label>
+                    <Textarea
+                      placeholder="อธิบายสินค้าของคุณ เช่น จุดเด่น, กลุ่มเป้าหมาย, โปรโมชั่น..."
+                      value={productDesc}
+                      onChange={(e) => setProductDesc(e.target.value)}
+                      rows={4}
+                      className="bg-muted/50 border-border resize-none"
+                    />
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
 
-              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Video Style</label>
-                  <select className="w-full rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
-                    <option>Cinematic B-Roll</option>
-                    <option>Product Showcase</option>
-                    <option>Lifestyle</option>
-                    <option>Minimalist</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Duration</label>
-                  <select className="w-full rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
-                    <option>15 seconds</option>
-                    <option>30 seconds</option>
-                    <option>60 seconds</option>
-                  </select>
-                </div>
+            {/* Settings row */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Video Style</label>
+                <Select value={videoStyle} onValueChange={setVideoStyle}>
+                  <SelectTrigger className="bg-muted/50 border-border h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cinematic">Cinematic B-Roll</SelectItem>
+                    <SelectItem value="showcase">Product Showcase</SelectItem>
+                    <SelectItem value="lifestyle">Lifestyle</SelectItem>
+                    <SelectItem value="minimal">Minimalist</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Duration</label>
+                <Select value={duration} onValueChange={setDuration}>
+                  <SelectTrigger className="bg-muted/50 border-border h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="15">15 วินาที</SelectItem>
+                    <SelectItem value="30">30 วินาที</SelectItem>
+                    <SelectItem value="60">60 วินาที</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
-            <div className="flex justify-end">
-              <Button onClick={() => setStep(2)} className="gradient-primary gap-2 px-8 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-11">
-                <Sparkles className="h-4 w-4" />
-                Generate with AI
-              </Button>
-            </div>
-          </motion.div>
-        )}
+            {/* Generate Button */}
+            <Button
+              onClick={handleGenerate}
+              disabled={isGenerating || (!canGenerate && inputType !== "image")}
+              className="w-full gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-12 text-base disabled:opacity-50"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  กำลังสร้าง...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-5 w-5" />
+                  Generate with AI
+                </>
+              )}
+            </Button>
+          </div>
 
-        {/* Step 2 */}
-        {step === 2 && (
-          <motion.div key="step2" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-            <div className="rounded-2xl border border-border bg-card p-8 shadow-card">
-              <div className="flex flex-col items-center gap-6 py-8">
-                <div className="relative">
-                  <div className="flex h-20 w-20 items-center justify-center rounded-2xl gradient-primary shadow-glow-lg">
-                    <Wand2 className="h-10 w-10 text-primary-foreground" />
+          {/* AI Progress (shows during/after generation) */}
+          <AnimatePresence>
+            {(isGenerating || isGenerated) && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="rounded-2xl border border-border bg-card p-5 shadow-card"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${isGenerated ? "bg-success/15" : "bg-primary/10"}`}>
+                    {isGenerated ? <Check className="h-4 w-4 text-success" /> : <Loader2 className="h-4 w-4 text-primary animate-spin" />}
                   </div>
-                  <div className="absolute -inset-4 animate-pulse-glow rounded-3xl gradient-primary opacity-20 blur-2xl" />
+                  <h2 className="font-display text-base font-semibold text-foreground">
+                    {isGenerated ? "สร้างเสร็จแล้ว ✨" : "AI กำลังทำงาน..."}
+                  </h2>
                 </div>
-                <div className="text-center">
-                  <h3 className="font-display text-xl font-bold text-foreground">AI กำลังสร้าง Reel ของคุณ</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">กรุณารอสักครู่...</p>
+
+                {/* Progress bar */}
+                <div className="w-full h-2 rounded-full bg-muted mb-4 overflow-hidden">
+                  <motion.div
+                    className="h-full rounded-full gradient-primary"
+                    initial={{ width: "0%" }}
+                    animate={{ width: isGenerated ? "100%" : `${(generationStep / generationSteps.length) * 100}%` }}
+                    transition={{ duration: 0.4, ease: "easeOut" }}
+                  />
                 </div>
-                <div className="w-full max-w-sm space-y-4 mt-2">
-                  {["วิเคราะห์สินค้า...", "สร้าง Script & Caption...", "สร้างวิดีโอ B-Roll...", "ประมวลผลขั้นสุดท้าย..."].map((text, i) => (
+
+                <div className="space-y-2.5">
+                  {generationSteps.map((text, i) => (
                     <div key={i} className="flex items-center gap-3">
-                      <div className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${
-                        i < 2 
-                          ? "bg-success/15 ring-1 ring-success/30" 
+                      <div className={`flex h-5 w-5 items-center justify-center rounded-full text-xs transition-all ${
+                        i < generationStep
+                          ? "bg-success/15 ring-1 ring-success/30"
+                          : i === generationStep && isGenerating
+                          ? "bg-primary/15 ring-1 ring-primary/30"
                           : "bg-muted ring-1 ring-border"
                       }`}>
-                        {i < 2 ? <Check className="h-3 w-3 text-success" /> : <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse-glow" />}
+                        {i < generationStep ? (
+                          <Check className="h-2.5 w-2.5 text-success" />
+                        ) : i === generationStep && isGenerating ? (
+                          <Loader2 className="h-2.5 w-2.5 text-primary animate-spin" />
+                        ) : (
+                          <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
+                        )}
                       </div>
-                      <span className={`text-sm ${i < 2 ? "text-foreground" : "text-muted-foreground"}`}>{text}</span>
+                      <span className={`text-sm ${i < generationStep ? "text-foreground" : "text-muted-foreground"}`}>{text}</span>
                     </div>
                   ))}
                 </div>
-              </div>
-            </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {[
-                { platform: "Instagram", emoji: "📸", caption: "✨ เปิดตัวคอลเลคชั่นใหม่! สินค้าที่จะเปลี่ยนไลฟ์สไตล์ของคุณ 🔥", hashtags: "#Shopping #NewArrival #MustHave #ของดี #แนะนำ" },
-                { platform: "Facebook", emoji: "📘", caption: "🛍️ สินค้าใหม่มาแรง! ดีไซน์สวย คุณภาพเกินราคา ต้องลองแล้วจะติดใจ", hashtags: "👉 สั่งซื้อได้ที่ลิงก์ใน bio" },
-              ].map(({ platform, emoji, caption, hashtags }) => (
-                <div key={platform} className="rounded-2xl border border-border bg-card p-6 shadow-card">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{emoji}</span>
-                    <h3 className="font-display font-semibold text-foreground">Caption ({platform})</h3>
-                  </div>
-                  <div className="mt-4 rounded-xl bg-muted/40 p-4 text-sm text-foreground ring-1 ring-border/50">
-                    <p>{caption}</p>
-                    <p className="mt-2 text-muted-foreground">{hashtags}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(1)} className="gap-2">
-                <ArrowLeft className="h-4 w-4" />
-                ย้อนกลับ
-              </Button>
-              <Button onClick={() => setStep(3)} className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300">
-                <Video className="h-4 w-4" />
-                Preview Reel
-              </Button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Step 3 */}
-        {step === 3 && (
-          <motion.div key="step3" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-              <div className="flex flex-col items-center">
-                <div className="aspect-[9/16] w-full max-w-[280px] overflow-hidden rounded-3xl border-2 border-border bg-muted shadow-elevated">
-                  <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
-                    <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-muted-foreground/10">
-                      <Video className="h-10 w-10 text-muted-foreground/40" />
+          {/* Captions (editable, shows after generation) */}
+          <AnimatePresence>
+            {isGenerated && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-4"
+              >
+                {[
+                  { key: "instagram" as const, label: "Instagram", emoji: "📸" },
+                  { key: "facebook" as const, label: "Facebook", emoji: "📘" },
+                ].map(({ key, label, emoji }) => (
+                  <div key={key} className="rounded-2xl border border-border bg-card p-5 shadow-card">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-base">{emoji}</span>
+                      <h3 className="font-display text-sm font-semibold text-foreground">Caption — {label}</h3>
                     </div>
-                    <div className="text-center">
-                      <p className="text-sm font-medium text-muted-foreground">ตัวอย่างวิดีโอ</p>
-                      <p className="mt-1 text-xs text-muted-foreground/70">จะแสดงเมื่อเชื่อมต่อ Google Veo API</p>
-                    </div>
+                    <Textarea
+                      value={captions[key]}
+                      onChange={(e) => setCaptions(prev => ({ ...prev, [key]: e.target.value }))}
+                      rows={4}
+                      className="bg-muted/30 border-border/50 text-sm resize-none"
+                    />
                   </div>
-                </div>
-              </div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
-              <div className="space-y-6">
-                <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
-                  <h3 className="font-display font-semibold text-foreground">Reel Details</h3>
-                  <div className="mt-5 space-y-4">
-                    {[
-                      ["Duration", "30 seconds"],
-                      ["Style", "Cinematic B-Roll"],
-                      ["Resolution", "1080 × 1920"],
-                    ].map(([label, value]) => (
-                      <div key={label} className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">{label}</span>
-                        <span className="font-medium text-foreground bg-muted px-3 py-1 rounded-lg">{value}</span>
+        {/* ===== RIGHT PANEL — Preview & Publish ===== */}
+        <div className="lg:col-span-2 space-y-5">
+          {/* Phone Preview */}
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-info/10">
+                <Play className="h-4 w-4 text-info" />
+              </div>
+              <h2 className="font-display text-base font-semibold text-foreground">Preview</h2>
+            </div>
+
+            <div className="flex justify-center">
+              <div className="aspect-[9/16] w-full max-w-[240px] overflow-hidden rounded-2xl border-2 border-border bg-muted/50 relative">
+                <AnimatePresence mode="wait">
+                  {isGenerating ? (
+                    <motion.div
+                      key="generating"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="flex h-full flex-col items-center justify-center gap-3 p-4"
+                    >
+                      <div className="relative">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl gradient-primary shadow-glow">
+                          <Wand2 className="h-8 w-8 text-primary-foreground" />
+                        </div>
+                        <div className="absolute -inset-3 animate-pulse rounded-2xl gradient-primary opacity-20 blur-xl" />
                       </div>
-                    ))}
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">Affiliate Link</span>
-                      <span className="font-medium text-success bg-success/10 px-3 py-1 rounded-lg ring-1 ring-success/20">Embedded ✓</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  <Button className="gradient-primary w-full gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-12">
-                    <Send className="h-4 w-4" />
-                    Publish to Platforms
-                  </Button>
-                  <Button variant="outline" className="w-full h-11">Save to Library</Button>
-                </div>
+                      <p className="text-xs font-medium text-muted-foreground text-center">AI กำลังสร้างวิดีโอ...</p>
+                    </motion.div>
+                  ) : isGenerated ? (
+                    <motion.div
+                      key="generated"
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="flex h-full flex-col items-center justify-center gap-3 p-4 bg-gradient-to-b from-muted/30 to-muted"
+                    >
+                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-success/10 ring-1 ring-success/30">
+                        <Video className="h-8 w-8 text-success" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-medium text-foreground">Reel พร้อมแล้ว!</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">จะแสดง preview จริงเมื่อเชื่อมต่อ API</p>
+                      </div>
+                      <Button variant="outline" size="sm" className="gap-1.5 mt-1">
+                        <Play className="h-3 w-3" />
+                        ดูตัวอย่าง
+                      </Button>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="empty"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="flex h-full flex-col items-center justify-center gap-3 p-4"
+                    >
+                      <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-muted-foreground/10">
+                        <Video className="h-7 w-7 text-muted-foreground/30" />
+                      </div>
+                      <p className="text-xs text-muted-foreground text-center">กรอกข้อมูลแล้วกด Generate<br />เพื่อดู preview ที่นี่</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
+          </div>
 
-            <div className="flex justify-start">
-              <Button variant="outline" onClick={() => setStep(2)} className="gap-2">
-                <ArrowLeft className="h-4 w-4" />
-                ย้อนกลับ
-              </Button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {/* Reel Details */}
+          <AnimatePresence>
+            {isGenerated && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-border bg-card p-5 shadow-card"
+              >
+                <h3 className="font-display text-sm font-semibold text-foreground mb-4">Reel Details</h3>
+                <div className="space-y-3">
+                  {[
+                    ["Duration", `${duration} seconds`],
+                    ["Style", videoStyle === "cinematic" ? "Cinematic B-Roll" : videoStyle === "showcase" ? "Product Showcase" : videoStyle === "lifestyle" ? "Lifestyle" : "Minimalist"],
+                    ["Resolution", "1080 × 1920"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">{label}</span>
+                      <span className="font-medium text-foreground bg-muted px-2.5 py-0.5 rounded-lg text-xs">{value}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Affiliate Link</span>
+                    <span className="font-medium text-success bg-success/10 px-2.5 py-0.5 rounded-lg text-xs ring-1 ring-success/20">Embedded ✓</span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Publish Actions */}
+          <AnimatePresence>
+            {isGenerated && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="space-y-3"
+              >
+                <Button
+                  onClick={handlePublish}
+                  className="w-full gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-12"
+                >
+                  <Send className="h-4 w-4" />
+                  Publish to Platforms
+                </Button>
+                <Button variant="outline" onClick={handleSave} className="w-full h-10">
+                  Save to Library
+                </Button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 };
