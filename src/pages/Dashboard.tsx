@@ -1,8 +1,26 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Video, Eye, Link2, TrendingUp, Play, Clock, BarChart3, ArrowRight, Sparkles, Zap } from "lucide-react";
+import { Video, Eye, Link2, TrendingUp, Play, Clock, BarChart3, ArrowRight, Sparkles, Zap, MousePointerClick } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StatCard from "@/components/StatCard";
 import { useNavigate } from "react-router-dom";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+
+const analyticsData = [
+  { date: "3 มี.ค.", views: 4200, clicks: 1800, conversions: 320 },
+  { date: "4 มี.ค.", views: 5100, clicks: 2100, conversions: 410 },
+  { date: "5 มี.ค.", views: 4800, clicks: 1950, conversions: 380 },
+  { date: "6 มี.ค.", views: 6200, clicks: 2800, conversions: 520 },
+  { date: "7 มี.ค.", views: 7100, clicks: 3200, conversions: 610 },
+  { date: "8 มี.ค.", views: 6800, clicks: 2900, conversions: 580 },
+  { date: "วันนี้", views: 7500, clicks: 3400, conversions: 670 },
+];
+
+const metrics = [
+  { key: "views", label: "Views", color: "hsl(var(--primary))" },
+  { key: "clicks", label: "Clicks", color: "hsl(var(--info))" },
+  { key: "conversions", label: "Conversions", color: "hsl(var(--success))" },
+] as const;
 
 const recentReels = [
   { id: 1, title: "Summer Collection Showcase", platform: "Instagram", status: "Published", views: "12.4K", date: "2 hours ago", emoji: "🏖️" },
