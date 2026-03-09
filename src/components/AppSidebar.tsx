@@ -1,7 +1,9 @@
-import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, Video, Library, Link2, Send, Sparkles, Menu } from "lucide-react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { LayoutDashboard, Video, Library, Link2, Send, Sparkles, Menu, User, LogOut } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -13,6 +15,21 @@ const navItems = [
 
 const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const initials = user?.displayName
+    ?.split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2) ?? "U";
+
+  const handleLogout = () => {
+    onNavigate?.();
+    logout();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <>
@@ -49,18 +66,31 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
         })}
       </nav>
 
-      {/* Bottom */}
-      <div className="border-t border-border p-4">
-        <div className="rounded-xl bg-muted/50 p-4 ring-1 ring-border">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-foreground">AI Credits</p>
-            <p className="text-xs font-medium text-primary">75%</p>
-          </div>
-          <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-border">
-            <div className="h-full w-3/4 rounded-full gradient-primary transition-all duration-500" />
-          </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">750 / 1,000 remaining</p>
-        </div>
+      {/* Bottom — User */}
+      <div className="border-t border-border p-3 space-y-1">
+        <NavLink
+          to="/account"
+          onClick={onNavigate}
+          className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
+            location.pathname === "/account"
+              ? "gradient-primary text-primary-foreground shadow-glow"
+              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          }`}
+        >
+          <Avatar className="h-7 w-7">
+            <AvatarFallback className="bg-secondary text-secondary-foreground text-xs font-bold">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <span className="flex-1 truncate">{user?.displayName ?? "Account"}</span>
+        </NavLink>
+        <button
+          onClick={handleLogout}
+          className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-destructive transition-all duration-200"
+        >
+          <LogOut className="h-[18px] w-[18px]" />
+          ออกจากระบบ
+        </button>
       </div>
     </>
   );
