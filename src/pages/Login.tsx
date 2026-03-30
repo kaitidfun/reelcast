@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
 
 const Login = () => {
-  const [email, setEmail] = useState("creator@reelforge.ai");
+  const [email, setEmail] = useState("creator@reelcast.ai");
   const [password, setPassword] = useState("demo123");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -47,8 +47,8 @@ const Login = () => {
             <Sparkles className="h-7 w-7 text-primary-foreground" />
           </div>
           <div className="text-center">
-            <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">ReelForge</h1>
-            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mt-1">AI Content Studio</p>
+             <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">ReelCast</h1>
+            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mt-1">AI Commercial Studio</p>
           </div>
         </div>
 
