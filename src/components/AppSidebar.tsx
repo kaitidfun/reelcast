@@ -117,7 +117,7 @@ export const MobileHeader = () => {
         <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-primary shadow-glow">
           <Sparkles className="h-4 w-4 text-primary-foreground" />
         </div>
-        <span className="font-display text-sm font-bold text-foreground tracking-tight">ReelForge</span>
+        <span className="font-display text-sm font-bold text-foreground tracking-tight">ReelCast</span>
       </div>
     </header>
   );

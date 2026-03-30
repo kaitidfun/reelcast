@@ -51,7 +51,7 @@ const Dashboard = () => {
                 <div className="flex h-6 w-6 items-center justify-center rounded-md gradient-primary">
                   <Zap className="h-3.5 w-3.5 text-primary-foreground" />
                 </div>
-                <span className="text-xs font-semibold uppercase tracking-widest text-primary">ReelForge Studio</span>
+                <span className="text-xs font-semibold uppercase tracking-widest text-primary">ReelCast Studio</span>
               </div>
               <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">
                 สวัสดี, ยินดีต้อนรับกลับ 👋
