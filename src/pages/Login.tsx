@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
 
 const Login = () => {
-  const [email, setEmail] = useState("creator@reelforge.ai");
+  const [email, setEmail] = useState("creator@reelcast.ai");
   const [password, setPassword] = useState("demo123");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
