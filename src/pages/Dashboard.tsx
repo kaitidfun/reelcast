@@ -23,9 +23,9 @@ const metrics = [
 ] as const;
 
 const recentReels = [
-  { id: 1, title: "Summer Collection Showcase", platform: "Instagram", status: "Published", views: "12.4K", date: "2 hours ago", emoji: "🏖️" },
-  { id: 2, title: "New Arrival — Minimal Watch", platform: "Facebook", status: "Processing", views: "—", date: "5 hours ago", emoji: "⌚" },
-  { id: 3, title: "Skincare Routine Bundle", platform: "Instagram", status: "Published", views: "8.2K", date: "1 day ago", emoji: "🧴" },
+  { id: 1, title: "Summer Collection Showcase", platform: "YouTube Shorts", status: "Published", views: "12.4K", date: "2 hours ago", emoji: "🏖️" },
+  { id: 2, title: "New Arrival — Minimal Watch", platform: "TikTok", status: "Processing", views: "—", date: "5 hours ago", emoji: "⌚" },
+  { id: 3, title: "Skincare Routine Bundle", platform: "YouTube Shorts", status: "Published", views: "8.2K", date: "1 day ago", emoji: "🧴" },
   { id: 4, title: "Tech Gadget Review", platform: "TikTok", status: "Draft", views: "—", date: "2 days ago", emoji: "📱" },
 ];
 
