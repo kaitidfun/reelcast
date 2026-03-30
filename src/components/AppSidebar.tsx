@@ -39,8 +39,8 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
           <Sparkles className="h-5 w-5 text-primary-foreground" />
         </div>
         <div>
-          <h1 className="font-display text-lg font-bold text-foreground tracking-tight">ReelForge</h1>
-          <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">AI Content Studio</p>
+          <h1 className="font-display text-lg font-bold text-foreground tracking-tight">ReelCast</h1>
+          <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">AI Commercial Studio</p>
         </div>
       </div>
 
