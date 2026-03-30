@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Upload, Link2, Type, Sparkles, Image, Video, Wand2, Send, Check, Loader2 } from "lucide-react";
+import { Upload, Link2, Type, Sparkles, Image, Video, Wand2, Send, Check, Loader2, Layers, Brain, Film, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,36 +16,36 @@ const CreateReel = () => {
   const { toast } = useToast();
 
   const inputOptions = [
-    { type: "link" as const, icon: Link2, label: "Link", desc: "วาง URL สินค้า" },
-    { type: "image" as const, icon: Image, label: "Image", desc: "อัปโหลดรูป" },
-    { type: "text" as const, icon: Type, label: "Text", desc: "พิมพ์คำอธิบาย" },
+    { type: "link" as const, icon: Link2, label: "Product URL", desc: "วาง URL สินค้า" },
+    { type: "image" as const, icon: Image, label: "Product Image", desc: "อัปโหลดรูปสินค้า" },
+    { type: "text" as const, icon: Type, label: "Description", desc: "พิมพ์คำอธิบายสินค้า" },
   ];
 
   const generationTasks = [
-    "วิเคราะห์สินค้า",
-    "สร้าง Script & Caption",
-    "สร้างวิดีโอ B-Roll",
-    "ประมวลผลขั้นสุดท้าย",
+    { label: "Gemini วิเคราะห์จุดขายสินค้า", icon: Brain, detail: "Gemini 1.5 Pro" },
+    { label: "Gemini สร้าง Script & Caption", icon: Type, detail: "Pre-defined Templates" },
+    { label: "Veo สร้างวิดีโอ B-Roll", icon: Film, detail: "Google Veo" },
+    { label: "FFmpeg ประกอบ Overlay สินค้า", icon: Scissors, detail: "Product Image Overlay" },
   ];
 
   const handleGenerate = () => {
     setGenerationStatus("generating");
     setTimeout(() => {
       setGenerationStatus("done");
-      setCaption("✨ เปิดตัวคอลเลคชั่นใหม่! สินค้าที่จะเปลี่ยนไลฟ์สไตล์ของคุณ 🔥\n\n#Shopping #NewArrival #MustHave");
-      toast({ title: "สร้าง Reel สำเร็จ!", description: "พร้อม publish แล้ว" });
+      setCaption("✨ เปิดตัวคอลเลคชั่นใหม่! สินค้าที่จะเปลี่ยนไลฟ์สไตล์ของคุณ 🔥\n\n#Shopping #NewArrival #MustHave #ReelCast");
+      toast({ title: "สร้าง Reel สำเร็จ!", description: "พร้อม preview และ publish แล้ว" });
     }, 3000);
   };
 
   const handlePublish = () => {
-    toast({ title: "Published!", description: "Reel ถูกเผยแพร่ไปยัง platforms แล้ว 🎉" });
+    toast({ title: "Published!", description: "Reel ถูกเผยแพร่ไปยัง YouTube Shorts & TikTok แล้ว 🎉" });
   };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Create Reel</h1>
-        <p className="mt-1 text-muted-foreground">สร้างวิดีโอ Reel ด้วย AI — ทุกอย่างในหน้าเดียว</p>
+        <p className="mt-1 text-muted-foreground">สร้างวิดีโอ Reel เชิงพาณิชย์ด้วย AI — Gemini + Veo + FFmpeg</p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
@@ -53,7 +53,7 @@ const CreateReel = () => {
         <div className="lg:col-span-3 space-y-5">
           {/* Input Type Selector */}
           <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
-            <h2 className="font-display font-semibold text-foreground text-sm uppercase tracking-wider text-muted-foreground">1. แหล่งข้อมูลสินค้า</h2>
+            <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">1. แหล่งข้อมูลสินค้า</h2>
             <div className="grid grid-cols-3 gap-3">
               {inputOptions.map(({ type, icon: Icon, label, desc }) => (
                 <button
@@ -75,17 +75,17 @@ const CreateReel = () => {
             {/* Input Field */}
             <div>
               {inputType === "link" && (
-                <Input placeholder="https://shopee.co.th/product/..." className="bg-muted/50 border-border h-11" />
+                <Input placeholder="https://shopee.co.th/product/... หรือ URL สินค้าจากแพลตฟอร์มใดก็ได้" className="bg-muted/50 border-border h-11" />
               )}
               {inputType === "image" && (
                 <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border/60 py-10 transition-colors hover:border-primary/30 hover:bg-primary/5 cursor-pointer">
                   <Upload className="h-6 w-6 text-muted-foreground" />
-                  <p className="text-xs text-muted-foreground">ลากไฟล์มาวาง หรือคลิกอัปโหลด</p>
+                  <p className="text-xs text-muted-foreground">ลากรูปสินค้ามาวาง หรือคลิกอัปโหลด</p>
                   <Button variant="outline" size="sm">เลือกไฟล์</Button>
                 </div>
               )}
               {inputType === "text" && (
-                <Textarea placeholder="อธิบายสินค้าของคุณ..." rows={4} className="bg-muted/50 border-border resize-none" />
+                <Textarea placeholder="อธิบายสินค้าของคุณ เช่น ชื่อสินค้า จุดเด่น ราคา..." rows={4} className="bg-muted/50 border-border resize-none" />
               )}
             </div>
           </div>
@@ -112,12 +112,32 @@ const CreateReel = () => {
                 </select>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground">Target Platform</label>
+                <select className="w-full rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option>YouTube Shorts + TikTok</option>
+                  <option>YouTube Shorts</option>
+                  <option>TikTok</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground">Campaign</label>
+                <select className="w-full rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option>Summer Sale 2026</option>
+                  <option>Accessories Launch</option>
+                  <option>Beauty Week</option>
+                  <option>+ New Campaign</option>
+                </select>
+              </div>
+            </div>
           </div>
 
-          {/* Caption — shown after generation */}
+          {/* Caption & Publish — shown after generation */}
           {generationStatus === "done" && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
-              <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">3. Caption & Publish</h2>
+              <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">3. Preview & Approve</h2>
+              <p className="text-xs text-muted-foreground">ตรวจสอบ Caption ที่ Gemini สร้าง และแก้ไขได้ก่อน Publish</p>
               <Textarea
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
@@ -127,9 +147,9 @@ const CreateReel = () => {
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button onClick={handlePublish} className="gradient-primary flex-1 gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-11">
                   <Send className="h-4 w-4" />
-                  Publish to Platforms
+                  Publish to YouTube Shorts & TikTok
                 </Button>
-                <Button variant="outline" className="flex-1 h-11">Save to Library</Button>
+                <Button variant="outline" className="flex-1 h-11">Save to Product Library</Button>
               </div>
             </motion.div>
           )}
@@ -161,16 +181,18 @@ const CreateReel = () => {
             )}
           </Button>
 
-          {/* Generation Progress */}
+          {/* AI Pipeline Progress */}
           {generationStatus !== "idle" && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-card">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">AI Pipeline</h3>
               <div className="space-y-3">
-                {generationTasks.map((text, i) => {
+                {generationTasks.map((task, i) => {
                   const isDone = generationStatus === "done" || (generationStatus === "generating" && i < 2);
                   const isActive = generationStatus === "generating" && i === 2;
+                  const TaskIcon = task.icon;
                   return (
                     <div key={i} className="flex items-center gap-3">
-                      <div className={`flex h-6 w-6 items-center justify-center rounded-full text-xs shrink-0 ${
+                      <div className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs shrink-0 ${
                         isDone
                           ? "bg-success/15 ring-1 ring-success/30"
                           : isActive
@@ -178,14 +200,17 @@ const CreateReel = () => {
                           : "bg-muted ring-1 ring-border"
                       }`}>
                         {isDone ? (
-                          <Check className="h-3 w-3 text-success" />
+                          <Check className="h-3.5 w-3.5 text-success" />
                         ) : isActive ? (
-                          <Loader2 className="h-3 w-3 text-primary animate-spin" />
+                          <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
                         ) : (
-                          <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                          <TaskIcon className="h-3.5 w-3.5 text-muted-foreground" />
                         )}
                       </div>
-                      <span className={`text-sm ${isDone ? "text-foreground" : isActive ? "text-primary" : "text-muted-foreground"}`}>{text}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className={`text-sm ${isDone ? "text-foreground" : isActive ? "text-primary" : "text-muted-foreground"}`}>{task.label}</span>
+                        <p className="text-[10px] text-muted-foreground">{task.detail}</p>
+                      </div>
                     </div>
                   );
                 })}
@@ -203,7 +228,7 @@ const CreateReel = () => {
                       <Video className="h-8 w-8 text-primary-foreground" />
                     </div>
                     <p className="text-sm font-medium text-foreground">Reel พร้อมแล้ว!</p>
-                    <p className="text-xs text-muted-foreground">เชื่อมต่อ API เพื่อดู preview จริง</p>
+                    <p className="text-xs text-muted-foreground text-center">B-Roll + Product Overlay สำเร็จ</p>
                   </>
                 ) : generationStatus === "generating" ? (
                   <>
@@ -213,14 +238,14 @@ const CreateReel = () => {
                       </div>
                       <div className="absolute -inset-3 animate-pulse rounded-2xl gradient-primary opacity-10 blur-xl" />
                     </div>
-                    <p className="text-sm text-muted-foreground">กำลังสร้าง...</p>
+                    <p className="text-sm text-muted-foreground">Veo กำลังสร้าง B-Roll...</p>
                   </>
                 ) : (
                   <>
                     <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted-foreground/10">
                       <Video className="h-8 w-8 text-muted-foreground/30" />
                     </div>
-                    <p className="text-xs text-muted-foreground text-center">กด Generate เพื่อสร้าง Reel</p>
+                    <p className="text-xs text-muted-foreground text-center">กด Generate เพื่อให้ AI สร้าง Reel</p>
                   </>
                 )}
               </div>
@@ -233,7 +258,10 @@ const CreateReel = () => {
                   ["Duration", "30s"],
                   ["Style", "Cinematic B-Roll"],
                   ["Resolution", "1080×1920"],
+                  ["AI Models", "Veo + Gemini"],
+                  ["Overlay", "Product Image ✓"],
                   ["Affiliate", "Embedded ✓"],
+                  ["Platforms", "YT Shorts + TikTok"],
                 ].map(([label, value]) => (
                   <div key={label} className="flex justify-between items-center text-xs">
                     <span className="text-muted-foreground">{label}</span>

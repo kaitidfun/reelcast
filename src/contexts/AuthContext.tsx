@@ -11,7 +11,7 @@ export interface MockUser {
 
 const MOCK_USER: MockUser = {
   id: "usr_001",
-  email: "creator@reelforge.ai",
+  email: "creator@reelcast.ai",
   displayName: "Alex Creator",
   avatar: "",
   plan: "pro",
