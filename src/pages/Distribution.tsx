@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Send, CheckCircle2, Clock, Settings, ToggleLeft, ToggleRight, ArrowRight, Wifi, WifiOff, AlertTriangle } from "lucide-react";
+import { Send, CheckCircle2, Clock, Settings, ToggleLeft, ToggleRight, ArrowRight, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
@@ -10,19 +10,21 @@ interface Platform {
   icon: string;
   connected: boolean;
   reelsPosted: number;
-  status: "connected" | "disconnected" | "sandbox";
-  note?: string;
+  status: "connected" | "disconnected";
 }
 
 const initialPlatforms: Platform[] = [
   { id: "yt", name: "YouTube Shorts", icon: "🎬", connected: true, reelsPosted: 28, status: "connected" },
-  { id: "tt", name: "TikTok", icon: "🎵", connected: true, reelsPosted: 0, status: "sandbox", note: "Sandbox Environment" },
+  { id: "tt", name: "TikTok", icon: "🎵", connected: true, reelsPosted: 15, status: "connected" },
+  { id: "fb", name: "Facebook", icon: "📘", connected: true, reelsPosted: 22, status: "connected" },
+  { id: "ig", name: "Instagram", icon: "📸", connected: false, reelsPosted: 0, status: "disconnected" },
 ];
 
 const scheduledPosts = [
-  { id: 1, title: "Summer Collection Promo", platforms: ["YouTube Shorts"], scheduledAt: "Mar 9, 2026 — 18:00", status: "scheduled" },
-  { id: 2, title: "Watch Unboxing Reel", platforms: ["YouTube Shorts", "TikTok"], scheduledAt: "Mar 10, 2026 — 12:00", status: "scheduled" },
-  { id: 3, title: "Skincare Bundle", platforms: ["TikTok"], scheduledAt: "Mar 8, 2026 — 09:00", status: "posted" },
+  { id: 1, title: "Summer Collection Promo", platforms: ["YouTube Shorts", "Facebook"], scheduledAt: "Mar 9, 2026 — 18:00", status: "scheduled" },
+  { id: 2, title: "Watch Unboxing Reel", platforms: ["YouTube Shorts", "TikTok", "Instagram"], scheduledAt: "Mar 10, 2026 — 12:00", status: "scheduled" },
+  { id: 3, title: "Skincare Bundle", platforms: ["TikTok", "Facebook"], scheduledAt: "Mar 8, 2026 — 09:00", status: "posted" },
+  { id: 4, title: "Tech Gadget Review", platforms: ["YouTube Shorts", "TikTok", "Facebook", "Instagram"], scheduledAt: "Mar 11, 2026 — 15:00", status: "scheduled" },
 ];
 
 const Distribution = () => {
@@ -31,7 +33,7 @@ const Distribution = () => {
   const togglePlatform = (id: string) => {
     setPlatforms((prev) =>
       prev.map((p) =>
-        p.id === id ? { ...p, connected: !p.connected, status: p.connected ? "disconnected" : (p.id === "tt" ? "sandbox" : "connected") } : p
+        p.id === id ? { ...p, connected: !p.connected, status: p.connected ? "disconnected" : "connected" } : p
       )
     );
   };
@@ -40,23 +42,8 @@ const Distribution = () => {
     <div className="space-y-8">
       <div>
         <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Distribution</h1>
-        <p className="mt-1 text-muted-foreground">เผยแพร่ Reel อัตโนมัติไปยัง YouTube Shorts และ TikTok</p>
+        <p className="mt-1 text-muted-foreground">เผยแพร่ Reel อัตโนมัติไปยัง YouTube Shorts, TikTok, Facebook และ Instagram</p>
       </div>
-
-      {/* MVP Notice */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="rounded-xl border border-info/30 bg-info/5 p-4 flex items-start gap-3"
-      >
-        <AlertTriangle className="h-5 w-5 text-info shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-medium text-foreground">MVP Phase — 2 Platforms</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            ขณะนี้รองรับ YouTube Shorts (Full API) และ TikTok (Sandbox) เพื่อจัดการ API limitations อย่างมีประสิทธิภาพ
-          </p>
-        </div>
-      </motion.div>
 
       {/* Platform Connections */}
       <div>
@@ -64,38 +51,33 @@ const Distribution = () => {
           <Wifi className="h-4 w-4 text-primary" />
           <h2 className="font-display text-lg font-semibold text-foreground">Connected Platforms</h2>
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {platforms.map((platform, i) => (
             <motion.div
               key={platform.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
-              className={`group rounded-2xl border p-5 sm:p-6 transition-all duration-300 card-shine ${
+              className={`group rounded-2xl border p-5 transition-all duration-300 card-shine ${
                 platform.connected
                   ? "border-primary/30 bg-card shadow-glow hover:shadow-glow-lg"
                   : "border-border bg-card hover:border-muted-foreground/20"
               }`}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 sm:gap-4">
-                  <div className={`flex h-12 w-12 items-center justify-center rounded-xl text-2xl transition-all ${
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-11 w-11 items-center justify-center rounded-xl text-xl transition-all ${
                     platform.connected ? "bg-primary/10 ring-1 ring-primary/20" : "bg-muted ring-1 ring-border"
                   }`}>
                     {platform.icon}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-display font-semibold text-foreground">{platform.name}</h3>
-                      {platform.status === "sandbox" && platform.connected && (
-                        <Badge variant="outline" className="text-[10px] border-warning/40 text-warning">Sandbox</Badge>
-                      )}
-                    </div>
+                    <h3 className="font-display text-sm font-semibold text-foreground">{platform.name}</h3>
                     <p className="text-xs text-muted-foreground">
                       {platform.connected ? (
                         <span className="flex items-center gap-1">
                           <CheckCircle2 className="h-3 w-3 text-success" />
-                          {platform.note || `${platform.reelsPosted} Reels posted`}
+                          {platform.reelsPosted} Reels posted
                         </span>
                       ) : (
                         <span className="flex items-center gap-1">
@@ -106,8 +88,8 @@ const Distribution = () => {
                     </p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => togglePlatform(platform.id)} 
+                <button
+                  onClick={() => togglePlatform(platform.id)}
                   className="text-muted-foreground transition-transform hover:scale-110"
                 >
                   {platform.connected ? (

@@ -1,32 +1,47 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Upload, Link2, Type, Sparkles, Image, Video, Wand2, Send, Check, Loader2, Layers, Brain, Film, Scissors } from "lucide-react";
+import { Upload, Link2, Type, Sparkles, Image, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 
-type InputType = "link" | "image" | "text";
+type InputType = "link" | "image" | "text" | "upload";
 type GenerationStatus = "idle" | "generating" | "done";
 
 const CreateReel = () => {
   const [inputType, setInputType] = useState<InputType>("link");
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
   const [caption, setCaption] = useState("");
+  const [selectedPlatforms, setSelectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
   const { toast } = useToast();
 
   const inputOptions = [
     { type: "link" as const, icon: Link2, label: "Product URL", desc: "วาง URL สินค้า" },
     { type: "image" as const, icon: Image, label: "Product Image", desc: "อัปโหลดรูปสินค้า" },
-    { type: "text" as const, icon: Type, label: "Description", desc: "พิมพ์คำอธิบายสินค้า" },
+    { type: "text" as const, icon: Type, label: "Prompt", desc: "พิมพ์ Prompt" },
+    { type: "upload" as const, icon: Upload, label: "Upload Reel", desc: "อัปโหลดวิดีโอ" },
+  ];
+
+  const platformOptions = [
+    { id: "yt", label: "YouTube Shorts", icon: "🎬" },
+    { id: "tt", label: "TikTok", icon: "🎵" },
+    { id: "fb", label: "Facebook", icon: "📘" },
+    { id: "ig", label: "Instagram", icon: "📸" },
   ];
 
   const generationTasks = [
     { label: "Gemini วิเคราะห์จุดขายสินค้า", icon: Brain, detail: "Gemini 1.5 Pro" },
-    { label: "Gemini สร้าง Script & Caption", icon: Type, detail: "Pre-defined Templates" },
+    { label: "Gemini สร้าง Script & Caption", icon: Hash, detail: "Platform-specific captions" },
     { label: "Veo สร้างวิดีโอ B-Roll", icon: Film, detail: "Google Veo" },
-    { label: "FFmpeg ประกอบ Overlay สินค้า", icon: Scissors, detail: "Product Image Overlay" },
+    { label: "FFmpeg ประกอบ Overlay สินค้า", icon: Scissors, detail: "Product Image + Brand Logo" },
   ];
+
+  const togglePlatform = (id: string) => {
+    setSelectedPlatforms((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+    );
+  };
 
   const handleGenerate = () => {
     setGenerationStatus("generating");
@@ -37,8 +52,18 @@ const CreateReel = () => {
     }, 3000);
   };
 
+  const handleRegenerate = () => {
+    setGenerationStatus("generating");
+    setTimeout(() => {
+      setGenerationStatus("done");
+      setCaption("🛍️ ของดีต้องบอกต่อ! คุณภาพเกินราคา ✅\n\n#BestDeal #Shopping #Trending #ReelCast");
+      toast({ title: "Re-generate สำเร็จ!", description: "เวอร์ชันใหม่พร้อมแล้ว" });
+    }, 2500);
+  };
+
   const handlePublish = () => {
-    toast({ title: "Published!", description: "Reel ถูกเผยแพร่ไปยัง YouTube Shorts & TikTok แล้ว 🎉" });
+    const names = platformOptions.filter((p) => selectedPlatforms.includes(p.id)).map((p) => p.label);
+    toast({ title: "Published!", description: `Reel ถูกเผยแพร่ไปยัง ${names.join(", ")} แล้ว 🎉` });
   };
 
   return (
@@ -49,12 +74,12 @@ const CreateReel = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        {/* Left Column — Input & Settings */}
+        {/* Left Column */}
         <div className="lg:col-span-3 space-y-5">
-          {/* Input Type Selector */}
+          {/* Input Type */}
           <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
-            <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">1. แหล่งข้อมูลสินค้า</h2>
-            <div className="grid grid-cols-3 gap-3">
+            <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">1. แหล่งข้อมูล</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {inputOptions.map(({ type, icon: Icon, label, desc }) => (
                 <button
                   key={type}
@@ -72,27 +97,46 @@ const CreateReel = () => {
               ))}
             </div>
 
-            {/* Input Field */}
             <div>
               {inputType === "link" && (
-                <Input placeholder="https://shopee.co.th/product/... หรือ URL สินค้าจากแพลตฟอร์มใดก็ได้" className="bg-muted/50 border-border h-11" />
+                <Input placeholder="https://shopee.co.th/product/... หรือ URL สินค้า" className="bg-muted/50 border-border h-11" />
               )}
               {inputType === "image" && (
                 <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border/60 py-10 transition-colors hover:border-primary/30 hover:bg-primary/5 cursor-pointer">
-                  <Upload className="h-6 w-6 text-muted-foreground" />
+                  <Image className="h-6 w-6 text-muted-foreground" />
                   <p className="text-xs text-muted-foreground">ลากรูปสินค้ามาวาง หรือคลิกอัปโหลด</p>
                   <Button variant="outline" size="sm">เลือกไฟล์</Button>
                 </div>
               )}
               {inputType === "text" && (
-                <Textarea placeholder="อธิบายสินค้าของคุณ เช่น ชื่อสินค้า จุดเด่น ราคา..." rows={4} className="bg-muted/50 border-border resize-none" />
+                <Textarea placeholder="พิมพ์ Prompt เกี่ยวกับ Reel ที่ต้องการ เช่น สินค้า จุดเด่น สไตล์..." rows={4} className="bg-muted/50 border-border resize-none" />
+              )}
+              {inputType === "upload" && (
+                <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border/60 py-10 transition-colors hover:border-primary/30 hover:bg-primary/5 cursor-pointer">
+                  <Upload className="h-6 w-6 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">อัปโหลดวิดีโอ Reel ของคุณเพื่อ process ต่อ</p>
+                  <p className="text-[10px] text-muted-foreground">รองรับ MP4, MOV (max 100MB)</p>
+                  <Button variant="outline" size="sm">เลือกวิดีโอ</Button>
+                </div>
               )}
             </div>
           </div>
 
+          {/* Select Product from Library */}
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
+            <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">2. เลือกสินค้าจาก Product Library</h2>
+            <select className="w-full rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+              <option>— เลือกสินค้า —</option>
+              <option>Summer Dress Collection</option>
+              <option>Minimal Watch — Gold</option>
+              <option>Skincare Bundle Set</option>
+              <option>Wireless Earbuds Pro</option>
+            </select>
+          </div>
+
           {/* Settings */}
           <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
-            <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">2. ตั้งค่า</h2>
+            <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">3. ตั้งค่า</h2>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-foreground">Video Style</label>
@@ -112,32 +156,34 @@ const CreateReel = () => {
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground">Target Platform</label>
-                <select className="w-full rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
-                  <option>YouTube Shorts + TikTok</option>
-                  <option>YouTube Shorts</option>
-                  <option>TikTok</option>
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground">Campaign</label>
-                <select className="w-full rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
-                  <option>Summer Sale 2026</option>
-                  <option>Accessories Launch</option>
-                  <option>Beauty Week</option>
-                  <option>+ New Campaign</option>
-                </select>
+
+            {/* Target Platforms */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-foreground">Target Platforms</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {platformOptions.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => togglePlatform(p.id)}
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition-all ${
+                      selectedPlatforms.includes(p.id)
+                        ? "border-primary/40 bg-primary/5 text-foreground ring-1 ring-primary/20"
+                        : "border-border text-muted-foreground hover:border-primary/20"
+                    }`}
+                  >
+                    <span>{p.icon}</span>
+                    <span className="truncate">{p.label}</span>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* Caption & Publish — shown after generation */}
+          {/* Caption & Publish */}
           {generationStatus === "done" && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
-              <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">3. Preview & Approve</h2>
-              <p className="text-xs text-muted-foreground">ตรวจสอบ Caption ที่ Gemini สร้าง และแก้ไขได้ก่อน Publish</p>
+              <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">4. Preview & Approve</h2>
+              <p className="text-xs text-muted-foreground">ตรวจสอบ Caption ที่ Gemini สร้าง (optimized per platform) แก้ไขได้ก่อน Publish</p>
               <Textarea
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
@@ -147,37 +193,31 @@ const CreateReel = () => {
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button onClick={handlePublish} className="gradient-primary flex-1 gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-11">
                   <Send className="h-4 w-4" />
-                  Publish to YouTube Shorts & TikTok
+                  Publish ({selectedPlatforms.length} platforms)
                 </Button>
-                <Button variant="outline" className="flex-1 h-11">Save to Product Library</Button>
+                <Button variant="outline" onClick={handleRegenerate} className="flex-1 gap-2 h-11">
+                  <RefreshCw className="h-4 w-4" />
+                  Regenerate
+                </Button>
               </div>
             </motion.div>
           )}
         </div>
 
-        {/* Right Column — Preview & Generate */}
+        {/* Right Column */}
         <div className="lg:col-span-2 space-y-5">
           {/* Generate Button */}
           <Button
-            onClick={handleGenerate}
+            onClick={generationStatus === "done" ? handleRegenerate : handleGenerate}
             disabled={generationStatus === "generating"}
             className="w-full gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-12 text-base"
           >
             {generationStatus === "generating" ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                AI กำลังสร้าง...
-              </>
+              <><Loader2 className="h-5 w-5 animate-spin" />AI กำลังสร้าง...</>
             ) : generationStatus === "done" ? (
-              <>
-                <Sparkles className="h-5 w-5" />
-                Re-generate
-              </>
+              <><RefreshCw className="h-5 w-5" />Re-generate</>
             ) : (
-              <>
-                <Sparkles className="h-5 w-5" />
-                Generate with AI
-              </>
+              <><Sparkles className="h-5 w-5" />Generate with AI</>
             )}
           </Button>
 
@@ -193,19 +233,13 @@ const CreateReel = () => {
                   return (
                     <div key={i} className="flex items-center gap-3">
                       <div className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs shrink-0 ${
-                        isDone
-                          ? "bg-success/15 ring-1 ring-success/30"
-                          : isActive
-                          ? "bg-primary/15 ring-1 ring-primary/30"
-                          : "bg-muted ring-1 ring-border"
+                        isDone ? "bg-success/15 ring-1 ring-success/30"
+                        : isActive ? "bg-primary/15 ring-1 ring-primary/30"
+                        : "bg-muted ring-1 ring-border"
                       }`}>
-                        {isDone ? (
-                          <Check className="h-3.5 w-3.5 text-success" />
-                        ) : isActive ? (
-                          <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
-                        ) : (
-                          <TaskIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                        )}
+                        {isDone ? <Check className="h-3.5 w-3.5 text-success" />
+                        : isActive ? <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
+                        : <TaskIcon className="h-3.5 w-3.5 text-muted-foreground" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <span className={`text-sm ${isDone ? "text-foreground" : isActive ? "text-primary" : "text-muted-foreground"}`}>{task.label}</span>
@@ -228,7 +262,7 @@ const CreateReel = () => {
                       <Video className="h-8 w-8 text-primary-foreground" />
                     </div>
                     <p className="text-sm font-medium text-foreground">Reel พร้อมแล้ว!</p>
-                    <p className="text-xs text-muted-foreground text-center">B-Roll + Product Overlay สำเร็จ</p>
+                    <p className="text-xs text-muted-foreground text-center">B-Roll + Product Image + Brand Logo Overlay</p>
                   </>
                 ) : generationStatus === "generating" ? (
                   <>
@@ -251,7 +285,6 @@ const CreateReel = () => {
               </div>
             </div>
 
-            {/* Reel Details */}
             {generationStatus === "done" && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 space-y-2.5">
                 {[
@@ -259,9 +292,9 @@ const CreateReel = () => {
                   ["Style", "Cinematic B-Roll"],
                   ["Resolution", "1080×1920"],
                   ["AI Models", "Veo + Gemini"],
-                  ["Overlay", "Product Image ✓"],
+                  ["Overlay", "Product Image + Logo ✓"],
                   ["Affiliate", "Embedded ✓"],
-                  ["Platforms", "YT Shorts + TikTok"],
+                  ["Platforms", `${selectedPlatforms.length} selected`],
                 ].map(([label, value]) => (
                   <div key={label} className="flex justify-between items-center text-xs">
                     <span className="text-muted-foreground">{label}</span>
