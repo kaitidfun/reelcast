@@ -13,6 +13,7 @@ import AffiliateLinks from "./pages/AffiliateLinks";
 import Distribution from "./pages/Distribution";
 import Account from "./pages/Account";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
