@@ -1,42 +1,53 @@
 import { motion } from "framer-motion";
-import { Package, Eye, Clock, MoreVertical, Search, Filter, Grid, List, Play, FolderOpen, Plus } from "lucide-react";
+import { Package, Eye, Clock, MoreVertical, Search, Filter, Grid, List, Play, FolderOpen, Plus, Link2, Image as ImageIcon, Tag, Edit } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 interface Product {
   id: number;
   title: string;
-  campaign: string;
+  collection: string;
   status: "Active" | "Draft" | "Archived";
   reelsGenerated: number;
   affiliateLink: string;
+  description: string;
+  brandLogo: string;
+  productImage: string;
   date: string;
   thumbnail: string;
+  tags: string[];
 }
 
 const mockProducts: Product[] = [
-  { id: 1, title: "Summer Dress Collection", campaign: "Summer Sale 2026", status: "Active", reelsGenerated: 5, affiliateLink: "reel.link/summer01", date: "Mar 6, 2026", thumbnail: "🏖️" },
-  { id: 2, title: "Minimal Watch — Gold", campaign: "Accessories Launch", status: "Active", reelsGenerated: 3, affiliateLink: "reel.link/watch01", date: "Mar 5, 2026", thumbnail: "⌚" },
-  { id: 3, title: "Skincare Bundle Set", campaign: "Beauty Week", status: "Draft", reelsGenerated: 0, affiliateLink: "—", date: "Mar 4, 2026", thumbnail: "🧴" },
-  { id: 4, title: "Wireless Earbuds Pro", campaign: "Tech Deals", status: "Active", reelsGenerated: 8, affiliateLink: "reel.link/tech01", date: "Mar 3, 2026", thumbnail: "🎧" },
-  { id: 5, title: "Fashion Lookbook SS26", campaign: "Summer Sale 2026", status: "Active", reelsGenerated: 12, affiliateLink: "reel.link/fashion01", date: "Mar 2, 2026", thumbnail: "👗" },
-  { id: 6, title: "Home Decor Candle Set", campaign: "Home & Living", status: "Archived", reelsGenerated: 2, affiliateLink: "reel.link/home01", date: "Mar 1, 2026", thumbnail: "🕯️" },
+  { id: 1, title: "Summer Dress Collection", collection: "Summer Sale 2026", status: "Active", reelsGenerated: 5, affiliateLink: "https://shopee.co.th/ref/summer01", description: "คอลเลคชั่นชุดเดรสฤดูร้อนสุดเก๋", brandLogo: "🏷️", productImage: "🏖️", date: "Mar 6, 2026", thumbnail: "🏖️", tags: ["fashion", "summer"] },
+  { id: 2, title: "Minimal Watch — Gold", collection: "Accessories Launch", status: "Active", reelsGenerated: 3, affiliateLink: "https://lazada.co.th/ref/watch01", description: "นาฬิกามินิมอลสีทอง หรูหรา", brandLogo: "⌚", productImage: "⌚", date: "Mar 5, 2026", thumbnail: "⌚", tags: ["accessories", "luxury"] },
+  { id: 3, title: "Skincare Bundle Set", collection: "Beauty Week", status: "Draft", reelsGenerated: 0, affiliateLink: "", description: "เซ็ตดูแลผิวครบชุด", brandLogo: "🧴", productImage: "🧴", date: "Mar 4, 2026", thumbnail: "🧴", tags: ["beauty", "skincare"] },
+  { id: 4, title: "Wireless Earbuds Pro", collection: "Tech Deals", status: "Active", reelsGenerated: 8, affiliateLink: "https://shopee.co.th/ref/tech01", description: "หูฟังไร้สายคุณภาพระดับ Pro", brandLogo: "🎧", productImage: "🎧", date: "Mar 3, 2026", thumbnail: "🎧", tags: ["tech", "audio"] },
+  { id: 5, title: "Fashion Lookbook SS26", collection: "Summer Sale 2026", status: "Active", reelsGenerated: 12, affiliateLink: "https://lazada.co.th/ref/fashion01", description: "แฟชั่นลุคบุ๊ค Spring/Summer 2026", brandLogo: "👗", productImage: "👗", date: "Mar 2, 2026", thumbnail: "👗", tags: ["fashion", "lookbook"] },
+  { id: 6, title: "Home Decor Candle Set", collection: "Home & Living", status: "Archived", reelsGenerated: 2, affiliateLink: "https://shopee.co.th/ref/home01", description: "เทียนหอมตกแต่งบ้าน", brandLogo: "🕯️", productImage: "🕯️", date: "Mar 1, 2026", thumbnail: "🕯️", tags: ["home", "decor"] },
 ];
 
-const campaigns = [...new Set(mockProducts.map((p) => p.campaign))];
+const collections = [...new Set(mockProducts.map((p) => p.collection))];
 
 const ContentLibrary = () => {
   const [view, setView] = useState<"grid" | "list">("grid");
+  const [activeCollection, setActiveCollection] = useState<string | null>(null);
+  const [expandedProduct, setExpandedProduct] = useState<number | null>(null);
   const navigate = useNavigate();
+
+  const filtered = activeCollection
+    ? mockProducts.filter((p) => p.collection === activeCollection)
+    : mockProducts;
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Product Library</h1>
-          <p className="mt-1 text-muted-foreground">จัดการสินค้าตามแคมเปญ เชื่อมลิงก์ Affiliate และติดตามผล Reel</p>
+          <p className="mt-1 text-muted-foreground">จัดการสินค้า, รูปภาพ, โลโก้แบรนด์, Affiliate Links และจัดกลุ่มเป็น Collections</p>
         </div>
         <Button onClick={() => navigate("/create")} className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto">
           <Plus className="h-4 w-4" />
@@ -44,15 +55,26 @@ const ContentLibrary = () => {
         </Button>
       </div>
 
-      {/* Campaign Tags */}
+      {/* Collection Tags */}
       <div className="flex items-center gap-2 flex-wrap">
-        <button className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary ring-1 ring-primary/20">
+        <button
+          onClick={() => setActiveCollection(null)}
+          className={`rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition-colors ${
+            !activeCollection ? "bg-primary/10 text-primary ring-primary/20" : "bg-muted text-muted-foreground ring-border hover:text-foreground"
+          }`}
+        >
           All ({mockProducts.length})
         </button>
-        {campaigns.map((c) => (
-          <button key={c} className="rounded-full bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground ring-1 ring-border hover:text-foreground hover:ring-primary/20 transition-colors">
+        {collections.map((c) => (
+          <button
+            key={c}
+            onClick={() => setActiveCollection(activeCollection === c ? null : c)}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition-colors ${
+              activeCollection === c ? "bg-primary/10 text-primary ring-primary/20" : "bg-muted text-muted-foreground ring-border hover:text-foreground"
+            }`}
+          >
             <FolderOpen className="inline h-3 w-3 mr-1" />
-            {c} ({mockProducts.filter((p) => p.campaign === c).length})
+            {c} ({mockProducts.filter((p) => p.collection === c).length})
           </button>
         ))}
       </div>
@@ -77,16 +99,18 @@ const ContentLibrary = () => {
       {/* Grid View */}
       {view === "grid" ? (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {mockProducts.map((product, i) => (
+          {filtered.map((product, i) => (
             <motion.div
               key={product.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
               className="group rounded-2xl border border-border bg-card shadow-card card-shine transition-all duration-300 hover:border-primary/20 hover:shadow-elevated cursor-pointer overflow-hidden"
+              onClick={() => setExpandedProduct(expandedProduct === product.id ? null : product.id)}
             >
               <div className="relative flex aspect-video items-center justify-center bg-muted text-4xl">
                 {product.thumbnail}
+                <div className="absolute top-2 right-2 text-lg">{product.brandLogo}</div>
                 <div className="absolute inset-0 flex items-center justify-center bg-background/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full gradient-primary shadow-glow">
                     <Play className="h-5 w-5 text-primary-foreground ml-0.5" />
@@ -102,19 +126,47 @@ const ContentLibrary = () => {
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground flex items-center gap-1">
                   <FolderOpen className="h-3 w-3" />
-                  {product.campaign}
+                  {product.collection}
                 </p>
+                <p className="mt-1 text-xs text-muted-foreground line-clamp-1">{product.description}</p>
+                <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                  {product.tags.map((tag) => (
+                    <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground ring-1 ring-border">
+                      <Tag className="inline h-2.5 w-2.5 mr-0.5" />{tag}
+                    </span>
+                  ))}
+                </div>
                 <div className="mt-3 flex items-center gap-2.5 text-xs text-muted-foreground flex-wrap">
                   <span className={`rounded-full px-2.5 py-0.5 font-medium ring-1 ${
                     product.status === "Active" ? "bg-success/10 text-success ring-success/20"
                     : product.status === "Draft" ? "bg-warning/10 text-warning ring-warning/20"
                     : "bg-muted text-muted-foreground ring-border"
                   }`}>{product.status}</span>
-                  <span className="flex items-center gap-1">
-                    <Package className="h-3 w-3" />
-                    {product.reelsGenerated} Reels
-                  </span>
+                  <span className="flex items-center gap-1"><Package className="h-3 w-3" />{product.reelsGenerated} Reels</span>
+                  {product.affiliateLink && (
+                    <span className="flex items-center gap-1 text-primary"><Link2 className="h-3 w-3" />Affiliate</span>
+                  )}
                 </div>
+
+                {/* Expanded Details */}
+                {expandedProduct === product.id && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="mt-3 pt-3 border-t border-border space-y-2">
+                    <div className="flex items-center gap-2 text-xs">
+                      <ImageIcon className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-muted-foreground">Product Image:</span>
+                      <span className="text-foreground">Uploaded ✓</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <Link2 className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-muted-foreground">Affiliate:</span>
+                      <span className="text-foreground truncate">{product.affiliateLink || "ยังไม่ได้ตั้งค่า"}</span>
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <Button variant="outline" size="sm" className="gap-1 flex-1 text-xs"><Edit className="h-3 w-3" />แก้ไข</Button>
+                      <Button size="sm" className="gap-1 flex-1 text-xs gradient-primary text-primary-foreground"><Play className="h-3 w-3" />สร้าง Reel</Button>
+                    </div>
+                  </motion.div>
+                )}
               </div>
             </motion.div>
           ))}
@@ -122,7 +174,7 @@ const ContentLibrary = () => {
       ) : (
         <div className="rounded-2xl border border-border bg-card shadow-card overflow-hidden">
           <div className="divide-y divide-border">
-            {mockProducts.map((product, i) => (
+            {filtered.map((product, i) => (
               <motion.div
                 key={product.id}
                 initial={{ opacity: 0, x: -10 }}
@@ -133,7 +185,7 @@ const ContentLibrary = () => {
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted text-xl ring-1 ring-border group-hover:ring-primary/20 transition-all">{product.thumbnail}</div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">{product.title}</p>
-                  <p className="text-xs text-muted-foreground">{product.campaign}</p>
+                  <p className="text-xs text-muted-foreground">{product.collection}</p>
                 </div>
                 <span className={`hidden sm:inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${
                   product.status === "Active" ? "bg-success/10 text-success ring-success/20"
@@ -141,7 +193,7 @@ const ContentLibrary = () => {
                   : "bg-muted text-muted-foreground ring-border"
                 }`}>{product.status}</span>
                 <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground"><Package className="h-3 w-3" />{product.reelsGenerated} Reels</span>
-                <span className="hidden md:block text-xs text-muted-foreground">{product.affiliateLink}</span>
+                {product.affiliateLink && <span className="hidden md:flex items-center gap-1 text-xs text-primary"><Link2 className="h-3 w-3" />Affiliate</span>}
                 <span className="hidden lg:flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{product.date}</span>
               </motion.div>
             ))}

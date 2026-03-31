@@ -13,6 +13,7 @@ import AffiliateLinks from "./pages/AffiliateLinks";
 import Distribution from "./pages/Distribution";
 import Account from "./pages/Account";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
             <Route
               element={
                 <ProtectedRoute>
