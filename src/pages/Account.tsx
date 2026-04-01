@@ -49,7 +49,7 @@ const Account = () => {
 
   const handleSave = () => {
     updateProfile({ displayName, email });
-    toast.success("บันทึกโปรไฟล์สำเร็จ");
+    toast.success("Profile saved successfully");
   };
 
   const handleLogout = () => {
@@ -63,7 +63,7 @@ const Account = () => {
     );
     const platform = socialPlatforms.find((p) => p.id === id);
     if (platform) {
-      toast.success(`${platform.name} ${platform.active ? "ปิด" : "เปิด"}ใช้งานแล้ว`);
+      toast.success(`${platform.name} ${platform.active ? "deactivated" : "activated"}`);
     }
   };
 
@@ -73,7 +73,7 @@ const Account = () => {
     );
     const platform = ecommercePlatforms.find((p) => p.id === id);
     if (platform) {
-      toast.success(`${platform.name} ${platform.active ? "ปิด" : "เปิด"}ใช้งานแล้ว`);
+      toast.success(`${platform.name} ${platform.active ? "deactivated" : "activated"}`);
     }
   };
 
@@ -94,7 +94,7 @@ const Account = () => {
         <div>
           <p className="text-sm font-medium text-foreground">{platform.name}</p>
           <p className="text-[11px] text-muted-foreground">
-            {platform.active ? "เปิดใช้งาน" : "ปิดใช้งาน"}
+            {platform.active ? "Active" : "Inactive"}
           </p>
         </div>
       </div>
@@ -111,8 +111,8 @@ const Account = () => {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-bold text-foreground">จัดการบัญชี</h1>
-        <p className="text-sm text-muted-foreground mt-1">แก้ไขข้อมูลโปรไฟล์และตั้งค่าบัญชี</p>
+        <h1 className="font-display text-2xl font-bold text-foreground">Account Management</h1>
+        <p className="text-sm text-muted-foreground mt-1">Edit your profile and manage account settings</p>
       </div>
 
       {/* Profile Card */}
@@ -135,7 +135,7 @@ const Account = () => {
                   </Badge>
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Calendar className="h-3 w-3" />
-                    เข้าร่วม {new Date(user.joinedAt).toLocaleDateString("th-TH")}
+                    Joined {new Date(user.joinedAt).toLocaleDateString("en-US")}
                   </span>
                 </div>
               </div>
@@ -150,16 +150,16 @@ const Account = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <User className="h-4 w-4 text-primary" />
-              ข้อมูลโปรไฟล์
+              Profile Information
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">ชื่อที่แสดง</Label>
+              <Label htmlFor="name">Display Name</Label>
               <Input id="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="acc-email">อีเมล</Label>
+              <Label htmlFor="acc-email">Email</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input id="acc-email" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10" />
@@ -167,7 +167,7 @@ const Account = () => {
             </div>
             <Button onClick={handleSave} className="gradient-primary text-primary-foreground shadow-glow">
               <Save className="h-4 w-4" />
-              บันทึก
+              Save
             </Button>
           </CardContent>
         </Card>
@@ -177,8 +177,8 @@ const Account = () => {
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
         <Card className="border-border bg-card">
           <CardHeader>
-            <CardTitle className="text-base">🔗 เชื่อมต่อแพลตฟอร์ม</CardTitle>
-            <CardDescription>เปิด/ปิดแพลตฟอร์มที่ต้องการใช้งานสำหรับเผยแพร่และติดตามข้อมูล</CardDescription>
+            <CardTitle className="text-base">🔗 Connect Platforms</CardTitle>
+            <CardDescription>Enable or disable platforms for publishing and data tracking</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             {/* Social Media */}
@@ -210,17 +210,17 @@ const Account = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Shield className="h-4 w-4 text-primary" />
-              ความปลอดภัย
+              Security
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-foreground">รหัสผ่าน</p>
-                <p className="text-xs text-muted-foreground">เปลี่ยนรหัสผ่านบัญชีของคุณ</p>
+                <p className="text-sm font-medium text-foreground">Password</p>
+                <p className="text-xs text-muted-foreground">Change your account password</p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => toast.info("Mock mode — ไม่สามารถเปลี่ยนรหัสผ่านได้")}>
-                เปลี่ยนรหัสผ่าน
+              <Button variant="outline" size="sm" onClick={() => toast.info("Mock mode — cannot change password")}>
+                Change Password
               </Button>
             </div>
 
@@ -229,9 +229,9 @@ const Account = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-foreground">Two-Factor Auth</p>
-                <p className="text-xs text-muted-foreground">เพิ่มความปลอดภัยด้วย 2FA</p>
+                <p className="text-xs text-muted-foreground">Add an extra layer of security with 2FA</p>
               </div>
-              <Badge variant="outline" className="text-xs">ยังไม่เปิดใช้</Badge>
+              <Badge variant="outline" className="text-xs">Not enabled</Badge>
             </div>
           </CardContent>
         </Card>
@@ -241,7 +241,7 @@ const Account = () => {
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
         <Button variant="outline" className="w-full border-destructive/30 text-destructive hover:bg-destructive/10" onClick={handleLogout}>
           <LogOut className="h-4 w-4" />
-          ออกจากระบบ
+          Sign Out
         </Button>
       </motion.div>
     </div>

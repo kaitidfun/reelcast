@@ -7,13 +7,13 @@ import { useNavigate } from "react-router-dom";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 
 const socialData = [
-  { date: "3 มี.ค.", views: 4200, clicks: 1800, conversions: 320 },
-  { date: "4 มี.ค.", views: 5100, clicks: 2100, conversions: 410 },
-  { date: "5 มี.ค.", views: 4800, clicks: 1950, conversions: 380 },
-  { date: "6 มี.ค.", views: 6200, clicks: 2800, conversions: 520 },
-  { date: "7 มี.ค.", views: 7100, clicks: 3200, conversions: 610 },
-  { date: "8 มี.ค.", views: 6800, clicks: 2900, conversions: 580 },
-  { date: "วันนี้", views: 7500, clicks: 3400, conversions: 670 },
+  { date: "Mar 3", views: 4200, clicks: 1800, conversions: 320 },
+  { date: "Mar 4", views: 5100, clicks: 2100, conversions: 410 },
+  { date: "Mar 5", views: 4800, clicks: 1950, conversions: 380 },
+  { date: "Mar 6", views: 6200, clicks: 2800, conversions: 520 },
+  { date: "Mar 7", views: 7100, clicks: 3200, conversions: 610 },
+  { date: "Mar 8", views: 6800, clicks: 2900, conversions: 580 },
+  { date: "Today", views: 7500, clicks: 3400, conversions: 670 },
 ];
 
 const ecommerceData = [
@@ -23,13 +23,13 @@ const ecommerceData = [
 ];
 
 const platformEngagement = [
-  { date: "3 มี.ค.", youtube: 2800, tiktok: 3500, facebook: 1900, instagram: 2100 },
-  { date: "4 มี.ค.", youtube: 3200, tiktok: 4100, facebook: 2200, instagram: 2400 },
-  { date: "5 มี.ค.", youtube: 2900, tiktok: 3800, facebook: 2000, instagram: 2300 },
-  { date: "6 มี.ค.", youtube: 4100, tiktok: 5200, facebook: 2800, instagram: 3100 },
-  { date: "7 มี.ค.", youtube: 4500, tiktok: 5800, facebook: 3100, instagram: 3400 },
-  { date: "8 มี.ค.", youtube: 4200, tiktok: 5500, facebook: 2900, instagram: 3200 },
-  { date: "วันนี้", youtube: 4800, tiktok: 6200, facebook: 3300, instagram: 3600 },
+  { date: "Mar 3", youtube: 2800, tiktok: 3500, facebook: 1900, instagram: 2100 },
+  { date: "Mar 4", youtube: 3200, tiktok: 4100, facebook: 2200, instagram: 2400 },
+  { date: "Mar 5", youtube: 2900, tiktok: 3800, facebook: 2000, instagram: 2300 },
+  { date: "Mar 6", youtube: 4100, tiktok: 5200, facebook: 2800, instagram: 3100 },
+  { date: "Mar 7", youtube: 4500, tiktok: 5800, facebook: 3100, instagram: 3400 },
+  { date: "Mar 8", youtube: 4200, tiktok: 5500, facebook: 2900, instagram: 3200 },
+  { date: "Today", youtube: 4800, tiktok: 6200, facebook: 3300, instagram: 3600 },
 ];
 
 const socialMetrics = [
@@ -69,8 +69,8 @@ const Dashboard = () => {
                 </div>
                 <span className="text-xs font-semibold uppercase tracking-widest text-primary">ReelCast Studio</span>
               </div>
-              <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">สวัสดี, ยินดีต้อนรับกลับ 👋</h1>
-              <p className="mt-2 text-muted-foreground max-w-lg">ภาพรวมคอนเทนต์ ยอดขาย และ Engagement จากทุกแพลตฟอร์ม</p>
+              <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Hello, Welcome Back 👋</h1>
+              <p className="mt-2 text-muted-foreground max-w-lg">Overview of your content, sales, and engagement across all platforms</p>
             </div>
             <Button onClick={() => navigate("/create")} className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto">
               <Sparkles className="h-4 w-4" />Create New Reel

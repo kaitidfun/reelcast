@@ -8,9 +8,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
 
 const roles = [
-  { id: "merchant", label: "Online Merchant", icon: Store, desc: "ผู้ค้าออนไลน์" },
-  { id: "affiliate", label: "Affiliate Marketer", icon: TrendingUp, desc: "นักการตลาด Affiliate" },
-  { id: "brand", label: "Brand Owner", icon: Briefcase, desc: "เจ้าของแบรนด์" },
+  { id: "merchant", label: "Online Merchant", icon: Store, desc: "E-commerce seller" },
+  { id: "affiliate", label: "Affiliate Marketer", icon: TrendingUp, desc: "Affiliate marketer" },
+  { id: "brand", label: "Brand Owner", icon: Briefcase, desc: "Brand owner" },
 ];
 
 const Register = () => {
@@ -28,15 +28,15 @@ const Register = () => {
     e.preventDefault();
     setError("");
     if (!displayName || !email || !password) {
-      setError("กรุณากรอกข้อมูลให้ครบ");
+      setError("Please fill in all fields");
       return;
     }
     if (password !== confirmPassword) {
-      setError("รหัสผ่านไม่ตรงกัน");
+      setError("Passwords do not match");
       return;
     }
     if (password.length < 6) {
-      setError("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร");
+      setError("Password must be at least 6 characters");
       return;
     }
     setLoading(true);
@@ -45,7 +45,7 @@ const Register = () => {
     if (ok) {
       navigate("/", { replace: true });
     } else {
-      setError("สมัครสมาชิกไม่สำเร็จ");
+      setError("Registration failed");
     }
   };
 
@@ -65,19 +65,19 @@ const Register = () => {
           </div>
           <div className="text-center">
             <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">ReelCast</h1>
-            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mt-1">สร้างบัญชีใหม่</p>
+            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mt-1">Create New Account</p>
           </div>
         </div>
 
         {/* Card */}
         <div className="rounded-2xl border border-border bg-card p-6 shadow-elevated">
-          <h2 className="text-lg font-semibold text-foreground mb-1">สมัครสมาชิก</h2>
-          <p className="text-sm text-muted-foreground mb-5">กรอกข้อมูลเพื่อเริ่มใช้งาน ReelCast</p>
+          <h2 className="text-lg font-semibold text-foreground mb-1">Register</h2>
+          <p className="text-sm text-muted-foreground mb-5">Fill in your details to get started with ReelCast</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Role Selection */}
             <div className="space-y-2">
-              <Label>ประเภทผู้ใช้งาน</Label>
+              <Label>User Type</Label>
               <div className="grid grid-cols-3 gap-2">
                 {roles.map((r) => {
                   const Icon = r.icon;
@@ -101,15 +101,15 @@ const Register = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="name">ชื่อที่แสดง</Label>
+              <Label htmlFor="name">Display Name</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input id="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="pl-10" placeholder="ชื่อของคุณ" />
+                <Input id="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="pl-10" placeholder="Your name" />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">อีเมล</Label>
+              <Label htmlFor="email">Email</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10" placeholder="email@example.com" />
@@ -118,14 +118,14 @@ const Register = () => {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="password">รหัสผ่าน</Label>
+                <Label htmlFor="password">Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10" placeholder="••••••" />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="confirm">ยืนยันรหัสผ่าน</Label>
+                <Label htmlFor="confirm">Confirm Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input id="confirm" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="pl-10" placeholder="••••••" />
@@ -136,14 +136,14 @@ const Register = () => {
             {error && <p className="text-sm text-destructive">{error}</p>}
 
             <Button type="submit" className="w-full gradient-primary text-primary-foreground shadow-glow" disabled={loading}>
-              {loading ? "กำลังสมัคร..." : "สมัครสมาชิก"}
+              {loading ? "Creating account..." : "Register"}
               {!loading && <ArrowRight className="h-4 w-4" />}
             </Button>
           </form>
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            มีบัญชีอยู่แล้ว?{" "}
-            <Link to="/login" className="text-primary hover:underline font-medium">เข้าสู่ระบบ</Link>
+            Already have an account?{" "}
+            <Link to="/login" className="text-primary hover:underline font-medium">Sign In</Link>
           </p>
         </div>
       </motion.div>

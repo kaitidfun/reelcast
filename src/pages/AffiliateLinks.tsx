@@ -17,7 +17,7 @@ const AffiliateLinks = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Affiliate Links</h1>
-          <p className="mt-1 text-muted-foreground">จัดการลิงก์สินค้าและติดตามผลลัพธ์</p>
+          <p className="mt-1 text-muted-foreground">Manage product links and track performance</p>
         </div>
         <Button className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto">
           <Plus className="h-4 w-4" />
@@ -32,7 +32,7 @@ const AffiliateLinks = () => {
         <StatCard icon={BarChart3} label="Total Revenue" value="฿47,320" change="+22%" positive delay={0.15} />
       </div>
 
-      {/* Links as Cards on mobile, Table on desktop */}
+      {/* Links */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -85,7 +85,7 @@ const AffiliateLinks = () => {
         {/* Desktop Table */}
         <div className="hidden sm:block rounded-2xl border border-border bg-card shadow-card overflow-hidden">
           <div className="border-b border-border px-6 py-4">
-            <Input placeholder="ค้นหาลิงก์..." className="max-w-xs bg-muted/50 border-border" />
+            <Input placeholder="Search links..." className="max-w-xs bg-muted/50 border-border" />
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">

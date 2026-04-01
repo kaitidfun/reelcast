@@ -17,8 +17,8 @@ const CreateReel = () => {
   const { toast } = useToast();
 
   const inputOptions = [
-    { type: "text" as const, icon: Type, label: "Prompt", desc: "พิมพ์ Prompt" },
-    { type: "upload" as const, icon: Upload, label: "Upload Reel", desc: "อัปโหลดวิดีโอ" },
+    { type: "text" as const, icon: Type, label: "Prompt", desc: "Type a prompt" },
+    { type: "upload" as const, icon: Upload, label: "Upload Reel", desc: "Upload a video" },
   ];
 
   const platformOptions = [
@@ -29,10 +29,10 @@ const CreateReel = () => {
   ];
 
   const generationTasks = [
-    { label: "Gemini วิเคราะห์จุดขายสินค้า", icon: Brain, detail: "Gemini 1.5 Pro" },
-    { label: "Gemini สร้าง Script & Caption", icon: Hash, detail: "Platform-specific captions" },
-    { label: "Veo สร้างวิดีโอ B-Roll", icon: Film, detail: "Google Veo" },
-    { label: "FFmpeg ประกอบ Overlay สินค้า", icon: Scissors, detail: "Product Image + Brand Logo" },
+    { label: "Gemini analyzes product highlights", icon: Brain, detail: "Gemini 1.5 Pro" },
+    { label: "Gemini generates Script & Caption", icon: Hash, detail: "Platform-specific captions" },
+    { label: "Veo generates B-Roll video", icon: Film, detail: "Google Veo" },
+    { label: "FFmpeg composes product overlay", icon: Scissors, detail: "Product Image + Brand Logo" },
   ];
 
   const togglePlatform = (id: string) => {
@@ -45,8 +45,8 @@ const CreateReel = () => {
     setGenerationStatus("generating");
     setTimeout(() => {
       setGenerationStatus("done");
-      setCaption("✨ เปิดตัวคอลเลคชั่นใหม่! สินค้าที่จะเปลี่ยนไลฟ์สไตล์ของคุณ 🔥\n\n#Shopping #NewArrival #MustHave #ReelCast");
-      toast({ title: "สร้าง Reel สำเร็จ!", description: "พร้อม preview และ publish แล้ว" });
+      setCaption("✨ Introducing our new collection! Products that will transform your lifestyle 🔥\n\n#Shopping #NewArrival #MustHave #ReelCast");
+      toast({ title: "Reel created successfully!", description: "Ready to preview and publish" });
     }, 3000);
   };
 
@@ -54,21 +54,21 @@ const CreateReel = () => {
     setGenerationStatus("generating");
     setTimeout(() => {
       setGenerationStatus("done");
-      setCaption("🛍️ ของดีต้องบอกต่อ! คุณภาพเกินราคา ✅\n\n#BestDeal #Shopping #Trending #ReelCast");
-      toast({ title: "Re-generate สำเร็จ!", description: "เวอร์ชันใหม่พร้อมแล้ว" });
+      setCaption("🛍️ Must-have alert! Premium quality at an unbeatable price ✅\n\n#BestDeal #Shopping #Trending #ReelCast");
+      toast({ title: "Regeneration complete!", description: "New version is ready" });
     }, 2500);
   };
 
   const handlePublish = () => {
     const names = platformOptions.filter((p) => selectedPlatforms.includes(p.id)).map((p) => p.label);
-    toast({ title: "Published!", description: `Reel ถูกเผยแพร่ไปยัง ${names.join(", ")} แล้ว 🎉` });
+    toast({ title: "Published!", description: `Reel has been distributed to ${names.join(", ")} 🎉` });
   };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Create Reel</h1>
-        <p className="mt-1 text-muted-foreground">สร้างวิดีโอ Reel เชิงพาณิชย์ด้วย AI — Gemini + Veo + FFmpeg</p>
+        <p className="mt-1 text-muted-foreground">Generate commercial Reels with AI — Gemini + Veo + FFmpeg</p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
@@ -76,7 +76,7 @@ const CreateReel = () => {
         <div className="lg:col-span-3 space-y-5">
           {/* Input Type */}
           <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
-            <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">1. แหล่งข้อมูล</h2>
+            <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">1. Input Source</h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {inputOptions.map(({ type, icon: Icon, label, desc }) => (
                 <button
@@ -97,14 +97,14 @@ const CreateReel = () => {
 
             <div>
               {inputType === "text" && (
-                <Textarea placeholder="พิมพ์ Prompt เกี่ยวกับ Reel ที่ต้องการ เช่น สินค้า จุดเด่น สไตล์..." rows={4} className="bg-muted/50 border-border resize-none" />
+                <Textarea placeholder="Describe the Reel you want — product details, highlights, style..." rows={4} className="bg-muted/50 border-border resize-none" />
               )}
               {inputType === "upload" && (
                 <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border/60 py-10 transition-colors hover:border-primary/30 hover:bg-primary/5 cursor-pointer">
                   <Upload className="h-6 w-6 text-muted-foreground" />
-                  <p className="text-xs text-muted-foreground">อัปโหลดวิดีโอ Reel ของคุณเพื่อ process ต่อ</p>
-                  <p className="text-[10px] text-muted-foreground">รองรับ MP4, MOV (max 100MB)</p>
-                  <Button variant="outline" size="sm">เลือกวิดีโอ</Button>
+                  <p className="text-xs text-muted-foreground">Upload your Reel video for processing</p>
+                  <p className="text-[10px] text-muted-foreground">Supports MP4, MOV (max 100MB)</p>
+                  <Button variant="outline" size="sm">Choose Video</Button>
                 </div>
               )}
             </div>
@@ -112,9 +112,9 @@ const CreateReel = () => {
 
           {/* Select Product from Library */}
           <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
-            <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">2. เลือกสินค้าจาก Product Library</h2>
+            <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">2. Select Product from Library</h2>
             <select className="w-full rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
-              <option>— เลือกสินค้า —</option>
+              <option>— Select a product —</option>
               <option>Summer Dress Collection</option>
               <option>Minimal Watch — Gold</option>
               <option>Skincare Bundle Set</option>
@@ -124,7 +124,7 @@ const CreateReel = () => {
 
           {/* Settings */}
           <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
-            <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">3. ตั้งค่า</h2>
+            <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">3. Settings</h2>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-foreground">Video Style</label>
@@ -171,7 +171,7 @@ const CreateReel = () => {
           {generationStatus === "done" && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
               <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">4. Preview & Approve</h2>
-              <p className="text-xs text-muted-foreground">ตรวจสอบ Caption ที่ Gemini สร้าง (optimized per platform) แก้ไขได้ก่อน Publish</p>
+              <p className="text-xs text-muted-foreground">Review the AI-generated caption (optimized per platform) — edit before publishing</p>
               <Textarea
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
@@ -201,7 +201,7 @@ const CreateReel = () => {
             className="w-full gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-12 text-base"
           >
             {generationStatus === "generating" ? (
-              <><Loader2 className="h-5 w-5 animate-spin" />AI กำลังสร้าง...</>
+              <><Loader2 className="h-5 w-5 animate-spin" />AI is generating...</>
             ) : generationStatus === "done" ? (
               <><RefreshCw className="h-5 w-5" />Re-generate</>
             ) : (
@@ -249,7 +249,7 @@ const CreateReel = () => {
                     <div className="flex h-16 w-16 items-center justify-center rounded-2xl gradient-primary shadow-glow">
                       <Video className="h-8 w-8 text-primary-foreground" />
                     </div>
-                    <p className="text-sm font-medium text-foreground">Reel พร้อมแล้ว!</p>
+                    <p className="text-sm font-medium text-foreground">Reel is ready!</p>
                     <p className="text-xs text-muted-foreground text-center">B-Roll + Product Image + Brand Logo Overlay</p>
                   </>
                 ) : generationStatus === "generating" ? (
@@ -260,14 +260,14 @@ const CreateReel = () => {
                       </div>
                       <div className="absolute -inset-3 animate-pulse rounded-2xl gradient-primary opacity-10 blur-xl" />
                     </div>
-                    <p className="text-sm text-muted-foreground">Veo กำลังสร้าง B-Roll...</p>
+                    <p className="text-sm text-muted-foreground">Veo is generating B-Roll...</p>
                   </>
                 ) : (
                   <>
                     <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted-foreground/10">
                       <Video className="h-8 w-8 text-muted-foreground/30" />
                     </div>
-                    <p className="text-xs text-muted-foreground text-center">กด Generate เพื่อให้ AI สร้าง Reel</p>
+                    <p className="text-xs text-muted-foreground text-center">Click Generate to let AI create your Reel</p>
                   </>
                 )}
               </div>
