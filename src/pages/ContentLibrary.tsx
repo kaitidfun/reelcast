@@ -22,12 +22,12 @@ interface Product {
 }
 
 const mockProducts: Product[] = [
-  { id: 1, title: "Summer Dress Collection", collection: "Summer Sale 2026", status: "Active", reelsGenerated: 5, affiliateLink: "https://shopee.co.th/ref/summer01", description: "คอลเลคชั่นชุดเดรสฤดูร้อนสุดเก๋", brandLogo: "🏷️", productImage: "🏖️", date: "Mar 6, 2026", thumbnail: "🏖️", tags: ["fashion", "summer"] },
-  { id: 2, title: "Minimal Watch — Gold", collection: "Accessories Launch", status: "Active", reelsGenerated: 3, affiliateLink: "https://lazada.co.th/ref/watch01", description: "นาฬิกามินิมอลสีทอง หรูหรา", brandLogo: "⌚", productImage: "⌚", date: "Mar 5, 2026", thumbnail: "⌚", tags: ["accessories", "luxury"] },
-  { id: 3, title: "Skincare Bundle Set", collection: "Beauty Week", status: "Draft", reelsGenerated: 0, affiliateLink: "", description: "เซ็ตดูแลผิวครบชุด", brandLogo: "🧴", productImage: "🧴", date: "Mar 4, 2026", thumbnail: "🧴", tags: ["beauty", "skincare"] },
-  { id: 4, title: "Wireless Earbuds Pro", collection: "Tech Deals", status: "Active", reelsGenerated: 8, affiliateLink: "https://shopee.co.th/ref/tech01", description: "หูฟังไร้สายคุณภาพระดับ Pro", brandLogo: "🎧", productImage: "🎧", date: "Mar 3, 2026", thumbnail: "🎧", tags: ["tech", "audio"] },
-  { id: 5, title: "Fashion Lookbook SS26", collection: "Summer Sale 2026", status: "Active", reelsGenerated: 12, affiliateLink: "https://lazada.co.th/ref/fashion01", description: "แฟชั่นลุคบุ๊ค Spring/Summer 2026", brandLogo: "👗", productImage: "👗", date: "Mar 2, 2026", thumbnail: "👗", tags: ["fashion", "lookbook"] },
-  { id: 6, title: "Home Decor Candle Set", collection: "Home & Living", status: "Archived", reelsGenerated: 2, affiliateLink: "https://shopee.co.th/ref/home01", description: "เทียนหอมตกแต่งบ้าน", brandLogo: "🕯️", productImage: "🕯️", date: "Mar 1, 2026", thumbnail: "🕯️", tags: ["home", "decor"] },
+  { id: 1, title: "Summer Dress Collection", collection: "Summer Sale 2026", status: "Active", reelsGenerated: 5, affiliateLink: "https://shopee.co.th/ref/summer01", description: "Stylish summer dress collection", brandLogo: "🏷️", productImage: "🏖️", date: "Mar 6, 2026", thumbnail: "🏖️", tags: ["fashion", "summer"] },
+  { id: 2, title: "Minimal Watch — Gold", collection: "Accessories Launch", status: "Active", reelsGenerated: 3, affiliateLink: "https://lazada.co.th/ref/watch01", description: "Elegant gold minimal watch", brandLogo: "⌚", productImage: "⌚", date: "Mar 5, 2026", thumbnail: "⌚", tags: ["accessories", "luxury"] },
+  { id: 3, title: "Skincare Bundle Set", collection: "Beauty Week", status: "Draft", reelsGenerated: 0, affiliateLink: "", description: "Complete skincare bundle set", brandLogo: "🧴", productImage: "🧴", date: "Mar 4, 2026", thumbnail: "🧴", tags: ["beauty", "skincare"] },
+  { id: 4, title: "Wireless Earbuds Pro", collection: "Tech Deals", status: "Active", reelsGenerated: 8, affiliateLink: "https://shopee.co.th/ref/tech01", description: "Pro-grade wireless earbuds", brandLogo: "🎧", productImage: "🎧", date: "Mar 3, 2026", thumbnail: "🎧", tags: ["tech", "audio"] },
+  { id: 5, title: "Fashion Lookbook SS26", collection: "Summer Sale 2026", status: "Active", reelsGenerated: 12, affiliateLink: "https://lazada.co.th/ref/fashion01", description: "Spring/Summer 2026 fashion lookbook", brandLogo: "👗", productImage: "👗", date: "Mar 2, 2026", thumbnail: "👗", tags: ["fashion", "lookbook"] },
+  { id: 6, title: "Home Decor Candle Set", collection: "Home & Living", status: "Archived", reelsGenerated: 2, affiliateLink: "https://shopee.co.th/ref/home01", description: "Decorative scented candle set", brandLogo: "🕯️", productImage: "🕯️", date: "Mar 1, 2026", thumbnail: "🕯️", tags: ["home", "decor"] },
 ];
 
 const collections = [...new Set(mockProducts.map((p) => p.collection))];
@@ -47,7 +47,7 @@ const ContentLibrary = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Product Library</h1>
-          <p className="mt-1 text-muted-foreground">จัดการสินค้า, รูปภาพ, โลโก้แบรนด์, Affiliate Links และจัดกลุ่มเป็น Collections</p>
+          <p className="mt-1 text-muted-foreground">Manage products, images, brand logos, affiliate links, and organize into collections</p>
         </div>
         <Button onClick={() => navigate("/create")} className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto">
           <Plus className="h-4 w-4" />
@@ -83,7 +83,7 @@ const ContentLibrary = () => {
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="ค้นหาสินค้า..." className="bg-card pl-10 border-border h-10" />
+          <Input placeholder="Search products..." className="bg-card pl-10 border-border h-10" />
         </div>
         <Button variant="outline" size="icon" className="h-10 w-10 shrink-0"><Filter className="h-4 w-4" /></Button>
         <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
@@ -159,11 +159,11 @@ const ContentLibrary = () => {
                     <div className="flex items-center gap-2 text-xs">
                       <Link2 className="h-3 w-3 text-muted-foreground" />
                       <span className="text-muted-foreground">Affiliate:</span>
-                      <span className="text-foreground truncate">{product.affiliateLink || "ยังไม่ได้ตั้งค่า"}</span>
+                      <span className="text-foreground truncate">{product.affiliateLink || "Not configured"}</span>
                     </div>
                     <div className="flex gap-2 mt-2">
-                      <Button variant="outline" size="sm" className="gap-1 flex-1 text-xs"><Edit className="h-3 w-3" />แก้ไข</Button>
-                      <Button size="sm" className="gap-1 flex-1 text-xs gradient-primary text-primary-foreground"><Play className="h-3 w-3" />สร้าง Reel</Button>
+                      <Button variant="outline" size="sm" className="gap-1 flex-1 text-xs"><Edit className="h-3 w-3" />Edit</Button>
+                      <Button size="sm" className="gap-1 flex-1 text-xs gradient-primary text-primary-foreground"><Play className="h-3 w-3" />Create Reel</Button>
                     </div>
                   </motion.div>
                 )}

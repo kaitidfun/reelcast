@@ -15,7 +15,7 @@ const Distribution = () => {
     <div className="space-y-8">
       <div>
         <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Distribution</h1>
-        <p className="mt-1 text-muted-foreground">เผยแพร่ Reel อัตโนมัติไปยัง YouTube Shorts, TikTok, Facebook และ Instagram</p>
+        <p className="mt-1 text-muted-foreground">Automatically distribute Reels to YouTube Shorts, TikTok, Facebook, and Instagram</p>
       </div>
 
       {/* Scheduled Posts */}

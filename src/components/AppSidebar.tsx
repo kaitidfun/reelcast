@@ -89,7 +89,7 @@ const SidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => {
           className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-destructive transition-all duration-200"
         >
           <LogOut className="h-[18px] w-[18px]" />
-          ออกจากระบบ
+          Sign Out
         </button>
       </div>
     </>

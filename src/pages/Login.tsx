@@ -19,7 +19,7 @@ const Login = () => {
     e.preventDefault();
     setError("");
     if (!email || !password) {
-      setError("กรุณากรอกข้อมูลให้ครบ");
+      setError("Please fill in all fields");
       return;
     }
     setLoading(true);
@@ -28,7 +28,7 @@ const Login = () => {
     if (ok) {
       navigate("/", { replace: true });
     } else {
-      setError("เข้าสู่ระบบไม่สำเร็จ");
+      setError("Login failed");
     }
   };
 
@@ -54,12 +54,12 @@ const Login = () => {
 
         {/* Card */}
         <div className="rounded-2xl border border-border bg-card p-6 shadow-elevated">
-          <h2 className="text-lg font-semibold text-foreground mb-1">เข้าสู่ระบบ</h2>
-          <p className="text-sm text-muted-foreground mb-6">ใช้ข้อมูล mock ได้เลย กด Login ได้ทันที</p>
+          <h2 className="text-lg font-semibold text-foreground mb-1">Sign In</h2>
+          <p className="text-sm text-muted-foreground mb-6">Use the mock credentials below — just click Login</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">อีเมล</Label>
+              <Label htmlFor="email">Email</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -74,7 +74,7 @@ const Login = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">รหัสผ่าน</Label>
+              <Label htmlFor="password">Password</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -93,17 +93,17 @@ const Login = () => {
             )}
 
             <Button type="submit" className="w-full gradient-primary text-primary-foreground shadow-glow" disabled={loading}>
-              {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
+              {loading ? "Signing in..." : "Sign In"}
               {!loading && <ArrowRight className="h-4 w-4" />}
             </Button>
           </form>
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            ยังไม่มีบัญชี?{" "}
-            <a href="/register" className="text-primary hover:underline font-medium">สมัครสมาชิก</a>
+            Don't have an account?{" "}
+            <a href="/register" className="text-primary hover:underline font-medium">Register</a>
           </p>
           <p className="mt-2 text-center text-xs text-muted-foreground">
-            Demo mode — ใส่อีเมลอะไรก็ได้
+            Demo mode — any email will work
           </p>
         </div>
       </motion.div>
