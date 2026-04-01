@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 
-type InputType = "link" | "image" | "text" | "upload";
+type InputType = "text" | "upload";
 type GenerationStatus = "idle" | "generating" | "done";
 
 const CreateReel = () => {
