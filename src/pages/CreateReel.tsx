@@ -10,7 +10,7 @@ type InputType = "text" | "upload";
 type GenerationStatus = "idle" | "generating" | "done";
 
 const CreateReel = () => {
-  const [inputType, setInputType] = useState<InputType>("link");
+  const [inputType, setInputType] = useState<InputType>("text");
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
   const [caption, setCaption] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
