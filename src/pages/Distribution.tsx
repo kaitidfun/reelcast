@@ -1,24 +1,7 @@
 import { motion } from "framer-motion";
-import { Send, CheckCircle2, Clock, Settings, ToggleLeft, ToggleRight, ArrowRight, Wifi, WifiOff } from "lucide-react";
+import { Send, Clock, Settings, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
-
-interface Platform {
-  id: string;
-  name: string;
-  icon: string;
-  connected: boolean;
-  reelsPosted: number;
-  status: "connected" | "disconnected";
-}
-
-const initialPlatforms: Platform[] = [
-  { id: "yt", name: "YouTube Shorts", icon: "🎬", connected: true, reelsPosted: 28, status: "connected" },
-  { id: "tt", name: "TikTok", icon: "🎵", connected: true, reelsPosted: 15, status: "connected" },
-  { id: "fb", name: "Facebook", icon: "📘", connected: true, reelsPosted: 22, status: "connected" },
-  { id: "ig", name: "Instagram", icon: "📸", connected: false, reelsPosted: 0, status: "disconnected" },
-];
 
 const scheduledPosts = [
   { id: 1, title: "Summer Collection Promo", platforms: ["YouTube Shorts", "Facebook"], scheduledAt: "Mar 9, 2026 — 18:00", status: "scheduled" },
@@ -28,80 +11,11 @@ const scheduledPosts = [
 ];
 
 const Distribution = () => {
-  const [platforms, setPlatforms] = useState(initialPlatforms);
-
-  const togglePlatform = (id: string) => {
-    setPlatforms((prev) =>
-      prev.map((p) =>
-        p.id === id ? { ...p, connected: !p.connected, status: p.connected ? "disconnected" : "connected" } : p
-      )
-    );
-  };
-
   return (
     <div className="space-y-8">
       <div>
         <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Distribution</h1>
         <p className="mt-1 text-muted-foreground">เผยแพร่ Reel อัตโนมัติไปยัง YouTube Shorts, TikTok, Facebook และ Instagram</p>
-      </div>
-
-      {/* Platform Connections */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <Wifi className="h-4 w-4 text-primary" />
-          <h2 className="font-display text-lg font-semibold text-foreground">Connected Platforms</h2>
-        </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {platforms.map((platform, i) => (
-            <motion.div
-              key={platform.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className={`group rounded-2xl border p-5 transition-all duration-300 card-shine ${
-                platform.connected
-                  ? "border-primary/30 bg-card shadow-glow hover:shadow-glow-lg"
-                  : "border-border bg-card hover:border-muted-foreground/20"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-11 w-11 items-center justify-center rounded-xl text-xl transition-all ${
-                    platform.connected ? "bg-primary/10 ring-1 ring-primary/20" : "bg-muted ring-1 ring-border"
-                  }`}>
-                    {platform.icon}
-                  </div>
-                  <div>
-                    <h3 className="font-display text-sm font-semibold text-foreground">{platform.name}</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {platform.connected ? (
-                        <span className="flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3 text-success" />
-                          {platform.reelsPosted} Reels posted
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1">
-                          <WifiOff className="h-3 w-3" />
-                          Not connected
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => togglePlatform(platform.id)}
-                  className="text-muted-foreground transition-transform hover:scale-110"
-                >
-                  {platform.connected ? (
-                    <ToggleRight className="h-7 w-7 text-primary" />
-                  ) : (
-                    <ToggleLeft className="h-7 w-7" />
-                  )}
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </div>
       </div>
 
       {/* Scheduled Posts */}
