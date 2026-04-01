@@ -1,24 +1,22 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Upload, Link2, Type, Sparkles, Image, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash } from "lucide-react";
+import { Upload, Type, Sparkles, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 
-type InputType = "link" | "image" | "text" | "upload";
+type InputType = "text" | "upload";
 type GenerationStatus = "idle" | "generating" | "done";
 
 const CreateReel = () => {
-  const [inputType, setInputType] = useState<InputType>("link");
+  const [inputType, setInputType] = useState<InputType>("text");
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
   const [caption, setCaption] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
   const { toast } = useToast();
 
   const inputOptions = [
-    { type: "link" as const, icon: Link2, label: "Product URL", desc: "วาง URL สินค้า" },
-    { type: "image" as const, icon: Image, label: "Product Image", desc: "อัปโหลดรูปสินค้า" },
     { type: "text" as const, icon: Type, label: "Prompt", desc: "พิมพ์ Prompt" },
     { type: "upload" as const, icon: Upload, label: "Upload Reel", desc: "อัปโหลดวิดีโอ" },
   ];
@@ -98,16 +96,6 @@ const CreateReel = () => {
             </div>
 
             <div>
-              {inputType === "link" && (
-                <Input placeholder="https://shopee.co.th/product/... หรือ URL สินค้า" className="bg-muted/50 border-border h-11" />
-              )}
-              {inputType === "image" && (
-                <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border/60 py-10 transition-colors hover:border-primary/30 hover:bg-primary/5 cursor-pointer">
-                  <Image className="h-6 w-6 text-muted-foreground" />
-                  <p className="text-xs text-muted-foreground">ลากรูปสินค้ามาวาง หรือคลิกอัปโหลด</p>
-                  <Button variant="outline" size="sm">เลือกไฟล์</Button>
-                </div>
-              )}
               {inputType === "text" && (
                 <Textarea placeholder="พิมพ์ Prompt เกี่ยวกับ Reel ที่ต้องการ เช่น สินค้า จุดเด่น สไตล์..." rows={4} className="bg-muted/50 border-border resize-none" />
               )}
