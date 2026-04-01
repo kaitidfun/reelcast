@@ -17,8 +17,6 @@ const CreateReel = () => {
   const { toast } = useToast();
 
   const inputOptions = [
-    { type: "link" as const, icon: Link2, label: "Product URL", desc: "วาง URL สินค้า" },
-    { type: "image" as const, icon: Image, label: "Product Image", desc: "อัปโหลดรูปสินค้า" },
     { type: "text" as const, icon: Type, label: "Prompt", desc: "พิมพ์ Prompt" },
     { type: "upload" as const, icon: Upload, label: "Upload Reel", desc: "อัปโหลดวิดีโอ" },
   ];
