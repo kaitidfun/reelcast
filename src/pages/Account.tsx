@@ -7,16 +7,36 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { User, Mail, Shield, Calendar, LogOut, Save, Crown } from "lucide-react";
+import { User, Mail, Shield, Calendar, LogOut, Save, Crown, ToggleLeft, ToggleRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+
+interface PlatformToggle {
+  id: string;
+  name: string;
+  icon: string;
+  active: boolean;
+}
 
 const Account = () => {
   const { user, updateProfile, logout } = useAuth();
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
+
+  const [socialPlatforms, setSocialPlatforms] = useState<PlatformToggle[]>([
+    { id: "youtube", name: "YouTube", icon: "🎬", active: true },
+    { id: "facebook", name: "Facebook", icon: "📘", active: true },
+    { id: "instagram", name: "Instagram", icon: "📸", active: false },
+    { id: "tiktok", name: "TikTok", icon: "🎵", active: true },
+  ]);
+
+  const [ecommercePlatforms, setEcommercePlatforms] = useState<PlatformToggle[]>([
+    { id: "tiktok-shop", name: "TikTok Shop", icon: "🛒", active: true },
+    { id: "lazada", name: "Lazada", icon: "🛍️", active: false },
+    { id: "shopee", name: "Shopee", icon: "🧡", active: false },
+  ]);
 
   if (!user) return null;
 
@@ -37,11 +57,56 @@ const Account = () => {
     navigate("/login", { replace: true });
   };
 
+  const toggleSocial = (id: string) => {
+    setSocialPlatforms((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, active: !p.active } : p))
+    );
+    const platform = socialPlatforms.find((p) => p.id === id);
+    if (platform) {
+      toast.success(`${platform.name} ${platform.active ? "ปิด" : "เปิด"}ใช้งานแล้ว`);
+    }
+  };
+
+  const toggleEcommerce = (id: string) => {
+    setEcommercePlatforms((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, active: !p.active } : p))
+    );
+    const platform = ecommercePlatforms.find((p) => p.id === id);
+    if (platform) {
+      toast.success(`${platform.name} ${platform.active ? "ปิด" : "เปิด"}ใช้งานแล้ว`);
+    }
+  };
+
   const planColors: Record<string, string> = {
     free: "bg-muted text-muted-foreground",
     pro: "gradient-primary text-primary-foreground",
     enterprise: "bg-accent text-accent-foreground",
   };
+
+  const PlatformRow = ({ platform, onToggle }: { platform: PlatformToggle; onToggle: (id: string) => void }) => (
+    <div className="flex items-center justify-between py-2.5">
+      <div className="flex items-center gap-3">
+        <div className={`flex h-9 w-9 items-center justify-center rounded-xl text-base transition-all ${
+          platform.active ? "bg-primary/10 ring-1 ring-primary/20" : "bg-muted ring-1 ring-border"
+        }`}>
+          {platform.icon}
+        </div>
+        <div>
+          <p className="text-sm font-medium text-foreground">{platform.name}</p>
+          <p className="text-[11px] text-muted-foreground">
+            {platform.active ? "เปิดใช้งาน" : "ปิดใช้งาน"}
+          </p>
+        </div>
+      </div>
+      <button onClick={() => onToggle(platform.id)} className="transition-transform hover:scale-110">
+        {platform.active ? (
+          <ToggleRight className="h-7 w-7 text-primary" />
+        ) : (
+          <ToggleLeft className="h-7 w-7 text-muted-foreground" />
+        )}
+      </button>
+    </div>
+  );
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -104,6 +169,37 @@ const Account = () => {
               <Save className="h-4 w-4" />
               บันทึก
             </Button>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Activate Platforms */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+        <Card className="border-border bg-card">
+          <CardHeader>
+            <CardTitle className="text-base">🔗 เชื่อมต่อแพลตฟอร์ม</CardTitle>
+            <CardDescription>เปิด/ปิดแพลตฟอร์มที่ต้องการใช้งานสำหรับเผยแพร่และติดตามข้อมูล</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {/* Social Media */}
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Social Media Platforms</h3>
+              <div className="divide-y divide-border rounded-xl border border-border px-4">
+                {socialPlatforms.map((p) => (
+                  <PlatformRow key={p.id} platform={p} onToggle={toggleSocial} />
+                ))}
+              </div>
+            </div>
+
+            {/* E-Commerce */}
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">E-Commerce Platforms</h3>
+              <div className="divide-y divide-border rounded-xl border border-border px-4">
+                {ecommercePlatforms.map((p) => (
+                  <PlatformRow key={p.id} platform={p} onToggle={toggleEcommerce} />
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
       </motion.div>
