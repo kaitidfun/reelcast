@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Upload, Type, Sparkles, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash } from "lucide-react";
+import { Upload, Type, Sparkles, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,10 +9,20 @@ import { useToast } from "@/hooks/use-toast";
 type InputType = "text" | "upload";
 type GenerationStatus = "idle" | "generating" | "done";
 
+const promptTemplates = [
+  { label: "🛍️ Product Showcase", prompt: "Create a 30-second cinematic Reel showcasing a premium wireless headphone. Highlight its sleek design, noise cancellation feature, and long battery life. Use smooth transitions and upbeat background music." },
+  { label: "🔥 Flash Sale", prompt: "Generate an urgent, fast-paced Reel for a 24-hour flash sale on skincare products. Include countdown visuals, bold text overlays with discount percentages, and energetic transitions." },
+  { label: "✨ New Arrival", prompt: "Create a stylish unboxing-style Reel for a new summer dress collection. Show the fabric texture, color options, and styling tips. Use soft lighting and trendy music." },
+  { label: "📦 Bundle Deal", prompt: "Make a Reel promoting a bundle deal: buy 2 get 1 free on fitness accessories. Show each product briefly, then the bundle together. Add price comparison text overlay." },
+  { label: "⭐ Review Highlight", prompt: "Create a Reel compiling top 5-star customer reviews for a bestselling watch. Display review quotes with product shots and satisfied customer vibes." },
+  { label: "🎯 How-To / Tutorial", prompt: "Generate a quick tutorial Reel showing 3 ways to style a minimal gold necklace for different occasions: casual, office, and evening. Use split-screen transitions." },
+];
+
 const CreateReel = () => {
   const [inputType, setInputType] = useState<InputType>("text");
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
   const [caption, setCaption] = useState("");
+  const [promptText, setPromptText] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
   const { toast } = useToast();
 
@@ -97,7 +107,32 @@ const CreateReel = () => {
 
             <div>
               {inputType === "text" && (
-                <Textarea placeholder="Describe the Reel you want — product details, highlights, style..." rows={4} className="bg-muted/50 border-border resize-none" />
+                <div className="space-y-3">
+                  <Textarea
+                    value={promptText}
+                    onChange={(e) => setPromptText(e.target.value)}
+                    placeholder="Describe the Reel you want — product details, highlights, style..."
+                    rows={4}
+                    className="bg-muted/50 border-border resize-none"
+                  />
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Lightbulb className="h-3.5 w-3.5 text-primary" />
+                      <span className="text-xs font-medium text-muted-foreground">Quick Templates</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {promptTemplates.map((t) => (
+                        <button
+                          key={t.label}
+                          onClick={() => setPromptText(t.prompt)}
+                          className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-foreground transition-all"
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               )}
               {inputType === "upload" && (
                 <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border/60 py-10 transition-colors hover:border-primary/30 hover:bg-primary/5 cursor-pointer">
