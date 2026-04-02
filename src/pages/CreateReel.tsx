@@ -87,7 +87,7 @@ const CreateReel = () => {
           {/* Input Type */}
           <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
             <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">1. Input Source</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               {inputOptions.map(({ type, icon: Icon, label, desc }) => (
                 <button
                   key={type}
