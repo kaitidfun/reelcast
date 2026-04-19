@@ -15,6 +15,18 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const handleSocialLogin = async (provider: "google" | "facebook") => {
+    setLoading(true);
+    toast({
+      title: `Connecting to ${provider === "google" ? "Google" : "Facebook"}...`,
+      description: "Demo mode — signing you in with a mock account.",
+    });
+    const ok = await login(`${provider}.user@reelcast.ai`, "oauth");
+    setLoading(false);
+    if (ok) navigate("/", { replace: true });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
