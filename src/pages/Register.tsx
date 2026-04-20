@@ -374,19 +374,13 @@ const Register = () => {
 
         </div>
 
-        <p className="mt-6 text-center text-xs text-muted-foreground">
+        <p className="mt-3 text-center text-[11px] text-muted-foreground">
           © 2026 ReelCast ·{" "}
-          <a href="#" className="hover:text-foreground transition-colors">
-            Privacy
-          </a>{" "}
+          <a href="#" className="hover:text-foreground transition-colors">Privacy</a>{" "}
           ·{" "}
-          <a href="#" className="hover:text-foreground transition-colors">
-            Terms
-          </a>{" "}
+          <a href="#" className="hover:text-foreground transition-colors">Terms</a>{" "}
           ·{" "}
-          <a href="#" className="hover:text-foreground transition-colors">
-            Support
-          </a>
+          <a href="#" className="hover:text-foreground transition-colors">Support</a>
         </p>
       </motion.div>
     </div>
