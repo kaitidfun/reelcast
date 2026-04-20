@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Home, LayoutDashboard, Video, Library, Link2, Send, Sparkles, Menu, LogOut } from "lucide-react";
+import { LayoutDashboard, Video, Library, Link2, Send, Sparkles, Menu, LogOut } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -7,7 +7,6 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
-  { to: "/home", icon: Home, label: "Home" },
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/create", icon: Video, label: "Create" },
   { to: "/library", icon: Library, label: "Library" },
@@ -35,13 +34,19 @@ const RailContent = () => {
 
   return (
     <>
-      {/* Logo (icon only) */}
+      {/* Logo (icon only) → Home */}
       <div className="flex items-center justify-center px-2 py-5">
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary shadow-glow">
+            <NavLink
+              to="/home"
+              className={`flex h-10 w-10 items-center justify-center rounded-xl gradient-primary shadow-glow transition-transform duration-200 hover:scale-105 ${
+                location.pathname === "/home" ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-sidebar" : ""
+              }`}
+              aria-label="Home"
+            >
               <Sparkles className="h-5 w-5 text-primary-foreground" />
-            </div>
+            </NavLink>
           </TooltipTrigger>
           <TooltipContent side="right">ReelCast — AI Commercial Studio</TooltipContent>
         </Tooltip>
@@ -125,7 +130,11 @@ const DrawerContent = ({ onNavigate }: { onNavigate: () => void }) => {
 
   return (
     <>
-      <div className="flex items-center gap-3 px-6 py-6">
+      <NavLink
+        to="/home"
+        onClick={onNavigate}
+        className="flex items-center gap-3 px-6 py-6 hover:opacity-80 transition-opacity"
+      >
         <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary shadow-glow">
           <Sparkles className="h-5 w-5 text-primary-foreground" />
         </div>
@@ -133,7 +142,7 @@ const DrawerContent = ({ onNavigate }: { onNavigate: () => void }) => {
           <h1 className="font-display text-lg font-bold text-foreground tracking-tight">ReelCast</h1>
           <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">AI Commercial Studio</p>
         </div>
-      </div>
+      </NavLink>
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navItems.map(({ to, icon: Icon, label }) => {
           const isActive = location.pathname === to;
@@ -200,12 +209,12 @@ export const MobileHeader = () => {
           </div>
         </SheetContent>
       </Sheet>
-      <div className="flex items-center gap-2">
+      <NavLink to="/home" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-primary shadow-glow">
           <Sparkles className="h-4 w-4 text-primary-foreground" />
         </div>
         <span className="font-display text-sm font-bold text-foreground tracking-tight">ReelCast</span>
-      </div>
+      </NavLink>
     </header>
   );
 };
