@@ -81,8 +81,8 @@ const Register = () => {
       setError("Please fill in all fields");
       return;
     }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
       return;
     }
     if (password.length < 6) {
