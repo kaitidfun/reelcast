@@ -214,34 +214,32 @@ const Register = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="name" className="text-xs">Full name</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="name"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      className="pl-10 h-9"
-                      placeholder="Jane Doe"
-                    />
-                  </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="name" className="text-xs">Full name</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="name"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="pl-10 h-9"
+                    placeholder="Jane Doe"
+                  />
                 </div>
+              </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="email" className="text-xs">Work email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 h-9"
-                      placeholder="you@company.com"
-                    />
-                  </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-xs">Work email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10 h-9"
+                    placeholder="you@company.com"
+                  />
                 </div>
               </div>
 
@@ -287,6 +285,21 @@ const Register = () => {
                     </span>
                   </div>
                 )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="confirm" className="text-xs">Confirm password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="confirm"
+                    type={showPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="pl-10 h-9"
+                    placeholder="Re-type your password"
+                  />
+                </div>
               </div>
 
               <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">
