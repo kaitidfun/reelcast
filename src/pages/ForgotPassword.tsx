@@ -1,6 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Sparkles, Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
+import {
+  Sparkles,
+  Mail,
+  ArrowLeft,
+  CheckCircle2,
+  KeyRound,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,47 +16,84 @@ const ForgotPassword = () => {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setInterval(() => setCooldown((c) => c - 1), 1000);
+    return () => clearInterval(t);
+  }, [cooldown]);
+
+  const sendEmail = async () => {
+    setLoading(true);
+    await new Promise((r) => setTimeout(r, 800));
+    setLoading(false);
+    setSubmitted(true);
+    setCooldown(30);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-    setLoading(true);
-    // Mock send
-    await new Promise((r) => setTimeout(r, 800));
-    setLoading(false);
-    setSubmitted(true);
+    await sendEmail();
+  };
+
+  const handleResend = async () => {
+    if (cooldown > 0) return;
+    await sendEmail();
+  };
+
+  const handleTryDifferent = () => {
+    setSubmitted(false);
+    setEmail("");
+    setCooldown(0);
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-background p-4 sm:p-6">
       <div className="gradient-glow pointer-events-none fixed inset-0" />
+      <div className="dot-pattern pointer-events-none fixed inset-0 opacity-40" />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative z-10 w-full max-w-sm"
+        transition={{ duration: 0.4 }}
+        className="relative z-10 w-full max-w-md"
       >
         <div className="mb-8 flex flex-col items-center gap-3">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl gradient-primary shadow-glow-lg">
             <Sparkles className="h-7 w-7 text-primary-foreground" />
           </div>
           <div className="text-center">
-            <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">ReelCast</h1>
-            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mt-1">AI Commercial Studio</p>
+            <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">
+              ReelCast
+            </h1>
+            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mt-1">
+              Account recovery
+            </p>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-elevated">
+        <div className="rounded-2xl border border-border glass-strong p-7 shadow-elevated">
           {!submitted ? (
             <>
-              <h2 className="text-lg font-semibold text-foreground mb-1">Forgot Password</h2>
-              <p className="text-sm text-muted-foreground mb-6">
-                Enter your email and we'll send you a reset link.
-              </p>
+              <div className="mb-6 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background/60">
+                  <KeyRound className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <h2 className="font-display text-xl font-bold text-foreground leading-tight">
+                    Forgot your password?
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    We'll email you a secure reset link.
+                  </p>
+                </div>
+              </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">Work email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -59,7 +102,8 @@ const ForgotPassword = () => {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="pl-10"
-                      placeholder="email@example.com"
+                      placeholder="you@company.com"
+                      autoFocus
                     />
                   </div>
                 </div>
@@ -69,31 +113,79 @@ const ForgotPassword = () => {
                   className="w-full gradient-primary text-primary-foreground shadow-glow"
                   disabled={loading}
                 >
-                  {loading ? "Sending..." : "Send Reset Link"}
+                  {loading ? "Sending..." : "Send reset link"}
                 </Button>
               </form>
             </>
           ) : (
-            <div className="flex flex-col items-center text-center py-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 mb-4">
-                <CheckCircle2 className="h-6 w-6 text-primary" />
+            <div className="flex flex-col items-center text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 mb-4">
+                <CheckCircle2 className="h-7 w-7 text-primary" />
               </div>
-              <h2 className="text-lg font-semibold text-foreground mb-1">Check your inbox</h2>
+              <h2 className="font-display text-xl font-bold text-foreground mb-2">
+                Check your inbox
+              </h2>
               <p className="text-sm text-muted-foreground">
-                If <span className="text-foreground font-medium">{email}</span> is registered,
-                you'll receive a password reset link shortly.
+                If{" "}
+                <span className="text-foreground font-medium">{email}</span> is
+                registered with ReelCast, a reset link is on its way. The link
+                expires in 30 minutes.
               </p>
+
+              <div className="mt-6 w-full space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={cooldown > 0 || loading}
+                  onClick={handleResend}
+                >
+                  {cooldown > 0
+                    ? `Resend email in ${cooldown}s`
+                    : loading
+                    ? "Resending..."
+                    : "Resend email"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={handleTryDifferent}
+                  className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Try a different email
+                </button>
+              </div>
             </div>
           )}
 
-          <Link
-            to="/login"
-            className="mt-6 inline-flex items-center justify-center gap-1 w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-3 w-3" />
-            Back to Sign In
-          </Link>
+          <div className="mt-6 border-t border-border pt-4">
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="w-full text-muted-foreground hover:text-foreground"
+            >
+              <Link to="/login">
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to Sign In
+              </Link>
+            </Button>
+          </div>
         </div>
+
+        <p className="mt-6 text-center text-xs text-muted-foreground">
+          © 2026 ReelCast ·{" "}
+          <a href="#" className="hover:text-foreground transition-colors">
+            Privacy
+          </a>{" "}
+          ·{" "}
+          <a href="#" className="hover:text-foreground transition-colors">
+            Terms
+          </a>{" "}
+          ·{" "}
+          <a href="#" className="hover:text-foreground transition-colors">
+            Support
+          </a>
+        </p>
       </motion.div>
     </div>
   );
