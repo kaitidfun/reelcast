@@ -74,7 +74,7 @@ const RailContent = () => {
       </nav>
 
       {/* Bottom — minimal profile + logout */}
-      <div className="border-t border-border p-3 flex flex-col items-center gap-2">
+      <div className="p-3 flex flex-col items-center gap-2">
         <Tooltip>
           <TooltipTrigger asChild>
             <NavLink
@@ -163,7 +163,7 @@ const DrawerContent = ({ onNavigate }: { onNavigate: () => void }) => {
           );
         })}
       </nav>
-      <div className="border-t border-border p-3 space-y-1">
+      <div className="p-3 space-y-1">
         <NavLink
           to="/account"
           onClick={onNavigate}
