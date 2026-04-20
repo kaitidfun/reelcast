@@ -51,7 +51,7 @@ const Register = () => {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  // confirm password removed for compact layout
   const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState("merchant");
   const [acceptTerms, setAcceptTerms] = useState(false);
