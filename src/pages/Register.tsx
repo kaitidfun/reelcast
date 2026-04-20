@@ -11,8 +11,6 @@ import {
   Briefcase,
   Eye,
   EyeOff,
-  ShieldCheck,
-  Globe,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,17 +20,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
+import authHero from "@/assets/auth-hero-register.jpg";
 
 const roles = [
   { id: "merchant", label: "Online Merchant", icon: Store, desc: "I sell on marketplaces" },
   { id: "affiliate", label: "Affiliate", icon: TrendingUp, desc: "I promote products" },
   { id: "brand", label: "Brand Owner", icon: Briefcase, desc: "I own a brand" },
-];
-
-const benefits = [
-  { icon: Sparkles, text: "Unlimited AI-generated commercial reels" },
-  { icon: Globe, text: "One-click distribution to 7+ platforms" },
-  { icon: ShieldCheck, text: "Brand-safe, on-message every time" },
 ];
 
 function getStrength(pw: string) {
@@ -122,8 +115,51 @@ const Register = () => {
         className="relative z-10 w-full max-w-5xl"
       >
         <div className="grid overflow-hidden rounded-3xl border border-border glass-strong shadow-elevated lg:grid-cols-2">
-          {/* FORM PANEL */}
-          <div className="p-6 sm:p-10">
+          {/* VISUAL PANEL (left on desktop) */}
+          <div className="relative hidden overflow-hidden border-r border-border bg-gradient-to-br from-card via-card to-muted/40 lg:order-1 lg:flex">
+            <div className="absolute inset-0 gradient-glow opacity-80 pointer-events-none" />
+            <img
+              src={authHero}
+              alt="ReelCast creator community"
+              width={896}
+              height={1216}
+              className="absolute inset-0 h-full w-full object-cover opacity-90"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/10 to-transparent pointer-events-none" />
+
+            {/* Floating creator chip */}
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+              className="absolute left-6 top-6 inline-flex items-center gap-2 rounded-full border border-border bg-background/60 px-3 py-1.5 backdrop-blur-md"
+            >
+              <Users className="h-3 w-3 text-primary" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground">
+                +12k creators
+              </span>
+            </motion.div>
+
+            {/* Bottom tagline + wordmark */}
+            <div className="relative z-10 mt-auto flex w-full items-end justify-between gap-4 p-8">
+              <div>
+                <p className="font-display text-2xl font-bold leading-tight text-foreground">
+                  Built for the
+                  <br />
+                  next-gen brand.
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                <span className="text-[10px] font-semibold uppercase tracking-widest">
+                  ReelCast
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* FORM PANEL (right on desktop) */}
+          <div className="p-6 sm:p-10 lg:order-2">
             <div className="mb-7 flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl gradient-primary shadow-glow">
                 <Sparkles className="h-5 w-5 text-primary-foreground" />
@@ -364,51 +400,6 @@ const Register = () => {
             </p>
           </div>
 
-          {/* BRAND PANEL */}
-          <div className="relative hidden flex-col justify-between gap-8 border-l border-border bg-gradient-to-br from-card via-card to-muted/40 p-10 lg:flex">
-            <div className="absolute inset-0 gradient-glow opacity-60 pointer-events-none" />
-
-            <div className="relative">
-              <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background/40 px-3 py-1 backdrop-blur">
-                <Users className="h-3 w-3 text-primary" />
-                <span className="text-xs font-medium text-foreground">
-                  Join 10,000+ creators &amp; brands
-                </span>
-              </div>
-              <h3 className="mt-5 font-display text-3xl font-bold leading-tight text-foreground">
-                The fastest way to turn products into revenue-driving reels.
-              </h3>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Stop renting agencies. Spin up an in-house AI commercial studio
-                that ships content while you sleep.
-              </p>
-            </div>
-
-            <div className="relative space-y-3">
-              {benefits.map((b) => {
-                const Icon = b.icon;
-                return (
-                  <div key={b.text} className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background/60">
-                      <Icon className="h-3.5 w-3.5 text-primary" />
-                    </div>
-                    <p className="text-sm text-foreground">{b.text}</p>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="relative flex flex-wrap gap-2">
-              {["SOC 2 Type II", "GDPR ready", "99.9% uptime"].map((chip) => (
-                <span
-                  key={chip}
-                  className="rounded-full border border-border bg-background/50 px-3 py-1 text-[11px] font-medium text-muted-foreground backdrop-blur"
-                >
-                  {chip}
-                </span>
-              ))}
-            </div>
-          </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
