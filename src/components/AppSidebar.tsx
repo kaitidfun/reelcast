@@ -221,7 +221,7 @@ export const MobileHeader = () => {
 
 const AppSidebar = () => {
   return (
-    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-20 flex-col border-r border-border bg-sidebar md:flex">
+    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-20 flex-col bg-sidebar md:flex">
       <RailContent />
     </aside>
   );
