@@ -159,13 +159,13 @@ const Register = () => {
           </div>
 
           {/* FORM PANEL (right on desktop) */}
-          <div className="p-6 sm:p-10 lg:order-2">
-            <div className="mb-7 flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl gradient-primary shadow-glow">
-                <Sparkles className="h-5 w-5 text-primary-foreground" />
+          <div className="p-5 sm:p-7 lg:order-2 lg:overflow-y-auto">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary shadow-glow">
+                <Sparkles className="h-4 w-4 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="font-display text-lg font-bold text-foreground tracking-tight leading-none">
+                <h1 className="font-display text-base font-bold text-foreground tracking-tight leading-none">
                   ReelCast
                 </h1>
                 <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground mt-1">
@@ -174,17 +174,17 @@ const Register = () => {
               </div>
             </div>
 
-            <h2 className="font-display text-2xl font-bold text-foreground mb-1">
+            <h2 className="font-display text-xl font-bold text-foreground mb-1">
               Start creating in minutes
             </h2>
-            <p className="text-sm text-muted-foreground mb-6">
+            <p className="text-xs text-muted-foreground mb-4">
               Free to try. No credit card required.
             </p>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3">
               {/* Role */}
-              <div className="space-y-2">
-                <Label>I am a…</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs">I am a…</Label>
                 <div className="grid grid-cols-3 gap-2">
                   {roles.map((r) => {
                     const Icon = r.icon;
@@ -194,22 +194,19 @@ const Register = () => {
                         key={r.id}
                         type="button"
                         onClick={() => setSelectedRole(r.id)}
-                        className={`rounded-xl border p-3 text-left transition-all ${
+                        className={`rounded-lg border p-2 text-left transition-all ${
                           active
                             ? "border-primary/50 bg-primary/5 ring-1 ring-primary/30"
                             : "border-border hover:border-primary/30"
                         }`}
                       >
                         <Icon
-                          className={`h-4 w-4 mb-2 ${
+                          className={`h-3.5 w-3.5 mb-1 ${
                             active ? "text-primary" : "text-muted-foreground"
                           }`}
                         />
-                        <p className="text-xs font-semibold text-foreground leading-tight">
+                        <p className="text-[11px] font-semibold text-foreground leading-tight">
                           {r.label}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-                          {r.desc}
                         </p>
                       </button>
                     );
@@ -217,37 +214,39 @@ const Register = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="name">Full name</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="name"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className="pl-10"
-                    placeholder="Jane Doe"
-                  />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="name" className="text-xs">Full name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="name"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      className="pl-10 h-9"
+                      placeholder="Jane Doe"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="email" className="text-xs">Work email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-10 h-9"
+                      placeholder="you@company.com"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="email">Work email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10"
-                    placeholder="you@company.com"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-xs">Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -255,7 +254,7 @@ const Register = () => {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-10"
+                    className="pl-10 pr-10 h-9"
                     placeholder="At least 6 characters"
                   />
                   <button
@@ -272,45 +271,25 @@ const Register = () => {
                   </button>
                 </div>
                 {password.length > 0 && (
-                  <div className="space-y-1.5">
-                    <div className="flex gap-1">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1 flex-1">
                       {[0, 1, 2, 3].map((i) => (
                         <div
                           key={i}
                           className={`h-1 flex-1 rounded-full transition-colors ${
-                            i < strength
-                              ? strengthColors[strength]
-                              : "bg-muted"
+                            i < strength ? strengthColors[strength] : "bg-muted"
                           }`}
                         />
                       ))}
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Password strength:{" "}
-                      <span className="text-foreground font-medium">
-                        {strengthLabels[strength]}
-                      </span>
-                    </p>
+                    <span className="text-[10px] text-muted-foreground font-medium">
+                      {strengthLabels[strength]}
+                    </span>
                   </div>
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="confirm">Confirm password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="confirm"
-                    type={showPassword ? "text" : "password"}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="pl-10"
-                    placeholder="Re-type your password"
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-start gap-2 text-sm text-muted-foreground cursor-pointer">
+              <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">
                 <Checkbox
                   checked={acceptTerms}
                   onCheckedChange={(v) => setAcceptTerms(!!v)}
@@ -318,28 +297,22 @@ const Register = () => {
                 />
                 <span className="leading-snug">
                   I agree to ReelCast's{" "}
-                  <a
-                    href="#"
-                    className="text-primary hover:underline font-medium"
-                  >
-                    Terms of Service
+                  <a href="#" className="text-primary hover:underline font-medium">
+                    Terms
                   </a>{" "}
                   and{" "}
-                  <a
-                    href="#"
-                    className="text-primary hover:underline font-medium"
-                  >
+                  <a href="#" className="text-primary hover:underline font-medium">
                     Privacy Policy
                   </a>
                   .
                 </span>
               </label>
 
-              {error && <p className="text-sm text-destructive">{error}</p>}
+              {error && <p className="text-xs text-destructive">{error}</p>}
 
               <Button
                 type="submit"
-                className="w-full gradient-primary text-primary-foreground shadow-glow"
+                className="w-full gradient-primary text-primary-foreground shadow-glow h-9"
                 disabled={loading}
               >
                 {loading ? "Creating account..." : "Create account"}
@@ -347,12 +320,12 @@ const Register = () => {
               </Button>
             </form>
 
-            <div className="relative my-5">
+            <div className="relative my-3">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t border-border" />
               </div>
               <div className="relative flex justify-center">
-                <span className="bg-card px-2 text-xs uppercase tracking-wider text-muted-foreground">
+                <span className="bg-card px-2 text-[10px] uppercase tracking-wider text-muted-foreground">
                   Or sign up with
                 </span>
               </div>
@@ -364,6 +337,7 @@ const Register = () => {
                 variant="outline"
                 onClick={() => handleSocialLogin("google")}
                 disabled={loading}
+                className="h-9"
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
                   <path
@@ -378,6 +352,7 @@ const Register = () => {
                 variant="outline"
                 onClick={() => handleSocialLogin("facebook")}
                 disabled={loading}
+                className="h-9"
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
                   <path
@@ -389,12 +364,9 @@ const Register = () => {
               </Button>
             </div>
 
-            <p className="mt-6 text-center text-sm text-muted-foreground">
+            <p className="mt-4 text-center text-xs text-muted-foreground">
               Already have an account?{" "}
-              <Link
-                to="/login"
-                className="text-primary hover:underline font-medium"
-              >
+              <Link to="/login" className="text-primary hover:underline font-medium">
                 Sign in
               </Link>
             </p>
