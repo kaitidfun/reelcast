@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Mail, ArrowLeft, CheckCircle2, Send } from "lucide-react";
+import { Sparkles, Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import AuthLayout from "@/components/auth/AuthLayout";
+import { motion } from "framer-motion";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -15,105 +15,87 @@ const ForgotPassword = () => {
     e.preventDefault();
     if (!email) return;
     setLoading(true);
+    // Mock send
     await new Promise((r) => setTimeout(r, 800));
     setLoading(false);
     setSubmitted(true);
   };
 
   return (
-    <AuthLayout
-      headline="We've got you covered."
-      subheadline="Reset your password securely and get back to creating Reels in minutes."
-    >
-      {!submitted ? (
-        <>
-          <div className="mb-8">
-            <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
-              Forgot password?
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              No worries — enter the email associated with your account and we'll
-              send you a secure reset link.
-            </p>
-          </div>
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className="gradient-glow pointer-events-none fixed inset-0" />
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Work email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-11 pl-10"
-                  placeholder="you@company.com"
-                  autoComplete="email"
-                  required
-                />
-              </div>
-            </div>
-
-            <Button
-              type="submit"
-              className="h-11 w-full gradient-primary text-primary-foreground shadow-glow"
-              disabled={loading}
-            >
-              {loading ? (
-                "Sending reset link..."
-              ) : (
-                <>
-                  <Send className="h-4 w-4" />
-                  Send reset link
-                </>
-              )}
-            </Button>
-          </form>
-        </>
-      ) : (
-        <div className="text-center">
-          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-success/10 ring-4 ring-success/5">
-            <CheckCircle2 className="h-7 w-7 text-success" />
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative z-10 w-full max-w-sm"
+      >
+        <div className="mb-8 flex flex-col items-center gap-3">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl gradient-primary shadow-glow-lg">
+            <Sparkles className="h-7 w-7 text-primary-foreground" />
           </div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
-            Check your inbox
-          </h1>
-          <p className="mt-3 text-sm text-muted-foreground">
-            If{" "}
-            <span className="font-medium text-foreground">{email}</span>{" "}
-            matches an account, you'll receive a password reset link within a few
-            minutes.
-          </p>
-          <div className="mt-6 rounded-xl border border-border bg-secondary/40 p-4 text-left">
-            <p className="text-xs font-semibold text-foreground">
-              Didn't get the email?
-            </p>
-            <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-              <li>• Check your spam or promotions folder</li>
-              <li>• Make sure the email address is correct</li>
-              <li>
-                •{" "}
-                <button
-                  onClick={() => setSubmitted(false)}
-                  className="text-primary hover:underline"
-                >
-                  Try a different email
-                </button>
-              </li>
-            </ul>
+          <div className="text-center">
+            <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">ReelCast</h1>
+            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mt-1">AI Commercial Studio</p>
           </div>
         </div>
-      )}
 
-      <Link
-        to="/login"
-        className="mt-6 inline-flex w-full items-center justify-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Back to sign in
-      </Link>
-    </AuthLayout>
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-elevated">
+          {!submitted ? (
+            <>
+              <h2 className="text-lg font-semibold text-foreground mb-1">Forgot Password</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Enter your email and we'll send you a reset link.
+              </p>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-10"
+                      placeholder="email@example.com"
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full gradient-primary text-primary-foreground shadow-glow"
+                  disabled={loading}
+                >
+                  {loading ? "Sending..." : "Send Reset Link"}
+                </Button>
+              </form>
+            </>
+          ) : (
+            <div className="flex flex-col items-center text-center py-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 mb-4">
+                <CheckCircle2 className="h-6 w-6 text-primary" />
+              </div>
+              <h2 className="text-lg font-semibold text-foreground mb-1">Check your inbox</h2>
+              <p className="text-sm text-muted-foreground">
+                If <span className="text-foreground font-medium">{email}</span> is registered,
+                you'll receive a password reset link shortly.
+              </p>
+            </div>
+          )}
+
+          <Link
+            to="/login"
+            className="mt-6 inline-flex items-center justify-center gap-1 w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-3 w-3" />
+            Back to Sign In
+          </Link>
+        </div>
+      </motion.div>
+    </div>
   );
 };
 
