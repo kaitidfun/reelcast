@@ -51,7 +51,7 @@ const Register = () => {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  // confirm password removed for compact layout
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState("merchant");
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -79,6 +79,10 @@ const Register = () => {
     setError("");
     if (!displayName || !email || !password) {
       setError("Please fill in all fields");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
       return;
     }
     if (password.length < 6) {
