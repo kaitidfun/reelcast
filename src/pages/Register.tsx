@@ -85,10 +85,6 @@ const Register = () => {
       setError("Password must be at least 6 characters");
       return;
     }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
     if (!acceptTerms) {
       setError("Please accept the Terms and Privacy Policy");
       return;
