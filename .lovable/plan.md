@@ -1,67 +1,47 @@
 
 ## Goal
-Make Login, Register, and Forgot Password pages feel like a real-world business product (think Stripe, Linear, Notion auth screens) while keeping the form vertically and horizontally centered. Stay in dark "Studio" theme with existing brand tokens.
+Swap the panels on the auth pages so the brand/visual panel is on the **left** and the form is on the **right**. Reduce text on the brand panel and replace it with a strong **visual/image** treatment.
 
-## Approach: Centered Split-Card Layout
-
-Currently each page is just a single small card centered on a glow background — looks like a demo. We'll upgrade to a **centered split layout** (form left, brand/marketing right) that still sits in the middle of the screen on desktop, and gracefully collapses to a single centered card on mobile.
+## Layout Change
 
 ```text
-┌──────────────────────────────────────────────────┐
-│  (subtle dot pattern + radial glow background)   │
-│                                                  │
-│        ┌─────────────────────────────────┐       │
-│        │ FORM PANEL  │  BRAND PANEL      │       │
-│        │             │                   │       │
-│        │ Logo        │  ✦ Tagline        │       │
-│        │ Sign In     │  • Trust point 1  │       │
-│        │ [email]     │  • Trust point 2  │       │
-│        │ [password]  │  • Trust point 3  │       │
-│        │ [Sign In]   │  "★★★★★ quote"    │       │
-│        │ ─ or ─      │  — Brand X        │       │
-│        │ Google FB   │                   │       │
-│        └─────────────────────────────────┘       │
-│         © 2026 ReelCast · Privacy · Terms        │
-└──────────────────────────────────────────────────┘
+BEFORE:                          AFTER:
+┌──────────┬──────────┐          ┌──────────┬──────────┐
+│  FORM    │  BRAND   │   →      │  VISUAL  │  FORM    │
+│  (left)  │  (right) │          │  (left)  │  (right) │
+└──────────┴──────────┘          └──────────┴──────────┘
 ```
 
-- Container: `max-w-5xl` card, centered with `flex items-center justify-center min-h-screen`.
-- On `< lg`: brand panel hides, form panel becomes a single centered card (`max-w-md`).
-- Background: keeps `gradient-glow` + adds subtle `dot-pattern` for texture.
-- Footer line under card with copyright + Privacy/Terms links (mock).
+On mobile (`< lg`): visual panel hides, form stays centered (same as before).
 
-## Per-Page Changes
+## Visual Panel Redesign (Left Side)
 
-### 1. `src/pages/Login.tsx`
-- Split layout (form left / brand right).
-- Brand panel: ReelCast logo lockup, tagline "AI-powered commerce reels for modern brands", 3 feature bullets with icons (Zap = Generate in seconds, ShieldCheck = Enterprise-grade, TrendingUp = Track ROI), and a small testimonial card.
-- Form: tighter spacing, password visibility toggle (Eye / EyeOff), "Remember me" checkbox next to "Forgot password?", primary button full width.
-- Replace the demo prefill text "Use the mock credentials below" with a small subtle "Demo mode" badge in the top corner of the form.
-- Keep Google + Facebook OAuth buttons, divider, and Register link.
+Replace the heavy text block + 3 feature bullets + testimonial with a **mostly-visual** composition:
 
-### 2. `src/pages/Register.tsx`
-- Same split layout. Brand panel emphasizes "Join 10,000+ creators", trust badges (SOC 2, GDPR — mock chips), and one short benefit list.
-- Form: keep 3 role tiles (Merchant / Affiliate / Brand), but improve hierarchy — section label "I am a…" above tiles.
-- Add password-strength indicator bar under password field (weak / medium / strong based on length + variety).
-- Add "I agree to Terms and Privacy Policy" checkbox required before submit.
-- Add Google + Facebook OAuth buttons for consistency with Login.
+- **Hero image**: a stylized vertical "reel preview" mockup — a phone-shape frame showing a gradient product reel with play button, view counter, and floating UI chips (likes, sales). Built with pure CSS/Tailwind + Lucide icons (no external image needed — fits "Studio" theme & stays self-contained).
+- **Floating decorative elements**: soft gradient orbs, a small "LIVE" pill, animated sparkle accents using framer-motion.
+- **Minimal text**: just a short 4-6 word tagline at the bottom (e.g., "Reels that sell themselves.") + tiny ReelCast wordmark — no paragraphs, no bullet lists, no testimonial quote.
+- Background: keeps the gradient + dot pattern, but stronger glow behind the phone mockup for a premium "product hero" feel.
 
-### 3. `src/pages/ForgotPassword.tsx`
-- Keep single centered card (no split — it's a focused task), but upgrade visuals:
-  - Larger header with subtitle.
-  - Email input with the same icon style.
-  - After submit: success state stays, but adds "Resend email" button with 30-second cooldown timer and "Try a different email" link.
-  - "Back to Sign In" as a clearer ghost button at the bottom.
+## Per-Page Application
 
-## Shared Polish
-- Add a small footer below each card: `© 2026 ReelCast · Privacy · Terms · Support` (links go to `#` for now).
-- All cards use `glass-strong` + `shadow-elevated` for that premium real-world feel.
-- Use `font-display` (Space Grotesk) for headings, keep Inter for body.
-- Add subtle entrance animations via existing framer-motion (already in use).
+### `src/pages/Login.tsx`
+- Swap grid order: visual panel → left (`order-1`), form panel → right (`order-2`).
+- Replace current right-side brand content (tagline + 3 features + testimonial) with the new visual hero.
+- Border between panels moves to the right edge of the visual panel.
+
+### `src/pages/Register.tsx`
+- Same swap. Visual panel left shows a slightly different variant — e.g., the phone reel with a "+12k creators" floating chip instead of the Login variant — to keep pages distinct but consistent.
+- Remove the current "Join 10,000+ creators" paragraph + trust badges + benefit list from the panel; condense into one tiny tagline + the visual.
+
+### `src/pages/ForgotPassword.tsx`
+- Stays single-card centered (no split). No change here.
+
+## Shared
+- No new dependencies. Pure Tailwind + existing Lucide icons + framer-motion already installed.
+- Footer, animations, glass styles, OAuth buttons, and form logic remain unchanged.
+- Mobile view unchanged — visual panel is hidden, form is the centered card.
 
 ## Files to Edit
-- `src/pages/Login.tsx` — split layout, password toggle, remember-me, demo badge.
-- `src/pages/Register.tsx` — split layout, password strength, terms checkbox, OAuth buttons.
-- `src/pages/ForgotPassword.tsx` — upgraded success state with resend cooldown, footer.
-
-No new dependencies, no routing changes, no auth logic changes — purely UX/visual upgrade on top of existing mock auth.
+- `src/pages/Login.tsx`
+- `src/pages/Register.tsx`
