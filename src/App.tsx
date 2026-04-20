@@ -7,6 +7,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./components/AppLayout";
 import Dashboard from "./pages/Dashboard";
+import Home from "./pages/Home";
 import CreateReel from "./pages/CreateReel";
 import ContentLibrary from "./pages/ContentLibrary";
 import AffiliateLinks from "./pages/AffiliateLinks";
@@ -38,6 +39,7 @@ const App = () => (
               }
             >
               <Route path="/" element={<Dashboard />} />
+              <Route path="/home" element={<Home />} />
               <Route path="/create" element={<CreateReel />} />
               <Route path="/library" element={<ContentLibrary />} />
               <Route path="/links" element={<AffiliateLinks />} />
