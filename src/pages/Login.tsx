@@ -7,9 +7,6 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
-  Zap,
-  ShieldCheck,
-  TrendingUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -18,24 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
-
-const features = [
-  {
-    icon: Zap,
-    title: "Generate in seconds",
-    desc: "Turn any product into a scroll-stopping vertical reel.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Enterprise-grade",
-    desc: "SOC 2 ready infrastructure with secure brand asset storage.",
-  },
-  {
-    icon: TrendingUp,
-    title: "Track real ROI",
-    desc: "Unified analytics across TikTok, Reels, Shorts and Shops.",
-  },
-];
+import authHero from "@/assets/auth-hero-login.jpg";
 
 const Login = () => {
   const [email, setEmail] = useState("creator@reelcast.ai");
@@ -88,8 +68,54 @@ const Login = () => {
         className="relative z-10 w-full max-w-5xl"
       >
         <div className="grid overflow-hidden rounded-3xl border border-border glass-strong shadow-elevated lg:grid-cols-2">
-          {/* FORM PANEL */}
-          <div className="relative p-6 sm:p-10">
+          {/* VISUAL PANEL (left on desktop) */}
+          <div className="relative hidden overflow-hidden border-r border-border bg-gradient-to-br from-card via-card to-muted/40 lg:order-1 lg:flex">
+            <div className="absolute inset-0 gradient-glow opacity-80 pointer-events-none" />
+            <img
+              src={authHero}
+              alt="ReelCast AI commerce reel preview"
+              width={896}
+              height={1216}
+              className="absolute inset-0 h-full w-full object-cover opacity-90"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/10 to-transparent pointer-events-none" />
+
+            {/* Floating LIVE pill */}
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+              className="absolute left-6 top-6 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 px-3 py-1 backdrop-blur-md"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              </span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground">
+                Live
+              </span>
+            </motion.div>
+
+            {/* Bottom tagline + wordmark */}
+            <div className="relative z-10 mt-auto flex w-full items-end justify-between gap-4 p-8">
+              <div>
+                <p className="font-display text-2xl font-bold leading-tight text-foreground">
+                  Reels that
+                  <br />
+                  sell themselves.
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                <span className="text-[10px] font-semibold uppercase tracking-widest">
+                  ReelCast
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* FORM PANEL (right on desktop) */}
+          <div className="relative p-6 sm:p-10 lg:order-2">
             <span className="absolute right-4 top-4 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               Demo mode
             </span>
@@ -241,63 +267,6 @@ const Login = () => {
             </p>
           </div>
 
-          {/* BRAND PANEL */}
-          <div className="relative hidden flex-col justify-between gap-8 border-l border-border bg-gradient-to-br from-card via-card to-muted/40 p-10 lg:flex">
-            <div className="absolute inset-0 gradient-glow opacity-60 pointer-events-none" />
-
-            <div className="relative">
-              <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background/40 px-3 py-1 backdrop-blur">
-                <Sparkles className="h-3 w-3 text-primary" />
-                <span className="text-xs font-medium text-foreground">
-                  AI-powered commerce reels
-                </span>
-              </div>
-              <h3 className="mt-5 font-display text-3xl font-bold leading-tight text-foreground">
-                Ship a month of social commerce content in an afternoon.
-              </h3>
-              <p className="mt-3 text-sm text-muted-foreground">
-                ReelCast turns your products, scripts, and brand voice into
-                ready-to-publish vertical reels — distributed everywhere your
-                buyers scroll.
-              </p>
-            </div>
-
-            <div className="relative space-y-4">
-              {features.map((f) => {
-                const Icon = f.icon;
-                return (
-                  <div key={f.title} className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background/60">
-                      <Icon className="h-4 w-4 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">
-                        {f.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {f.desc}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="relative rounded-xl border border-border bg-background/50 p-4 backdrop-blur">
-              <div className="flex items-center gap-1 text-primary text-xs">
-                {"★★★★★".split("").map((s, i) => (
-                  <span key={i}>{s}</span>
-                ))}
-              </div>
-              <p className="mt-2 text-sm text-foreground leading-relaxed">
-                "We replaced a full agency retainer with ReelCast. Output went
-                up 4× and our TikTok Shop revenue doubled in two months."
-              </p>
-              <p className="mt-3 text-xs text-muted-foreground">
-                — Mira Chen, Head of Growth at Lumen&nbsp;Studio
-              </p>
-            </div>
-          </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
