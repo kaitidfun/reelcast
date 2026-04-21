@@ -16,7 +16,7 @@ import {
   Clock,
 } from "lucide-react";
 import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -199,8 +199,16 @@ const sortItems = <T extends { name: string; createdAt: string; updatedAt: strin
 const ContentLibrary = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
-  const [openCampaignId, setOpenCampaignId] = useState<string | null>(null);
+  const openCampaignId = searchParams.get("campaign");
+  const setOpenCampaignId = (id: string | null) => {
+    if (id) {
+      setSearchParams({ campaign: id });
+    } else {
+      setSearchParams({});
+    }
+  };
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
