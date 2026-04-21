@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/hooks/use-toast";
+import { getMockReelsForProduct } from "@/lib/mockReels";
 
 type ProductStatus = "Active" | "Draft";
 type SortKey = "newest" | "oldest" | "updated" | "name";
