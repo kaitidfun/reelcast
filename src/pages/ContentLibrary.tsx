@@ -911,8 +911,8 @@ const ContentLibrary = () => {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
@@ -922,7 +922,7 @@ const ContentLibrary = () => {
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-          <SelectTrigger className="w-full sm:w-[180px] bg-card h-10">
+          <SelectTrigger className="w-full sm:w-[160px] bg-card h-10">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -931,17 +931,29 @@ const ContentLibrary = () => {
             <SelectItem value="Draft">Draft</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={productSort} onValueChange={(v) => setProductSort(v as SortKey)}>
+          <SelectTrigger className="w-full sm:w-[200px] bg-card h-10">
+            <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Sort" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="updated">Recently updated</SelectItem>
+            <SelectItem value="newest">Newest first</SelectItem>
+            <SelectItem value="oldest">Oldest first</SelectItem>
+            <SelectItem value="name">Name (A–Z)</SelectItem>
+          </SelectContent>
+        </Select>
         <ToggleGroup
           type="single"
           value={productView}
           onValueChange={(v) => v && setProductView(v as "grid" | "list")}
-          className="bg-card border border-border rounded-lg p-1 h-10"
+          className="bg-card border border-border rounded-lg p-0.5 h-10"
         >
-          <ToggleGroupItem value="grid" aria-label="Grid view" className="h-8 w-8 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-            <LayoutGrid className="h-4 w-4" />
+          <ToggleGroupItem value="grid" aria-label="Grid view" className="h-9 w-9 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            <LayoutGrid className="!h-5 !w-5" />
           </ToggleGroupItem>
-          <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-            <List className="h-4 w-4" />
+          <ToggleGroupItem value="list" aria-label="List view" className="h-9 w-9 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            <List className="!h-5 !w-5" />
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
