@@ -480,7 +480,7 @@ const ContentLibrary = () => {
           <p className="mt-1 text-muted-foreground">{currentCampaign.description}</p>
         </div>
         <Button
-          onClick={() => setIsAddProductOpen(true)}
+          onClick={openAddDialog}
           className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto"
         >
           <Plus className="h-4 w-4" />
