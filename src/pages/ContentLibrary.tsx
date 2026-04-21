@@ -79,8 +79,18 @@ interface Campaign {
   name: string;
   description: string;
   reelsCount: number;
+  banner: string; // tailwind gradient classes for banner background
   products: Product[];
 }
+
+const BANNER_PRESETS: { label: string; value: string }[] = [
+  { label: "Sunset", value: "from-orange-500 via-pink-500 to-purple-600" },
+  { label: "Ocean", value: "from-cyan-500 via-blue-500 to-indigo-600" },
+  { label: "Forest", value: "from-emerald-500 via-teal-500 to-cyan-600" },
+  { label: "Royal", value: "from-violet-500 via-purple-500 to-fuchsia-600" },
+  { label: "Ember", value: "from-rose-500 via-red-500 to-orange-500" },
+  { label: "Mint", value: "from-lime-400 via-emerald-500 to-teal-600" },
+];
 
 const initialCampaigns: Campaign[] = [
   {
@@ -88,6 +98,7 @@ const initialCampaigns: Campaign[] = [
     name: "Summer Sale 2026",
     description: "Seasonal promotion for summer essentials and beachwear.",
     reelsCount: 12,
+    banner: "from-orange-500 via-pink-500 to-purple-600",
     products: [
       { id: "p1", name: "Summer Dress Collection", keyPoints: "Lightweight fabric, breathable design, perfect for beach days and casual outings.", affiliateLink: "https://shopee.co.th/ref/summer01", status: "Active", thumbnail: "🏖️", reelsGenerated: 5 },
       { id: "p2", name: "Fashion Lookbook SS26", keyPoints: "Curated Spring/Summer 2026 styles featuring trending colors and silhouettes.", affiliateLink: "https://lazada.co.th/ref/fashion01", status: "Active", thumbnail: "👗", reelsGenerated: 4 },
@@ -99,6 +110,7 @@ const initialCampaigns: Campaign[] = [
     name: "Accessories Launch",
     description: "Premium accessories collection for modern lifestyles.",
     reelsCount: 7,
+    banner: "from-violet-500 via-purple-500 to-fuchsia-600",
     products: [
       { id: "p4", name: "Minimal Watch — Gold", keyPoints: "Elegant minimalist design with gold-plated stainless steel and sapphire crystal.", affiliateLink: "https://lazada.co.th/ref/watch01", status: "Active", thumbnail: "⌚", reelsGenerated: 3 },
       { id: "p5", name: "Leather Wallet Slim", keyPoints: "Genuine leather, RFID-blocking, holds up to 8 cards in a slim profile.", affiliateLink: "https://shopee.co.th/ref/wallet01", status: "Active", thumbnail: "👛", reelsGenerated: 2 },
@@ -110,6 +122,7 @@ const initialCampaigns: Campaign[] = [
     name: "Beauty Week",
     description: "Skincare and beauty essentials promo week.",
     reelsCount: 5,
+    banner: "from-rose-500 via-red-500 to-orange-500",
     products: [
       { id: "p7", name: "Skincare Bundle Set", keyPoints: "Complete 5-step routine with cleanser, toner, serum, moisturizer, and SPF.", affiliateLink: "", status: "Draft", thumbnail: "🧴", reelsGenerated: 2 },
       { id: "p8", name: "Lip Tint Trio", keyPoints: "Long-lasting matte finish in three universally flattering shades.", affiliateLink: "https://shopee.co.th/ref/lip01", status: "Active", thumbnail: "💄", reelsGenerated: 3 },
@@ -120,6 +133,7 @@ const initialCampaigns: Campaign[] = [
     name: "Tech Deals",
     description: "Best deals on consumer tech and audio gear.",
     reelsCount: 9,
+    banner: "from-cyan-500 via-blue-500 to-indigo-600",
     products: [
       { id: "p9", name: "Wireless Earbuds Pro", keyPoints: "Active noise cancellation, 30-hour battery life, IPX5 water resistance.", affiliateLink: "https://shopee.co.th/ref/tech01", status: "Active", thumbnail: "🎧", reelsGenerated: 4 },
       { id: "p10", name: "Portable Charger 20K", keyPoints: "20,000mAh capacity with fast-charge USB-C and dual USB-A outputs.", affiliateLink: "https://lazada.co.th/ref/charger01", status: "Active", thumbnail: "🔋", reelsGenerated: 3 },
@@ -135,6 +149,13 @@ const ContentLibrary = () => {
   const [openCampaignId, setOpenCampaignId] = useState<string | null>(null);
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+
+  // Campaign dialog state
+  const [isCampaignDialogOpen, setIsCampaignDialogOpen] = useState(false);
+  const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
+  const [cName, setCName] = useState("");
+  const [cDescription, setCDescription] = useState("");
+  const [cBanner, setCBanner] = useState<string>(BANNER_PRESETS[0].value);
 
   // Campaigns view
   const [campaignSearch, setCampaignSearch] = useState("");
@@ -269,9 +290,161 @@ const ContentLibrary = () => {
     });
   };
 
-  // ============ STATE 1: Campaigns View ============
+  // ============ Campaign CRUD ============
+  const resetCampaignForm = () => {
+    setCName("");
+    setCDescription("");
+    setCBanner(BANNER_PRESETS[0].value);
+    setEditingCampaignId(null);
+  };
+
+  const openNewCampaignDialog = () => {
+    resetCampaignForm();
+    setIsCampaignDialogOpen(true);
+  };
+
+  const openEditCampaignDialog = (e: React.MouseEvent, campaign: Campaign) => {
+    e.stopPropagation();
+    setEditingCampaignId(campaign.id);
+    setCName(campaign.name);
+    setCDescription(campaign.description);
+    setCBanner(campaign.banner);
+    setIsCampaignDialogOpen(true);
+  };
+
+  const handleSaveCampaign = () => {
+    if (!cName.trim()) {
+      toast({ title: "Campaign name is required", variant: "destructive" });
+      return;
+    }
+    if (editingCampaignId) {
+      setCampaigns((prev) =>
+        prev.map((c) =>
+          c.id === editingCampaignId
+            ? { ...c, name: cName.trim(), description: cDescription.trim(), banner: cBanner }
+            : c,
+        ),
+      );
+      toast({ title: "Campaign updated", description: `${cName.trim()} saved.` });
+    } else {
+      const newCampaign: Campaign = {
+        id: `c${Date.now()}`,
+        name: cName.trim(),
+        description: cDescription.trim(),
+        reelsCount: 0,
+        banner: cBanner,
+        products: [],
+      };
+      setCampaigns((prev) => [newCampaign, ...prev]);
+      toast({ title: "Campaign created", description: `${newCampaign.name} added.` });
+    }
+    resetCampaignForm();
+    setIsCampaignDialogOpen(false);
+  };
+
+  // ============ Campaign Dialog (shared between views) ============
+  const campaignDialog = (
+    <Dialog
+      open={isCampaignDialogOpen}
+      onOpenChange={(open) => {
+        setIsCampaignDialogOpen(open);
+        if (!open) resetCampaignForm();
+      }}
+    >
+      <DialogContent className="max-w-xl p-0 gap-0 overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+        >
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
+            <DialogTitle className="font-display text-xl">
+              {editingCampaignId ? "Edit Campaign" : "New Campaign"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingCampaignId
+                ? "Update your campaign details and banner style."
+                : "Create a new campaign to group related products."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-6 py-5 space-y-5">
+            {/* Banner preview */}
+            <div className={`relative h-24 rounded-xl overflow-hidden bg-gradient-to-br ${cBanner}`}>
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.3),transparent_60%)]" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="font-display text-lg font-semibold text-white drop-shadow">
+                  {cName.trim() || "Campaign Banner"}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <Label className="mb-2 block">Banner Style</Label>
+              <div className="grid grid-cols-6 gap-2">
+                {BANNER_PRESETS.map((preset) => (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    onClick={() => setCBanner(preset.value)}
+                    title={preset.label}
+                    className={`h-10 rounded-lg bg-gradient-to-br ${preset.value} ring-2 transition-all ${
+                      cBanner === preset.value
+                        ? "ring-primary scale-105"
+                        : "ring-transparent hover:ring-border"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="campaign-name" className="mb-2 block">Campaign Name</Label>
+              <Input
+                id="campaign-name"
+                value={cName}
+                onChange={(e) => setCName(e.target.value)}
+                placeholder="e.g., Summer Sale 2026"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="campaign-desc" className="mb-2 block">Description</Label>
+              <Textarea
+                id="campaign-desc"
+                rows={3}
+                value={cDescription}
+                onChange={(e) => setCDescription(e.target.value)}
+                placeholder="Short description of this campaign"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="px-6 py-4 border-t border-border flex-row gap-3 justify-end">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                resetCampaignForm();
+                setIsCampaignDialogOpen(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveCampaign}
+              className="gradient-primary text-primary-foreground shadow-glow hover:shadow-glow-lg"
+            >
+              {editingCampaignId ? "Save Changes" : "Create Campaign"}
+            </Button>
+          </DialogFooter>
+        </motion.div>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (!currentCampaign) {
     return (
+      <>
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -283,7 +456,7 @@ const ContentLibrary = () => {
             </p>
           </div>
           <Button
-            onClick={() => toast({ title: "New Campaign", description: "Campaign creation coming soon." })}
+            onClick={openNewCampaignDialog}
             className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto"
           >
             <Plus className="h-4 w-4" />
@@ -306,13 +479,13 @@ const ContentLibrary = () => {
             type="single"
             value={campaignView}
             onValueChange={(v) => v && setCampaignView(v as "grid" | "list")}
-            className="bg-card border border-border rounded-md p-1 h-10"
+            className="bg-card border border-border rounded-lg p-1 h-12"
           >
-            <ToggleGroupItem value="grid" aria-label="Grid view" className="h-8 w-8 data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-              <LayoutGrid className="h-4 w-4" />
+            <ToggleGroupItem value="grid" aria-label="Grid view" className="h-10 w-10 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+              <LayoutGrid className="h-5 w-5" />
             </ToggleGroupItem>
-            <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-              <List className="h-4 w-4" />
+            <ToggleGroupItem value="list" aria-label="List view" className="h-10 w-10 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+              <List className="h-5 w-5" />
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -333,64 +506,82 @@ const ContentLibrary = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
                   onClick={() => setOpenCampaignId(campaign.id)}
-                  className="group relative rounded-2xl border border-border bg-card p-6 card-shine cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated before:content-[''] before:absolute before:-top-2 before:left-6 before:h-3 before:w-14 before:rounded-t-lg before:bg-card before:border before:border-b-0 before:border-border"
+                  className="group relative rounded-2xl border border-border bg-card overflow-hidden card-shine cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl gradient-primary shadow-glow">
-                      <FolderOpen className="h-6 w-6 text-primary-foreground" />
+                  {/* Banner */}
+                  <div className={`relative h-28 bg-gradient-to-br ${campaign.banner} overflow-hidden`}>
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.25),transparent_60%)]" />
+                    <div className="absolute inset-0 flex items-center justify-center gap-1.5 opacity-90">
+                      {campaign.products.slice(0, 4).map((p, idx) => (
+                        <span key={idx} className="text-3xl drop-shadow-lg">{p.thumbnail}</span>
+                      ))}
                     </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      onClick={(e) => openEditCampaignDialog(e, campaign)}
+                      className="absolute top-2 right-2 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Edit campaign"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <h3 className="mt-4 font-display text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
-                    {campaign.name}
-                  </h3>
-                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                    {campaign.description}
-                  </p>
 
-                  {/* Mini product thumbnails grid */}
-                  <div className="grid grid-cols-4 gap-1.5 mt-4">
-                    {Array.from({ length: 4 }).map((_, idx) => {
-                      const product = previewProducts[idx];
-                      const showOverflow = idx === 3 && overflow > 0;
-                      if (showOverflow) {
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-display text-lg font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                        {campaign.name}
+                      </h3>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1" />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                      {campaign.description}
+                    </p>
+
+                    {/* Mini product thumbnails grid */}
+                    <div className="grid grid-cols-4 gap-1.5 mt-4">
+                      {Array.from({ length: 4 }).map((_, idx) => {
+                        const product = previewProducts[idx];
+                        const showOverflow = idx === 3 && overflow > 0;
+                        if (showOverflow) {
+                          return (
+                            <div
+                              key={idx}
+                              className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xs font-semibold text-muted-foreground"
+                            >
+                              +{overflow + 1}
+                            </div>
+                          );
+                        }
+                        if (product) {
+                          return (
+                            <div
+                              key={idx}
+                              className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xl"
+                            >
+                              {product.thumbnail}
+                            </div>
+                          );
+                        }
                         return (
                           <div
                             key={idx}
-                            className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xs font-semibold text-muted-foreground"
-                          >
-                            +{overflow + 1}
-                          </div>
+                            className="h-12 rounded-lg border border-dashed border-border/60"
+                          />
                         );
-                      }
-                      if (product) {
-                        return (
-                          <div
-                            key={idx}
-                            className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xl"
-                          >
-                            {product.thumbnail}
-                          </div>
-                        );
-                      }
-                      return (
-                        <div
-                          key={idx}
-                          className="h-12 rounded-lg border border-dashed border-border/60"
-                        />
-                      );
-                    })}
-                  </div>
+                      })}
+                    </div>
 
-                  <div className="mt-4 flex gap-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1.5">
-                      <Package className="h-3.5 w-3.5" />
-                      {campaign.products.length} Products
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <Video className="h-3.5 w-3.5" />
-                      {campaign.reelsCount} Reels
-                    </span>
+                    <div className="mt-4 flex gap-4 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Package className="h-3.5 w-3.5" />
+                        {campaign.products.length} Products
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Video className="h-3.5 w-3.5" />
+                        {campaign.reelsCount} Reels
+                      </span>
+                    </div>
                   </div>
                 </motion.div>
               );
@@ -409,8 +600,8 @@ const ContentLibrary = () => {
                   onClick={() => setOpenCampaignId(campaign.id)}
                   className="group flex items-center gap-4 p-4 rounded-2xl border border-border bg-card cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary shadow-glow shrink-0">
-                    <FolderOpen className="h-5 w-5 text-primary-foreground" />
+                  <div className={`relative h-12 w-16 rounded-lg shrink-0 overflow-hidden bg-gradient-to-br ${campaign.banner}`}>
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.3),transparent_60%)]" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-display text-base font-semibold text-foreground truncate group-hover:text-primary transition-colors">
@@ -438,6 +629,15 @@ const ContentLibrary = () => {
                       </div>
                     ))}
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => openEditCampaignDialog(e, campaign)}
+                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Edit campaign"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
                   <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                 </motion.div>
               );
@@ -445,6 +645,8 @@ const ContentLibrary = () => {
           </div>
         )}
       </div>
+      {campaignDialog}
+      </>
     );
   }
 
@@ -513,13 +715,13 @@ const ContentLibrary = () => {
           type="single"
           value={productView}
           onValueChange={(v) => v && setProductView(v as "grid" | "list")}
-          className="bg-card border border-border rounded-md p-1 h-10"
+          className="bg-card border border-border rounded-lg p-1 h-12"
         >
-          <ToggleGroupItem value="grid" aria-label="Grid view" className="h-8 w-8 data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-            <LayoutGrid className="h-4 w-4" />
+          <ToggleGroupItem value="grid" aria-label="Grid view" className="h-10 w-10 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            <LayoutGrid className="h-5 w-5" />
           </ToggleGroupItem>
-          <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-            <List className="h-4 w-4" />
+          <ToggleGroupItem value="list" aria-label="List view" className="h-10 w-10 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            <List className="h-5 w-5" />
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
