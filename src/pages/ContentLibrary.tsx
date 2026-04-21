@@ -181,6 +181,25 @@ const ContentLibrary = () => {
     setPPoints("");
     setPLink("");
     setPCta("Shop Now");
+    setPImage("");
+    setPLogo("");
+    setEditingProductId(null);
+  };
+
+  const openAddDialog = () => {
+    resetForm();
+    setIsProductDialogOpen(true);
+  };
+
+  const openEditDialog = (product: Product) => {
+    setEditingProductId(product.id);
+    setPName(product.name);
+    setPPoints(product.keyPoints);
+    setPLink(product.affiliateLink);
+    setPCta("Shop Now");
+    setPImage(product.thumbnail);
+    setPLogo("");
+    setIsProductDialogOpen(true);
   };
 
   const handleSaveProduct = () => {
@@ -188,23 +207,47 @@ const ContentLibrary = () => {
       toast({ title: "Product name is required", variant: "destructive" });
       return;
     }
-    const newProduct: Product = {
-      id: `p${Date.now()}`,
-      name: pName.trim(),
-      keyPoints: pPoints.trim(),
-      affiliateLink: pLink.trim(),
-      status: "Draft",
-      thumbnail: "📦",
-      reelsGenerated: 0,
-    };
-    setCampaigns((prev) =>
-      prev.map((c) =>
-        c.id === currentCampaign.id ? { ...c, products: [newProduct, ...c.products] } : c,
-      ),
-    );
-    toast({ title: "Product added", description: `${newProduct.name} added to ${currentCampaign.name}.` });
+    if (editingProductId) {
+      setCampaigns((prev) =>
+        prev.map((c) =>
+          c.id === currentCampaign.id
+            ? {
+                ...c,
+                products: c.products.map((p) =>
+                  p.id === editingProductId
+                    ? {
+                        ...p,
+                        name: pName.trim(),
+                        keyPoints: pPoints.trim(),
+                        affiliateLink: pLink.trim(),
+                        thumbnail: pImage || p.thumbnail,
+                      }
+                    : p,
+                ),
+              }
+            : c,
+        ),
+      );
+      toast({ title: "Product updated", description: `${pName.trim()} saved.` });
+    } else {
+      const newProduct: Product = {
+        id: `p${Date.now()}`,
+        name: pName.trim(),
+        keyPoints: pPoints.trim(),
+        affiliateLink: pLink.trim(),
+        status: "Draft",
+        thumbnail: pImage || "📦",
+        reelsGenerated: 0,
+      };
+      setCampaigns((prev) =>
+        prev.map((c) =>
+          c.id === currentCampaign.id ? { ...c, products: [newProduct, ...c.products] } : c,
+        ),
+      );
+      toast({ title: "Product added", description: `${newProduct.name} added to ${currentCampaign.name}.` });
+    }
     resetForm();
-    setIsAddProductOpen(false);
+    setIsProductDialogOpen(false);
   };
 
   const handleCopyLink = async (link: string) => {
