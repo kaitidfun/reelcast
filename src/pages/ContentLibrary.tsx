@@ -706,13 +706,19 @@ const ContentLibrary = () => {
                   className="group relative rounded-2xl border border-border bg-card overflow-hidden card-shine cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
                 >
                   {/* Banner */}
-                  <div className={`relative h-28 bg-gradient-to-br ${campaign.banner} overflow-hidden`}>
+                  <div
+                    className={`relative h-28 overflow-hidden ${campaign.bannerImage ? "" : `bg-gradient-to-br ${campaign.banner}`}`}
+                    style={campaign.bannerImage ? { backgroundImage: `url(${campaign.bannerImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+                  >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.25),transparent_60%)]" />
-                    <div className="absolute inset-0 flex items-center justify-center gap-1.5 opacity-90">
-                      {campaign.products.slice(0, 4).map((p, idx) => (
-                        <span key={idx} className="text-3xl drop-shadow-lg">{p.thumbnail}</span>
-                      ))}
-                    </div>
+                    {campaign.bannerImage && <div className="absolute inset-0 bg-black/30" />}
+                    {!campaign.bannerImage && (
+                      <div className="absolute inset-0 flex items-center justify-center gap-1.5 opacity-90">
+                        {campaign.products.slice(0, 4).map((p, idx) => (
+                          <span key={idx} className="text-3xl drop-shadow-lg">{p.thumbnail}</span>
+                        ))}
+                      </div>
+                    )}
                     <Button
                       variant="secondary"
                       size="icon"
