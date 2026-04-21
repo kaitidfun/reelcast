@@ -133,7 +133,8 @@ const ContentLibrary = () => {
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
   const [openCampaignId, setOpenCampaignId] = useState<string | null>(null);
-  const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
   // Campaigns view
   const [campaignSearch, setCampaignSearch] = useState("");
@@ -149,6 +150,8 @@ const ContentLibrary = () => {
   const [pPoints, setPPoints] = useState("");
   const [pLink, setPLink] = useState("");
   const [pCta, setPCta] = useState("Shop Now");
+  const [pImage, setPImage] = useState<string>("");
+  const [pLogo, setPLogo] = useState<string>("");
 
   const currentCampaign = campaigns.find((c) => c.id === openCampaignId) ?? null;
 
