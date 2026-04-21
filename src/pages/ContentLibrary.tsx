@@ -11,8 +11,12 @@ import {
   UploadCloud,
   Edit,
   Trash2,
+  LayoutGrid,
+  List,
+  Sparkles,
 } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +59,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/hooks/use-toast";
 
 type ProductStatus = "Active" | "Draft";
@@ -66,6 +71,7 @@ interface Product {
   affiliateLink: string;
   status: ProductStatus;
   thumbnail: string;
+  reelsGenerated: number;
 }
 
 interface Campaign {
@@ -83,9 +89,9 @@ const initialCampaigns: Campaign[] = [
     description: "Seasonal promotion for summer essentials and beachwear.",
     reelsCount: 12,
     products: [
-      { id: "p1", name: "Summer Dress Collection", keyPoints: "Lightweight fabric, breathable design, perfect for beach days and casual outings.", affiliateLink: "https://shopee.co.th/ref/summer01", status: "Active", thumbnail: "🏖️" },
-      { id: "p2", name: "Fashion Lookbook SS26", keyPoints: "Curated Spring/Summer 2026 styles featuring trending colors and silhouettes.", affiliateLink: "https://lazada.co.th/ref/fashion01", status: "Active", thumbnail: "👗" },
-      { id: "p3", name: "Beach Tote Bag", keyPoints: "Spacious, water-resistant tote with reinforced straps for everyday summer use.", affiliateLink: "https://shopee.co.th/ref/tote01", status: "Draft", thumbnail: "👜" },
+      { id: "p1", name: "Summer Dress Collection", keyPoints: "Lightweight fabric, breathable design, perfect for beach days and casual outings.", affiliateLink: "https://shopee.co.th/ref/summer01", status: "Active", thumbnail: "🏖️", reelsGenerated: 5 },
+      { id: "p2", name: "Fashion Lookbook SS26", keyPoints: "Curated Spring/Summer 2026 styles featuring trending colors and silhouettes.", affiliateLink: "https://lazada.co.th/ref/fashion01", status: "Active", thumbnail: "👗", reelsGenerated: 4 },
+      { id: "p3", name: "Beach Tote Bag", keyPoints: "Spacious, water-resistant tote with reinforced straps for everyday summer use.", affiliateLink: "https://shopee.co.th/ref/tote01", status: "Draft", thumbnail: "👜", reelsGenerated: 3 },
     ],
   },
   {
@@ -94,9 +100,9 @@ const initialCampaigns: Campaign[] = [
     description: "Premium accessories collection for modern lifestyles.",
     reelsCount: 7,
     products: [
-      { id: "p4", name: "Minimal Watch — Gold", keyPoints: "Elegant minimalist design with gold-plated stainless steel and sapphire crystal.", affiliateLink: "https://lazada.co.th/ref/watch01", status: "Active", thumbnail: "⌚" },
-      { id: "p5", name: "Leather Wallet Slim", keyPoints: "Genuine leather, RFID-blocking, holds up to 8 cards in a slim profile.", affiliateLink: "https://shopee.co.th/ref/wallet01", status: "Active", thumbnail: "👛" },
-      { id: "p6", name: "Sunglasses Aviator", keyPoints: "Polarized UV400 lenses with classic aviator frame in matte finish.", affiliateLink: "", status: "Draft", thumbnail: "🕶️" },
+      { id: "p4", name: "Minimal Watch — Gold", keyPoints: "Elegant minimalist design with gold-plated stainless steel and sapphire crystal.", affiliateLink: "https://lazada.co.th/ref/watch01", status: "Active", thumbnail: "⌚", reelsGenerated: 3 },
+      { id: "p5", name: "Leather Wallet Slim", keyPoints: "Genuine leather, RFID-blocking, holds up to 8 cards in a slim profile.", affiliateLink: "https://shopee.co.th/ref/wallet01", status: "Active", thumbnail: "👛", reelsGenerated: 2 },
+      { id: "p6", name: "Sunglasses Aviator", keyPoints: "Polarized UV400 lenses with classic aviator frame in matte finish.", affiliateLink: "", status: "Draft", thumbnail: "🕶️", reelsGenerated: 2 },
     ],
   },
   {
@@ -105,8 +111,8 @@ const initialCampaigns: Campaign[] = [
     description: "Skincare and beauty essentials promo week.",
     reelsCount: 5,
     products: [
-      { id: "p7", name: "Skincare Bundle Set", keyPoints: "Complete 5-step routine with cleanser, toner, serum, moisturizer, and SPF.", affiliateLink: "", status: "Draft", thumbnail: "🧴" },
-      { id: "p8", name: "Lip Tint Trio", keyPoints: "Long-lasting matte finish in three universally flattering shades.", affiliateLink: "https://shopee.co.th/ref/lip01", status: "Active", thumbnail: "💄" },
+      { id: "p7", name: "Skincare Bundle Set", keyPoints: "Complete 5-step routine with cleanser, toner, serum, moisturizer, and SPF.", affiliateLink: "", status: "Draft", thumbnail: "🧴", reelsGenerated: 2 },
+      { id: "p8", name: "Lip Tint Trio", keyPoints: "Long-lasting matte finish in three universally flattering shades.", affiliateLink: "https://shopee.co.th/ref/lip01", status: "Active", thumbnail: "💄", reelsGenerated: 3 },
     ],
   },
   {
@@ -115,20 +121,28 @@ const initialCampaigns: Campaign[] = [
     description: "Best deals on consumer tech and audio gear.",
     reelsCount: 9,
     products: [
-      { id: "p9", name: "Wireless Earbuds Pro", keyPoints: "Active noise cancellation, 30-hour battery life, IPX5 water resistance.", affiliateLink: "https://shopee.co.th/ref/tech01", status: "Active", thumbnail: "🎧" },
-      { id: "p10", name: "Portable Charger 20K", keyPoints: "20,000mAh capacity with fast-charge USB-C and dual USB-A outputs.", affiliateLink: "https://lazada.co.th/ref/charger01", status: "Active", thumbnail: "🔋" },
-      { id: "p11", name: "Smart Desk Lamp", keyPoints: "Adjustable color temperature, touch dimming, USB charging port built-in.", affiliateLink: "", status: "Draft", thumbnail: "💡" },
+      { id: "p9", name: "Wireless Earbuds Pro", keyPoints: "Active noise cancellation, 30-hour battery life, IPX5 water resistance.", affiliateLink: "https://shopee.co.th/ref/tech01", status: "Active", thumbnail: "🎧", reelsGenerated: 4 },
+      { id: "p10", name: "Portable Charger 20K", keyPoints: "20,000mAh capacity with fast-charge USB-C and dual USB-A outputs.", affiliateLink: "https://lazada.co.th/ref/charger01", status: "Active", thumbnail: "🔋", reelsGenerated: 3 },
+      { id: "p11", name: "Smart Desk Lamp", keyPoints: "Adjustable color temperature, touch dimming, USB charging port built-in.", affiliateLink: "", status: "Draft", thumbnail: "💡", reelsGenerated: 2 },
     ],
   },
 ];
 
 const ContentLibrary = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
   const [openCampaignId, setOpenCampaignId] = useState<string | null>(null);
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+
+  // Campaigns view
+  const [campaignSearch, setCampaignSearch] = useState("");
+  const [campaignView, setCampaignView] = useState<"grid" | "list">("grid");
+
+  // Products view
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | ProductStatus>("all");
+  const [productView, setProductView] = useState<"grid" | "list">("grid");
 
   // Form state
   const [pName, setPName] = useState("");
@@ -137,6 +151,15 @@ const ContentLibrary = () => {
   const [pCta, setPCta] = useState("Shop Now");
 
   const currentCampaign = campaigns.find((c) => c.id === openCampaignId) ?? null;
+
+  const filteredCampaigns = campaigns.filter((c) => {
+    const q = campaignSearch.toLowerCase();
+    return (
+      !q ||
+      c.name.toLowerCase().includes(q) ||
+      c.description.toLowerCase().includes(q)
+    );
+  });
 
   const filteredProducts = currentCampaign
     ? currentCampaign.products.filter((p) => {
@@ -169,6 +192,7 @@ const ContentLibrary = () => {
       affiliateLink: pLink.trim(),
       status: "Draft",
       thumbnail: "📦",
+      reelsGenerated: 0,
     };
     setCampaigns((prev) =>
       prev.map((c) =>
@@ -189,10 +213,20 @@ const ContentLibrary = () => {
     }
   };
 
+  const handleCreateReel = (product: Product) => {
+    navigate("/create", {
+      state: {
+        productId: product.id,
+        productName: product.name,
+        campaignId: currentCampaign?.id,
+      },
+    });
+  };
+
   // ============ STATE 1: Campaigns View ============
   if (!currentCampaign) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">
@@ -211,41 +245,159 @@ const ContentLibrary = () => {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {campaigns.map((campaign, i) => (
-            <motion.div
-              key={campaign.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              onClick={() => setOpenCampaignId(campaign.id)}
-              className="group relative rounded-2xl border border-border bg-card p-6 card-shine cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated before:content-[''] before:absolute before:-top-2 before:left-6 before:h-3 before:w-14 before:rounded-t-lg before:bg-card before:border before:border-b-0 before:border-border"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl gradient-primary shadow-glow">
-                  <FolderOpen className="h-6 w-6 text-primary-foreground" />
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-              <h3 className="mt-4 font-display text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
-                {campaign.name}
-              </h3>
-              <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                {campaign.description}
-              </p>
-              <div className="mt-4 flex gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <Package className="h-3.5 w-3.5" />
-                  {campaign.products.length} Products
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Video className="h-3.5 w-3.5" />
-                  {campaign.reelsCount} Reels
-                </span>
-              </div>
-            </motion.div>
-          ))}
+        {/* Toolbar */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={campaignSearch}
+              onChange={(e) => setCampaignSearch(e.target.value)}
+              placeholder="Search campaigns…"
+              className="bg-card pl-10 border-border h-10"
+            />
+          </div>
+          <ToggleGroup
+            type="single"
+            value={campaignView}
+            onValueChange={(v) => v && setCampaignView(v as "grid" | "list")}
+            className="bg-card border border-border rounded-md p-1 h-10"
+          >
+            <ToggleGroupItem value="grid" aria-label="Grid view" className="h-8 w-8 data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+              <LayoutGrid className="h-4 w-4" />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+              <List className="h-4 w-4" />
+            </ToggleGroupItem>
+          </ToggleGroup>
         </div>
+
+        {filteredCampaigns.length === 0 ? (
+          <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
+            No campaigns match your search.
+          </div>
+        ) : campaignView === "grid" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredCampaigns.map((campaign, i) => {
+              const previewProducts = campaign.products.slice(0, 4);
+              const overflow = Math.max(0, campaign.products.length - 4);
+              return (
+                <motion.div
+                  key={campaign.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  onClick={() => setOpenCampaignId(campaign.id)}
+                  className="group relative rounded-2xl border border-border bg-card p-6 card-shine cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated before:content-[''] before:absolute before:-top-2 before:left-6 before:h-3 before:w-14 before:rounded-t-lg before:bg-card before:border before:border-b-0 before:border-border"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl gradient-primary shadow-glow">
+                      <FolderOpen className="h-6 w-6 text-primary-foreground" />
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                  <h3 className="mt-4 font-display text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+                    {campaign.name}
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                    {campaign.description}
+                  </p>
+
+                  {/* Mini product thumbnails grid */}
+                  <div className="grid grid-cols-4 gap-1.5 mt-4">
+                    {Array.from({ length: 4 }).map((_, idx) => {
+                      const product = previewProducts[idx];
+                      const showOverflow = idx === 3 && overflow > 0;
+                      if (showOverflow) {
+                        return (
+                          <div
+                            key={idx}
+                            className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xs font-semibold text-muted-foreground"
+                          >
+                            +{overflow + 1}
+                          </div>
+                        );
+                      }
+                      if (product) {
+                        return (
+                          <div
+                            key={idx}
+                            className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xl"
+                          >
+                            {product.thumbnail}
+                          </div>
+                        );
+                      }
+                      return (
+                        <div
+                          key={idx}
+                          className="h-12 rounded-lg border border-dashed border-border/60"
+                        />
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 flex gap-4 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <Package className="h-3.5 w-3.5" />
+                      {campaign.products.length} Products
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Video className="h-3.5 w-3.5" />
+                      {campaign.reelsCount} Reels
+                    </span>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredCampaigns.map((campaign, i) => {
+              const previewProducts = campaign.products.slice(0, 4);
+              return (
+                <motion.div
+                  key={campaign.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  onClick={() => setOpenCampaignId(campaign.id)}
+                  className="group flex items-center gap-4 p-4 rounded-2xl border border-border bg-card cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary shadow-glow shrink-0">
+                    <FolderOpen className="h-5 w-5 text-primary-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-display text-base font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+                      {campaign.name}
+                    </h3>
+                    <p className="text-xs text-muted-foreground truncate">{campaign.description}</p>
+                    <div className="mt-1.5 flex gap-4 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Package className="h-3.5 w-3.5" />
+                        {campaign.products.length} Products
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Video className="h-3.5 w-3.5" />
+                        {campaign.reelsCount} Reels
+                      </span>
+                    </div>
+                  </div>
+                  <div className="hidden md:flex -space-x-2">
+                    {previewProducts.map((p, idx) => (
+                      <div
+                        key={idx}
+                        className="h-9 w-9 rounded-lg bg-muted ring-2 ring-card flex items-center justify-center text-base"
+                      >
+                        {p.thumbnail}
+                      </div>
+                    ))}
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }
@@ -311,30 +463,122 @@ const ContentLibrary = () => {
             <SelectItem value="Draft">Draft</SelectItem>
           </SelectContent>
         </Select>
+        <ToggleGroup
+          type="single"
+          value={productView}
+          onValueChange={(v) => v && setProductView(v as "grid" | "list")}
+          className="bg-card border border-border rounded-md p-1 h-10"
+        >
+          <ToggleGroupItem value="grid" aria-label="Grid view" className="h-8 w-8 data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            <LayoutGrid className="h-4 w-4" />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            <List className="h-4 w-4" />
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
-      {/* Data Table */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[80px]">Thumbnail</TableHead>
-              <TableHead>Product Name</TableHead>
-              <TableHead>Key Selling Points</TableHead>
-              <TableHead className="w-[100px]">Affiliate</TableHead>
-              <TableHead className="w-[110px]">Status</TableHead>
-              <TableHead className="w-[60px] text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredProducts.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
-                  No products match your filters.
-                </TableCell>
+      {/* Content */}
+      {filteredProducts.length === 0 ? (
+        <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
+          No products match your filters.
+        </div>
+      ) : productView === "grid" ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredProducts.map((product, i) => (
+            <motion.div
+              key={product.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04 }}
+              className="rounded-2xl border border-border bg-card overflow-hidden card-shine hover:border-primary/30 hover:shadow-elevated transition-all duration-300"
+            >
+              <div className="aspect-video bg-muted flex items-center justify-center text-5xl relative">
+                {product.thumbnail}
+                <Badge
+                  variant="outline"
+                  className={
+                    "absolute top-3 right-3 " +
+                    (product.status === "Active"
+                      ? "bg-success/15 text-success border-success/30"
+                      : "bg-warning/15 text-warning border-warning/30")
+                  }
+                >
+                  {product.status}
+                </Badge>
+                <div className="absolute top-3 left-3 flex items-center gap-1 rounded-full bg-background/70 backdrop-blur px-2 py-1 text-xs text-foreground">
+                  <Video className="h-3 w-3" />
+                  {product.reelsGenerated} reels
+                </div>
+              </div>
+              <div className="p-4 space-y-3">
+                <h3 className="font-semibold text-foreground line-clamp-1">{product.name}</h3>
+                <p className="text-xs text-muted-foreground line-clamp-2 min-h-[2rem]">
+                  {product.keyPoints}
+                </p>
+                <div className="flex items-center justify-between gap-2 pt-2">
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => product.affiliateLink && handleCopyLink(product.affiliateLink)}
+                      disabled={!product.affiliateLink}
+                      title="Copy link"
+                      className="h-8 w-8 text-primary"
+                    >
+                      <Link2 className="h-4 w-4" />
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => toast({ title: `Edit ${product.name}` })}>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => toast({ title: `Delete ${product.name}`, variant: "destructive" })}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => handleCreateReel(product)}
+                    className="gradient-primary gap-1.5 text-primary-foreground shadow-glow hover:shadow-glow-lg"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Create Reel
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-[80px]">Thumbnail</TableHead>
+                <TableHead>Product Name</TableHead>
+                <TableHead>Key Selling Points</TableHead>
+                <TableHead className="w-[100px]">Affiliate</TableHead>
+                <TableHead className="w-[110px]">Status</TableHead>
+                <TableHead className="w-[80px]">Reels</TableHead>
+                <TableHead className="w-[140px]">Create</TableHead>
+                <TableHead className="w-[60px] text-right">Actions</TableHead>
               </TableRow>
-            ) : (
-              filteredProducts.map((product) => (
+            </TableHeader>
+            <TableBody>
+              {filteredProducts.map((product) => (
                 <TableRow key={product.id}>
                   <TableCell>
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-xl ring-1 ring-border">
@@ -372,6 +616,22 @@ const ContentLibrary = () => {
                       {product.status}
                     </Badge>
                   </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Video className="h-3.5 w-3.5" />
+                      {product.reelsGenerated}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      size="sm"
+                      onClick={() => handleCreateReel(product)}
+                      className="gradient-primary gap-1.5 text-primary-foreground shadow-glow hover:shadow-glow-lg"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Create Reel
+                    </Button>
+                  </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -395,11 +655,11 @@ const ContentLibrary = () => {
                     </DropdownMenu>
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       {/* Add Product Drawer */}
       <Sheet open={isAddProductOpen} onOpenChange={setIsAddProductOpen}>
