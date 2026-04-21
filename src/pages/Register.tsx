@@ -104,7 +104,7 @@ const Register = () => {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background p-3 sm:p-4">
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-background p-3 sm:p-4">
       <div className="gradient-glow pointer-events-none fixed inset-0" />
       <div className="dot-pattern pointer-events-none fixed inset-0 opacity-40" />
 
