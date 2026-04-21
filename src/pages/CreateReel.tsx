@@ -408,25 +408,7 @@ const CreateReel = () => {
             )}
           </div>
 
-            {generationStatus === "done" && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 space-y-2.5">
-                {[
-                  ["Duration", "30s"],
-                  ["Style", "Cinematic B-Roll"],
-                  ["Resolution", "1080×1920"],
-                  ["AI Models", "Veo + Gemini"],
-                  ["Overlay", "Product Image + Logo ✓"],
-                  ["Affiliate", "Embedded ✓"],
-                  ["Platforms", `${selectedPlatforms.length} selected`],
-                ].map(([label, value]) => (
-                  <div key={label} className="flex justify-between items-center text-xs">
-                    <span className="text-muted-foreground">{label}</span>
-                    <span className="font-medium text-foreground bg-muted px-2 py-0.5 rounded-md">{value}</span>
-                  </div>
-                ))}
-              </motion.div>
-            )}
-          </div>
+
         </div>
       </div>
     </div>
