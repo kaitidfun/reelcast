@@ -79,8 +79,18 @@ interface Campaign {
   name: string;
   description: string;
   reelsCount: number;
+  banner: string; // tailwind gradient classes for banner background
   products: Product[];
 }
+
+const BANNER_PRESETS: { label: string; value: string }[] = [
+  { label: "Sunset", value: "from-orange-500 via-pink-500 to-purple-600" },
+  { label: "Ocean", value: "from-cyan-500 via-blue-500 to-indigo-600" },
+  { label: "Forest", value: "from-emerald-500 via-teal-500 to-cyan-600" },
+  { label: "Royal", value: "from-violet-500 via-purple-500 to-fuchsia-600" },
+  { label: "Ember", value: "from-rose-500 via-red-500 to-orange-500" },
+  { label: "Mint", value: "from-lime-400 via-emerald-500 to-teal-600" },
+];
 
 const initialCampaigns: Campaign[] = [
   {
@@ -88,6 +98,7 @@ const initialCampaigns: Campaign[] = [
     name: "Summer Sale 2026",
     description: "Seasonal promotion for summer essentials and beachwear.",
     reelsCount: 12,
+    banner: "from-orange-500 via-pink-500 to-purple-600",
     products: [
       { id: "p1", name: "Summer Dress Collection", keyPoints: "Lightweight fabric, breathable design, perfect for beach days and casual outings.", affiliateLink: "https://shopee.co.th/ref/summer01", status: "Active", thumbnail: "🏖️", reelsGenerated: 5 },
       { id: "p2", name: "Fashion Lookbook SS26", keyPoints: "Curated Spring/Summer 2026 styles featuring trending colors and silhouettes.", affiliateLink: "https://lazada.co.th/ref/fashion01", status: "Active", thumbnail: "👗", reelsGenerated: 4 },
