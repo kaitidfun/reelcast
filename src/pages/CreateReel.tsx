@@ -226,27 +226,15 @@ const CreateReel = () => {
             </div>
           </div>
 
-          {/* Caption & Publish */}
+          {/* Publish */}
           {generationStatus === "done" && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
-              <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">4. Preview & Approve</h2>
-              <p className="text-xs text-muted-foreground">Review the AI-generated caption (optimized per platform) — edit before publishing</p>
-              <Textarea
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                rows={4}
-                className="bg-muted/50 border-border resize-none"
-              />
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Button onClick={handlePublish} className="gradient-primary flex-1 gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-11">
-                  <Send className="h-4 w-4" />
-                  Publish ({selectedPlatforms.length} platforms)
-                </Button>
-                <Button variant="outline" onClick={handleRegenerate} className="flex-1 gap-2 h-11">
-                  <RefreshCw className="h-4 w-4" />
-                  Regenerate
-                </Button>
-              </div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-3">
+              <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">4. Publish</h2>
+              <p className="text-xs text-muted-foreground">Once approved, distribute your Reel across selected platforms</p>
+              <Button onClick={handlePublish} className="gradient-primary w-full gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-11">
+                <Send className="h-4 w-4" />
+                Publish to {selectedPlatforms.length} platforms
+              </Button>
             </motion.div>
           )}
         </div>
