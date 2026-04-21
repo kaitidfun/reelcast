@@ -499,8 +499,8 @@ const ContentLibrary = () => {
                   onClick={() => setOpenCampaignId(campaign.id)}
                   className="group flex items-center gap-4 p-4 rounded-2xl border border-border bg-card cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary shadow-glow shrink-0">
-                    <FolderOpen className="h-5 w-5 text-primary-foreground" />
+                  <div className={`relative h-12 w-16 rounded-lg shrink-0 overflow-hidden bg-gradient-to-br ${campaign.banner}`}>
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.3),transparent_60%)]" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-display text-base font-semibold text-foreground truncate group-hover:text-primary transition-colors">
@@ -528,6 +528,15 @@ const ContentLibrary = () => {
                       </div>
                     ))}
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => openEditCampaignDialog(e, campaign)}
+                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Edit campaign"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
                   <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                 </motion.div>
               );
