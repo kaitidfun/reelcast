@@ -234,25 +234,31 @@ const ContentLibrary = () => {
 
   const currentCampaign = campaigns.find((c) => c.id === openCampaignId) ?? null;
 
-  const filteredCampaigns = campaigns.filter((c) => {
-    const q = campaignSearch.toLowerCase();
-    return (
-      !q ||
-      c.name.toLowerCase().includes(q) ||
-      c.description.toLowerCase().includes(q)
-    );
-  });
+  const filteredCampaigns = sortItems(
+    campaigns.filter((c) => {
+      const q = campaignSearch.toLowerCase();
+      return (
+        !q ||
+        c.name.toLowerCase().includes(q) ||
+        c.description.toLowerCase().includes(q)
+      );
+    }),
+    campaignSort,
+  );
 
   const filteredProducts = currentCampaign
-    ? currentCampaign.products.filter((p) => {
-        const q = search.toLowerCase();
-        const matchesSearch =
-          !q ||
-          p.name.toLowerCase().includes(q) ||
-          p.keyPoints.toLowerCase().includes(q);
-        const matchesStatus = statusFilter === "all" || p.status === statusFilter;
-        return matchesSearch && matchesStatus;
-      })
+    ? sortItems(
+        currentCampaign.products.filter((p) => {
+          const q = search.toLowerCase();
+          const matchesSearch =
+            !q ||
+            p.name.toLowerCase().includes(q) ||
+            p.keyPoints.toLowerCase().includes(q);
+          const matchesStatus = statusFilter === "all" || p.status === statusFilter;
+          return matchesSearch && matchesStatus;
+        }),
+        productSort,
+      )
     : [];
 
   const resetForm = () => {
