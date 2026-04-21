@@ -498,26 +498,69 @@ const ContentLibrary = () => {
 
           <div className="px-6 py-5 space-y-5">
             {/* Banner preview */}
-            <div className={`relative h-24 rounded-xl overflow-hidden bg-gradient-to-br ${cBanner}`}>
+            <div
+              className={`relative h-28 rounded-xl overflow-hidden ${
+                cBannerImage ? "" : `bg-gradient-to-br ${cBanner}`
+              }`}
+              style={cBannerImage ? { backgroundImage: `url(${cBannerImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+            >
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.3),transparent_60%)]" />
+              {cBannerImage && <div className="absolute inset-0 bg-black/30" />}
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className="font-display text-lg font-semibold text-white drop-shadow">
                   {cName.trim() || "Campaign Banner"}
                 </span>
               </div>
+              {cBannerImage && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setCBannerImage("")}
+                  className="absolute top-2 right-2 h-7 bg-background/70 backdrop-blur hover:bg-background text-xs"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Remove
+                </Button>
+              )}
             </div>
 
             <div>
-              <Label className="mb-2 block">Banner Style</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label>Banner</Label>
+                <input
+                  ref={cBannerInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleBannerImageUpload(e.target.files?.[0])}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => cBannerInputRef.current?.click()}
+                  className="h-8 gap-1.5 text-xs"
+                >
+                  <UploadCloud className="h-3.5 w-3.5" />
+                  {cBannerImage ? "Replace image" : "Upload image"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Pick a gradient style or upload your own banner image (PNG/JPG, max 5MB).
+              </p>
               <div className="grid grid-cols-6 gap-2">
                 {BANNER_PRESETS.map((preset) => (
                   <button
                     key={preset.value}
                     type="button"
-                    onClick={() => setCBanner(preset.value)}
+                    onClick={() => {
+                      setCBanner(preset.value);
+                      setCBannerImage("");
+                    }}
                     title={preset.label}
                     className={`h-10 rounded-lg bg-gradient-to-br ${preset.value} ring-2 transition-all ${
-                      cBanner === preset.value
+                      cBanner === preset.value && !cBannerImage
                         ? "ring-primary scale-105"
                         : "ring-transparent hover:ring-border"
                     }`}
