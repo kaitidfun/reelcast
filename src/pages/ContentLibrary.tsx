@@ -775,7 +775,7 @@ const ContentLibrary = () => {
                       })}
                     </div>
 
-                    <div className="mt-4 flex gap-4 text-xs text-muted-foreground">
+                    <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1.5">
                         <Package className="h-3.5 w-3.5" />
                         {campaign.products.length} Products
@@ -783,6 +783,16 @@ const ContentLibrary = () => {
                       <span className="flex items-center gap-1.5">
                         <Video className="h-3.5 w-3.5" />
                         {campaign.reelsCount} Reels
+                      </span>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-border/50 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground/80">
+                      <span className="flex items-center gap-1" title={`Created ${formatDateTime(campaign.createdAt)}`}>
+                        <Plus className="h-3 w-3" />
+                        {formatDate(campaign.createdAt)}
+                      </span>
+                      <span className="flex items-center gap-1" title={`Updated ${formatDateTime(campaign.updatedAt)}`}>
+                        <Clock className="h-3 w-3" />
+                        {formatDate(campaign.updatedAt)}
                       </span>
                     </div>
                   </div>
