@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/hooks/use-toast";
+import { getMockReelsForProduct } from "@/lib/mockReels";
 
 type ProductStatus = "Active" | "Draft";
 type SortKey = "newest" | "oldest" | "updated" | "name";
@@ -973,13 +974,16 @@ const ContentLibrary = () => {
         </div>
       ) : productView === "grid" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredProducts.map((product, i) => (
+          {filteredProducts.map((product, i) => {
+            const previewReels = getMockReelsForProduct(product.id, product.name, product.reelsGenerated).slice(0, 4);
+            return (
             <motion.div
               key={product.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
-              className="rounded-2xl border border-border bg-card overflow-hidden card-shine hover:border-primary/30 hover:shadow-elevated transition-all duration-300"
+              onClick={() => navigate(`/library/product/${product.id}`)}
+              className="rounded-2xl border border-border bg-card overflow-hidden card-shine hover:border-primary/30 hover:shadow-elevated transition-all duration-300 cursor-pointer"
             >
               <div className="aspect-video bg-muted flex items-center justify-center text-5xl relative group/img">
                 {product.thumbnail}
@@ -1001,7 +1005,7 @@ const ContentLibrary = () => {
                 <Button
                   variant="secondary"
                   size="icon"
-                  onClick={() => openEditDialog(product)}
+                  onClick={(e) => { e.stopPropagation(); openEditDialog(product); }}
                   className="absolute bottom-3 right-3 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background opacity-0 group-hover/img:opacity-100 transition-opacity"
                   title="Edit product"
                 >
@@ -1013,11 +1017,40 @@ const ContentLibrary = () => {
                 <p className="text-xs text-muted-foreground line-clamp-2 min-h-[2rem]">
                   {product.keyPoints}
                 </p>
+
+                {/* Mini reels preview strip */}
+                {previewReels.length > 0 && (
+                  <div className="pt-1">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground/80 font-medium">
+                        Reels generated
+                      </span>
+                      {product.reelsGenerated > previewReels.length && (
+                        <span className="text-[11px] text-muted-foreground">
+                          +{product.reelsGenerated - previewReels.length} more
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {previewReels.map((reel) => (
+                        <div
+                          key={reel.id}
+                          className={`relative aspect-[9/16] rounded-md bg-gradient-to-br ${reel.gradient} flex items-center justify-center text-base overflow-hidden ring-1 ring-border/50`}
+                          title={reel.title}
+                        >
+                          <span className="drop-shadow-sm">{reel.thumbnail}</span>
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between gap-2 pt-2">
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => product.affiliateLink && handleCopyLink(product.affiliateLink)}
+                    onClick={(e) => { e.stopPropagation(); product.affiliateLink && handleCopyLink(product.affiliateLink); }}
                     disabled={!product.affiliateLink}
                     title="Copy link"
                     className="h-8 w-8 text-primary"
@@ -1026,7 +1059,7 @@ const ContentLibrary = () => {
                   </Button>
                   <Button
                     size="sm"
-                    onClick={() => handleCreateReel(product)}
+                    onClick={(e) => { e.stopPropagation(); handleCreateReel(product); }}
                     className="gradient-primary gap-1.5 text-primary-foreground shadow-glow hover:shadow-glow-lg"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
@@ -1045,7 +1078,8 @@ const ContentLibrary = () => {
                 </div>
               </div>
             </motion.div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
@@ -1065,7 +1099,11 @@ const ContentLibrary = () => {
             </TableHeader>
             <TableBody>
               {filteredProducts.map((product) => (
-                <TableRow key={product.id}>
+                <TableRow
+                  key={product.id}
+                  onClick={() => navigate(`/library/product/${product.id}`)}
+                  className="cursor-pointer"
+                >
                   <TableCell>
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-xl ring-1 ring-border">
                       {product.thumbnail}
@@ -1080,7 +1118,7 @@ const ContentLibrary = () => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleCopyLink(product.affiliateLink)}
+                        onClick={(e) => { e.stopPropagation(); handleCopyLink(product.affiliateLink); }}
                         title="Copy link"
                         className="h-8 w-8 text-primary"
                       >
@@ -1117,7 +1155,7 @@ const ContentLibrary = () => {
                   <TableCell>
                     <Button
                       size="sm"
-                      onClick={() => handleCreateReel(product)}
+                      onClick={(e) => { e.stopPropagation(); handleCreateReel(product); }}
                       className="gradient-primary gap-1.5 text-primary-foreground shadow-glow hover:shadow-glow-lg"
                     >
                       <Sparkles className="h-3.5 w-3.5" />
@@ -1128,7 +1166,7 @@ const ContentLibrary = () => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => openEditDialog(product)}
+                      onClick={(e) => { e.stopPropagation(); openEditDialog(product); }}
                       className="h-8 w-8"
                       title="Edit product"
                     >
