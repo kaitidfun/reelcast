@@ -122,6 +122,7 @@ const initialCampaigns: Campaign[] = [
     name: "Beauty Week",
     description: "Skincare and beauty essentials promo week.",
     reelsCount: 5,
+    banner: "from-rose-500 via-red-500 to-orange-500",
     products: [
       { id: "p7", name: "Skincare Bundle Set", keyPoints: "Complete 5-step routine with cleanser, toner, serum, moisturizer, and SPF.", affiliateLink: "", status: "Draft", thumbnail: "🧴", reelsGenerated: 2 },
       { id: "p8", name: "Lip Tint Trio", keyPoints: "Long-lasting matte finish in three universally flattering shades.", affiliateLink: "https://shopee.co.th/ref/lip01", status: "Active", thumbnail: "💄", reelsGenerated: 3 },
