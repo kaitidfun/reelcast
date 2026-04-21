@@ -21,10 +21,13 @@ const promptTemplates = [
 
 const CreateReel = () => {
   const [inputType, setInputType] = useState<InputType>("text");
-  const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
-  const [caption, setCaption] = useState("");
+  const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("done");
+  const [caption, setCaption] = useState("Ready for summer? Check out our new arrival! ✨🏖️ #SummerVibes #MustHave #ReelCast #ShopNow");
   const [promptText, setPromptText] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
+  const [showLogo, setShowLogo] = useState(true);
+  const [showProduct, setShowProduct] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
   const { toast } = useToast();
 
   const inputOptions = [
