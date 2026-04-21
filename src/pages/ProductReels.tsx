@@ -222,12 +222,6 @@ const ProductReels = () => {
               >
                 <span className="drop-shadow-lg">{reel.thumbnail}</span>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                <div className="absolute top-2 left-2">
-                  <Badge variant="outline" className="bg-background/70 backdrop-blur border-border/50 text-foreground text-[10px] gap-1">
-                    <span>{platformEmoji[reel.platform]}</span>
-                    {platformLabel[reel.platform]}
-                  </Badge>
-                </div>
                 <div className="absolute top-2 right-2">
                   <Badge
                     variant="outline"
@@ -243,29 +237,19 @@ const ProductReels = () => {
                     {reel.status}
                   </Badge>
                 </div>
-                <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-background/70 backdrop-blur px-2 py-0.5 text-[10px] text-foreground">
-                  <Clock className="h-3 w-3" />
-                  {formatDuration(reel.durationSec)}
-                </div>
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <div className="h-12 w-12 rounded-full bg-background/80 backdrop-blur flex items-center justify-center">
                     <Play className="h-5 w-5 text-foreground fill-foreground ml-0.5" />
                   </div>
                 </div>
               </div>
-              <div className="p-3 space-y-2">
+              <div className="p-3 space-y-1.5">
                 <h3 className="text-sm font-medium text-foreground line-clamp-2 min-h-[2.5rem]">
                   {reel.title}
                 </h3>
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <Eye className="h-3 w-3" />
-                    {formatCount(reel.views)}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Heart className="h-3 w-3" />
-                    {formatCount(reel.likes)}
-                  </span>
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  {formatDate(reel.createdAt)}
                 </div>
               </div>
             </motion.div>
@@ -289,20 +273,9 @@ const ProductReels = () => {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-medium text-foreground truncate">{reel.title}</h3>
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                  <span>{platformEmoji[reel.platform]} {platformLabel[reel.platform]}</span>
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {formatDuration(reel.durationSec)}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Eye className="h-3 w-3" />
-                    {formatCount(reel.views)}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Heart className="h-3 w-3" />
-                    {formatCount(reel.likes)}
-                  </span>
+                <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  {formatDate(reel.createdAt)}
                 </div>
               </div>
               <Badge
