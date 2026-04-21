@@ -715,13 +715,13 @@ const ContentLibrary = () => {
           type="single"
           value={productView}
           onValueChange={(v) => v && setProductView(v as "grid" | "list")}
-          className="bg-card border border-border rounded-md p-1 h-10"
+          className="bg-card border border-border rounded-lg p-1 h-12"
         >
-          <ToggleGroupItem value="grid" aria-label="Grid view" className="h-8 w-8 data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-            <LayoutGrid className="h-4 w-4" />
+          <ToggleGroupItem value="grid" aria-label="Grid view" className="h-10 w-10 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            <LayoutGrid className="h-5 w-5" />
           </ToggleGroupItem>
-          <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-            <List className="h-4 w-4" />
+          <ToggleGroupItem value="list" aria-label="List view" className="h-10 w-10 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            <List className="h-5 w-5" />
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
