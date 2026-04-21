@@ -1025,6 +1025,16 @@ const ContentLibrary = () => {
                     Create Reel
                   </Button>
                 </div>
+                <div className="pt-2 border-t border-border/50 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground/80">
+                  <span className="flex items-center gap-1" title={`Created ${formatDateTime(product.createdAt)}`}>
+                    <Plus className="h-3 w-3" />
+                    {formatDate(product.createdAt)}
+                  </span>
+                  <span className="flex items-center gap-1" title={`Updated ${formatDateTime(product.updatedAt)}`}>
+                    <Clock className="h-3 w-3" />
+                    {formatDate(product.updatedAt)}
+                  </span>
+                </div>
               </div>
             </motion.div>
           ))}
