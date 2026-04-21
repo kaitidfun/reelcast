@@ -59,8 +59,8 @@ const CreateReel = () => {
     setGenerationStatus("generating");
     setTimeout(() => {
       setGenerationStatus("done");
-      setCaption("✨ Introducing our new collection! Products that will transform your lifestyle 🔥\n\n#Shopping #NewArrival #MustHave #ReelCast");
-      toast({ title: "Reel created successfully!", description: "Ready to preview and publish" });
+      setCaption("Ready for summer? Check out our new arrival! ✨🏖️ #SummerVibes #MustHave #ReelCast #ShopNow");
+      toast({ title: "Reel created successfully!", description: "Ready to preview and approve" });
     }, 3000);
   };
 
@@ -68,9 +68,13 @@ const CreateReel = () => {
     setGenerationStatus("generating");
     setTimeout(() => {
       setGenerationStatus("done");
-      setCaption("🛍️ Must-have alert! Premium quality at an unbeatable price ✅\n\n#BestDeal #Shopping #Trending #ReelCast");
+      setCaption("🛍️ Must-have alert! Premium quality at an unbeatable price ✅ #BestDeal #Trending #ReelCast");
       toast({ title: "Regeneration complete!", description: "New version is ready" });
     }, 2500);
+  };
+
+  const handleApprove = () => {
+    toast({ title: "Approved & Saved!", description: "Reel saved to your library 🎉" });
   };
 
   const handlePublish = () => {
