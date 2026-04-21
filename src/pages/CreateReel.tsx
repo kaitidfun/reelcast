@@ -188,6 +188,22 @@ const CreateReel = () => {
               </div>
             </div>
 
+            {/* Overlays (FFmpeg) */}
+            <div className="space-y-2 rounded-xl border border-border/60 bg-muted/30 p-3">
+              <div className="flex items-center gap-1.5">
+                <Scissors className="h-3.5 w-3.5 text-primary" />
+                <label className="text-xs font-medium text-foreground">Overlays (FFmpeg)</label>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-card/60 px-3 py-2">
+                <span className="text-xs text-foreground">Show Brand Logo</span>
+                <Switch checked={showLogo} onCheckedChange={setShowLogo} />
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-card/60 px-3 py-2">
+                <span className="text-xs text-foreground">Show Product Image</span>
+                <Switch checked={showProduct} onCheckedChange={setShowProduct} />
+              </div>
+            </div>
+
             {/* Target Platforms */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-foreground">Target Platforms</label>
