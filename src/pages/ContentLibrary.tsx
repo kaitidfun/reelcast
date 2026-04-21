@@ -405,64 +405,82 @@ const ContentLibrary = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
                   onClick={() => setOpenCampaignId(campaign.id)}
-                  className="group relative rounded-2xl border border-border bg-card p-6 card-shine cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated before:content-[''] before:absolute before:-top-2 before:left-6 before:h-3 before:w-14 before:rounded-t-lg before:bg-card before:border before:border-b-0 before:border-border"
+                  className="group relative rounded-2xl border border-border bg-card overflow-hidden card-shine cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl gradient-primary shadow-glow">
-                      <FolderOpen className="h-6 w-6 text-primary-foreground" />
+                  {/* Banner */}
+                  <div className={`relative h-28 bg-gradient-to-br ${campaign.banner} overflow-hidden`}>
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.25),transparent_60%)]" />
+                    <div className="absolute inset-0 flex items-center justify-center gap-1.5 opacity-90">
+                      {campaign.products.slice(0, 4).map((p, idx) => (
+                        <span key={idx} className="text-3xl drop-shadow-lg">{p.thumbnail}</span>
+                      ))}
                     </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      onClick={(e) => openEditCampaignDialog(e, campaign)}
+                      className="absolute top-2 right-2 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Edit campaign"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <h3 className="mt-4 font-display text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
-                    {campaign.name}
-                  </h3>
-                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                    {campaign.description}
-                  </p>
 
-                  {/* Mini product thumbnails grid */}
-                  <div className="grid grid-cols-4 gap-1.5 mt-4">
-                    {Array.from({ length: 4 }).map((_, idx) => {
-                      const product = previewProducts[idx];
-                      const showOverflow = idx === 3 && overflow > 0;
-                      if (showOverflow) {
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-display text-lg font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                        {campaign.name}
+                      </h3>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1" />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                      {campaign.description}
+                    </p>
+
+                    {/* Mini product thumbnails grid */}
+                    <div className="grid grid-cols-4 gap-1.5 mt-4">
+                      {Array.from({ length: 4 }).map((_, idx) => {
+                        const product = previewProducts[idx];
+                        const showOverflow = idx === 3 && overflow > 0;
+                        if (showOverflow) {
+                          return (
+                            <div
+                              key={idx}
+                              className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xs font-semibold text-muted-foreground"
+                            >
+                              +{overflow + 1}
+                            </div>
+                          );
+                        }
+                        if (product) {
+                          return (
+                            <div
+                              key={idx}
+                              className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xl"
+                            >
+                              {product.thumbnail}
+                            </div>
+                          );
+                        }
                         return (
                           <div
                             key={idx}
-                            className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xs font-semibold text-muted-foreground"
-                          >
-                            +{overflow + 1}
-                          </div>
+                            className="h-12 rounded-lg border border-dashed border-border/60"
+                          />
                         );
-                      }
-                      if (product) {
-                        return (
-                          <div
-                            key={idx}
-                            className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xl"
-                          >
-                            {product.thumbnail}
-                          </div>
-                        );
-                      }
-                      return (
-                        <div
-                          key={idx}
-                          className="h-12 rounded-lg border border-dashed border-border/60"
-                        />
-                      );
-                    })}
-                  </div>
+                      })}
+                    </div>
 
-                  <div className="mt-4 flex gap-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1.5">
-                      <Package className="h-3.5 w-3.5" />
-                      {campaign.products.length} Products
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <Video className="h-3.5 w-3.5" />
-                      {campaign.reelsCount} Reels
-                    </span>
+                    <div className="mt-4 flex gap-4 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Package className="h-3.5 w-3.5" />
+                        {campaign.products.length} Products
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Video className="h-3.5 w-3.5" />
+                        {campaign.reelsCount} Reels
+                      </span>
+                    </div>
                   </div>
                 </motion.div>
               );
