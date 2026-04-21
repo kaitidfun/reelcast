@@ -4,7 +4,6 @@ import {
   Package,
   Video,
   ChevronRight,
-  ChevronLeft,
   Search,
   Link2,
   UploadCloud,
@@ -896,27 +895,11 @@ const ContentLibrary = () => {
       </Breadcrumb>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              setOpenCampaignId(null);
-              setSearch("");
-              setStatusFilter("all");
-            }}
-            className="h-10 w-10 shrink-0 bg-card border-border"
-            title="Back to Library"
-            aria-label="Back to Library"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">
-              {currentCampaign.name}
-            </h1>
-            <p className="mt-1 text-muted-foreground">{currentCampaign.description}</p>
-          </div>
+        <div>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">
+            {currentCampaign.name}
+          </h1>
+          <p className="mt-1 text-muted-foreground">{currentCampaign.description}</p>
         </div>
         <Button
           onClick={openAddDialog}
