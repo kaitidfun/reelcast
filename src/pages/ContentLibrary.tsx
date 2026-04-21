@@ -397,6 +397,7 @@ const ContentLibrary = () => {
     setCName("");
     setCDescription("");
     setCBanner(BANNER_PRESETS[0].value);
+    setCBannerImage("");
     setEditingCampaignId(null);
   };
 
@@ -411,7 +412,21 @@ const ContentLibrary = () => {
     setCName(campaign.name);
     setCDescription(campaign.description);
     setCBanner(campaign.banner);
+    setCBannerImage(campaign.bannerImage ?? "");
     setIsCampaignDialogOpen(true);
+  };
+
+  const handleBannerImageUpload = (file: File | null | undefined) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Image too large", description: "Max 5MB.", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") setCBannerImage(reader.result);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSaveCampaign = () => {
@@ -419,11 +434,19 @@ const ContentLibrary = () => {
       toast({ title: "Campaign name is required", variant: "destructive" });
       return;
     }
+    const now = new Date().toISOString();
     if (editingCampaignId) {
       setCampaigns((prev) =>
         prev.map((c) =>
           c.id === editingCampaignId
-            ? { ...c, name: cName.trim(), description: cDescription.trim(), banner: cBanner }
+            ? {
+                ...c,
+                name: cName.trim(),
+                description: cDescription.trim(),
+                banner: cBanner,
+                bannerImage: cBannerImage || undefined,
+                updatedAt: now,
+              }
             : c,
         ),
       );
@@ -435,7 +458,10 @@ const ContentLibrary = () => {
         description: cDescription.trim(),
         reelsCount: 0,
         banner: cBanner,
+        bannerImage: cBannerImage || undefined,
         products: [],
+        createdAt: now,
+        updatedAt: now,
       };
       setCampaigns((prev) => [newCampaign, ...prev]);
       toast({ title: "Campaign created", description: `${newCampaign.name} added.` });
