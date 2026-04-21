@@ -1,12 +1,10 @@
 import { motion } from "framer-motion";
 import {
-  FolderOpen,
   Plus,
   Package,
   Video,
   ChevronRight,
   Search,
-  
   Link2,
   UploadCloud,
   Edit,
@@ -14,8 +12,10 @@ import {
   LayoutGrid,
   List,
   Sparkles,
+  ArrowUpDown,
+  Clock,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/hooks/use-toast";
 
 type ProductStatus = "Active" | "Draft";
+type SortKey = "newest" | "oldest" | "updated" | "name";
 
 interface Product {
   id: string;
@@ -66,6 +67,8 @@ interface Product {
   status: ProductStatus;
   thumbnail: string;
   reelsGenerated: number;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
 }
 
 interface Campaign {
@@ -73,8 +76,11 @@ interface Campaign {
   name: string;
   description: string;
   reelsCount: number;
-  banner: string; // tailwind gradient classes for banner background
+  banner: string; // tailwind gradient classes for banner background (fallback)
+  bannerImage?: string; // data URL or remote URL — overrides gradient when present
   products: Product[];
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
 }
 
 const BANNER_PRESETS: { label: string; value: string }[] = [
@@ -86,6 +92,35 @@ const BANNER_PRESETS: { label: string; value: string }[] = [
   { label: "Mint", value: "from-lime-400 via-emerald-500 to-teal-600" },
 ];
 
+// Helper: produce a deterministic ISO date offset by N days back from now
+const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+
+const formatDate = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+};
+
+const formatDateTime = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+};
+
 const initialCampaigns: Campaign[] = [
   {
     id: "summer-2026",
@@ -93,10 +128,12 @@ const initialCampaigns: Campaign[] = [
     description: "Seasonal promotion for summer essentials and beachwear.",
     reelsCount: 12,
     banner: "from-orange-500 via-pink-500 to-purple-600",
+    createdAt: daysAgo(30),
+    updatedAt: daysAgo(2),
     products: [
-      { id: "p1", name: "Summer Dress Collection", keyPoints: "Lightweight fabric, breathable design, perfect for beach days and casual outings.", affiliateLink: "https://shopee.co.th/ref/summer01", status: "Active", thumbnail: "🏖️", reelsGenerated: 5 },
-      { id: "p2", name: "Fashion Lookbook SS26", keyPoints: "Curated Spring/Summer 2026 styles featuring trending colors and silhouettes.", affiliateLink: "https://lazada.co.th/ref/fashion01", status: "Active", thumbnail: "👗", reelsGenerated: 4 },
-      { id: "p3", name: "Beach Tote Bag", keyPoints: "Spacious, water-resistant tote with reinforced straps for everyday summer use.", affiliateLink: "https://shopee.co.th/ref/tote01", status: "Draft", thumbnail: "👜", reelsGenerated: 3 },
+      { id: "p1", name: "Summer Dress Collection", keyPoints: "Lightweight fabric, breathable design, perfect for beach days and casual outings.", affiliateLink: "https://shopee.co.th/ref/summer01", status: "Active", thumbnail: "🏖️", reelsGenerated: 5, createdAt: daysAgo(28), updatedAt: daysAgo(3) },
+      { id: "p2", name: "Fashion Lookbook SS26", keyPoints: "Curated Spring/Summer 2026 styles featuring trending colors and silhouettes.", affiliateLink: "https://lazada.co.th/ref/fashion01", status: "Active", thumbnail: "👗", reelsGenerated: 4, createdAt: daysAgo(20), updatedAt: daysAgo(1) },
+      { id: "p3", name: "Beach Tote Bag", keyPoints: "Spacious, water-resistant tote with reinforced straps for everyday summer use.", affiliateLink: "https://shopee.co.th/ref/tote01", status: "Draft", thumbnail: "👜", reelsGenerated: 3, createdAt: daysAgo(15), updatedAt: daysAgo(5) },
     ],
   },
   {
@@ -105,10 +142,12 @@ const initialCampaigns: Campaign[] = [
     description: "Premium accessories collection for modern lifestyles.",
     reelsCount: 7,
     banner: "from-violet-500 via-purple-500 to-fuchsia-600",
+    createdAt: daysAgo(45),
+    updatedAt: daysAgo(7),
     products: [
-      { id: "p4", name: "Minimal Watch — Gold", keyPoints: "Elegant minimalist design with gold-plated stainless steel and sapphire crystal.", affiliateLink: "https://lazada.co.th/ref/watch01", status: "Active", thumbnail: "⌚", reelsGenerated: 3 },
-      { id: "p5", name: "Leather Wallet Slim", keyPoints: "Genuine leather, RFID-blocking, holds up to 8 cards in a slim profile.", affiliateLink: "https://shopee.co.th/ref/wallet01", status: "Active", thumbnail: "👛", reelsGenerated: 2 },
-      { id: "p6", name: "Sunglasses Aviator", keyPoints: "Polarized UV400 lenses with classic aviator frame in matte finish.", affiliateLink: "", status: "Draft", thumbnail: "🕶️", reelsGenerated: 2 },
+      { id: "p4", name: "Minimal Watch — Gold", keyPoints: "Elegant minimalist design with gold-plated stainless steel and sapphire crystal.", affiliateLink: "https://lazada.co.th/ref/watch01", status: "Active", thumbnail: "⌚", reelsGenerated: 3, createdAt: daysAgo(40), updatedAt: daysAgo(7) },
+      { id: "p5", name: "Leather Wallet Slim", keyPoints: "Genuine leather, RFID-blocking, holds up to 8 cards in a slim profile.", affiliateLink: "https://shopee.co.th/ref/wallet01", status: "Active", thumbnail: "👛", reelsGenerated: 2, createdAt: daysAgo(35), updatedAt: daysAgo(10) },
+      { id: "p6", name: "Sunglasses Aviator", keyPoints: "Polarized UV400 lenses with classic aviator frame in matte finish.", affiliateLink: "", status: "Draft", thumbnail: "🕶️", reelsGenerated: 2, createdAt: daysAgo(25), updatedAt: daysAgo(12) },
     ],
   },
   {
@@ -117,9 +156,11 @@ const initialCampaigns: Campaign[] = [
     description: "Skincare and beauty essentials promo week.",
     reelsCount: 5,
     banner: "from-rose-500 via-red-500 to-orange-500",
+    createdAt: daysAgo(14),
+    updatedAt: daysAgo(1),
     products: [
-      { id: "p7", name: "Skincare Bundle Set", keyPoints: "Complete 5-step routine with cleanser, toner, serum, moisturizer, and SPF.", affiliateLink: "", status: "Draft", thumbnail: "🧴", reelsGenerated: 2 },
-      { id: "p8", name: "Lip Tint Trio", keyPoints: "Long-lasting matte finish in three universally flattering shades.", affiliateLink: "https://shopee.co.th/ref/lip01", status: "Active", thumbnail: "💄", reelsGenerated: 3 },
+      { id: "p7", name: "Skincare Bundle Set", keyPoints: "Complete 5-step routine with cleanser, toner, serum, moisturizer, and SPF.", affiliateLink: "", status: "Draft", thumbnail: "🧴", reelsGenerated: 2, createdAt: daysAgo(12), updatedAt: daysAgo(2) },
+      { id: "p8", name: "Lip Tint Trio", keyPoints: "Long-lasting matte finish in three universally flattering shades.", affiliateLink: "https://shopee.co.th/ref/lip01", status: "Active", thumbnail: "💄", reelsGenerated: 3, createdAt: daysAgo(10), updatedAt: daysAgo(1) },
     ],
   },
   {
@@ -128,13 +169,32 @@ const initialCampaigns: Campaign[] = [
     description: "Best deals on consumer tech and audio gear.",
     reelsCount: 9,
     banner: "from-cyan-500 via-blue-500 to-indigo-600",
+    createdAt: daysAgo(60),
+    updatedAt: daysAgo(4),
     products: [
-      { id: "p9", name: "Wireless Earbuds Pro", keyPoints: "Active noise cancellation, 30-hour battery life, IPX5 water resistance.", affiliateLink: "https://shopee.co.th/ref/tech01", status: "Active", thumbnail: "🎧", reelsGenerated: 4 },
-      { id: "p10", name: "Portable Charger 20K", keyPoints: "20,000mAh capacity with fast-charge USB-C and dual USB-A outputs.", affiliateLink: "https://lazada.co.th/ref/charger01", status: "Active", thumbnail: "🔋", reelsGenerated: 3 },
-      { id: "p11", name: "Smart Desk Lamp", keyPoints: "Adjustable color temperature, touch dimming, USB charging port built-in.", affiliateLink: "", status: "Draft", thumbnail: "💡", reelsGenerated: 2 },
+      { id: "p9", name: "Wireless Earbuds Pro", keyPoints: "Active noise cancellation, 30-hour battery life, IPX5 water resistance.", affiliateLink: "https://shopee.co.th/ref/tech01", status: "Active", thumbnail: "🎧", reelsGenerated: 4, createdAt: daysAgo(55), updatedAt: daysAgo(4) },
+      { id: "p10", name: "Portable Charger 20K", keyPoints: "20,000mAh capacity with fast-charge USB-C and dual USB-A outputs.", affiliateLink: "https://lazada.co.th/ref/charger01", status: "Active", thumbnail: "🔋", reelsGenerated: 3, createdAt: daysAgo(50), updatedAt: daysAgo(8) },
+      { id: "p11", name: "Smart Desk Lamp", keyPoints: "Adjustable color temperature, touch dimming, USB charging port built-in.", affiliateLink: "", status: "Draft", thumbnail: "💡", reelsGenerated: 2, createdAt: daysAgo(48), updatedAt: daysAgo(15) },
     ],
   },
 ];
+
+const sortItems = <T extends { name: string; createdAt: string; updatedAt: string }>(
+  items: T[],
+  key: SortKey,
+): T[] => {
+  const arr = [...items];
+  switch (key) {
+    case "newest":
+      return arr.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+    case "oldest":
+      return arr.sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+    case "updated":
+      return arr.sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt));
+    case "name":
+      return arr.sort((a, b) => a.name.localeCompare(b.name));
+  }
+};
 
 const ContentLibrary = () => {
   const { toast } = useToast();
@@ -150,15 +210,19 @@ const ContentLibrary = () => {
   const [cName, setCName] = useState("");
   const [cDescription, setCDescription] = useState("");
   const [cBanner, setCBanner] = useState<string>(BANNER_PRESETS[0].value);
+  const [cBannerImage, setCBannerImage] = useState<string>("");
+  const cBannerInputRef = useRef<HTMLInputElement>(null);
 
   // Campaigns view
   const [campaignSearch, setCampaignSearch] = useState("");
   const [campaignView, setCampaignView] = useState<"grid" | "list">("grid");
+  const [campaignSort, setCampaignSort] = useState<SortKey>("updated");
 
   // Products view
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | ProductStatus>("all");
   const [productView, setProductView] = useState<"grid" | "list">("grid");
+  const [productSort, setProductSort] = useState<SortKey>("updated");
 
   // Form state
   const [pName, setPName] = useState("");
@@ -170,25 +234,31 @@ const ContentLibrary = () => {
 
   const currentCampaign = campaigns.find((c) => c.id === openCampaignId) ?? null;
 
-  const filteredCampaigns = campaigns.filter((c) => {
-    const q = campaignSearch.toLowerCase();
-    return (
-      !q ||
-      c.name.toLowerCase().includes(q) ||
-      c.description.toLowerCase().includes(q)
-    );
-  });
+  const filteredCampaigns = sortItems(
+    campaigns.filter((c) => {
+      const q = campaignSearch.toLowerCase();
+      return (
+        !q ||
+        c.name.toLowerCase().includes(q) ||
+        c.description.toLowerCase().includes(q)
+      );
+    }),
+    campaignSort,
+  );
 
   const filteredProducts = currentCampaign
-    ? currentCampaign.products.filter((p) => {
-        const q = search.toLowerCase();
-        const matchesSearch =
-          !q ||
-          p.name.toLowerCase().includes(q) ||
-          p.keyPoints.toLowerCase().includes(q);
-        const matchesStatus = statusFilter === "all" || p.status === statusFilter;
-        return matchesSearch && matchesStatus;
-      })
+    ? sortItems(
+        currentCampaign.products.filter((p) => {
+          const q = search.toLowerCase();
+          const matchesSearch =
+            !q ||
+            p.name.toLowerCase().includes(q) ||
+            p.keyPoints.toLowerCase().includes(q);
+          const matchesStatus = statusFilter === "all" || p.status === statusFilter;
+          return matchesSearch && matchesStatus;
+        }),
+        productSort,
+      )
     : [];
 
   const resetForm = () => {
@@ -222,12 +292,14 @@ const ContentLibrary = () => {
       toast({ title: "Product name is required", variant: "destructive" });
       return;
     }
+    const now = new Date().toISOString();
     if (editingProductId) {
       setCampaigns((prev) =>
         prev.map((c) =>
           c.id === currentCampaign.id
             ? {
                 ...c,
+                updatedAt: now,
                 products: c.products.map((p) =>
                   p.id === editingProductId
                     ? {
@@ -236,6 +308,7 @@ const ContentLibrary = () => {
                         keyPoints: pPoints.trim(),
                         affiliateLink: pLink.trim(),
                         thumbnail: pImage || p.thumbnail,
+                        updatedAt: now,
                       }
                     : p,
                 ),
@@ -253,10 +326,14 @@ const ContentLibrary = () => {
         status: "Draft",
         thumbnail: pImage || "📦",
         reelsGenerated: 0,
+        createdAt: now,
+        updatedAt: now,
       };
       setCampaigns((prev) =>
         prev.map((c) =>
-          c.id === currentCampaign.id ? { ...c, products: [newProduct, ...c.products] } : c,
+          c.id === currentCampaign.id
+            ? { ...c, updatedAt: now, products: [newProduct, ...c.products] }
+            : c,
         ),
       );
       toast({ title: "Product added", description: `${newProduct.name} added to ${currentCampaign.name}.` });
@@ -320,6 +397,7 @@ const ContentLibrary = () => {
     setCName("");
     setCDescription("");
     setCBanner(BANNER_PRESETS[0].value);
+    setCBannerImage("");
     setEditingCampaignId(null);
   };
 
@@ -334,7 +412,21 @@ const ContentLibrary = () => {
     setCName(campaign.name);
     setCDescription(campaign.description);
     setCBanner(campaign.banner);
+    setCBannerImage(campaign.bannerImage ?? "");
     setIsCampaignDialogOpen(true);
+  };
+
+  const handleBannerImageUpload = (file: File | null | undefined) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Image too large", description: "Max 5MB.", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") setCBannerImage(reader.result);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSaveCampaign = () => {
@@ -342,11 +434,19 @@ const ContentLibrary = () => {
       toast({ title: "Campaign name is required", variant: "destructive" });
       return;
     }
+    const now = new Date().toISOString();
     if (editingCampaignId) {
       setCampaigns((prev) =>
         prev.map((c) =>
           c.id === editingCampaignId
-            ? { ...c, name: cName.trim(), description: cDescription.trim(), banner: cBanner }
+            ? {
+                ...c,
+                name: cName.trim(),
+                description: cDescription.trim(),
+                banner: cBanner,
+                bannerImage: cBannerImage || undefined,
+                updatedAt: now,
+              }
             : c,
         ),
       );
@@ -358,7 +458,10 @@ const ContentLibrary = () => {
         description: cDescription.trim(),
         reelsCount: 0,
         banner: cBanner,
+        bannerImage: cBannerImage || undefined,
         products: [],
+        createdAt: now,
+        updatedAt: now,
       };
       setCampaigns((prev) => [newCampaign, ...prev]);
       toast({ title: "Campaign created", description: `${newCampaign.name} added.` });
@@ -395,26 +498,69 @@ const ContentLibrary = () => {
 
           <div className="px-6 py-5 space-y-5">
             {/* Banner preview */}
-            <div className={`relative h-24 rounded-xl overflow-hidden bg-gradient-to-br ${cBanner}`}>
+            <div
+              className={`relative h-28 rounded-xl overflow-hidden ${
+                cBannerImage ? "" : `bg-gradient-to-br ${cBanner}`
+              }`}
+              style={cBannerImage ? { backgroundImage: `url(${cBannerImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+            >
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.3),transparent_60%)]" />
+              {cBannerImage && <div className="absolute inset-0 bg-black/30" />}
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className="font-display text-lg font-semibold text-white drop-shadow">
                   {cName.trim() || "Campaign Banner"}
                 </span>
               </div>
+              {cBannerImage && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setCBannerImage("")}
+                  className="absolute top-2 right-2 h-7 bg-background/70 backdrop-blur hover:bg-background text-xs"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Remove
+                </Button>
+              )}
             </div>
 
             <div>
-              <Label className="mb-2 block">Banner Style</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label>Banner</Label>
+                <input
+                  ref={cBannerInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleBannerImageUpload(e.target.files?.[0])}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => cBannerInputRef.current?.click()}
+                  className="h-8 gap-1.5 text-xs"
+                >
+                  <UploadCloud className="h-3.5 w-3.5" />
+                  {cBannerImage ? "Replace image" : "Upload image"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Pick a gradient style or upload your own banner image (PNG/JPG, max 5MB).
+              </p>
               <div className="grid grid-cols-6 gap-2">
                 {BANNER_PRESETS.map((preset) => (
                   <button
                     key={preset.value}
                     type="button"
-                    onClick={() => setCBanner(preset.value)}
+                    onClick={() => {
+                      setCBanner(preset.value);
+                      setCBannerImage("");
+                    }}
                     title={preset.label}
                     className={`h-10 rounded-lg bg-gradient-to-br ${preset.value} ring-2 transition-all ${
-                      cBanner === preset.value
+                      cBanner === preset.value && !cBannerImage
                         ? "ring-primary scale-105"
                         : "ring-transparent hover:ring-border"
                     }`}
@@ -514,17 +660,29 @@ const ContentLibrary = () => {
               className="bg-card pl-10 border-border h-10"
             />
           </div>
+          <Select value={campaignSort} onValueChange={(v) => setCampaignSort(v as SortKey)}>
+            <SelectTrigger className="w-full sm:w-[200px] bg-card h-10">
+              <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+              <SelectValue placeholder="Sort" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="updated">Recently updated</SelectItem>
+              <SelectItem value="newest">Newest first</SelectItem>
+              <SelectItem value="oldest">Oldest first</SelectItem>
+              <SelectItem value="name">Name (A–Z)</SelectItem>
+            </SelectContent>
+          </Select>
           <ToggleGroup
             type="single"
             value={campaignView}
             onValueChange={(v) => v && setCampaignView(v as "grid" | "list")}
-            className="bg-card border border-border rounded-lg p-1 h-10"
+            className="bg-card border border-border rounded-lg p-0.5 h-10"
           >
-            <ToggleGroupItem value="grid" aria-label="Grid view" className="h-8 w-8 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-              <LayoutGrid className="h-4 w-4" />
+            <ToggleGroupItem value="grid" aria-label="Grid view" className="h-9 w-9 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+              <LayoutGrid className="!h-5 !w-5" />
             </ToggleGroupItem>
-            <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-              <List className="h-4 w-4" />
+            <ToggleGroupItem value="list" aria-label="List view" className="h-9 w-9 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+              <List className="!h-5 !w-5" />
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -548,13 +706,19 @@ const ContentLibrary = () => {
                   className="group relative rounded-2xl border border-border bg-card overflow-hidden card-shine cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
                 >
                   {/* Banner */}
-                  <div className={`relative h-28 bg-gradient-to-br ${campaign.banner} overflow-hidden`}>
+                  <div
+                    className={`relative h-28 overflow-hidden ${campaign.bannerImage ? "" : `bg-gradient-to-br ${campaign.banner}`}`}
+                    style={campaign.bannerImage ? { backgroundImage: `url(${campaign.bannerImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+                  >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.25),transparent_60%)]" />
-                    <div className="absolute inset-0 flex items-center justify-center gap-1.5 opacity-90">
-                      {campaign.products.slice(0, 4).map((p, idx) => (
-                        <span key={idx} className="text-3xl drop-shadow-lg">{p.thumbnail}</span>
-                      ))}
-                    </div>
+                    {campaign.bannerImage && <div className="absolute inset-0 bg-black/30" />}
+                    {!campaign.bannerImage && (
+                      <div className="absolute inset-0 flex items-center justify-center gap-1.5 opacity-90">
+                        {campaign.products.slice(0, 4).map((p, idx) => (
+                          <span key={idx} className="text-3xl drop-shadow-lg">{p.thumbnail}</span>
+                        ))}
+                      </div>
+                    )}
                     <Button
                       variant="secondary"
                       size="icon"
@@ -611,7 +775,7 @@ const ContentLibrary = () => {
                       })}
                     </div>
 
-                    <div className="mt-4 flex gap-4 text-xs text-muted-foreground">
+                    <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1.5">
                         <Package className="h-3.5 w-3.5" />
                         {campaign.products.length} Products
@@ -619,6 +783,16 @@ const ContentLibrary = () => {
                       <span className="flex items-center gap-1.5">
                         <Video className="h-3.5 w-3.5" />
                         {campaign.reelsCount} Reels
+                      </span>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-border/50 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground/80">
+                      <span className="flex items-center gap-1" title={`Created ${formatDateTime(campaign.createdAt)}`}>
+                        <Plus className="h-3 w-3" />
+                        {formatDate(campaign.createdAt)}
+                      </span>
+                      <span className="flex items-center gap-1" title={`Updated ${formatDateTime(campaign.updatedAt)}`}>
+                        <Clock className="h-3 w-3" />
+                        {formatDate(campaign.updatedAt)}
                       </span>
                     </div>
                   </div>
@@ -639,7 +813,10 @@ const ContentLibrary = () => {
                   onClick={() => setOpenCampaignId(campaign.id)}
                   className="group flex items-center gap-4 p-4 rounded-2xl border border-border bg-card cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
                 >
-                  <div className={`relative h-12 w-16 rounded-lg shrink-0 overflow-hidden bg-gradient-to-br ${campaign.banner}`}>
+                  <div
+                    className={`relative h-12 w-16 rounded-lg shrink-0 overflow-hidden ${campaign.bannerImage ? "" : `bg-gradient-to-br ${campaign.banner}`}`}
+                    style={campaign.bannerImage ? { backgroundImage: `url(${campaign.bannerImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+                  >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.3),transparent_60%)]" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -647,7 +824,7 @@ const ContentLibrary = () => {
                       {campaign.name}
                     </h3>
                     <p className="text-xs text-muted-foreground truncate">{campaign.description}</p>
-                    <div className="mt-1.5 flex gap-4 text-xs text-muted-foreground">
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1.5">
                         <Package className="h-3.5 w-3.5" />
                         {campaign.products.length} Products
@@ -655,6 +832,10 @@ const ContentLibrary = () => {
                       <span className="flex items-center gap-1.5">
                         <Video className="h-3.5 w-3.5" />
                         {campaign.reelsCount} Reels
+                      </span>
+                      <span className="flex items-center gap-1.5" title={`Updated ${formatDateTime(campaign.updatedAt)}`}>
+                        <Clock className="h-3.5 w-3.5" />
+                        Updated {formatDate(campaign.updatedAt)}
                       </span>
                     </div>
                   </div>
@@ -730,8 +911,8 @@ const ContentLibrary = () => {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
@@ -741,7 +922,7 @@ const ContentLibrary = () => {
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-          <SelectTrigger className="w-full sm:w-[180px] bg-card h-10">
+          <SelectTrigger className="w-full sm:w-[160px] bg-card h-10">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -750,17 +931,29 @@ const ContentLibrary = () => {
             <SelectItem value="Draft">Draft</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={productSort} onValueChange={(v) => setProductSort(v as SortKey)}>
+          <SelectTrigger className="w-full sm:w-[200px] bg-card h-10">
+            <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Sort" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="updated">Recently updated</SelectItem>
+            <SelectItem value="newest">Newest first</SelectItem>
+            <SelectItem value="oldest">Oldest first</SelectItem>
+            <SelectItem value="name">Name (A–Z)</SelectItem>
+          </SelectContent>
+        </Select>
         <ToggleGroup
           type="single"
           value={productView}
           onValueChange={(v) => v && setProductView(v as "grid" | "list")}
-          className="bg-card border border-border rounded-lg p-1 h-10"
+          className="bg-card border border-border rounded-lg p-0.5 h-10"
         >
-          <ToggleGroupItem value="grid" aria-label="Grid view" className="h-8 w-8 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-            <LayoutGrid className="h-4 w-4" />
+          <ToggleGroupItem value="grid" aria-label="Grid view" className="h-9 w-9 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            <LayoutGrid className="!h-5 !w-5" />
           </ToggleGroupItem>
-          <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-            <List className="h-4 w-4" />
+          <ToggleGroupItem value="list" aria-label="List view" className="h-9 w-9 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            <List className="!h-5 !w-5" />
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
@@ -832,6 +1025,16 @@ const ContentLibrary = () => {
                     Create Reel
                   </Button>
                 </div>
+                <div className="pt-2 border-t border-border/50 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground/80">
+                  <span className="flex items-center gap-1" title={`Created ${formatDateTime(product.createdAt)}`}>
+                    <Plus className="h-3 w-3" />
+                    {formatDate(product.createdAt)}
+                  </span>
+                  <span className="flex items-center gap-1" title={`Updated ${formatDateTime(product.updatedAt)}`}>
+                    <Clock className="h-3 w-3" />
+                    {formatDate(product.updatedAt)}
+                  </span>
+                </div>
               </div>
             </motion.div>
           ))}
@@ -847,6 +1050,7 @@ const ContentLibrary = () => {
                 <TableHead className="w-[100px]">Affiliate</TableHead>
                 <TableHead className="w-[110px]">Status</TableHead>
                 <TableHead className="w-[80px]">Reels</TableHead>
+                <TableHead className="w-[140px]">Updated</TableHead>
                 <TableHead className="w-[140px]">Create</TableHead>
                 <TableHead className="w-[60px] text-right">Actions</TableHead>
               </TableRow>
@@ -894,6 +1098,12 @@ const ContentLibrary = () => {
                     <span className="inline-flex items-center gap-1.5">
                       <Video className="h-3.5 w-3.5" />
                       {product.reelsGenerated}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground" title={`Created ${formatDateTime(product.createdAt)}\nUpdated ${formatDateTime(product.updatedAt)}`}>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5" />
+                      {formatDate(product.updatedAt)}
                     </span>
                   </TableCell>
                   <TableCell>
