@@ -342,8 +342,109 @@ const ContentLibrary = () => {
     setIsCampaignDialogOpen(false);
   };
 
+  // ============ Campaign Dialog (shared between views) ============
+  const campaignDialog = (
+    <Dialog
+      open={isCampaignDialogOpen}
+      onOpenChange={(open) => {
+        setIsCampaignDialogOpen(open);
+        if (!open) resetCampaignForm();
+      }}
+    >
+      <DialogContent className="max-w-xl p-0 gap-0 overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+        >
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
+            <DialogTitle className="font-display text-xl">
+              {editingCampaignId ? "Edit Campaign" : "New Campaign"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingCampaignId
+                ? "Update your campaign details and banner style."
+                : "Create a new campaign to group related products."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-6 py-5 space-y-5">
+            {/* Banner preview */}
+            <div className={`relative h-24 rounded-xl overflow-hidden bg-gradient-to-br ${cBanner}`}>
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.3),transparent_60%)]" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="font-display text-lg font-semibold text-white drop-shadow">
+                  {cName.trim() || "Campaign Banner"}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <Label className="mb-2 block">Banner Style</Label>
+              <div className="grid grid-cols-6 gap-2">
+                {BANNER_PRESETS.map((preset) => (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    onClick={() => setCBanner(preset.value)}
+                    title={preset.label}
+                    className={`h-10 rounded-lg bg-gradient-to-br ${preset.value} ring-2 transition-all ${
+                      cBanner === preset.value
+                        ? "ring-primary scale-105"
+                        : "ring-transparent hover:ring-border"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="campaign-name" className="mb-2 block">Campaign Name</Label>
+              <Input
+                id="campaign-name"
+                value={cName}
+                onChange={(e) => setCName(e.target.value)}
+                placeholder="e.g., Summer Sale 2026"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="campaign-desc" className="mb-2 block">Description</Label>
+              <Textarea
+                id="campaign-desc"
+                rows={3}
+                value={cDescription}
+                onChange={(e) => setCDescription(e.target.value)}
+                placeholder="Short description of this campaign"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="px-6 py-4 border-t border-border flex-row gap-3 justify-end">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                resetCampaignForm();
+                setIsCampaignDialogOpen(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveCampaign}
+              className="gradient-primary text-primary-foreground shadow-glow hover:shadow-glow-lg"
+            >
+              {editingCampaignId ? "Save Changes" : "Create Campaign"}
+            </Button>
+          </DialogFooter>
+        </motion.div>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (!currentCampaign) {
     return (
+      <>
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
