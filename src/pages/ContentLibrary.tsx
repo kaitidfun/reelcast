@@ -1050,6 +1050,7 @@ const ContentLibrary = () => {
                 <TableHead className="w-[100px]">Affiliate</TableHead>
                 <TableHead className="w-[110px]">Status</TableHead>
                 <TableHead className="w-[80px]">Reels</TableHead>
+                <TableHead className="w-[140px]">Updated</TableHead>
                 <TableHead className="w-[140px]">Create</TableHead>
                 <TableHead className="w-[60px] text-right">Actions</TableHead>
               </TableRow>
