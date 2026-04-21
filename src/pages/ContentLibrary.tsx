@@ -1118,7 +1118,7 @@ const ContentLibrary = () => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleCopyLink(product.affiliateLink)}
+                        onClick={(e) => { e.stopPropagation(); handleCopyLink(product.affiliateLink); }}
                         title="Copy link"
                         className="h-8 w-8 text-primary"
                       >
@@ -1155,7 +1155,7 @@ const ContentLibrary = () => {
                   <TableCell>
                     <Button
                       size="sm"
-                      onClick={() => handleCreateReel(product)}
+                      onClick={(e) => { e.stopPropagation(); handleCreateReel(product); }}
                       className="gradient-primary gap-1.5 text-primary-foreground shadow-glow hover:shadow-glow-lg"
                     >
                       <Sparkles className="h-3.5 w-3.5" />
@@ -1166,7 +1166,7 @@ const ContentLibrary = () => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => openEditDialog(product)}
+                      onClick={(e) => { e.stopPropagation(); openEditDialog(product); }}
                       className="h-8 w-8"
                       title="Edit product"
                     >
