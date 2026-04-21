@@ -1099,7 +1099,11 @@ const ContentLibrary = () => {
             </TableHeader>
             <TableBody>
               {filteredProducts.map((product) => (
-                <TableRow key={product.id}>
+                <TableRow
+                  key={product.id}
+                  onClick={() => navigate(`/library/product/${product.id}`)}
+                  className="cursor-pointer"
+                >
                   <TableCell>
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-xl ring-1 ring-border">
                       {product.thumbnail}
