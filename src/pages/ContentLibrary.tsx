@@ -1031,22 +1031,36 @@ const ContentLibrary = () => {
               </div>
             </div>
 
-            <DialogFooter className="px-6 py-4 border-t border-border flex-row gap-3 justify-end">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  resetForm();
-                  setIsProductDialogOpen(false);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSaveProduct}
-                className="gradient-primary text-primary-foreground shadow-glow hover:shadow-glow-lg"
-              >
-                {editingProductId ? "Save Changes" : "Save Product"}
-              </Button>
+            <DialogFooter className="px-6 py-4 border-t border-border flex-row gap-3 sm:justify-between">
+              <div>
+                {editingProductId && (
+                  <Button
+                    variant="ghost"
+                    onClick={handleDeleteProductFromDialog}
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    resetForm();
+                    setIsProductDialogOpen(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSaveProduct}
+                  className="gradient-primary text-primary-foreground shadow-glow hover:shadow-glow-lg"
+                >
+                  {editingProductId ? "Save Changes" : "Save Product"}
+                </Button>
+              </div>
             </DialogFooter>
           </motion.div>
         </DialogContent>
