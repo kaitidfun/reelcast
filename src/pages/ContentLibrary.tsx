@@ -292,12 +292,14 @@ const ContentLibrary = () => {
       toast({ title: "Product name is required", variant: "destructive" });
       return;
     }
+    const now = new Date().toISOString();
     if (editingProductId) {
       setCampaigns((prev) =>
         prev.map((c) =>
           c.id === currentCampaign.id
             ? {
                 ...c,
+                updatedAt: now,
                 products: c.products.map((p) =>
                   p.id === editingProductId
                     ? {
@@ -306,6 +308,7 @@ const ContentLibrary = () => {
                         keyPoints: pPoints.trim(),
                         affiliateLink: pLink.trim(),
                         thumbnail: pImage || p.thumbnail,
+                        updatedAt: now,
                       }
                     : p,
                 ),
@@ -323,10 +326,14 @@ const ContentLibrary = () => {
         status: "Draft",
         thumbnail: pImage || "📦",
         reelsGenerated: 0,
+        createdAt: now,
+        updatedAt: now,
       };
       setCampaigns((prev) =>
         prev.map((c) =>
-          c.id === currentCampaign.id ? { ...c, products: [newProduct, ...c.products] } : c,
+          c.id === currentCampaign.id
+            ? { ...c, updatedAt: now, products: [newProduct, ...c.products] }
+            : c,
         ),
       );
       toast({ title: "Product added", description: `${newProduct.name} added to ${currentCampaign.name}.` });
