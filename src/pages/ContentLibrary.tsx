@@ -280,6 +280,37 @@ const ContentLibrary = () => {
     }
   };
 
+  const handleDeleteProduct = (productId: string, productName: string) => {
+    if (!currentCampaign) return;
+    setCampaigns((prev) =>
+      prev.map((c) =>
+        c.id === currentCampaign.id
+          ? { ...c, products: c.products.filter((p) => p.id !== productId) }
+          : c,
+      ),
+    );
+    toast({ title: "Product deleted", description: `${productName} removed.`, variant: "destructive" });
+  };
+
+  const handleDeleteProductFromDialog = () => {
+    if (!editingProductId || !currentCampaign) return;
+    const product = currentCampaign.products.find((p) => p.id === editingProductId);
+    if (!product) return;
+    handleDeleteProduct(editingProductId, product.name);
+    resetForm();
+    setIsProductDialogOpen(false);
+  };
+
+  const handleDeleteCampaign = () => {
+    if (!editingCampaignId) return;
+    const campaign = campaigns.find((c) => c.id === editingCampaignId);
+    if (!campaign) return;
+    setCampaigns((prev) => prev.filter((c) => c.id !== editingCampaignId));
+    toast({ title: "Campaign deleted", description: `${campaign.name} removed.`, variant: "destructive" });
+    resetCampaignForm();
+    setIsCampaignDialogOpen(false);
+  };
+
   const handleCreateReel = (product: Product) => {
     navigate("/create", {
       state: {
