@@ -1,12 +1,10 @@
 import { motion } from "framer-motion";
 import {
-  FolderOpen,
   Plus,
   Package,
   Video,
   ChevronRight,
   Search,
-  
   Link2,
   UploadCloud,
   Edit,
@@ -14,8 +12,10 @@ import {
   LayoutGrid,
   List,
   Sparkles,
+  ArrowUpDown,
+  Clock,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
