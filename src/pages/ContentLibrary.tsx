@@ -645,6 +645,8 @@ const ContentLibrary = () => {
           </div>
         )}
       </div>
+      {campaignDialog}
+      </>
     );
   }
 
