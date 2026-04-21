@@ -57,6 +57,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/hooks/use-toast";
 
 type ProductStatus = "Active" | "Draft";
+type SortKey = "newest" | "oldest" | "updated" | "name";
 
 interface Product {
   id: string;
@@ -66,6 +67,8 @@ interface Product {
   status: ProductStatus;
   thumbnail: string;
   reelsGenerated: number;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
 }
 
 interface Campaign {
@@ -73,8 +76,11 @@ interface Campaign {
   name: string;
   description: string;
   reelsCount: number;
-  banner: string; // tailwind gradient classes for banner background
+  banner: string; // tailwind gradient classes for banner background (fallback)
+  bannerImage?: string; // data URL or remote URL — overrides gradient when present
   products: Product[];
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
 }
 
 const BANNER_PRESETS: { label: string; value: string }[] = [
@@ -86,6 +92,35 @@ const BANNER_PRESETS: { label: string; value: string }[] = [
   { label: "Mint", value: "from-lime-400 via-emerald-500 to-teal-600" },
 ];
 
+// Helper: produce a deterministic ISO date offset by N days back from now
+const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+
+const formatDate = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+};
+
+const formatDateTime = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+};
+
 const initialCampaigns: Campaign[] = [
   {
     id: "summer-2026",
@@ -93,10 +128,12 @@ const initialCampaigns: Campaign[] = [
     description: "Seasonal promotion for summer essentials and beachwear.",
     reelsCount: 12,
     banner: "from-orange-500 via-pink-500 to-purple-600",
+    createdAt: daysAgo(30),
+    updatedAt: daysAgo(2),
     products: [
-      { id: "p1", name: "Summer Dress Collection", keyPoints: "Lightweight fabric, breathable design, perfect for beach days and casual outings.", affiliateLink: "https://shopee.co.th/ref/summer01", status: "Active", thumbnail: "🏖️", reelsGenerated: 5 },
-      { id: "p2", name: "Fashion Lookbook SS26", keyPoints: "Curated Spring/Summer 2026 styles featuring trending colors and silhouettes.", affiliateLink: "https://lazada.co.th/ref/fashion01", status: "Active", thumbnail: "👗", reelsGenerated: 4 },
-      { id: "p3", name: "Beach Tote Bag", keyPoints: "Spacious, water-resistant tote with reinforced straps for everyday summer use.", affiliateLink: "https://shopee.co.th/ref/tote01", status: "Draft", thumbnail: "👜", reelsGenerated: 3 },
+      { id: "p1", name: "Summer Dress Collection", keyPoints: "Lightweight fabric, breathable design, perfect for beach days and casual outings.", affiliateLink: "https://shopee.co.th/ref/summer01", status: "Active", thumbnail: "🏖️", reelsGenerated: 5, createdAt: daysAgo(28), updatedAt: daysAgo(3) },
+      { id: "p2", name: "Fashion Lookbook SS26", keyPoints: "Curated Spring/Summer 2026 styles featuring trending colors and silhouettes.", affiliateLink: "https://lazada.co.th/ref/fashion01", status: "Active", thumbnail: "👗", reelsGenerated: 4, createdAt: daysAgo(20), updatedAt: daysAgo(1) },
+      { id: "p3", name: "Beach Tote Bag", keyPoints: "Spacious, water-resistant tote with reinforced straps for everyday summer use.", affiliateLink: "https://shopee.co.th/ref/tote01", status: "Draft", thumbnail: "👜", reelsGenerated: 3, createdAt: daysAgo(15), updatedAt: daysAgo(5) },
     ],
   },
   {
@@ -105,10 +142,12 @@ const initialCampaigns: Campaign[] = [
     description: "Premium accessories collection for modern lifestyles.",
     reelsCount: 7,
     banner: "from-violet-500 via-purple-500 to-fuchsia-600",
+    createdAt: daysAgo(45),
+    updatedAt: daysAgo(7),
     products: [
-      { id: "p4", name: "Minimal Watch — Gold", keyPoints: "Elegant minimalist design with gold-plated stainless steel and sapphire crystal.", affiliateLink: "https://lazada.co.th/ref/watch01", status: "Active", thumbnail: "⌚", reelsGenerated: 3 },
-      { id: "p5", name: "Leather Wallet Slim", keyPoints: "Genuine leather, RFID-blocking, holds up to 8 cards in a slim profile.", affiliateLink: "https://shopee.co.th/ref/wallet01", status: "Active", thumbnail: "👛", reelsGenerated: 2 },
-      { id: "p6", name: "Sunglasses Aviator", keyPoints: "Polarized UV400 lenses with classic aviator frame in matte finish.", affiliateLink: "", status: "Draft", thumbnail: "🕶️", reelsGenerated: 2 },
+      { id: "p4", name: "Minimal Watch — Gold", keyPoints: "Elegant minimalist design with gold-plated stainless steel and sapphire crystal.", affiliateLink: "https://lazada.co.th/ref/watch01", status: "Active", thumbnail: "⌚", reelsGenerated: 3, createdAt: daysAgo(40), updatedAt: daysAgo(7) },
+      { id: "p5", name: "Leather Wallet Slim", keyPoints: "Genuine leather, RFID-blocking, holds up to 8 cards in a slim profile.", affiliateLink: "https://shopee.co.th/ref/wallet01", status: "Active", thumbnail: "👛", reelsGenerated: 2, createdAt: daysAgo(35), updatedAt: daysAgo(10) },
+      { id: "p6", name: "Sunglasses Aviator", keyPoints: "Polarized UV400 lenses with classic aviator frame in matte finish.", affiliateLink: "", status: "Draft", thumbnail: "🕶️", reelsGenerated: 2, createdAt: daysAgo(25), updatedAt: daysAgo(12) },
     ],
   },
   {
@@ -117,9 +156,11 @@ const initialCampaigns: Campaign[] = [
     description: "Skincare and beauty essentials promo week.",
     reelsCount: 5,
     banner: "from-rose-500 via-red-500 to-orange-500",
+    createdAt: daysAgo(14),
+    updatedAt: daysAgo(1),
     products: [
-      { id: "p7", name: "Skincare Bundle Set", keyPoints: "Complete 5-step routine with cleanser, toner, serum, moisturizer, and SPF.", affiliateLink: "", status: "Draft", thumbnail: "🧴", reelsGenerated: 2 },
-      { id: "p8", name: "Lip Tint Trio", keyPoints: "Long-lasting matte finish in three universally flattering shades.", affiliateLink: "https://shopee.co.th/ref/lip01", status: "Active", thumbnail: "💄", reelsGenerated: 3 },
+      { id: "p7", name: "Skincare Bundle Set", keyPoints: "Complete 5-step routine with cleanser, toner, serum, moisturizer, and SPF.", affiliateLink: "", status: "Draft", thumbnail: "🧴", reelsGenerated: 2, createdAt: daysAgo(12), updatedAt: daysAgo(2) },
+      { id: "p8", name: "Lip Tint Trio", keyPoints: "Long-lasting matte finish in three universally flattering shades.", affiliateLink: "https://shopee.co.th/ref/lip01", status: "Active", thumbnail: "💄", reelsGenerated: 3, createdAt: daysAgo(10), updatedAt: daysAgo(1) },
     ],
   },
   {
@@ -128,13 +169,32 @@ const initialCampaigns: Campaign[] = [
     description: "Best deals on consumer tech and audio gear.",
     reelsCount: 9,
     banner: "from-cyan-500 via-blue-500 to-indigo-600",
+    createdAt: daysAgo(60),
+    updatedAt: daysAgo(4),
     products: [
-      { id: "p9", name: "Wireless Earbuds Pro", keyPoints: "Active noise cancellation, 30-hour battery life, IPX5 water resistance.", affiliateLink: "https://shopee.co.th/ref/tech01", status: "Active", thumbnail: "🎧", reelsGenerated: 4 },
-      { id: "p10", name: "Portable Charger 20K", keyPoints: "20,000mAh capacity with fast-charge USB-C and dual USB-A outputs.", affiliateLink: "https://lazada.co.th/ref/charger01", status: "Active", thumbnail: "🔋", reelsGenerated: 3 },
-      { id: "p11", name: "Smart Desk Lamp", keyPoints: "Adjustable color temperature, touch dimming, USB charging port built-in.", affiliateLink: "", status: "Draft", thumbnail: "💡", reelsGenerated: 2 },
+      { id: "p9", name: "Wireless Earbuds Pro", keyPoints: "Active noise cancellation, 30-hour battery life, IPX5 water resistance.", affiliateLink: "https://shopee.co.th/ref/tech01", status: "Active", thumbnail: "🎧", reelsGenerated: 4, createdAt: daysAgo(55), updatedAt: daysAgo(4) },
+      { id: "p10", name: "Portable Charger 20K", keyPoints: "20,000mAh capacity with fast-charge USB-C and dual USB-A outputs.", affiliateLink: "https://lazada.co.th/ref/charger01", status: "Active", thumbnail: "🔋", reelsGenerated: 3, createdAt: daysAgo(50), updatedAt: daysAgo(8) },
+      { id: "p11", name: "Smart Desk Lamp", keyPoints: "Adjustable color temperature, touch dimming, USB charging port built-in.", affiliateLink: "", status: "Draft", thumbnail: "💡", reelsGenerated: 2, createdAt: daysAgo(48), updatedAt: daysAgo(15) },
     ],
   },
 ];
+
+const sortItems = <T extends { name: string; createdAt: string; updatedAt: string }>(
+  items: T[],
+  key: SortKey,
+): T[] => {
+  const arr = [...items];
+  switch (key) {
+    case "newest":
+      return arr.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+    case "oldest":
+      return arr.sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+    case "updated":
+      return arr.sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt));
+    case "name":
+      return arr.sort((a, b) => a.name.localeCompare(b.name));
+  }
+};
 
 const ContentLibrary = () => {
   const { toast } = useToast();
