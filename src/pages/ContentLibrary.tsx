@@ -6,7 +6,7 @@ import {
   Video,
   ChevronRight,
   Search,
-  MoreVertical,
+  
   Link2,
   UploadCloud,
   Edit,
@@ -46,12 +46,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -280,6 +274,37 @@ const ContentLibrary = () => {
     }
   };
 
+  const handleDeleteProduct = (productId: string, productName: string) => {
+    if (!currentCampaign) return;
+    setCampaigns((prev) =>
+      prev.map((c) =>
+        c.id === currentCampaign.id
+          ? { ...c, products: c.products.filter((p) => p.id !== productId) }
+          : c,
+      ),
+    );
+    toast({ title: "Product deleted", description: `${productName} removed.`, variant: "destructive" });
+  };
+
+  const handleDeleteProductFromDialog = () => {
+    if (!editingProductId || !currentCampaign) return;
+    const product = currentCampaign.products.find((p) => p.id === editingProductId);
+    if (!product) return;
+    handleDeleteProduct(editingProductId, product.name);
+    resetForm();
+    setIsProductDialogOpen(false);
+  };
+
+  const handleDeleteCampaign = () => {
+    if (!editingCampaignId) return;
+    const campaign = campaigns.find((c) => c.id === editingCampaignId);
+    if (!campaign) return;
+    setCampaigns((prev) => prev.filter((c) => c.id !== editingCampaignId));
+    toast({ title: "Campaign deleted", description: `${campaign.name} removed.`, variant: "destructive" });
+    resetCampaignForm();
+    setIsCampaignDialogOpen(false);
+  };
+
   const handleCreateReel = (product: Product) => {
     navigate("/create", {
       state: {
@@ -420,22 +445,36 @@ const ContentLibrary = () => {
             </div>
           </div>
 
-          <DialogFooter className="px-6 py-4 border-t border-border flex-row gap-3 justify-end">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                resetCampaignForm();
-                setIsCampaignDialogOpen(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveCampaign}
-              className="gradient-primary text-primary-foreground shadow-glow hover:shadow-glow-lg"
-            >
-              {editingCampaignId ? "Save Changes" : "Create Campaign"}
-            </Button>
+          <DialogFooter className="px-6 py-4 border-t border-border flex-row gap-3 sm:justify-between">
+            <div>
+              {editingCampaignId && (
+                <Button
+                  variant="ghost"
+                  onClick={handleDeleteCampaign}
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  resetCampaignForm();
+                  setIsCampaignDialogOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveCampaign}
+                className="gradient-primary text-primary-foreground shadow-glow hover:shadow-glow-lg"
+              >
+                {editingCampaignId ? "Save Changes" : "Create Campaign"}
+              </Button>
+            </div>
           </DialogFooter>
         </motion.div>
       </DialogContent>
@@ -479,13 +518,13 @@ const ContentLibrary = () => {
             type="single"
             value={campaignView}
             onValueChange={(v) => v && setCampaignView(v as "grid" | "list")}
-            className="bg-card border border-border rounded-lg p-1 h-12"
+            className="bg-card border border-border rounded-lg p-1 h-10"
           >
-            <ToggleGroupItem value="grid" aria-label="Grid view" className="h-10 w-10 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-              <LayoutGrid className="h-5 w-5" />
+            <ToggleGroupItem value="grid" aria-label="Grid view" className="h-8 w-8 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+              <LayoutGrid className="h-4 w-4" />
             </ToggleGroupItem>
-            <ToggleGroupItem value="list" aria-label="List view" className="h-10 w-10 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-              <List className="h-5 w-5" />
+            <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+              <List className="h-4 w-4" />
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -715,13 +754,13 @@ const ContentLibrary = () => {
           type="single"
           value={productView}
           onValueChange={(v) => v && setProductView(v as "grid" | "list")}
-          className="bg-card border border-border rounded-lg p-1 h-12"
+          className="bg-card border border-border rounded-lg p-1 h-10"
         >
-          <ToggleGroupItem value="grid" aria-label="Grid view" className="h-10 w-10 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-            <LayoutGrid className="h-5 w-5" />
+          <ToggleGroupItem value="grid" aria-label="Grid view" className="h-8 w-8 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            <LayoutGrid className="h-4 w-4" />
           </ToggleGroupItem>
-          <ToggleGroupItem value="list" aria-label="List view" className="h-10 w-10 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-            <List className="h-5 w-5" />
+          <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+            <List className="h-4 w-4" />
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
@@ -741,7 +780,7 @@ const ContentLibrary = () => {
               transition={{ delay: i * 0.04 }}
               className="rounded-2xl border border-border bg-card overflow-hidden card-shine hover:border-primary/30 hover:shadow-elevated transition-all duration-300"
             >
-              <div className="aspect-video bg-muted flex items-center justify-center text-5xl relative">
+              <div className="aspect-video bg-muted flex items-center justify-center text-5xl relative group/img">
                 {product.thumbnail}
                 <Badge
                   variant="outline"
@@ -758,6 +797,15 @@ const ContentLibrary = () => {
                   <Video className="h-3 w-3" />
                   {product.reelsGenerated} reels
                 </div>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  onClick={() => openEditDialog(product)}
+                  className="absolute bottom-3 right-3 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background opacity-0 group-hover/img:opacity-100 transition-opacity"
+                  title="Edit product"
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
               </div>
               <div className="p-4 space-y-3">
                 <h3 className="font-semibold text-foreground line-clamp-1">{product.name}</h3>
@@ -765,38 +813,16 @@ const ContentLibrary = () => {
                   {product.keyPoints}
                 </p>
                 <div className="flex items-center justify-between gap-2 pt-2">
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => product.affiliateLink && handleCopyLink(product.affiliateLink)}
-                      disabled={!product.affiliateLink}
-                      title="Copy link"
-                      className="h-8 w-8 text-primary"
-                    >
-                      <Link2 className="h-4 w-4" />
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openEditDialog(product)}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => toast({ title: `Delete ${product.name}`, variant: "destructive" })}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => product.affiliateLink && handleCopyLink(product.affiliateLink)}
+                    disabled={!product.affiliateLink}
+                    title="Copy link"
+                    className="h-8 w-8 text-primary"
+                  >
+                    <Link2 className="h-4 w-4" />
+                  </Button>
                   <Button
                     size="sm"
                     onClick={() => handleCreateReel(product)}
@@ -881,26 +907,15 @@ const ContentLibrary = () => {
                     </Button>
                   </TableCell>
                   <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openEditDialog(product)}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => toast({ title: `Delete ${product.name}`, variant: "destructive" })}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openEditDialog(product)}
+                      className="h-8 w-8"
+                      title="Edit product"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1010,22 +1025,36 @@ const ContentLibrary = () => {
               </div>
             </div>
 
-            <DialogFooter className="px-6 py-4 border-t border-border flex-row gap-3 justify-end">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  resetForm();
-                  setIsProductDialogOpen(false);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSaveProduct}
-                className="gradient-primary text-primary-foreground shadow-glow hover:shadow-glow-lg"
-              >
-                {editingProductId ? "Save Changes" : "Save Product"}
-              </Button>
+            <DialogFooter className="px-6 py-4 border-t border-border flex-row gap-3 sm:justify-between">
+              <div>
+                {editingProductId && (
+                  <Button
+                    variant="ghost"
+                    onClick={handleDeleteProductFromDialog}
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    resetForm();
+                    setIsProductDialogOpen(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSaveProduct}
+                  className="gradient-primary text-primary-foreground shadow-glow hover:shadow-glow-lg"
+                >
+                  {editingProductId ? "Save Changes" : "Save Product"}
+                </Button>
+              </div>
             </DialogFooter>
           </motion.div>
         </DialogContent>
