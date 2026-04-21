@@ -6,7 +6,7 @@ import {
   Video,
   ChevronRight,
   Search,
-  MoreVertical,
+  
   Link2,
   UploadCloud,
   Edit,
