@@ -290,7 +290,58 @@ const ContentLibrary = () => {
     });
   };
 
-  // ============ STATE 1: Campaigns View ============
+  // ============ Campaign CRUD ============
+  const resetCampaignForm = () => {
+    setCName("");
+    setCDescription("");
+    setCBanner(BANNER_PRESETS[0].value);
+    setEditingCampaignId(null);
+  };
+
+  const openNewCampaignDialog = () => {
+    resetCampaignForm();
+    setIsCampaignDialogOpen(true);
+  };
+
+  const openEditCampaignDialog = (e: React.MouseEvent, campaign: Campaign) => {
+    e.stopPropagation();
+    setEditingCampaignId(campaign.id);
+    setCName(campaign.name);
+    setCDescription(campaign.description);
+    setCBanner(campaign.banner);
+    setIsCampaignDialogOpen(true);
+  };
+
+  const handleSaveCampaign = () => {
+    if (!cName.trim()) {
+      toast({ title: "Campaign name is required", variant: "destructive" });
+      return;
+    }
+    if (editingCampaignId) {
+      setCampaigns((prev) =>
+        prev.map((c) =>
+          c.id === editingCampaignId
+            ? { ...c, name: cName.trim(), description: cDescription.trim(), banner: cBanner }
+            : c,
+        ),
+      );
+      toast({ title: "Campaign updated", description: `${cName.trim()} saved.` });
+    } else {
+      const newCampaign: Campaign = {
+        id: `c${Date.now()}`,
+        name: cName.trim(),
+        description: cDescription.trim(),
+        reelsCount: 0,
+        banner: cBanner,
+        products: [],
+      };
+      setCampaigns((prev) => [newCampaign, ...prev]);
+      toast({ title: "Campaign created", description: `${newCampaign.name} added.` });
+    }
+    resetCampaignForm();
+    setIsCampaignDialogOpen(false);
+  };
+
   if (!currentCampaign) {
     return (
       <div className="space-y-6">
