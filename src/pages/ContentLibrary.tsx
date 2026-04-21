@@ -355,7 +355,7 @@ const ContentLibrary = () => {
             </p>
           </div>
           <Button
-            onClick={() => toast({ title: "New Campaign", description: "Campaign creation coming soon." })}
+            onClick={openNewCampaignDialog}
             className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto"
           >
             <Plus className="h-4 w-4" />
