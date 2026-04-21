@@ -2,8 +2,6 @@ import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Sparkles,
-  Heart,
-  Eye,
   Play,
   Clock,
   Search,
@@ -33,9 +31,6 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   getMockReelsForProduct,
-  platformLabel,
-  platformEmoji,
-  formatCount,
   type ReelPlatform,
 } from "@/lib/mockReels";
 
@@ -56,10 +51,16 @@ const PRODUCT_LOOKUP: Record<string, { name: string; thumbnail: string; reelsGen
   p11: { name: "Smart Desk Lamp", thumbnail: "💡", reelsGenerated: 2, campaignId: "tech-deals", campaignName: "Tech Deals" },
 };
 
-const formatDuration = (s: number) => {
-  const m = Math.floor(s / 60);
-  const r = s % 60;
-  return m > 0 ? `${m}:${r.toString().padStart(2, "0")}` : `0:${r.toString().padStart(2, "0")}`;
+const formatDate = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return "—";
+  }
 };
 
 const ProductReels = () => {
