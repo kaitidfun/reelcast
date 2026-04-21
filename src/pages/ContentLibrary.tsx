@@ -786,7 +786,7 @@ const ContentLibrary = () => {
               transition={{ delay: i * 0.04 }}
               className="rounded-2xl border border-border bg-card overflow-hidden card-shine hover:border-primary/30 hover:shadow-elevated transition-all duration-300"
             >
-              <div className="aspect-video bg-muted flex items-center justify-center text-5xl relative">
+              <div className="aspect-video bg-muted flex items-center justify-center text-5xl relative group/img">
                 {product.thumbnail}
                 <Badge
                   variant="outline"
@@ -803,6 +803,15 @@ const ContentLibrary = () => {
                   <Video className="h-3 w-3" />
                   {product.reelsGenerated} reels
                 </div>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  onClick={() => openEditDialog(product)}
+                  className="absolute bottom-3 right-3 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background opacity-0 group-hover/img:opacity-100 transition-opacity"
+                  title="Edit product"
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
               </div>
               <div className="p-4 space-y-3">
                 <h3 className="font-semibold text-foreground line-clamp-1">{product.name}</h3>
