@@ -581,7 +581,7 @@ const ContentLibrary = () => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => toast({ title: `Edit ${product.name}` })}>
+                        <DropdownMenuItem onClick={() => openEditDialog(product)}>
                           <Edit className="h-4 w-4 mr-2" />
                           Edit
                         </DropdownMenuItem>
@@ -686,7 +686,7 @@ const ContentLibrary = () => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => toast({ title: `Edit ${product.name}` })}>
+                        <DropdownMenuItem onClick={() => openEditDialog(product)}>
                           <Edit className="h-4 w-4 mr-2" />
                           Edit
                         </DropdownMenuItem>
@@ -707,92 +707,127 @@ const ContentLibrary = () => {
         </div>
       )}
 
-      {/* Add Product Drawer */}
-      <Sheet open={isAddProductOpen} onOpenChange={setIsAddProductOpen}>
-        <SheetContent side="right" className="sm:max-w-md w-full flex flex-col p-0">
-          <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
-            <SheetTitle>Add New Product</SheetTitle>
-            <SheetDescription>Add a product to {currentCampaign.name}.</SheetDescription>
-          </SheetHeader>
+      {/* Add / Edit Product Dialog */}
+      <Dialog
+        open={isProductDialogOpen}
+        onOpenChange={(open) => {
+          setIsProductDialogOpen(open);
+          if (!open) resetForm();
+        }}
+      >
+        <DialogContent className="max-w-2xl p-0 gap-0 max-h-[90vh] flex flex-col overflow-hidden">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="flex flex-col min-h-0"
+          >
+            <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
+              <DialogTitle className="font-display text-xl">
+                {editingProductId ? "Edit Product" : "Add New Product"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingProductId
+                  ? `Update product details in ${currentCampaign.name}.`
+                  : `Add a product to ${currentCampaign.name}.`}
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-            {/* Image dropzone */}
-            <div>
-              <Label className="mb-2 block">Product Image</Label>
-              <label className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-primary/40 hover:bg-muted/30 cursor-pointer transition-all">
-                <UploadCloud className="h-8 w-8 text-muted-foreground mb-2" />
-                <p className="text-sm text-foreground">Drag & drop or click to upload</p>
-                <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
-                <input type="file" accept="image/*" className="hidden" />
-              </label>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+              {/* Image uploads — two-column */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2">
+                  <Label className="mb-2 block">Product Image</Label>
+                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-primary/40 hover:bg-muted/30 cursor-pointer transition-all min-h-[160px]">
+                    {pImage && pImage.length <= 4 ? (
+                      <div className="text-5xl mb-2">{pImage}</div>
+                    ) : (
+                      <UploadCloud className="h-8 w-8 text-muted-foreground mb-2" />
+                    )}
+                    <p className="text-sm text-foreground">Drag & drop or click to upload</p>
+                    <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
+                    <input type="file" accept="image/*" className="hidden" />
+                  </label>
+                </div>
+                <div>
+                  <Label className="mb-2 block">Brand Logo</Label>
+                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-primary/40 hover:bg-muted/30 cursor-pointer transition-all min-h-[160px]">
+                    <UploadCloud className="h-6 w-6 text-muted-foreground mb-2" />
+                    <p className="text-xs text-foreground">Upload logo</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">PNG up to 2MB</p>
+                    <input type="file" accept="image/*" className="hidden" />
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="product-name" className="mb-2 block">Product Name</Label>
+                  <Input
+                    id="product-name"
+                    value={pName}
+                    onChange={(e) => setPName(e.target.value)}
+                    placeholder="e.g., Wireless Earbuds Pro"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-2 block">Call to Action</Label>
+                  <Select value={pCta} onValueChange={setPCta}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Shop Now">Shop Now</SelectItem>
+                      <SelectItem value="Link in Bio">Link in Bio</SelectItem>
+                      <SelectItem value="Learn More">Learn More</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="product-points" className="mb-2 block">Key Selling Points</Label>
+                <Textarea
+                  id="product-points"
+                  rows={4}
+                  value={pPoints}
+                  onChange={(e) => setPPoints(e.target.value)}
+                  placeholder="Enter key features for AI script generation"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="product-link" className="mb-2 block">Affiliate Link</Label>
+                <Input
+                  id="product-link"
+                  type="url"
+                  value={pLink}
+                  onChange={(e) => setPLink(e.target.value)}
+                  placeholder="https://..."
+                />
+              </div>
             </div>
 
-            <div>
-              <Label htmlFor="product-name" className="mb-2 block">Product Name</Label>
-              <Input
-                id="product-name"
-                value={pName}
-                onChange={(e) => setPName(e.target.value)}
-                placeholder="e.g., Wireless Earbuds Pro"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="product-points" className="mb-2 block">Key Selling Points</Label>
-              <Textarea
-                id="product-points"
-                rows={4}
-                value={pPoints}
-                onChange={(e) => setPPoints(e.target.value)}
-                placeholder="Enter key features for AI script generation"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="product-link" className="mb-2 block">Affiliate Link</Label>
-              <Input
-                id="product-link"
-                type="url"
-                value={pLink}
-                onChange={(e) => setPLink(e.target.value)}
-                placeholder="https://..."
-              />
-            </div>
-
-            <div>
-              <Label className="mb-2 block">Call to Action</Label>
-              <Select value={pCta} onValueChange={setPCta}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Shop Now">Shop Now</SelectItem>
-                  <SelectItem value="Link in Bio">Link in Bio</SelectItem>
-                  <SelectItem value="Learn More">Learn More</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <SheetFooter className="px-6 py-4 border-t border-border flex-row gap-3 justify-end">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                resetForm();
-                setIsAddProductOpen(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveProduct}
-              className="gradient-primary text-primary-foreground shadow-glow hover:shadow-glow-lg"
-            >
-              Save Product
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+            <DialogFooter className="px-6 py-4 border-t border-border flex-row gap-3 justify-end">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  resetForm();
+                  setIsProductDialogOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveProduct}
+                className="gradient-primary text-primary-foreground shadow-glow hover:shadow-glow-lg"
+              >
+                {editingProductId ? "Save Changes" : "Save Product"}
+              </Button>
+            </DialogFooter>
+          </motion.div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
