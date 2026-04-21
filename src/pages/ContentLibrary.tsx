@@ -4,6 +4,7 @@ import {
   Package,
   Video,
   ChevronRight,
+  ChevronLeft,
   Search,
   Link2,
   UploadCloud,
