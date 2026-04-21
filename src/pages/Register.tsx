@@ -114,7 +114,7 @@ const Register = () => {
         transition={{ duration: 0.4 }}
         className="relative z-10 w-full max-w-5xl"
       >
-        <div className="grid overflow-hidden rounded-3xl border border-border glass-strong shadow-elevated lg:grid-cols-2 lg:max-h-[calc(100vh-2rem)]">
+        <div className="grid overflow-hidden rounded-3xl border border-border glass-strong shadow-elevated lg:grid-cols-2">
           {/* VISUAL PANEL (left on desktop) */}
           <div className="relative hidden overflow-hidden border-r border-border bg-gradient-to-br from-card via-card to-muted/40 lg:order-1 lg:flex">
             <div className="absolute inset-0 gradient-glow opacity-80 pointer-events-none" />
