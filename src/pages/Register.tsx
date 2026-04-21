@@ -159,7 +159,7 @@ const Register = () => {
           </div>
 
           {/* FORM PANEL (right on desktop) */}
-          <div className="p-5 sm:p-7 lg:order-2 lg:overflow-y-auto">
+          <div className="p-5 sm:p-7 lg:order-2">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary shadow-glow">
                 <Sparkles className="h-4 w-4 text-primary-foreground" />
