@@ -150,6 +150,13 @@ const ContentLibrary = () => {
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
+  // Campaign dialog state
+  const [isCampaignDialogOpen, setIsCampaignDialogOpen] = useState(false);
+  const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
+  const [cName, setCName] = useState("");
+  const [cDescription, setCDescription] = useState("");
+  const [cBanner, setCBanner] = useState<string>(BANNER_PRESETS[0].value);
+
   // Campaigns view
   const [campaignSearch, setCampaignSearch] = useState("");
   const [campaignView, setCampaignView] = useState<"grid" | "list">("grid");
