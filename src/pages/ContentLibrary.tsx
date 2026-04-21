@@ -813,7 +813,10 @@ const ContentLibrary = () => {
                   onClick={() => setOpenCampaignId(campaign.id)}
                   className="group flex items-center gap-4 p-4 rounded-2xl border border-border bg-card cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
                 >
-                  <div className={`relative h-12 w-16 rounded-lg shrink-0 overflow-hidden bg-gradient-to-br ${campaign.banner}`}>
+                  <div
+                    className={`relative h-12 w-16 rounded-lg shrink-0 overflow-hidden ${campaign.bannerImage ? "" : `bg-gradient-to-br ${campaign.banner}`}`}
+                    style={campaign.bannerImage ? { backgroundImage: `url(${campaign.bannerImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+                  >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.3),transparent_60%)]" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -821,7 +824,7 @@ const ContentLibrary = () => {
                       {campaign.name}
                     </h3>
                     <p className="text-xs text-muted-foreground truncate">{campaign.description}</p>
-                    <div className="mt-1.5 flex gap-4 text-xs text-muted-foreground">
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1.5">
                         <Package className="h-3.5 w-3.5" />
                         {campaign.products.length} Products
@@ -829,6 +832,10 @@ const ContentLibrary = () => {
                       <span className="flex items-center gap-1.5">
                         <Video className="h-3.5 w-3.5" />
                         {campaign.reelsCount} Reels
+                      </span>
+                      <span className="flex items-center gap-1.5" title={`Updated ${formatDateTime(campaign.updatedAt)}`}>
+                        <Clock className="h-3.5 w-3.5" />
+                        Updated {formatDate(campaign.updatedAt)}
                       </span>
                     </div>
                   </div>
