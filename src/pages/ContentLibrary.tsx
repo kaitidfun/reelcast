@@ -133,6 +133,7 @@ const initialCampaigns: Campaign[] = [
     name: "Tech Deals",
     description: "Best deals on consumer tech and audio gear.",
     reelsCount: 9,
+    banner: "from-cyan-500 via-blue-500 to-indigo-600",
     products: [
       { id: "p9", name: "Wireless Earbuds Pro", keyPoints: "Active noise cancellation, 30-hour battery life, IPX5 water resistance.", affiliateLink: "https://shopee.co.th/ref/tech01", status: "Active", thumbnail: "🎧", reelsGenerated: 4 },
       { id: "p10", name: "Portable Charger 20K", keyPoints: "20,000mAh capacity with fast-charge USB-C and dual USB-A outputs.", affiliateLink: "https://lazada.co.th/ref/charger01", status: "Active", thumbnail: "🔋", reelsGenerated: 3 },
