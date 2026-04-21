@@ -110,6 +110,7 @@ const initialCampaigns: Campaign[] = [
     name: "Accessories Launch",
     description: "Premium accessories collection for modern lifestyles.",
     reelsCount: 7,
+    banner: "from-violet-500 via-purple-500 to-fuchsia-600",
     products: [
       { id: "p4", name: "Minimal Watch — Gold", keyPoints: "Elegant minimalist design with gold-plated stainless steel and sapphire crystal.", affiliateLink: "https://lazada.co.th/ref/watch01", status: "Active", thumbnail: "⌚", reelsGenerated: 3 },
       { id: "p5", name: "Leather Wallet Slim", keyPoints: "Genuine leather, RFID-blocking, holds up to 8 cards in a slim profile.", affiliateLink: "https://shopee.co.th/ref/wallet01", status: "Active", thumbnail: "👛", reelsGenerated: 2 },
