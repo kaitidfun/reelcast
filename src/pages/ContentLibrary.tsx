@@ -210,15 +210,19 @@ const ContentLibrary = () => {
   const [cName, setCName] = useState("");
   const [cDescription, setCDescription] = useState("");
   const [cBanner, setCBanner] = useState<string>(BANNER_PRESETS[0].value);
+  const [cBannerImage, setCBannerImage] = useState<string>("");
+  const cBannerInputRef = useRef<HTMLInputElement>(null);
 
   // Campaigns view
   const [campaignSearch, setCampaignSearch] = useState("");
   const [campaignView, setCampaignView] = useState<"grid" | "list">("grid");
+  const [campaignSort, setCampaignSort] = useState<SortKey>("updated");
 
   // Products view
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | ProductStatus>("all");
   const [productView, setProductView] = useState<"grid" | "list">("grid");
+  const [productSort, setProductSort] = useState<SortKey>("updated");
 
   // Form state
   const [pName, setPName] = useState("");
