@@ -660,17 +660,29 @@ const ContentLibrary = () => {
               className="bg-card pl-10 border-border h-10"
             />
           </div>
+          <Select value={campaignSort} onValueChange={(v) => setCampaignSort(v as SortKey)}>
+            <SelectTrigger className="w-full sm:w-[200px] bg-card h-10">
+              <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+              <SelectValue placeholder="Sort" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="updated">Recently updated</SelectItem>
+              <SelectItem value="newest">Newest first</SelectItem>
+              <SelectItem value="oldest">Oldest first</SelectItem>
+              <SelectItem value="name">Name (A–Z)</SelectItem>
+            </SelectContent>
+          </Select>
           <ToggleGroup
             type="single"
             value={campaignView}
             onValueChange={(v) => v && setCampaignView(v as "grid" | "list")}
-            className="bg-card border border-border rounded-lg p-1 h-10"
+            className="bg-card border border-border rounded-lg p-0.5 h-10"
           >
-            <ToggleGroupItem value="grid" aria-label="Grid view" className="h-8 w-8 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-              <LayoutGrid className="h-4 w-4" />
+            <ToggleGroupItem value="grid" aria-label="Grid view" className="h-9 w-9 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+              <LayoutGrid className="!h-5 !w-5" />
             </ToggleGroupItem>
-            <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-              <List className="h-4 w-4" />
+            <ToggleGroupItem value="list" aria-label="List view" className="h-9 w-9 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+              <List className="!h-5 !w-5" />
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
