@@ -1100,6 +1100,12 @@ const ContentLibrary = () => {
                       {product.reelsGenerated}
                     </span>
                   </TableCell>
+                  <TableCell className="text-sm text-muted-foreground" title={`Created ${formatDateTime(product.createdAt)}\nUpdated ${formatDateTime(product.updatedAt)}`}>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5" />
+                      {formatDate(product.updatedAt)}
+                    </span>
+                  </TableCell>
                   <TableCell>
                     <Button
                       size="sm"
