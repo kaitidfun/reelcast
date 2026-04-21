@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import Home from "./pages/Home";
 import CreateReel from "./pages/CreateReel";
 import ContentLibrary from "./pages/ContentLibrary";
+import ProductReels from "./pages/ProductReels";
 import AffiliateLinks from "./pages/AffiliateLinks";
 import Distribution from "./pages/Distribution";
 import Account from "./pages/Account";
@@ -42,6 +43,7 @@ const App = () => (
               <Route path="/home" element={<Home />} />
               <Route path="/create" element={<CreateReel />} />
               <Route path="/library" element={<ContentLibrary />} />
+              <Route path="/library/product/:productId" element={<ProductReels />} />
               <Route path="/links" element={<AffiliateLinks />} />
               <Route path="/distribute" element={<Distribution />} />
               <Route path="/account" element={<Account />} />
