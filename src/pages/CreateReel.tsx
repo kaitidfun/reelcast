@@ -287,8 +287,12 @@ const CreateReel = () => {
   };
 
   const handleGenerate = () => {
-    if (!promptText.trim() && !referenceFile) {
-      toast({ title: "Describe your Reel", description: "Type a prompt or attach a reference to start." });
+    if (!selectedProduct) {
+      toast({ title: "Select a product", description: "Pick a product from your library — required to generate a Reel." });
+      return;
+    }
+    if (!promptText.trim()) {
+      toast({ title: "Describe your Reel", description: "Write a prompt describing the Reel you want." });
       return;
     }
     setGenerationStatus("generating");
