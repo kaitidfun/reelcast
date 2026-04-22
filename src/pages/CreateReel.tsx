@@ -435,40 +435,7 @@ const CreateReel = () => {
             </div>
           </div>
 
-          {/* Advanced Settings */}
-          <Accordion type="single" collapsible className="rounded-2xl border border-border bg-card px-5 shadow-card">
-            <AccordionItem value="advanced" className="border-b-0">
-              <AccordionTrigger className="text-sm text-muted-foreground hover:text-foreground hover:no-underline py-4">
-                ⚙️ Advanced Settings
-              </AccordionTrigger>
-              <AccordionContent className="space-y-4 pb-5">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">Negative Prompt</label>
-                  <Textarea
-                    value={negativePrompt}
-                    onChange={(e) => setNegativePrompt(e.target.value)}
-                    placeholder="Specify what to avoid in the generated video..."
-                    rows={3}
-                    className="bg-muted/50 border-border resize-none text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">Camera Motion</label>
-                  <Select value={cameraMotion} onValueChange={setCameraMotion}>
-                    <SelectTrigger className="h-10 rounded-lg border-border bg-muted/50 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">Auto</SelectItem>
-                      <SelectItem value="pan-left">Pan Left</SelectItem>
-                      <SelectItem value="zoom-in">Zoom In</SelectItem>
-                      <SelectItem value="static">Static</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+
 
           {/* Publish */}
           {generationStatus === "done" && (
