@@ -1,68 +1,76 @@
 
-# Create Reel — Real-World AI Studio Redesign
 
-ปรับหน้า Create Reel ให้เหมือนเครื่องมือ AI Video จริง (Sora / Runway / Kling / Veo) — Prompt เป็นหัวใจหลัก, Upload Reel กลายเป็น **optional add-on** ไม่ใช่โหมดแยก
+# Create Reel — ปรับให้ Fit หน้าจอ + Reference เด่นชัด + Product บังคับ
 
-## Core Concept Change
+## 4 จุดหลักที่จะแก้ใน `src/pages/CreateReel.tsx`
 
-**ก่อน:** Toggle 2 ปุ่ม — "Prompt" หรือ "Upload Reel" (เลือกอย่างใดอย่างหนึ่ง)
-**หลัง:** Prompt **อยู่ตลอดเวลา** + ช่อง Upload เป็น optional reference (เช่น "อิงสไตล์จากคลิปนี้" หรือ "remix จากวิดีโอเก่า")
+### 1. ลบ "Recent outputs" (History strip) ออกทั้งบล็อก
+- ลบบล็อก `Recent outputs` (lines 667–685) ทั้งก้อน
+- ลบ `mockHistory` constant และ icon imports ที่ไม่ใช้แล้ว
+- ผลลัพธ์: คอลัมน์ซ้ายสั้นลง พอดีกับความสูง preview ฝั่งขวา
+
+### 2. Product = **บังคับใส่** (Required)
+- เพิ่ม **banner เตือนสีอ่อน** เหนือ chip toolbar เมื่อยังไม่เลือก product:
+  > "📦 Select a product to feature — required for shoppable Reels"
+  พร้อมปุ่ม "Choose product" ในตัว
+- เปลี่ยนชิป "Product library" เป็น **chip สีเด่น** (border-primary, bg-primary/5) เมื่อยังไม่เลือก + มีจุดแดงเล็กๆ (•) บอก required
+- ปุ่ม **Generate disabled** ถ้า `!selectedProduct` พร้อม tooltip/toast: "Please select a product first"
+- เพิ่ม validation ใน `handleGenerate`
+
+### 3. Reference = **Optional ชัดเจน + ดูแตกต่าง**
+- แยกชิป "Reference" ออกจากกลุ่ม chip toolbar ปกติ → ใส่เป็น **dashed-border chip** สีเทา จาง พร้อม label `(Optional)` ติดข้างๆ:
+  > `[+ Reference] Optional · style/inspiration`
+- ใช้ `border-dashed border-border/60 text-muted-foreground/70` ต่างจากชิปอื่นที่เป็น solid
+- มี hint icon (ⓘ) hover แสดง: "Attach a clip or image as style reference. Leave empty to generate from prompt only."
+
+### 4. Right Column — Real-world Preview Polish + Fit-to-screen
+- **Sticky preview** (`lg:sticky lg:top-4`) ให้ preview ติดอยู่กับที่เวลาเลื่อน
+- **Compact balance bar**: รวม "Estimated cost" + credits + aspect ratio badge ใน bar เดียว
+- **Phone-frame mockup**: เพิ่ม device frame บางๆ รอบ preview (rounded-[2.5rem] border-2 border-zinc-800 + notch ปลอม) ให้ดูเหมือน real device
+- **Status pill** บนมุม preview: 🔴 LIVE / 🟢 READY / ⚪ IDLE
+- **Pipeline ย่อให้กระชับ**: เปลี่ยนจาก vertical list เป็น **horizontal stepper** (4 dots เชื่อมเส้น) เมื่อ generating → ประหยัดพื้นที่ครึ่งหนึ่ง
+- **Caption + Actions**: ย่อให้ tighter — caption textarea 3 rows (จากเดิม 4), spacing แน่นขึ้น
+
+### 5. Fit-to-viewport Optimization
+- Container หลักลด `space-y-6` → `space-y-4`, ลด `gap-6` → `gap-5`
+- Header padding/margin ลดลง: `mt-1` ไม่ต้อง, ใช้ inline
+- Composer monolith: ลด `min-h-[160px]` → `min-h-[120px]` สำหรับ textarea, ลด padding ภายใน
+- "Output settings" card กับ "Quick prompts" รวมเป็น **collapsed accordion** ใต้ composer (ไม่ขยายตอนแรก) → ประหยัดความสูง
+- Preview phone frame ใช้ `max-h-[calc(100vh-12rem)]` กับ `aspect-[9/16]` คุม
 
 ---
 
-## เลือก 1 ใน 3 แบบ (ฉันจะส่ง prototype ให้ดูก่อนทำจริง)
+## Layout เป้าหมาย (1311×887 viewport)
 
-### Option A — "Sora-style" Hero Composer
-- Prompt เป็น **textarea ขนาดใหญ่กลางจอ** เหมือน ChatGPT / Sora
-- ใต้ prompt มี **toolbar แถวเดียว** (chip-style): 📎 Attach Reference · 🎨 Style · ⏱️ Duration · 📐 Aspect · 🎬 Camera · 🔊 Audio
-- กด chip ไหน popover เด้งให้เลือก
-- Upload กลายเป็นปุ่ม 📎 ใน toolbar — กดแล้วโชว์ thumbnail เล็กๆ ติดอยู่บน prompt
-- Settings เก่าทั้งหมดยุบเข้า toolbar/popover → หน้าโล่งสุด
-- Quick Templates เป็น chip ด้านล่าง prompt
+```text
+┌─────────────────────────────────────────────────────────┐
+│ Create Reel                              ⚡ 120 credits │
+├──────────────────────────────────┬──────────────────────┤
+│ ⚠ Select product (required)      │  ┌──────────────┐   │
+│ ┌──────────────────────────────┐ │  │              │   │
+│ │ [📦 Product*] [+Ref optional]│ │  │  📱 Phone    │   │
+│ │                              │ │  │   Preview    │   │
+│ │  Prompt textarea (compact)   │ │  │  (sticky)    │   │
+│ │                              │ │  │              │   │
+│ │ Chips: aspect|style|dur|cam… │ │  │              │   │
+│ │ [Enhance][Surprise] [Gen ⚡8]│ │  └──────────────┘   │
+│ └──────────────────────────────┘ │  ● Pipeline stepper │
+│ ▸ Quick prompts                  │  Caption + Actions  │
+│ ▸ Output settings                │                     │
+└──────────────────────────────────┴──────────────────────┘
+```
 
-### Option B — "Runway-style" Split Composer
-- Prompt textarea เด่นด้านบน + ปุ่ม ✨ Enhance / 🎲 Surprise me
-- ใต้ prompt มี **"Reference (optional)" dropzone แบบ collapsed** — โชว์เป็นแถบบางๆ "+ Add reference video/image" กดแล้วขยาย
-- ขวามือเป็น **panel settings แบบ stacked cards** — Style / Duration / Audio / Advanced
-- Product Library เป็น **chip ติดบน prompt** ("📦 Summer Dress") ลบออกได้
-- ปุ่ม Generate ใหญ่ติด sticky ด้านล่าง
-
-### Option C — "Kling-style" Tabbed Modes
-- Header tabs: **Text-to-Video** (default) · **Image-to-Video** · **Video-to-Video**
-- ทุก tab มี prompt เหมือนกัน — tab ต่างกันแค่ "input ที่แนบเพิ่ม" (รูป / วิดีโอ)
-- Upload อยู่ใน tab Image/Video-to-Video เท่านั้น (optional ตาม tab)
-- Settings panel เดียวใช้ร่วมกันทุก tab
-- Visual: tabs เป็น pill-style ด้านบน prompt
-
----
-
-## Common Improvements (ทำเหมือนกันทั้ง 3 แบบ)
-
-1. **ลบ "Input Source" toggle เดิม** — Prompt ไม่ใช่ตัวเลือกอีกต่อไป มันคือ default
-2. **Upload = Optional Reference** — แนบ clip/image เป็น style reference ไม่ใช่แทน prompt
-3. **Aspect Ratio selector** เพิ่มใหม่ (9:16 / 1:1 / 16:9) — ของจริง AI gen ทุกตัวมี
-4. **Seed number** field ใน Advanced — สำหรับ reproducibility
-5. **Resolution selector** (480p / 720p / 1080p) — ผูกกับ credit cost (1080p แพงกว่า)
-6. **Dynamic credit cost** — ราคาเปลี่ยนตาม duration × resolution × voiceover (เช่น 5 → 12 credits)
-7. **History strip** ด้านล่าง — thumbnail รีลที่เพิ่ง gen 3-4 ตัวล่าสุด คลิก preview ได้
-8. **"Surprise me 🎲"** ปุ่มข้างๆ Enhance — สุ่ม prompt creative
+ทุกอย่าง fit ใน viewport เดียวบนจอ ≥900px — ไม่ต้อง scroll
 
 ---
 
 ## Technical Details
-
 - ไฟล์เดียว: `src/pages/CreateReel.tsx`
-- State ใหม่: `referenceFile` (File | null), `aspectRatio`, `resolution`, `seed`, `history[]`
-- ลบ state `inputType` (ไม่จำเป็นแล้ว) — Option C จะใช้ `mode` แทน
-- ใช้ shadcn `Popover` สำหรับ chip toolbar (Option A), `Tabs` สำหรับ Option C
-- Credit cost คำนวณแบบ memoized: `useMemo(() => base + durationCost + resCost, [duration, resolution, voiceover])`
-- Reference upload: file input ซ่อน + button trigger, preview thumbnail แบบ removable chip
-- ไม่แตะ Right Column (Preview) — คงไว้เหมือนเดิม
+- ลบ: `mockHistory`, history block, icon imports ที่ไม่ใช้
+- เพิ่ม validation: `handleGenerate` check `selectedProduct` ก่อน
+- Disabled state: `disabled={generationStatus==='generating' || !selectedProduct}`
+- Sticky: `lg:sticky lg:top-4 lg:self-start` บน right column wrapper
+- Phone frame: nested wrapper รอบ aspect-[9/16] เดิม
+- Horizontal stepper: เปลี่ยน Pipeline `space-y-3` → `flex items-center gap-2` + connector lines
+- Output settings + Quick prompts ห่อด้วย shadcn `Accordion type="multiple"` defaultValue=[] (collapsed)
 
----
-
-## Next Step
-
-ฉันจะสร้าง **3 prototypes** (HTML mockup เห็นภาพจริง) ให้ดูเลือกก่อน แล้วค่อย implement ตัวที่ชอบ
-
-**กดอนุมัติ plan นี้** → ฉันจะเปิด default mode แล้ว generate prototype ทั้ง 3 แบบให้เลือกผ่าน `ask_questions` (type: prototype) ก่อนลงมือแก้โค้ดจริง
