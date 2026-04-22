@@ -233,7 +233,7 @@ const CreateReel = () => {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setPickerOpen(true)}
+              onClick={openPicker}
               className="w-full justify-start gap-3 h-auto min-h-[3.25rem] px-3 py-2.5 rounded-xl border-border bg-muted/40 hover:bg-muted/60 hover:border-primary/30 text-left"
             >
               {selectedProduct ? (
