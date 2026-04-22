@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Upload, Type, Sparkles, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash, Lightbulb, Play, Pause, Volume2, ShoppingBag, Folder, FolderOpen, ChevronRight } from "lucide-react";
+import { Upload, Type, Sparkles, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash, Lightbulb, Play, Pause, Volume2, ShoppingBag, Folder, FolderOpen, ChevronRight, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
 
 type LibraryProduct = {
@@ -20,6 +19,8 @@ type LibraryProduct = {
 type LibraryCampaign = {
   id: string;
   name: string;
+  banner: string; // tailwind gradient classes
+  emoji: string;
   products: LibraryProduct[];
 };
 
@@ -27,6 +28,8 @@ const productLibrary: LibraryCampaign[] = [
   {
     id: "summer-2026",
     name: "Summer Sale 2026",
+    banner: "from-amber-500/40 via-orange-500/30 to-pink-500/40",
+    emoji: "🏖️",
     products: [
       { id: "p1", name: "Summer Dress Collection", thumbnail: "🏖️", highlights: "Lightweight fabric, breezy fit, 5 pastel colors for summer outings" },
       { id: "p2", name: "Fashion Lookbook SS26", thumbnail: "👗", highlights: "Curated SS26 looks, mix-and-match outfits for every occasion" },
@@ -36,6 +39,8 @@ const productLibrary: LibraryCampaign[] = [
   {
     id: "accessories",
     name: "Accessories Launch",
+    banner: "from-yellow-500/40 via-amber-400/30 to-rose-500/40",
+    emoji: "⌚",
     products: [
       { id: "p4", name: "Minimal Watch — Gold", thumbnail: "⌚", highlights: "Sapphire glass, 18K gold plating, quiet quartz movement" },
       { id: "p5", name: "Leather Wallet Slim", thumbnail: "👛", highlights: "Full-grain leather, RFID-blocking, fits 8 cards" },
@@ -45,6 +50,8 @@ const productLibrary: LibraryCampaign[] = [
   {
     id: "beauty-week",
     name: "Beauty Week",
+    banner: "from-pink-500/40 via-fuchsia-500/30 to-purple-500/40",
+    emoji: "💄",
     products: [
       { id: "p7", name: "Skincare Bundle Set", thumbnail: "🧴", highlights: "Cleanser, serum & moisturizer — clinically tested glow routine" },
       { id: "p8", name: "Lip Tint Trio", thumbnail: "💄", highlights: "Long-wear formula, 3 viral shades, buildable color" },
@@ -53,6 +60,8 @@ const productLibrary: LibraryCampaign[] = [
   {
     id: "tech-deals",
     name: "Tech Deals",
+    banner: "from-sky-500/40 via-indigo-500/30 to-violet-500/40",
+    emoji: "🎧",
     products: [
       { id: "p9", name: "Wireless Earbuds Pro", thumbnail: "🎧", highlights: "Active noise cancelling, 30h battery, hi-res audio" },
       { id: "p10", name: "Portable Charger 20K", thumbnail: "🔋", highlights: "20,000mAh, 65W fast charge, charges laptop & phone" },
@@ -84,6 +93,15 @@ const CreateReel = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<LibraryProduct | null>(null);
+  const [pickerView, setPickerView] = useState<"campaigns" | "products">("campaigns");
+  const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null);
+  const activeCampaign = productLibrary.find((c) => c.id === activeCampaignId) ?? null;
+
+  const openPicker = () => {
+    setPickerView("campaigns");
+    setActiveCampaignId(null);
+    setPickerOpen(true);
+  };
   const { toast } = useToast();
 
   const inputOptions = [
@@ -215,7 +233,7 @@ const CreateReel = () => {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setPickerOpen(true)}
+              onClick={openPicker}
               className="w-full justify-start gap-3 h-auto min-h-[3.25rem] px-3 py-2.5 rounded-xl border-border bg-muted/40 hover:bg-muted/60 hover:border-primary/30 text-left"
             >
               {selectedProduct ? (
@@ -476,72 +494,119 @@ const CreateReel = () => {
 
       {/* Product Picker Dialog */}
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2">
               <FolderOpen className="h-5 w-5 text-primary" />
               Select Product
             </DialogTitle>
             <DialogDescription>
-              Browse your campaigns and pick a product to feature in this Reel.
+              {pickerView === "campaigns"
+                ? "Pick a campaign folder to browse its products."
+                : "Choose a product to feature in this Reel."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="overflow-y-auto -mx-6 px-6 pb-1">
-            <Accordion
-              type="single"
-              collapsible
-              defaultValue={productLibrary[0]?.id}
-              className="w-full"
-            >
-              {productLibrary.map((campaign) => (
-                <AccordionItem key={campaign.id} value={campaign.id} className="border-border">
-                  <AccordionTrigger className="hover:no-underline">
-                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                      <Folder className="h-4 w-4 text-primary shrink-0" />
-                      <span className="font-medium text-foreground truncate">{campaign.name}</span>
-                      <Badge variant="secondary" className="ml-1 shrink-0">
-                        {campaign.products.length}
-                      </Badge>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                      {campaign.products.map((product) => {
-                        const isSelected = selectedProduct?.id === product.id;
-                        return (
-                          <button
-                            key={product.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedProduct(product);
-                              setPickerOpen(false);
-                            }}
-                            className={`flex gap-3 p-3 rounded-lg border text-left transition-all hover:bg-accent cursor-pointer ${
-                              isSelected
-                                ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20"
-                                : "border-border bg-card"
-                            }`}
-                          >
-                            <div className="h-12 w-12 shrink-0 rounded-md bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-2xl object-cover">
-                              {product.thumbnail}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-sm text-foreground truncate">
-                                {product.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                                {product.highlights}
-                              </p>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
+            {pickerView === "campaigns" && (
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Browse Campaigns
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {productLibrary.map((campaign) => (
+                    <button
+                      key={campaign.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveCampaignId(campaign.id);
+                        setPickerView("products");
+                      }}
+                      className="group rounded-lg border border-border bg-card overflow-hidden text-left cursor-pointer transition-all hover:ring-2 hover:ring-primary hover:-translate-y-0.5 hover:shadow-glow"
+                    >
+                      <div className={`h-24 w-full bg-gradient-to-br ${campaign.banner} flex items-center justify-center text-4xl`}>
+                        <span className="drop-shadow-sm">{campaign.emoji}</span>
+                      </div>
+                      <div className="p-3 space-y-1">
+                        <p className="font-semibold text-sm text-foreground truncate group-hover:text-primary transition-colors">
+                          {campaign.name}
+                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <Folder className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-[11px] text-muted-foreground">
+                            {campaign.products.length} Products
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {pickerView === "products" && activeCampaign && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setPickerView("campaigns");
+                      setActiveCampaignId(null);
+                    }}
+                    className="gap-1.5 -ml-2"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to Campaigns
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <div className={`h-10 w-10 rounded-md bg-gradient-to-br ${activeCampaign.banner} flex items-center justify-center text-xl`}>
+                    {activeCampaign.emoji}
+                  </div>
+                  <div>
+                    <h3 className="font-display font-semibold text-foreground">{activeCampaign.name}</h3>
+                    <p className="text-[11px] text-muted-foreground">
+                      {activeCampaign.products.length} products in this campaign
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  {activeCampaign.products.map((product) => {
+                    const isSelected = selectedProduct?.id === product.id;
+                    return (
+                      <button
+                        key={product.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedProduct(product);
+                          setPickerOpen(false);
+                        }}
+                        className={`flex gap-3 p-3 rounded-lg border text-left transition-all hover:bg-accent cursor-pointer ${
+                          isSelected
+                            ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20"
+                            : "border-border bg-card"
+                        }`}
+                      >
+                        <div className="h-12 w-12 shrink-0 rounded-md bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-2xl">
+                          {product.thumbnail}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm text-foreground truncate">
+                            {product.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                            {product.highlights}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
