@@ -215,13 +215,30 @@ const CreateReel = () => {
             <div>
               {inputType === "text" && (
                 <div className="space-y-3">
-                  <Textarea
-                    value={promptText}
-                    onChange={(e) => setPromptText(e.target.value)}
-                    placeholder="Describe the Reel you want — product details, highlights, style..."
-                    rows={4}
-                    className="bg-muted/50 border-border resize-none"
-                  />
+                  <div className="relative">
+                    <Textarea
+                      value={promptText}
+                      onChange={(e) => setPromptText(e.target.value)}
+                      placeholder="Describe the Reel you want — product details, highlights, style..."
+                      rows={4}
+                      className="bg-muted/50 border-border resize-none pb-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleEnhancePrompt}
+                      disabled={enhancing}
+                      className="absolute bottom-2 right-2 h-7 gap-1 px-2 text-xs border-primary/30 bg-card/80 backdrop-blur-sm hover:bg-primary/10 hover:text-primary"
+                    >
+                      {enhancing ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" />
+                      )}
+                      Enhance Prompt
+                    </Button>
+                  </div>
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
                       <Lightbulb className="h-3.5 w-3.5 text-primary" />
