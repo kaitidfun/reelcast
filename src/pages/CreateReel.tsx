@@ -17,7 +17,6 @@ import {
   Volume2,
   ShoppingBag,
   FolderOpen,
-  ChevronRight,
   ChevronLeft,
   Folder,
   Paperclip,
@@ -29,6 +28,8 @@ import {
   Music2,
   SlidersHorizontal,
   Image as ImageIcon,
+  Info,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,8 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 
 type LibraryProduct = {
@@ -166,13 +169,6 @@ const lightingOptions = [
   { value: "neon", label: "Neon / Night" },
 ];
 
-const mockHistory = [
-  { id: "h1", emoji: "🏖️", gradient: "from-amber-500/40 via-orange-500/30 to-pink-500/40", duration: "0:15" },
-  { id: "h2", emoji: "💄", gradient: "from-pink-500/40 via-fuchsia-500/30 to-purple-500/40", duration: "0:30" },
-  { id: "h3", emoji: "🎧", gradient: "from-sky-500/40 via-indigo-500/30 to-violet-500/40", duration: "0:30" },
-  { id: "h4", emoji: "⌚", gradient: "from-yellow-500/40 via-amber-400/30 to-rose-500/40", duration: "0:60" },
-];
-
 const CreateReel = () => {
   const { toast } = useToast();
 
@@ -287,6 +283,10 @@ const CreateReel = () => {
   };
 
   const handleGenerate = () => {
+    if (!selectedProduct) {
+      toast({ title: "Select a product first", description: "A product is required to create a shoppable Reel.", variant: "destructive" });
+      return;
+    }
     if (!promptText.trim() && !referenceFile) {
       toast({ title: "Describe your Reel", description: "Type a prompt or attach a reference to start." });
       return;
@@ -320,11 +320,12 @@ const CreateReel = () => {
   const musicLabel = musicOptions.find((m) => m.value === bgMusic)?.label ?? bgMusic;
 
   return (
-    <div className="space-y-6">
+    <TooltipProvider delayDuration={150}>
+    <div className="space-y-4">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Create Reel</h1>
-          <p className="mt-1 text-muted-foreground">Describe what you want — AI handles the rest. Powered by Gemini + Veo.</p>
+          <p className="text-xs text-muted-foreground">Describe what you want — AI handles the rest. Powered by Gemini + Veo.</p>
         </div>
         <div className="flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs font-mono text-muted-foreground backdrop-blur">
           <span className="size-1.5 rounded-full bg-success animate-pulse" />
@@ -334,9 +335,26 @@ const CreateReel = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
         {/* ============ LEFT: Composer (Sora-style monolith) ============ */}
-        <div className="lg:col-span-3 space-y-5">
+        <div className="lg:col-span-3 space-y-4">
+          {/* Required-product banner */}
+          {!selectedProduct && (
+            <button
+              type="button"
+              onClick={openPicker}
+              className="flex w-full items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-left transition-colors hover:bg-primary/10"
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <ShoppingBag className="h-4 w-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-foreground">Select a product to feature <span className="text-primary">· Required</span></p>
+                <p className="text-[11px] text-muted-foreground">Shoppable Reels need a product so viewers can tap to buy.</p>
+              </div>
+              <span className="rounded-full bg-primary/15 px-3 py-1 text-[11px] font-medium text-primary">Choose product</span>
+            </button>
+          )}
           {/* THE MONOLITH */}
           <div className="relative rounded-3xl border border-border bg-card shadow-elevated overflow-hidden group focus-within:border-primary/30 transition-colors">
             {/* subtle glow */}
@@ -398,21 +416,45 @@ const CreateReel = () => {
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
                 placeholder="Describe the Reel you want to create — scene, mood, motion, style, product details…"
-                className="min-h-[160px] w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="min-h-[120px] w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0"
               />
             </div>
 
             {/* Chip toolbar */}
             <div className="px-4 pb-3 flex flex-wrap items-center gap-1.5">
-              {/* Attach reference */}
+              {/* Product library — REQUIRED, prominent */}
               <button
                 type="button"
-                onClick={handleAttachReference}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5 transition-colors"
+                onClick={openPicker}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors ${
+                  selectedProduct
+                    ? "border border-border bg-muted/40 text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5"
+                    : "border border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
+                }`}
               >
-                <Paperclip className="h-3.5 w-3.5" />
-                Reference
+                <FolderOpen className="h-3.5 w-3.5" />
+                {selectedProduct ? "Change product" : "Product"}
+                {!selectedProduct && <span className="ml-0.5 size-1.5 rounded-full bg-destructive" aria-hidden />}
               </button>
+
+              {/* Attach reference — OPTIONAL, dashed */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handleAttachReference}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border/70 bg-transparent px-3 py-1.5 text-xs text-muted-foreground/80 hover:text-foreground hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                  >
+                    <Paperclip className="h-3.5 w-3.5" />
+                    + Reference
+                    <span className="ml-1 rounded-full border border-border/60 px-1.5 py-px text-[9px] uppercase tracking-wider text-muted-foreground/70">Optional</span>
+                    <Info className="h-3 w-3 text-muted-foreground/50" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[240px] text-xs">
+                  Attach a clip or image as a style reference. Leave empty to generate from prompt only.
+                </TooltipContent>
+              </Tooltip>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -420,16 +462,6 @@ const CreateReel = () => {
                 hidden
                 onChange={handleReferenceChange}
               />
-
-              {/* Product library */}
-              <button
-                type="button"
-                onClick={openPicker}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5 transition-colors"
-              >
-                <FolderOpen className="h-3.5 w-3.5" />
-                {selectedProduct ? "Change product" : "Product library"}
-              </button>
 
               {/* Aspect popover */}
               <Popover>
@@ -632,98 +664,94 @@ const CreateReel = () => {
                   Surprise me
                 </Button>
               </div>
-              <Button
-                onClick={generationStatus === "done" ? handleRegenerate : handleGenerate}
-                disabled={generationStatus === "generating"}
-                className="gradient-primary h-9 gap-2 px-4 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
-              >
-                {generationStatus === "generating" ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" />Generating…</>
-                ) : generationStatus === "done" ? (
-                  <><RefreshCw className="h-4 w-4" />Re-generate <span className="opacity-80 text-xs font-mono">⚡{generateCost}</span></>
-                ) : (
-                  <><Sparkles className="h-4 w-4" />Generate Video <span className="opacity-80 text-xs font-mono">⚡{generateCost}</span></>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={!selectedProduct ? 0 : -1}>
+                    <Button
+                      onClick={generationStatus === "done" ? handleRegenerate : handleGenerate}
+                      disabled={generationStatus === "generating" || !selectedProduct}
+                      className="gradient-primary h-9 gap-2 px-4 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg disabled:opacity-50"
+                    >
+                      {generationStatus === "generating" ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" />Generating…</>
+                      ) : generationStatus === "done" ? (
+                        <><RefreshCw className="h-4 w-4" />Re-generate <span className="opacity-80 text-xs font-mono">⚡{generateCost}</span></>
+                      ) : (
+                        <><Sparkles className="h-4 w-4" />Generate Video <span className="opacity-80 text-xs font-mono">⚡{generateCost}</span></>
+                      )}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!selectedProduct && (
+                  <TooltipContent side="top" className="text-xs">Select a product first</TooltipContent>
                 )}
-              </Button>
+              </Tooltip>
             </div>
           </div>
 
-          {/* Quick templates strip */}
-          <div className="space-y-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Quick prompts</p>
-            <div className="flex flex-wrap gap-2">
-              {promptTemplates.map((t) => (
-                <button
-                  key={t.label}
-                  onClick={() => setPromptText(t.prompt)}
-                  className="rounded-full border border-border bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-foreground transition-all"
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* History strip */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Recent outputs</p>
-              <button className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground">View all</button>
-            </div>
-            <div className="flex gap-3 overflow-x-auto pb-2">
-              {mockHistory.map((h) => (
-                <button
-                  key={h.id}
-                  className={`relative h-24 w-16 shrink-0 overflow-hidden rounded-xl border border-border bg-gradient-to-br ${h.gradient} flex items-center justify-center text-3xl ring-1 ring-inset ring-white/5 hover:ring-primary/40 hover:-translate-y-0.5 transition-all`}
-                  title={`Reel · ${h.duration}`}
-                >
-                  <span className="drop-shadow">{h.emoji}</span>
-                  <span className="absolute bottom-1 left-1 right-1 rounded-md bg-black/50 backdrop-blur px-1 py-0.5 text-[9px] font-mono text-white text-center">{h.duration}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Overlays + platforms (compact card) */}
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
-            <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">Output settings</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-xs font-medium text-foreground">Brand Logo</span>
+          {/* Collapsed extras: Quick prompts + Output settings */}
+          <Accordion type="multiple" className="rounded-2xl border border-border bg-card/40 px-4">
+            <AccordionItem value="prompts" className="border-b border-border/60">
+              <AccordionTrigger className="py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:no-underline">
+                Quick prompts
+              </AccordionTrigger>
+              <AccordionContent className="pb-3">
+                <div className="flex flex-wrap gap-2">
+                  {promptTemplates.map((t) => (
+                    <button
+                      key={t.label}
+                      onClick={() => setPromptText(t.prompt)}
+                      className="rounded-full border border-border bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-foreground transition-all"
+                    >
+                      {t.label}
+                    </button>
+                  ))}
                 </div>
-                <Switch checked={showLogo} onCheckedChange={setShowLogo} />
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
-                <div className="flex items-center gap-2">
-                  <ShoppingBag className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-xs font-medium text-foreground">Product Overlay</span>
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="output" className="border-b-0">
+              <AccordionTrigger className="py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:no-underline">
+                Output settings & platforms
+              </AccordionTrigger>
+              <AccordionContent className="pb-3 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-3.5 w-3.5 text-primary" />
+                      <span className="text-xs font-medium text-foreground">Brand Logo</span>
+                    </div>
+                    <Switch checked={showLogo} onCheckedChange={setShowLogo} />
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                      <span className="text-xs font-medium text-foreground">Product Overlay</span>
+                    </div>
+                    <Switch checked={showProduct} onCheckedChange={setShowProduct} />
+                  </div>
                 </div>
-                <Switch checked={showProduct} onCheckedChange={setShowProduct} />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-foreground">Target Platforms</label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {platformOptions.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => togglePlatform(p.id)}
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition-all ${
-                      selectedPlatforms.includes(p.id)
-                        ? "border-primary/40 bg-primary/5 text-foreground ring-1 ring-primary/20"
-                        : "border-border text-muted-foreground hover:border-primary/20"
-                    }`}
-                  >
-                    <span>{p.icon}</span>
-                    <span className="truncate">{p.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-foreground">Target Platforms</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {platformOptions.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => togglePlatform(p.id)}
+                        className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition-all ${
+                          selectedPlatforms.includes(p.id)
+                            ? "border-primary/40 bg-primary/5 text-foreground ring-1 ring-primary/20"
+                            : "border-border text-muted-foreground hover:border-primary/20"
+                        }`}
+                      >
+                        <span>{p.icon}</span>
+                        <span className="truncate">{p.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
 
           {/* Publish */}
           {generationStatus === "done" && (
@@ -738,144 +766,168 @@ const CreateReel = () => {
           )}
         </div>
 
-        {/* ============ RIGHT: Preview (kept) ============ */}
-        <div className="lg:col-span-2 space-y-5">
-          {/* Balance reminder */}
-          <div className="flex items-center justify-between rounded-2xl border border-border bg-card/60 px-4 py-2.5 text-xs">
-            <span className="text-muted-foreground">Estimated cost</span>
+        {/* ============ RIGHT: Preview (real-world polish) ============ */}
+        <div className="lg:col-span-2 lg:sticky lg:top-4 lg:self-start space-y-3">
+          {/* Compact balance bar */}
+          <div className="flex items-center justify-between gap-2 rounded-2xl border border-border bg-card/60 px-3 py-2 text-xs backdrop-blur">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-foreground">{aspectRatio}</span>
+              <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-foreground">{resolution}</span>
+              <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-foreground">{duration}s</span>
+            </div>
             <span className="font-mono text-foreground">⚡ {generateCost} <span className="text-muted-foreground">/ {credits}</span></span>
           </div>
 
-          {/* AI Pipeline Progress */}
-          {generationStatus !== "idle" && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-card">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">AI Pipeline</h3>
-              <div className="space-y-3">
-                {generationTasks.map((task, i) => {
-                  const isDone = generationStatus === "done" || (generationStatus === "generating" && i < 2);
-                  const isActive = generationStatus === "generating" && i === 2;
-                  const TaskIcon = task.icon;
-                  return (
-                    <div key={i} className="flex items-center gap-3">
-                      <div className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs shrink-0 ${
-                        isDone ? "bg-success/15 ring-1 ring-success/30"
-                        : isActive ? "bg-primary/15 ring-1 ring-primary/30"
-                        : "bg-muted ring-1 ring-border"
-                      }`}>
-                        {isDone ? <Check className="h-3.5 w-3.5 text-success" />
-                        : isActive ? <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
-                        : <TaskIcon className="h-3.5 w-3.5 text-muted-foreground" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className={`text-sm ${isDone ? "text-foreground" : isActive ? "text-primary" : "text-muted-foreground"}`}>{task.label}</span>
-                        <p className="text-[10px] text-muted-foreground">{task.detail}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          )}
+          {/* Phone-frame preview */}
+          <div className="rounded-2xl border border-border bg-card p-3 shadow-card space-y-3">
+            <div className="relative mx-auto w-full max-w-[260px]">
+              {/* Device frame */}
+              <div className="relative rounded-[2rem] border-2 border-zinc-900 bg-zinc-950 p-1.5 shadow-2xl">
+                {/* Notch */}
+                <div className="absolute left-1/2 top-1.5 z-20 h-3 w-14 -translate-x-1/2 rounded-b-xl bg-zinc-900" />
+                {/* Status pill */}
+                <div className="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[9px] font-mono backdrop-blur-md">
+                  {generationStatus === "done" ? (
+                    <><span className="size-1.5 rounded-full bg-success" /><span className="text-white/90">READY</span></>
+                  ) : generationStatus === "generating" ? (
+                    <><span className="size-1.5 rounded-full bg-destructive animate-pulse" /><span className="text-white/90">LIVE</span></>
+                  ) : (
+                    <><span className="size-1.5 rounded-full bg-white/40" /><span className="text-white/70">IDLE</span></>
+                  )}
+                </div>
 
-          {/* Video Preview */}
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-card space-y-4">
-            <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-              {generationStatus === "done" ? (
-                <>
-                  <div className="absolute inset-0" style={{
-                    backgroundImage: "radial-gradient(circle at 30% 40%, hsl(var(--primary) / 0.35), transparent 55%), radial-gradient(circle at 70% 75%, hsl(var(--accent) / 0.3), transparent 55%)"
-                  }} />
-                  {showLogo && (
-                    <div className="absolute top-3 right-3 flex items-center gap-1.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 px-2 py-1 shadow-lg">
-                      <div className="h-5 w-5 rounded-md gradient-primary flex items-center justify-center">
-                        <Sparkles className="h-3 w-3 text-primary-foreground" />
-                      </div>
-                      <span className="text-[10px] font-bold text-white">REELCAST</span>
-                    </div>
-                  )}
-                  {showProduct && (
-                    <div className="absolute bottom-16 left-3 right-3 flex items-center gap-2.5 rounded-xl bg-black/50 backdrop-blur-md border border-white/10 p-2.5 shadow-xl">
-                      <div className="h-12 w-12 shrink-0 rounded-lg bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center text-2xl">
-                        {selectedProduct?.thumbnail ?? <ShoppingBag className="h-5 w-5 text-white" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-semibold text-white truncate">{selectedProduct?.name ?? "Summer Dress Collection"}</p>
-                        <p className="text-[10px] text-white/70">Tap to shop · $49.99</p>
-                      </div>
-                    </div>
-                  )}
-                  <button
-                    onClick={() => setIsPlaying((p) => !p)}
-                    className="absolute inset-0 flex items-center justify-center group"
-                    aria-label={isPlaying ? "Pause" : "Play"}
-                  >
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/15 backdrop-blur-md ring-1 ring-white/20 group-hover:bg-white/25 transition-all">
-                      {isPlaying ? <Pause className="h-6 w-6 text-white" /> : <Play className="h-6 w-6 text-white ml-0.5" />}
-                    </div>
-                  </button>
-                  <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/70 to-transparent">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setIsPlaying((p) => !p)} className="text-white shrink-0" aria-label="Toggle play">
-                        {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                <div className="relative aspect-[9/16] w-full overflow-hidden rounded-[1.6rem] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+                  {generationStatus === "done" ? (
+                    <>
+                      <div className="absolute inset-0" style={{
+                        backgroundImage: "radial-gradient(circle at 30% 40%, hsl(var(--primary) / 0.35), transparent 55%), radial-gradient(circle at 70% 75%, hsl(var(--accent) / 0.3), transparent 55%)"
+                      }} />
+                      {showLogo && (
+                        <div className="absolute top-7 right-2 flex items-center gap-1 rounded-md bg-black/40 backdrop-blur-md border border-white/10 px-1.5 py-0.5 shadow-lg">
+                          <div className="h-3.5 w-3.5 rounded gradient-primary flex items-center justify-center">
+                            <Sparkles className="h-2 w-2 text-primary-foreground" />
+                          </div>
+                          <span className="text-[8px] font-bold text-white">REELCAST</span>
+                        </div>
+                      )}
+                      {showProduct && (
+                        <div className="absolute bottom-12 left-2 right-2 flex items-center gap-2 rounded-lg bg-black/50 backdrop-blur-md border border-white/10 p-1.5 shadow-xl">
+                          <div className="h-8 w-8 shrink-0 rounded-md bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center text-base">
+                            {selectedProduct?.thumbnail ?? <ShoppingBag className="h-3.5 w-3.5 text-white" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[9px] font-semibold text-white truncate">{selectedProduct?.name ?? "Product"}</p>
+                            <p className="text-[8px] text-white/70">Tap to shop · $49.99</p>
+                          </div>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => setIsPlaying((p) => !p)}
+                        className="absolute inset-0 flex items-center justify-center group"
+                        aria-label={isPlaying ? "Pause" : "Play"}
+                      >
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 backdrop-blur-md ring-1 ring-white/20 group-hover:bg-white/25 transition-all">
+                          {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white ml-0.5" />}
+                        </div>
                       </button>
-                      <span className="text-[10px] text-white/80 font-mono">0:08</span>
-                      <div className="flex-1 h-1 rounded-full bg-white/20 overflow-hidden">
-                        <div className="h-full w-1/3 rounded-full bg-white" />
+                      <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => setIsPlaying((p) => !p)} className="text-white shrink-0" aria-label="Toggle play">
+                            {isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                          </button>
+                          <span className="text-[8px] text-white/80 font-mono">0:08</span>
+                          <div className="flex-1 h-0.5 rounded-full bg-white/20 overflow-hidden">
+                            <div className="h-full w-1/3 rounded-full bg-white" />
+                          </div>
+                          <span className="text-[8px] text-white/80 font-mono">0:{duration.toString().padStart(2, "0")}</span>
+                          <Volume2 className="h-3 w-3 text-white shrink-0" />
+                        </div>
                       </div>
-                      <span className="text-[10px] text-white/80 font-mono">0:{duration.toString().padStart(2, "0")}</span>
-                      <Volume2 className="h-3.5 w-3.5 text-white shrink-0" />
+                    </>
+                  ) : generationStatus === "generating" ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 p-4">
+                      <div className="relative">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted-foreground/10">
+                          <Wand2 className="h-6 w-6 text-muted-foreground/40 animate-pulse" />
+                        </div>
+                        <div className="absolute -inset-3 animate-pulse rounded-xl gradient-primary opacity-10 blur-xl" />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">Veo is generating B-Roll…</p>
                     </div>
-                  </div>
-                </>
-              ) : generationStatus === "generating" ? (
-                <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
-                  <div className="relative">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted-foreground/10">
-                      <Wand2 className="h-8 w-8 text-muted-foreground/40 animate-pulse" />
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted-foreground/10">
+                        <Video className="h-6 w-6 text-muted-foreground/30" />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground max-w-[20ch]">Awaiting command. Hit Generate.</p>
                     </div>
-                    <div className="absolute -inset-3 animate-pulse rounded-2xl gradient-primary opacity-10 blur-xl" />
-                  </div>
-                  <p className="text-sm text-muted-foreground">Veo is generating B-Roll…</p>
+                  )}
                 </div>
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted-foreground/10">
-                    <Video className="h-8 w-8 text-muted-foreground/30" />
-                  </div>
-                  <p className="text-xs text-muted-foreground max-w-[28ch]">Awaiting command. Describe your Reel and hit Generate.</p>
-                  <div className="absolute top-3 left-3 w-3 h-3 border-t border-l border-white/10" />
-                  <div className="absolute top-3 right-3 w-3 h-3 border-t border-r border-white/10" />
-                  <div className="absolute bottom-3 left-3 w-3 h-3 border-b border-l border-white/10" />
-                  <div className="absolute bottom-3 right-3 w-3 h-3 border-b border-r border-white/10" />
-                </div>
-              )}
+              </div>
             </div>
 
+            {/* Horizontal stepper pipeline */}
+            {generationStatus !== "idle" && (
+              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">AI Pipeline</p>
+                  <p className="text-[9px] font-mono text-muted-foreground">{generationStatus === "done" ? "Complete" : "In progress…"}</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  {generationTasks.map((task, i) => {
+                    const isDone = generationStatus === "done" || (generationStatus === "generating" && i < 2);
+                    const isActive = generationStatus === "generating" && i === 2;
+                    return (
+                      <Tooltip key={i}>
+                        <TooltipTrigger asChild>
+                          <div className="flex flex-1 items-center gap-1">
+                            <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] ${
+                              isDone ? "bg-success/20 ring-1 ring-success/40 text-success"
+                              : isActive ? "bg-primary/20 ring-1 ring-primary/40 text-primary"
+                              : "bg-muted ring-1 ring-border text-muted-foreground"
+                            }`}>
+                              {isDone ? <Check className="h-2.5 w-2.5" /> : isActive ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : i + 1}
+                            </div>
+                            {i < generationTasks.length - 1 && (
+                              <div className={`h-px flex-1 ${isDone ? "bg-success/40" : "bg-border"}`} />
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          <p className="font-medium">{task.label}</p>
+                          <p className="text-[10px] text-muted-foreground">{task.detail}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+
             {generationStatus === "done" && (
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
+              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-1.5">
                 <div className="flex items-center gap-1.5">
-                  <Brain className="h-3.5 w-3.5 text-primary" />
-                  <label className="text-xs font-medium text-foreground">AI Caption & Hashtags (Gemini)</label>
+                  <Brain className="h-3 w-3 text-primary" />
+                  <label className="text-[11px] font-medium text-foreground">AI Caption</label>
                 </div>
                 <Textarea
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
-                  rows={4}
-                  className="bg-muted/50 border-border resize-none text-xs"
+                  rows={3}
+                  className="bg-muted/40 border-border resize-none text-[11px] leading-relaxed"
                 />
-                <p className="text-[10px] text-muted-foreground">Editable — tweak before approving</p>
               </motion.div>
             )}
 
             {generationStatus === "done" && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={handleRegenerate} className="gap-2 h-11">
-                  <RefreshCw className="h-4 w-4" />
+                <Button variant="outline" onClick={handleRegenerate} className="gap-1.5 h-9 text-xs">
+                  <RefreshCw className="h-3.5 w-3.5" />
                   Regenerate
                 </Button>
-                <Button onClick={handleApprove} className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-11">
-                  <Check className="h-4 w-4" />
-                  Approve & Save
+                <Button onClick={handleApprove} className="gradient-primary gap-1.5 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-9 text-xs">
+                  <Check className="h-3.5 w-3.5" />
+                  Approve
                 </Button>
               </motion.div>
             )}
@@ -969,6 +1021,7 @@ const CreateReel = () => {
         </DialogContent>
       </Dialog>
     </div>
+    </TooltipProvider>
   );
 };
 
