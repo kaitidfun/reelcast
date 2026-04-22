@@ -664,19 +664,28 @@ const CreateReel = () => {
                   Surprise me
                 </Button>
               </div>
-              <Button
-                onClick={generationStatus === "done" ? handleRegenerate : handleGenerate}
-                disabled={generationStatus === "generating"}
-                className="gradient-primary h-9 gap-2 px-4 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
-              >
-                {generationStatus === "generating" ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" />Generating…</>
-                ) : generationStatus === "done" ? (
-                  <><RefreshCw className="h-4 w-4" />Re-generate <span className="opacity-80 text-xs font-mono">⚡{generateCost}</span></>
-                ) : (
-                  <><Sparkles className="h-4 w-4" />Generate Video <span className="opacity-80 text-xs font-mono">⚡{generateCost}</span></>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={!selectedProduct ? 0 : -1}>
+                    <Button
+                      onClick={generationStatus === "done" ? handleRegenerate : handleGenerate}
+                      disabled={generationStatus === "generating" || !selectedProduct}
+                      className="gradient-primary h-9 gap-2 px-4 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg disabled:opacity-50"
+                    >
+                      {generationStatus === "generating" ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" />Generating…</>
+                      ) : generationStatus === "done" ? (
+                        <><RefreshCw className="h-4 w-4" />Re-generate <span className="opacity-80 text-xs font-mono">⚡{generateCost}</span></>
+                      ) : (
+                        <><Sparkles className="h-4 w-4" />Generate Video <span className="opacity-80 text-xs font-mono">⚡{generateCost}</span></>
+                      )}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!selectedProduct && (
+                  <TooltipContent side="top" className="text-xs">Select a product first</TooltipContent>
                 )}
-              </Button>
+              </Tooltip>
             </div>
           </div>
 
