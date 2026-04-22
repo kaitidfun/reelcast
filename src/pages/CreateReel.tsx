@@ -1021,6 +1021,7 @@ const CreateReel = () => {
         </DialogContent>
       </Dialog>
     </div>
+    </TooltipProvider>
   );
 };
 
