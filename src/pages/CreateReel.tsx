@@ -450,8 +450,8 @@ const CreateReel = () => {
           )}
         </div>
 
-        {/* Right Column */}
-        <div className="lg:col-span-2 space-y-5 lg:sticky lg:top-6">
+        {/* Right Column - fixed, fits viewport */}
+        <div className="lg:col-span-2 space-y-5 lg:h-full lg:overflow-y-auto lg:pr-1">
           {/* Generate Button */}
           <div className="space-y-2">
             <Button
