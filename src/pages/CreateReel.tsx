@@ -283,6 +283,10 @@ const CreateReel = () => {
   };
 
   const handleGenerate = () => {
+    if (!selectedProduct) {
+      toast({ title: "Select a product first", description: "A product is required to create a shoppable Reel.", variant: "destructive" });
+      return;
+    }
     if (!promptText.trim() && !referenceFile) {
       toast({ title: "Describe your Reel", description: "Type a prompt or attach a reference to start." });
       return;
