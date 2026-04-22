@@ -84,7 +84,118 @@ const promptTemplates = [
   { label: "🎯 How-To / Tutorial", prompt: "Generate a quick tutorial Reel showing 3 ways to style a minimal gold necklace for different occasions: casual, office, and evening. Use split-screen transitions." },
 ];
 
-const CreateReel = () => {
+type VideoPreviewBoxProps = {
+  generationStatus: GenerationStatus;
+  showLogo: boolean;
+  showProduct: boolean;
+  isPlaying: boolean;
+  setIsPlaying: React.Dispatch<React.SetStateAction<boolean>>;
+  onExpand?: () => void;
+  showExpandButton?: boolean;
+};
+
+const VideoPreviewBox = ({
+  generationStatus,
+  showLogo,
+  showProduct,
+  isPlaying,
+  setIsPlaying,
+  onExpand,
+  showExpandButton = false,
+}: VideoPreviewBoxProps) => {
+  return (
+    <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      {generationStatus === "done" ? (
+        <>
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 30% 40%, hsl(var(--primary) / 0.35), transparent 55%), radial-gradient(circle at 70% 75%, hsl(var(--accent) / 0.3), transparent 55%)",
+            }}
+          />
+
+          {showExpandButton && onExpand && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onExpand();
+              }}
+              className="absolute top-3 left-3 z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-all"
+              aria-label="Expand to fullscreen"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+
+          {showLogo && (
+            <div className="absolute top-3 right-3 flex items-center gap-1.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 px-2 py-1 shadow-lg">
+              <div className="h-5 w-5 rounded-md gradient-primary flex items-center justify-center">
+                <Sparkles className="h-3 w-3 text-primary-foreground" />
+              </div>
+              <span className="text-[10px] font-bold text-white">REELCAST</span>
+            </div>
+          )}
+
+          {showProduct && (
+            <div className="absolute bottom-16 left-3 right-3 flex items-center gap-2.5 rounded-xl bg-black/50 backdrop-blur-md border border-white/10 p-2.5 shadow-xl">
+              <div className="h-12 w-12 shrink-0 rounded-lg bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center">
+                <ShoppingBag className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-white truncate">Summer Dress Collection</p>
+                <p className="text-[10px] text-white/70">Tap to shop · $49.99</p>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={() => setIsPlaying((p) => !p)}
+            className="absolute inset-0 flex items-center justify-center group"
+            aria-label={isPlaying ? "Pause" : "Play"}
+          >
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/15 backdrop-blur-md ring-1 ring-white/20 group-hover:bg-white/25 transition-all">
+              {isPlaying ? <Pause className="h-6 w-6 text-white" /> : <Play className="h-6 w-6 text-white ml-0.5" />}
+            </div>
+          </button>
+
+          <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/70 to-transparent">
+            <div className="flex items-center gap-2">
+              <button onClick={() => setIsPlaying((p) => !p)} className="text-white shrink-0" aria-label="Toggle play">
+                {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+              </button>
+              <span className="text-[10px] text-white/80 font-mono">0:08</span>
+              <div className="flex-1 h-1 rounded-full bg-white/20 overflow-hidden">
+                <div className="h-full w-1/3 rounded-full bg-white" />
+              </div>
+              <span className="text-[10px] text-white/80 font-mono">0:30</span>
+              <Volume2 className="h-3.5 w-3.5 text-white shrink-0" />
+            </div>
+          </div>
+        </>
+      ) : generationStatus === "generating" ? (
+        <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
+          <div className="relative">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted-foreground/10">
+              <Wand2 className="h-8 w-8 text-muted-foreground/40 animate-pulse" />
+            </div>
+            <div className="absolute -inset-3 animate-pulse rounded-2xl gradient-primary opacity-10 blur-xl" />
+          </div>
+          <p className="text-sm text-muted-foreground">Veo is generating B-Roll...</p>
+        </div>
+      ) : (
+        <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted-foreground/10">
+            <Video className="h-8 w-8 text-muted-foreground/30" />
+          </div>
+          <p className="text-xs text-muted-foreground text-center">Click Generate to let AI create your Reel</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
   const [inputType, setInputType] = useState<InputType>("text");
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
   const [caption, setCaption] = useState("Ready for summer? Check out our new arrival! ✨🏖️ #SummerVibes #MustHave #ReelCast #ShopNow");
