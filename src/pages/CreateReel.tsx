@@ -1,11 +1,65 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Upload, Type, Sparkles, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash, Lightbulb, Play, Pause, Volume2, ShoppingBag } from "lucide-react";
+import { Upload, Type, Sparkles, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash, Lightbulb, Play, Pause, Volume2, ShoppingBag, Folder, FolderOpen, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
+
+type LibraryProduct = {
+  id: string;
+  name: string;
+  thumbnail: string;
+  highlights: string;
+};
+
+type LibraryCampaign = {
+  id: string;
+  name: string;
+  products: LibraryProduct[];
+};
+
+const productLibrary: LibraryCampaign[] = [
+  {
+    id: "summer-2026",
+    name: "Summer Sale 2026",
+    products: [
+      { id: "p1", name: "Summer Dress Collection", thumbnail: "🏖️", highlights: "Lightweight fabric, breezy fit, 5 pastel colors for summer outings" },
+      { id: "p2", name: "Fashion Lookbook SS26", thumbnail: "👗", highlights: "Curated SS26 looks, mix-and-match outfits for every occasion" },
+      { id: "p3", name: "Beach Tote Bag", thumbnail: "👜", highlights: "Roomy interior, water-resistant canvas, perfect beach companion" },
+    ],
+  },
+  {
+    id: "accessories",
+    name: "Accessories Launch",
+    products: [
+      { id: "p4", name: "Minimal Watch — Gold", thumbnail: "⌚", highlights: "Sapphire glass, 18K gold plating, quiet quartz movement" },
+      { id: "p5", name: "Leather Wallet Slim", thumbnail: "👛", highlights: "Full-grain leather, RFID-blocking, fits 8 cards" },
+      { id: "p6", name: "Sunglasses Aviator", thumbnail: "🕶️", highlights: "UV400 protection, polarized, lightweight titanium frame" },
+    ],
+  },
+  {
+    id: "beauty-week",
+    name: "Beauty Week",
+    products: [
+      { id: "p7", name: "Skincare Bundle Set", thumbnail: "🧴", highlights: "Cleanser, serum & moisturizer — clinically tested glow routine" },
+      { id: "p8", name: "Lip Tint Trio", thumbnail: "💄", highlights: "Long-wear formula, 3 viral shades, buildable color" },
+    ],
+  },
+  {
+    id: "tech-deals",
+    name: "Tech Deals",
+    products: [
+      { id: "p9", name: "Wireless Earbuds Pro", thumbnail: "🎧", highlights: "Active noise cancelling, 30h battery, hi-res audio" },
+      { id: "p10", name: "Portable Charger 20K", thumbnail: "🔋", highlights: "20,000mAh, 65W fast charge, charges laptop & phone" },
+      { id: "p11", name: "Smart Desk Lamp", thumbnail: "💡", highlights: "Adaptive brightness, 5 color modes, USB-C charging port" },
+    ],
+  },
+];
 
 type InputType = "text" | "upload";
 type GenerationStatus = "idle" | "generating" | "done";
