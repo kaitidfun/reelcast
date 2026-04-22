@@ -19,6 +19,8 @@ type LibraryProduct = {
 type LibraryCampaign = {
   id: string;
   name: string;
+  banner: string; // tailwind gradient classes
+  emoji: string;
   products: LibraryProduct[];
 };
 
@@ -26,6 +28,8 @@ const productLibrary: LibraryCampaign[] = [
   {
     id: "summer-2026",
     name: "Summer Sale 2026",
+    banner: "from-amber-500/40 via-orange-500/30 to-pink-500/40",
+    emoji: "🏖️",
     products: [
       { id: "p1", name: "Summer Dress Collection", thumbnail: "🏖️", highlights: "Lightweight fabric, breezy fit, 5 pastel colors for summer outings" },
       { id: "p2", name: "Fashion Lookbook SS26", thumbnail: "👗", highlights: "Curated SS26 looks, mix-and-match outfits for every occasion" },
@@ -35,6 +39,8 @@ const productLibrary: LibraryCampaign[] = [
   {
     id: "accessories",
     name: "Accessories Launch",
+    banner: "from-yellow-500/40 via-amber-400/30 to-rose-500/40",
+    emoji: "⌚",
     products: [
       { id: "p4", name: "Minimal Watch — Gold", thumbnail: "⌚", highlights: "Sapphire glass, 18K gold plating, quiet quartz movement" },
       { id: "p5", name: "Leather Wallet Slim", thumbnail: "👛", highlights: "Full-grain leather, RFID-blocking, fits 8 cards" },
@@ -44,6 +50,8 @@ const productLibrary: LibraryCampaign[] = [
   {
     id: "beauty-week",
     name: "Beauty Week",
+    banner: "from-pink-500/40 via-fuchsia-500/30 to-purple-500/40",
+    emoji: "💄",
     products: [
       { id: "p7", name: "Skincare Bundle Set", thumbnail: "🧴", highlights: "Cleanser, serum & moisturizer — clinically tested glow routine" },
       { id: "p8", name: "Lip Tint Trio", thumbnail: "💄", highlights: "Long-wear formula, 3 viral shades, buildable color" },
@@ -52,6 +60,8 @@ const productLibrary: LibraryCampaign[] = [
   {
     id: "tech-deals",
     name: "Tech Deals",
+    banner: "from-sky-500/40 via-indigo-500/30 to-violet-500/40",
+    emoji: "🎧",
     products: [
       { id: "p9", name: "Wireless Earbuds Pro", thumbnail: "🎧", highlights: "Active noise cancelling, 30h battery, hi-res audio" },
       { id: "p10", name: "Portable Charger 20K", thumbnail: "🔋", highlights: "20,000mAh, 65W fast charge, charges laptop & phone" },
