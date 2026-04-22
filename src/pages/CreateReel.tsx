@@ -1,11 +1,65 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Upload, Type, Sparkles, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash, Lightbulb, Play, Pause, Volume2, ShoppingBag } from "lucide-react";
+import { Upload, Type, Sparkles, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash, Lightbulb, Play, Pause, Volume2, ShoppingBag, Folder, FolderOpen, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
+
+type LibraryProduct = {
+  id: string;
+  name: string;
+  thumbnail: string;
+  highlights: string;
+};
+
+type LibraryCampaign = {
+  id: string;
+  name: string;
+  products: LibraryProduct[];
+};
+
+const productLibrary: LibraryCampaign[] = [
+  {
+    id: "summer-2026",
+    name: "Summer Sale 2026",
+    products: [
+      { id: "p1", name: "Summer Dress Collection", thumbnail: "🏖️", highlights: "Lightweight fabric, breezy fit, 5 pastel colors for summer outings" },
+      { id: "p2", name: "Fashion Lookbook SS26", thumbnail: "👗", highlights: "Curated SS26 looks, mix-and-match outfits for every occasion" },
+      { id: "p3", name: "Beach Tote Bag", thumbnail: "👜", highlights: "Roomy interior, water-resistant canvas, perfect beach companion" },
+    ],
+  },
+  {
+    id: "accessories",
+    name: "Accessories Launch",
+    products: [
+      { id: "p4", name: "Minimal Watch — Gold", thumbnail: "⌚", highlights: "Sapphire glass, 18K gold plating, quiet quartz movement" },
+      { id: "p5", name: "Leather Wallet Slim", thumbnail: "👛", highlights: "Full-grain leather, RFID-blocking, fits 8 cards" },
+      { id: "p6", name: "Sunglasses Aviator", thumbnail: "🕶️", highlights: "UV400 protection, polarized, lightweight titanium frame" },
+    ],
+  },
+  {
+    id: "beauty-week",
+    name: "Beauty Week",
+    products: [
+      { id: "p7", name: "Skincare Bundle Set", thumbnail: "🧴", highlights: "Cleanser, serum & moisturizer — clinically tested glow routine" },
+      { id: "p8", name: "Lip Tint Trio", thumbnail: "💄", highlights: "Long-wear formula, 3 viral shades, buildable color" },
+    ],
+  },
+  {
+    id: "tech-deals",
+    name: "Tech Deals",
+    products: [
+      { id: "p9", name: "Wireless Earbuds Pro", thumbnail: "🎧", highlights: "Active noise cancelling, 30h battery, hi-res audio" },
+      { id: "p10", name: "Portable Charger 20K", thumbnail: "🔋", highlights: "20,000mAh, 65W fast charge, charges laptop & phone" },
+      { id: "p11", name: "Smart Desk Lamp", thumbnail: "💡", highlights: "Adaptive brightness, 5 color modes, USB-C charging port" },
+    ],
+  },
+];
 
 type InputType = "text" | "upload";
 type GenerationStatus = "idle" | "generating" | "done";
@@ -28,6 +82,8 @@ const CreateReel = () => {
   const [showLogo, setShowLogo] = useState(true);
   const [showProduct, setShowProduct] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<LibraryProduct | null>(null);
   const { toast } = useToast();
 
   const inputOptions = [
@@ -156,13 +212,31 @@ const CreateReel = () => {
           {/* Select Product from Library */}
           <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
             <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">2. Select Product from Library</h2>
-            <select className="w-full rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
-              <option>— Select a product —</option>
-              <option>Summer Dress Collection</option>
-              <option>Minimal Watch — Gold</option>
-              <option>Skincare Bundle Set</option>
-              <option>Wireless Earbuds Pro</option>
-            </select>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPickerOpen(true)}
+              className="w-full justify-start gap-3 h-auto min-h-[3.25rem] px-3 py-2.5 rounded-xl border-border bg-muted/40 hover:bg-muted/60 hover:border-primary/30 text-left"
+            >
+              {selectedProduct ? (
+                <>
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 text-xl">
+                    {selectedProduct.thumbnail}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">{selectedProduct.name}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{selectedProduct.highlights}</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </>
+              ) : (
+                <>
+                  <FolderOpen className="h-5 w-5 text-primary shrink-0" />
+                  <span className="flex-1 text-sm font-medium text-foreground">Browse Product Library</span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </>
+              )}
+            </Button>
           </div>
 
           {/* Settings */}
@@ -399,6 +473,78 @@ const CreateReel = () => {
 
         </div>
       </div>
+
+      {/* Product Picker Dialog */}
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2">
+              <FolderOpen className="h-5 w-5 text-primary" />
+              Select Product
+            </DialogTitle>
+            <DialogDescription>
+              Browse your campaigns and pick a product to feature in this Reel.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="overflow-y-auto -mx-6 px-6 pb-1">
+            <Accordion
+              type="single"
+              collapsible
+              defaultValue={productLibrary[0]?.id}
+              className="w-full"
+            >
+              {productLibrary.map((campaign) => (
+                <AccordionItem key={campaign.id} value={campaign.id} className="border-border">
+                  <AccordionTrigger className="hover:no-underline">
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                      <Folder className="h-4 w-4 text-primary shrink-0" />
+                      <span className="font-medium text-foreground truncate">{campaign.name}</span>
+                      <Badge variant="secondary" className="ml-1 shrink-0">
+                        {campaign.products.length}
+                      </Badge>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      {campaign.products.map((product) => {
+                        const isSelected = selectedProduct?.id === product.id;
+                        return (
+                          <button
+                            key={product.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedProduct(product);
+                              setPickerOpen(false);
+                            }}
+                            className={`flex gap-3 p-3 rounded-lg border text-left transition-all hover:bg-accent cursor-pointer ${
+                              isSelected
+                                ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20"
+                                : "border-border bg-card"
+                            }`}
+                          >
+                            <div className="h-12 w-12 shrink-0 rounded-md bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-2xl object-cover">
+                              {product.thumbnail}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm text-foreground truncate">
+                                {product.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                                {product.highlights}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
