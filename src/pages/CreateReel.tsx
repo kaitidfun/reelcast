@@ -97,6 +97,23 @@ const CreateReel = () => {
   const [bgMusic, setBgMusic] = useState("trendy");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [cameraMotion, setCameraMotion] = useState("auto");
+  const [lighting, setLighting] = useState("auto");
+  const [enhancing, setEnhancing] = useState(false);
+
+  const handleEnhancePrompt = () => {
+    if (!promptText.trim()) {
+      toast({ title: "Add a prompt first", description: "Type a brief idea before enhancing." });
+      return;
+    }
+    setEnhancing(true);
+    setTimeout(() => {
+      setPromptText(
+        `Create a cinematic 30-second vertical Reel: ${promptText.trim()}. Use dynamic camera moves, premium lighting, hero product close-ups, vibrant color grading, and crisp on-screen text overlays that highlight key benefits. End with a strong call-to-action.`,
+      );
+      setEnhancing(false);
+      toast({ title: "Prompt enhanced ✨", description: "Refined into a professional creative brief." });
+    }, 900);
+  };
   const [credits] = useState(120);
   const generateCost = 5;
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -198,13 +215,30 @@ const CreateReel = () => {
             <div>
               {inputType === "text" && (
                 <div className="space-y-3">
-                  <Textarea
-                    value={promptText}
-                    onChange={(e) => setPromptText(e.target.value)}
-                    placeholder="Describe the Reel you want — product details, highlights, style..."
-                    rows={4}
-                    className="bg-muted/50 border-border resize-none"
-                  />
+                  <div className="relative">
+                    <Textarea
+                      value={promptText}
+                      onChange={(e) => setPromptText(e.target.value)}
+                      placeholder="Describe the Reel you want — product details, highlights, style..."
+                      rows={4}
+                      className="bg-muted/50 border-border resize-none pb-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleEnhancePrompt}
+                      disabled={enhancing}
+                      className="absolute bottom-2 right-2 h-7 gap-1 px-2 text-xs border-primary/30 bg-card/80 backdrop-blur-sm hover:bg-primary/10 hover:text-primary"
+                    >
+                      {enhancing ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" />
+                      )}
+                      Enhance Prompt
+                    </Button>
+                  </div>
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
                       <Lightbulb className="h-3.5 w-3.5 text-primary" />
@@ -304,34 +338,80 @@ const CreateReel = () => {
               </div>
             </div>
 
-            {/* Audio & Voiceover */}
-            <div className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-3">
-              <div className="flex items-center gap-1.5">
-                <Volume2 className="h-3.5 w-3.5 text-primary" />
-                <label className="text-xs font-medium text-foreground">Audio & Voiceover</label>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-card/60 px-3 py-2">
-                <div className="min-w-0 pr-3">
-                  <p className="text-xs text-foreground">Enable AI Voiceover</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Generate speech from the AI script</p>
+            {/* Voiceover toggle */}
+            <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <Volume2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-foreground">Enable AI Voiceover</p>
+                  <p className="text-[10px] text-muted-foreground">Generate speech from the AI script</p>
                 </div>
-                <Switch checked={voiceover} onCheckedChange={setVoiceover} />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-medium text-muted-foreground">Background Music</label>
-                <Select value={bgMusic} onValueChange={setBgMusic}>
-                  <SelectTrigger className="h-10 rounded-lg border-border bg-card/60 text-xs">
-                    <SelectValue placeholder="Choose music" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="trendy">Trendy & Upbeat</SelectItem>
-                    <SelectItem value="lofi">Lo-Fi Chill</SelectItem>
-                    <SelectItem value="cinematic">Cinematic</SelectItem>
-                    <SelectItem value="none">None</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Switch checked={voiceover} onCheckedChange={setVoiceover} />
             </div>
+
+            {/* Advanced Settings (Director Controls) — compact */}
+            <Accordion type="single" collapsible className="rounded-xl border border-border/60 bg-muted/30 px-3">
+              <AccordionItem value="advanced" className="border-b-0">
+                <AccordionTrigger className="text-xs text-muted-foreground hover:text-foreground hover:no-underline py-3">
+                  ⚙️ Advanced Settings
+                </AccordionTrigger>
+                <AccordionContent className="space-y-3 pb-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-medium text-muted-foreground">Camera Motion</label>
+                      <Select value={cameraMotion} onValueChange={setCameraMotion}>
+                        <SelectTrigger className="h-9 rounded-lg border-border bg-card/60 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">Auto</SelectItem>
+                          <SelectItem value="pan-left">Pan Left</SelectItem>
+                          <SelectItem value="zoom-in">Zoom In</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-medium text-muted-foreground">Lighting</label>
+                      <Select value={lighting} onValueChange={setLighting}>
+                        <SelectTrigger className="h-9 rounded-lg border-border bg-card/60 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">Auto</SelectItem>
+                          <SelectItem value="cinematic">Cinematic</SelectItem>
+                          <SelectItem value="studio">Studio</SelectItem>
+                          <SelectItem value="natural">Natural</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-medium text-muted-foreground">Background Music</label>
+                    <Select value={bgMusic} onValueChange={setBgMusic}>
+                      <SelectTrigger className="h-9 rounded-lg border-border bg-card/60 text-xs">
+                        <SelectValue placeholder="Choose music" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="trendy">Trendy & Upbeat</SelectItem>
+                        <SelectItem value="lofi">Lo-Fi Chill</SelectItem>
+                        <SelectItem value="cinematic">Cinematic</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-medium text-muted-foreground">Negative Prompt</label>
+                    <Input
+                      value={negativePrompt}
+                      onChange={(e) => setNegativePrompt(e.target.value)}
+                      placeholder="e.g. blurry, low quality, watermark"
+                      className="h-9 rounded-lg border-border bg-card/60 text-xs"
+                    />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
 
             {/* Target Platforms */}
             <div className="space-y-2">
@@ -355,40 +435,7 @@ const CreateReel = () => {
             </div>
           </div>
 
-          {/* Advanced Settings */}
-          <Accordion type="single" collapsible className="rounded-2xl border border-border bg-card px-5 shadow-card">
-            <AccordionItem value="advanced" className="border-b-0">
-              <AccordionTrigger className="text-sm text-muted-foreground hover:text-foreground hover:no-underline py-4">
-                ⚙️ Advanced Settings
-              </AccordionTrigger>
-              <AccordionContent className="space-y-4 pb-5">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">Negative Prompt</label>
-                  <Textarea
-                    value={negativePrompt}
-                    onChange={(e) => setNegativePrompt(e.target.value)}
-                    placeholder="Specify what to avoid in the generated video..."
-                    rows={3}
-                    className="bg-muted/50 border-border resize-none text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">Camera Motion</label>
-                  <Select value={cameraMotion} onValueChange={setCameraMotion}>
-                    <SelectTrigger className="h-10 rounded-lg border-border bg-muted/50 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">Auto</SelectItem>
-                      <SelectItem value="pan-left">Pan Left</SelectItem>
-                      <SelectItem value="zoom-in">Zoom In</SelectItem>
-                      <SelectItem value="static">Static</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+
 
           {/* Publish */}
           {generationStatus === "done" && (
