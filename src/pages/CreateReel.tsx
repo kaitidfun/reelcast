@@ -99,6 +99,7 @@ const CreateReel = () => {
   const [cameraMotion, setCameraMotion] = useState("auto");
   const [lighting, setLighting] = useState("auto");
   const [enhancing, setEnhancing] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const handleEnhancePrompt = () => {
     if (!promptText.trim()) {
