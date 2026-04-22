@@ -406,19 +406,22 @@ const CreateReel = () => {
         {/* Right Column */}
         <div className="lg:col-span-2 space-y-5">
           {/* Generate Button */}
-          <Button
-            onClick={generationStatus === "done" ? handleRegenerate : handleGenerate}
-            disabled={generationStatus === "generating"}
-            className="w-full gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-12 text-base"
-          >
-            {generationStatus === "generating" ? (
-              <><Loader2 className="h-5 w-5 animate-spin" />AI is generating...</>
-            ) : generationStatus === "done" ? (
-              <><RefreshCw className="h-5 w-5" />Re-generate</>
-            ) : (
-              <><Sparkles className="h-5 w-5" />Generate with AI</>
-            )}
-          </Button>
+          <div className="space-y-2">
+            <Button
+              onClick={generationStatus === "done" ? handleRegenerate : handleGenerate}
+              disabled={generationStatus === "generating"}
+              className="w-full gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-12 text-base"
+            >
+              {generationStatus === "generating" ? (
+                <><Loader2 className="h-5 w-5 animate-spin" />AI is generating...</>
+              ) : generationStatus === "done" ? (
+                <><RefreshCw className="h-5 w-5" />Re-generate <span className="opacity-80 text-sm">(⚡ {generateCost} Credits)</span></>
+              ) : (
+                <><Sparkles className="h-5 w-5" />Generate Video <span className="opacity-80 text-sm">(⚡ {generateCost} Credits)</span></>
+              )}
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">Balance: ⚡ {credits} Credits available</p>
+          </div>
 
           {/* AI Pipeline Progress */}
           {generationStatus !== "idle" && (
