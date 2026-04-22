@@ -93,6 +93,12 @@ const CreateReel = () => {
   const [showLogo, setShowLogo] = useState(true);
   const [showProduct, setShowProduct] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [voiceover, setVoiceover] = useState(true);
+  const [bgMusic, setBgMusic] = useState("trendy");
+  const [negativePrompt, setNegativePrompt] = useState("");
+  const [cameraMotion, setCameraMotion] = useState("auto");
+  const [credits] = useState(120);
+  const generateCost = 5;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<LibraryProduct | null>(null);
   const [pickerView, setPickerView] = useState<"campaigns" | "products">("campaigns");
