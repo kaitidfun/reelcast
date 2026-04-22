@@ -93,6 +93,15 @@ const CreateReel = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<LibraryProduct | null>(null);
+  const [pickerView, setPickerView] = useState<"campaigns" | "products">("campaigns");
+  const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null);
+  const activeCampaign = productLibrary.find((c) => c.id === activeCampaignId) ?? null;
+
+  const openPicker = () => {
+    setPickerView("campaigns");
+    setActiveCampaignId(null);
+    setPickerOpen(true);
+  };
   const { toast } = useToast();
 
   const inputOptions = [
