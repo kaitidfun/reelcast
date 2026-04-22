@@ -7,6 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
 
 type LibraryProduct = {
@@ -91,6 +93,12 @@ const CreateReel = () => {
   const [showLogo, setShowLogo] = useState(true);
   const [showProduct, setShowProduct] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [voiceover, setVoiceover] = useState(true);
+  const [bgMusic, setBgMusic] = useState("trendy");
+  const [negativePrompt, setNegativePrompt] = useState("");
+  const [cameraMotion, setCameraMotion] = useState("auto");
+  const [credits] = useState(120);
+  const generateCost = 5;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<LibraryProduct | null>(null);
   const [pickerView, setPickerView] = useState<"campaigns" | "products">("campaigns");
@@ -296,6 +304,35 @@ const CreateReel = () => {
               </div>
             </div>
 
+            {/* Audio & Voiceover */}
+            <div className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-3">
+              <div className="flex items-center gap-1.5">
+                <Volume2 className="h-3.5 w-3.5 text-primary" />
+                <label className="text-xs font-medium text-foreground">Audio & Voiceover</label>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-card/60 px-3 py-2">
+                <div className="min-w-0 pr-3">
+                  <p className="text-xs text-foreground">Enable AI Voiceover</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Generate speech from the AI script</p>
+                </div>
+                <Switch checked={voiceover} onCheckedChange={setVoiceover} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-medium text-muted-foreground">Background Music</label>
+                <Select value={bgMusic} onValueChange={setBgMusic}>
+                  <SelectTrigger className="h-10 rounded-lg border-border bg-card/60 text-xs">
+                    <SelectValue placeholder="Choose music" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="trendy">Trendy & Upbeat</SelectItem>
+                    <SelectItem value="lofi">Lo-Fi Chill</SelectItem>
+                    <SelectItem value="cinematic">Cinematic</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             {/* Target Platforms */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-foreground">Target Platforms</label>
@@ -318,6 +355,41 @@ const CreateReel = () => {
             </div>
           </div>
 
+          {/* Advanced Settings */}
+          <Accordion type="single" collapsible className="rounded-2xl border border-border bg-card px-5 shadow-card">
+            <AccordionItem value="advanced" className="border-b-0">
+              <AccordionTrigger className="text-sm text-muted-foreground hover:text-foreground hover:no-underline py-4">
+                ⚙️ Advanced Settings
+              </AccordionTrigger>
+              <AccordionContent className="space-y-4 pb-5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-foreground">Negative Prompt</label>
+                  <Textarea
+                    value={negativePrompt}
+                    onChange={(e) => setNegativePrompt(e.target.value)}
+                    placeholder="Specify what to avoid in the generated video..."
+                    rows={3}
+                    className="bg-muted/50 border-border resize-none text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-foreground">Camera Motion</label>
+                  <Select value={cameraMotion} onValueChange={setCameraMotion}>
+                    <SelectTrigger className="h-10 rounded-lg border-border bg-muted/50 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Auto</SelectItem>
+                      <SelectItem value="pan-left">Pan Left</SelectItem>
+                      <SelectItem value="zoom-in">Zoom In</SelectItem>
+                      <SelectItem value="static">Static</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+
           {/* Publish */}
           {generationStatus === "done" && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-3">
@@ -334,19 +406,22 @@ const CreateReel = () => {
         {/* Right Column */}
         <div className="lg:col-span-2 space-y-5">
           {/* Generate Button */}
-          <Button
-            onClick={generationStatus === "done" ? handleRegenerate : handleGenerate}
-            disabled={generationStatus === "generating"}
-            className="w-full gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-12 text-base"
-          >
-            {generationStatus === "generating" ? (
-              <><Loader2 className="h-5 w-5 animate-spin" />AI is generating...</>
-            ) : generationStatus === "done" ? (
-              <><RefreshCw className="h-5 w-5" />Re-generate</>
-            ) : (
-              <><Sparkles className="h-5 w-5" />Generate with AI</>
-            )}
-          </Button>
+          <div className="space-y-2">
+            <Button
+              onClick={generationStatus === "done" ? handleRegenerate : handleGenerate}
+              disabled={generationStatus === "generating"}
+              className="w-full gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-12 text-base"
+            >
+              {generationStatus === "generating" ? (
+                <><Loader2 className="h-5 w-5 animate-spin" />AI is generating...</>
+              ) : generationStatus === "done" ? (
+                <><RefreshCw className="h-5 w-5" />Re-generate <span className="opacity-80 text-sm">(⚡ {generateCost} Credits)</span></>
+              ) : (
+                <><Sparkles className="h-5 w-5" />Generate Video <span className="opacity-80 text-sm">(⚡ {generateCost} Credits)</span></>
+              )}
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">Balance: ⚡ {credits} Credits available</p>
+          </div>
 
           {/* AI Pipeline Progress */}
           {generationStatus !== "idle" && (
