@@ -494,72 +494,119 @@ const CreateReel = () => {
 
       {/* Product Picker Dialog */}
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2">
               <FolderOpen className="h-5 w-5 text-primary" />
               Select Product
             </DialogTitle>
             <DialogDescription>
-              Browse your campaigns and pick a product to feature in this Reel.
+              {pickerView === "campaigns"
+                ? "Pick a campaign folder to browse its products."
+                : "Choose a product to feature in this Reel."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="overflow-y-auto -mx-6 px-6 pb-1">
-            <Accordion
-              type="single"
-              collapsible
-              defaultValue={productLibrary[0]?.id}
-              className="w-full"
-            >
-              {productLibrary.map((campaign) => (
-                <AccordionItem key={campaign.id} value={campaign.id} className="border-border">
-                  <AccordionTrigger className="hover:no-underline">
-                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                      <Folder className="h-4 w-4 text-primary shrink-0" />
-                      <span className="font-medium text-foreground truncate">{campaign.name}</span>
-                      <Badge variant="secondary" className="ml-1 shrink-0">
-                        {campaign.products.length}
-                      </Badge>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                      {campaign.products.map((product) => {
-                        const isSelected = selectedProduct?.id === product.id;
-                        return (
-                          <button
-                            key={product.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedProduct(product);
-                              setPickerOpen(false);
-                            }}
-                            className={`flex gap-3 p-3 rounded-lg border text-left transition-all hover:bg-accent cursor-pointer ${
-                              isSelected
-                                ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20"
-                                : "border-border bg-card"
-                            }`}
-                          >
-                            <div className="h-12 w-12 shrink-0 rounded-md bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-2xl object-cover">
-                              {product.thumbnail}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-sm text-foreground truncate">
-                                {product.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                                {product.highlights}
-                              </p>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
+            {pickerView === "campaigns" && (
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Browse Campaigns
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {productLibrary.map((campaign) => (
+                    <button
+                      key={campaign.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveCampaignId(campaign.id);
+                        setPickerView("products");
+                      }}
+                      className="group rounded-lg border border-border bg-card overflow-hidden text-left cursor-pointer transition-all hover:ring-2 hover:ring-primary hover:-translate-y-0.5 hover:shadow-glow"
+                    >
+                      <div className={`h-24 w-full bg-gradient-to-br ${campaign.banner} flex items-center justify-center text-4xl`}>
+                        <span className="drop-shadow-sm">{campaign.emoji}</span>
+                      </div>
+                      <div className="p-3 space-y-1">
+                        <p className="font-semibold text-sm text-foreground truncate group-hover:text-primary transition-colors">
+                          {campaign.name}
+                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <Folder className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-[11px] text-muted-foreground">
+                            {campaign.products.length} Products
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {pickerView === "products" && activeCampaign && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setPickerView("campaigns");
+                      setActiveCampaignId(null);
+                    }}
+                    className="gap-1.5 -ml-2"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to Campaigns
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <div className={`h-10 w-10 rounded-md bg-gradient-to-br ${activeCampaign.banner} flex items-center justify-center text-xl`}>
+                    {activeCampaign.emoji}
+                  </div>
+                  <div>
+                    <h3 className="font-display font-semibold text-foreground">{activeCampaign.name}</h3>
+                    <p className="text-[11px] text-muted-foreground">
+                      {activeCampaign.products.length} products in this campaign
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  {activeCampaign.products.map((product) => {
+                    const isSelected = selectedProduct?.id === product.id;
+                    return (
+                      <button
+                        key={product.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedProduct(product);
+                          setPickerOpen(false);
+                        }}
+                        className={`flex gap-3 p-3 rounded-lg border text-left transition-all hover:bg-accent cursor-pointer ${
+                          isSelected
+                            ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20"
+                            : "border-border bg-card"
+                        }`}
+                      >
+                        <div className="h-12 w-12 shrink-0 rounded-md bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-2xl">
+                          {product.thumbnail}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm text-foreground truncate">
+                            {product.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                            {product.highlights}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
