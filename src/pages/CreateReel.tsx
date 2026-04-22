@@ -337,7 +337,24 @@ const CreateReel = () => {
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
         {/* ============ LEFT: Composer (Sora-style monolith) ============ */}
-        <div className="lg:col-span-3 space-y-5">
+        <div className="lg:col-span-3 space-y-4">
+          {/* Required-product banner */}
+          {!selectedProduct && (
+            <button
+              type="button"
+              onClick={openPicker}
+              className="flex w-full items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-left transition-colors hover:bg-primary/10"
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <ShoppingBag className="h-4 w-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-foreground">Select a product to feature <span className="text-primary">· Required</span></p>
+                <p className="text-[11px] text-muted-foreground">Shoppable Reels need a product so viewers can tap to buy.</p>
+              </div>
+              <span className="rounded-full bg-primary/15 px-3 py-1 text-[11px] font-medium text-primary">Choose product</span>
+            </button>
+          )}
           {/* THE MONOLITH */}
           <div className="relative rounded-3xl border border-border bg-card shadow-elevated overflow-hidden group focus-within:border-primary/30 transition-colors">
             {/* subtle glow */}
