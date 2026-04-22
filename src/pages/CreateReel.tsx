@@ -678,6 +678,35 @@ const CreateReel = () => {
         </div>
       </div>
 
+      {/* Fullscreen Video Preview Dialog */}
+      <Dialog open={isFullscreen} onOpenChange={setIsFullscreen}>
+        <DialogContent className="max-w-none w-screen h-screen sm:rounded-none border-0 bg-background/95 backdrop-blur-xl p-0 flex items-center justify-center">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Video Preview — Fullscreen</DialogTitle>
+            <DialogDescription>Preview the generated Reel at full size.</DialogDescription>
+          </DialogHeader>
+          <button
+            type="button"
+            onClick={() => setIsFullscreen(false)}
+            className="absolute top-4 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-card/80 border border-border backdrop-blur-md text-foreground hover:bg-card hover:text-primary transition-all"
+            aria-label="Close fullscreen"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div className="h-full w-full flex items-center justify-center p-4 sm:p-8">
+            <div className="h-full max-h-[calc(100vh-4rem)] aspect-[9/16]">
+              <VideoPreviewBox
+                generationStatus={generationStatus}
+                showLogo={showLogo}
+                showProduct={showProduct}
+                isPlaying={isPlaying}
+                setIsPlaying={setIsPlaying}
+              />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Product Picker Dialog */}
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
