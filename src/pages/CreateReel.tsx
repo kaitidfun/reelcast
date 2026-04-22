@@ -473,6 +473,78 @@ const CreateReel = () => {
 
         </div>
       </div>
+
+      {/* Product Picker Dialog */}
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2">
+              <FolderOpen className="h-5 w-5 text-primary" />
+              Select Product
+            </DialogTitle>
+            <DialogDescription>
+              Browse your campaigns and pick a product to feature in this Reel.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="overflow-y-auto -mx-6 px-6 pb-1">
+            <Accordion
+              type="single"
+              collapsible
+              defaultValue={productLibrary[0]?.id}
+              className="w-full"
+            >
+              {productLibrary.map((campaign) => (
+                <AccordionItem key={campaign.id} value={campaign.id} className="border-border">
+                  <AccordionTrigger className="hover:no-underline">
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                      <Folder className="h-4 w-4 text-primary shrink-0" />
+                      <span className="font-medium text-foreground truncate">{campaign.name}</span>
+                      <Badge variant="secondary" className="ml-1 shrink-0">
+                        {campaign.products.length}
+                      </Badge>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      {campaign.products.map((product) => {
+                        const isSelected = selectedProduct?.id === product.id;
+                        return (
+                          <button
+                            key={product.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedProduct(product);
+                              setPickerOpen(false);
+                            }}
+                            className={`flex gap-3 p-3 rounded-lg border text-left transition-all hover:bg-accent cursor-pointer ${
+                              isSelected
+                                ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20"
+                                : "border-border bg-card"
+                            }`}
+                          >
+                            <div className="h-12 w-12 shrink-0 rounded-md bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-2xl object-cover">
+                              {product.thumbnail}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm text-foreground truncate">
+                                {product.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                                {product.highlights}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
