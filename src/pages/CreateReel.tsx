@@ -422,15 +422,39 @@ const CreateReel = () => {
 
             {/* Chip toolbar */}
             <div className="px-4 pb-3 flex flex-wrap items-center gap-1.5">
-              {/* Attach reference */}
+              {/* Product library — REQUIRED, prominent */}
               <button
                 type="button"
-                onClick={handleAttachReference}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5 transition-colors"
+                onClick={openPicker}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors ${
+                  selectedProduct
+                    ? "border border-border bg-muted/40 text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5"
+                    : "border border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
+                }`}
               >
-                <Paperclip className="h-3.5 w-3.5" />
-                Reference
+                <FolderOpen className="h-3.5 w-3.5" />
+                {selectedProduct ? "Change product" : "Product"}
+                {!selectedProduct && <span className="ml-0.5 size-1.5 rounded-full bg-destructive" aria-hidden />}
               </button>
+
+              {/* Attach reference — OPTIONAL, dashed */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handleAttachReference}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border/70 bg-transparent px-3 py-1.5 text-xs text-muted-foreground/80 hover:text-foreground hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                  >
+                    <Paperclip className="h-3.5 w-3.5" />
+                    + Reference
+                    <span className="ml-1 rounded-full border border-border/60 px-1.5 py-px text-[9px] uppercase tracking-wider text-muted-foreground/70">Optional</span>
+                    <Info className="h-3 w-3 text-muted-foreground/50" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[240px] text-xs">
+                  Attach a clip or image as a style reference. Leave empty to generate from prompt only.
+                </TooltipContent>
+              </Tooltip>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -438,16 +462,6 @@ const CreateReel = () => {
                 hidden
                 onChange={handleReferenceChange}
               />
-
-              {/* Product library */}
-              <button
-                type="button"
-                onClick={openPicker}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5 transition-colors"
-              >
-                <FolderOpen className="h-3.5 w-3.5" />
-                {selectedProduct ? "Change product" : "Product library"}
-              </button>
 
               {/* Aspect popover */}
               <Popover>
