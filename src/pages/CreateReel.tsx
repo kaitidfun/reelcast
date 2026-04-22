@@ -97,6 +97,23 @@ const CreateReel = () => {
   const [bgMusic, setBgMusic] = useState("trendy");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [cameraMotion, setCameraMotion] = useState("auto");
+  const [lighting, setLighting] = useState("auto");
+  const [enhancing, setEnhancing] = useState(false);
+
+  const handleEnhancePrompt = () => {
+    if (!promptText.trim()) {
+      toast({ title: "Add a prompt first", description: "Type a brief idea before enhancing." });
+      return;
+    }
+    setEnhancing(true);
+    setTimeout(() => {
+      setPromptText(
+        `Create a cinematic 30-second vertical Reel: ${promptText.trim()}. Use dynamic camera moves, premium lighting, hero product close-ups, vibrant color grading, and crisp on-screen text overlays that highlight key benefits. End with a strong call-to-action.`,
+      );
+      setEnhancing(false);
+      toast({ title: "Prompt enhanced ✨", description: "Refined into a professional creative brief." });
+    }, 900);
+  };
   const [credits] = useState(120);
   const generateCost = 5;
   const [pickerOpen, setPickerOpen] = useState(false);
