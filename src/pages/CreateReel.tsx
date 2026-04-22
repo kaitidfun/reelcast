@@ -188,7 +188,7 @@ const CreateReel = () => {
         <p className="mt-1 text-muted-foreground">Generate commercial Reels with AI — Gemini + Veo + FFmpeg</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5 items-start">
         {/* Left Column */}
         <div className="lg:col-span-3 space-y-5">
           {/* Input Type */}
@@ -451,7 +451,7 @@ const CreateReel = () => {
         </div>
 
         {/* Right Column */}
-        <div className="lg:col-span-2 space-y-5">
+        <div className="lg:col-span-2 space-y-5 lg:sticky lg:top-6 lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
           {/* Generate Button */}
           <div className="space-y-2">
             <Button
