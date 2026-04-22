@@ -1,100 +1,68 @@
 
+# Create Reel — Real-World AI Studio Redesign
 
-## Goal
-Enhance `src/pages/ContentLibrary.tsx` with:
-1. **Search + filter + view toggle (Grid/List)** on both Campaigns view and Products view.
-2. **Campaign cards** show a **mini grid of product thumbnails** inside (preview of contents).
-3. **Products view** gets a **Grid mode** (cards) in addition to the existing List/Table mode, where each product card shows status, reel count, and a **"Create Reel"** button that navigates to the Reel Studio prefilled with that product.
+ปรับหน้า Create Reel ให้เหมือนเครื่องมือ AI Video จริง (Sora / Runway / Kling / Veo) — Prompt เป็นหัวใจหลัก, Upload Reel กลายเป็น **optional add-on** ไม่ใช่โหมดแยก
 
----
+## Core Concept Change
 
-## 1. Shared State Additions (top of `ContentLibrary.tsx`)
-```ts
-const [campaignSearch, setCampaignSearch] = useState("");
-const [campaignView, setCampaignView] = useState<"grid" | "list">("grid");
-const [productView, setProductView] = useState<"grid" | "list">("grid"); // default Grid per request
-```
-Existing `search` + `statusFilter` stay (used in Products view).
-
-Add `reelsGenerated: number` to the `Product` type and seed each mock product with a value (0–8). Keep `Campaign.reelsCount` as the sum.
+**ก่อน:** Toggle 2 ปุ่ม — "Prompt" หรือ "Upload Reel" (เลือกอย่างใดอย่างหนึ่ง)
+**หลัง:** Prompt **อยู่ตลอดเวลา** + ช่อง Upload เป็น optional reference (เช่น "อิงสไตล์จากคลิปนี้" หรือ "remix จากวิดีโอเก่า")
 
 ---
 
-## 2. Campaigns View — State 1
+## เลือก 1 ใน 3 แบบ (ฉันจะส่ง prototype ให้ดูก่อนทำจริง)
 
-**Toolbar row** (above the grid, below the header):
-- `Input` with `Search` icon — placeholder "Search campaigns…", filters by `name` + `description` (case-insensitive).
-- **View toggle** on the right: shadcn `ToggleGroup` (single, `type="single"`) with two items — `LayoutGrid` icon (grid) and `List` icon (list). Bound to `campaignView`.
+### Option A — "Sora-style" Hero Composer
+- Prompt เป็น **textarea ขนาดใหญ่กลางจอ** เหมือน ChatGPT / Sora
+- ใต้ prompt มี **toolbar แถวเดียว** (chip-style): 📎 Attach Reference · 🎨 Style · ⏱️ Duration · 📐 Aspect · 🎬 Camera · 🔊 Audio
+- กด chip ไหน popover เด้งให้เลือก
+- Upload กลายเป็นปุ่ม 📎 ใน toolbar — กดแล้วโชว์ thumbnail เล็กๆ ติดอยู่บน prompt
+- Settings เก่าทั้งหมดยุบเข้า toolbar/popover → หน้าโล่งสุด
+- Quick Templates เป็น chip ด้านล่าง prompt
 
-**Empty state**: muted "No campaigns match your search."
+### Option B — "Runway-style" Split Composer
+- Prompt textarea เด่นด้านบน + ปุ่ม ✨ Enhance / 🎲 Surprise me
+- ใต้ prompt มี **"Reference (optional)" dropzone แบบ collapsed** — โชว์เป็นแถบบางๆ "+ Add reference video/image" กดแล้วขยาย
+- ขวามือเป็น **panel settings แบบ stacked cards** — Style / Duration / Audio / Advanced
+- Product Library เป็น **chip ติดบน prompt** ("📦 Summer Dress") ลบออกได้
+- ปุ่ม Generate ใหญ่ติด sticky ด้านล่าง
 
-**Campaign Card — Grid mode** (existing card, enhanced):
-- Keep folder-tab styling, name, description, stats.
-- **Add a mini product thumbnail grid** below the description:
-  - `grid grid-cols-4 gap-1.5 mt-4`
-  - Show first 4 products as `h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xl` cells (emoji thumbnails).
-  - If more than 4 products, the 4th cell shows `+N` overlay (e.g. `+3`) instead of an emoji.
-  - If 0 products, render 4 empty dashed placeholder cells.
-- Stats row stays below the mini-grid.
-
-**Campaign Card — List mode**:
-- Horizontal layout: `flex items-center gap-4 p-4 rounded-2xl border bg-card hover:border-primary/30`.
-- Left: small `FolderOpen` gradient tile (`h-10 w-10`).
-- Middle: name + description (truncate) + stats inline (`Package` count · `Video` count).
-- Right: small horizontal strip of up to 4 thumbnails (`flex -space-x-2`) + `ChevronRight`.
-- Click → open campaign (same handler).
-
----
-
-## 3. Products View — State 2
-
-**Toolbar** (extend existing):
-- Existing search input + status `Select`.
-- **Add view toggle** on the right: same `ToggleGroup` pattern, bound to `productView`. Default = `grid`.
-
-**Grid mode** (new, default):
-- `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5`.
-- **Product Card** (`motion.div`):
-  - `rounded-2xl border border-border bg-card overflow-hidden card-shine hover:border-primary/30 hover:shadow-elevated transition-all`.
-  - **Top media area**: `aspect-video bg-muted flex items-center justify-center text-5xl relative`
-    - Renders the emoji thumbnail at large size.
-    - Top-right corner: `Badge` with status (Active = success, Draft = warning).
-    - Top-left corner: small pill `bg-background/70 backdrop-blur text-xs` showing `<Video className="h-3 w-3" /> {reelsGenerated} reels`.
-  - **Body** (`p-4 space-y-3`):
-    - Product name (`font-semibold text-foreground line-clamp-1`).
-    - Key selling points (`text-xs text-muted-foreground line-clamp-2`).
-    - Footer row (`flex items-center justify-between gap-2 pt-2`):
-      - Left: ghost icon button `Link2` (copy affiliate link, disabled if empty) + ghost icon `MoreVertical` dropdown with Edit/Delete.
-      - Right: **`Create Reel`** button — `size="sm"`, gradient-primary, `Sparkles` icon, navigates to `/create` with state `{ productId, productName, campaignId }` via `useNavigate`.
-
-**List mode**:
-- Existing `Table` layout, plus:
-  - Add a new column **"Reels"** (between Status and Actions): shows `<Video className="h-3.5 w-3.5" /> {reelsGenerated}` in muted text.
-  - Add a new column **"Create"** (before Actions, width ~120px): renders a small gradient-primary button `Create Reel` with `Sparkles` icon → same nav handler as Grid mode.
-- Adjust `colSpan` of empty state row to new total (8).
+### Option C — "Kling-style" Tabbed Modes
+- Header tabs: **Text-to-Video** (default) · **Image-to-Video** · **Video-to-Video**
+- ทุก tab มี prompt เหมือนกัน — tab ต่างกันแค่ "input ที่แนบเพิ่ม" (รูป / วิดีโอ)
+- Upload อยู่ใน tab Image/Video-to-Video เท่านั้น (optional ตาม tab)
+- Settings panel เดียวใช้ร่วมกันทุก tab
+- Visual: tabs เป็น pill-style ด้านบน prompt
 
 ---
 
-## 4. Create Reel Handler
-```ts
-const navigate = useNavigate();
-const handleCreateReel = (product: Product) => {
-  navigate("/create", { state: { productId: product.id, productName: product.name, campaignId: currentCampaign?.id } });
-};
-```
-The Reel Studio (`/create`) doesn't need to consume this state today — passing it forward is forward-compatible and the route already exists.
+## Common Improvements (ทำเหมือนกันทั้ง 3 แบบ)
+
+1. **ลบ "Input Source" toggle เดิม** — Prompt ไม่ใช่ตัวเลือกอีกต่อไป มันคือ default
+2. **Upload = Optional Reference** — แนบ clip/image เป็น style reference ไม่ใช่แทน prompt
+3. **Aspect Ratio selector** เพิ่มใหม่ (9:16 / 1:1 / 16:9) — ของจริง AI gen ทุกตัวมี
+4. **Seed number** field ใน Advanced — สำหรับ reproducibility
+5. **Resolution selector** (480p / 720p / 1080p) — ผูกกับ credit cost (1080p แพงกว่า)
+6. **Dynamic credit cost** — ราคาเปลี่ยนตาม duration × resolution × voiceover (เช่น 5 → 12 credits)
+7. **History strip** ด้านล่าง — thumbnail รีลที่เพิ่ง gen 3-4 ตัวล่าสุด คลิก preview ได้
+8. **"Surprise me 🎲"** ปุ่มข้างๆ Enhance — สุ่ม prompt creative
 
 ---
 
-## 5. New Imports
-- Lucide: add `LayoutGrid`, `List`, `Sparkles`.
-- shadcn: `ToggleGroup`, `ToggleGroupItem` from `@/components/ui/toggle-group` (already in project).
-- React Router: `useNavigate` from `react-router-dom`.
+## Technical Details
+
+- ไฟล์เดียว: `src/pages/CreateReel.tsx`
+- State ใหม่: `referenceFile` (File | null), `aspectRatio`, `resolution`, `seed`, `history[]`
+- ลบ state `inputType` (ไม่จำเป็นแล้ว) — Option C จะใช้ `mode` แทน
+- ใช้ shadcn `Popover` สำหรับ chip toolbar (Option A), `Tabs` สำหรับ Option C
+- Credit cost คำนวณแบบ memoized: `useMemo(() => base + durationCost + resCost, [duration, resolution, voiceover])`
+- Reference upload: file input ซ่อน + button trigger, preview thumbnail แบบ removable chip
+- ไม่แตะ Right Column (Preview) — คงไว้เหมือนเดิม
 
 ---
 
-## Files to Edit
-- **Edit** `src/pages/ContentLibrary.tsx` — add search/filter/view-toggle to Campaigns view, add product thumbnail mini-grid to campaign cards, add Grid mode + reel count + Create Reel button in Products view (both Grid and List).
+## Next Step
 
-No new dependencies. No route changes. No backend changes.
+ฉันจะสร้าง **3 prototypes** (HTML mockup เห็นภาพจริง) ให้ดูเลือกก่อน แล้วค่อย implement ตัวที่ชอบ
 
+**กดอนุมัติ plan นี้** → ฉันจะเปิด default mode แล้ว generate prototype ทั้ง 3 แบบให้เลือกผ่าน `ask_questions` (type: prototype) ก่อนลงมือแก้โค้ดจริง
