@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Upload, Type, Sparkles, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash, Lightbulb, Play, Pause, Volume2, ShoppingBag, Folder, FolderOpen, ChevronRight, ChevronLeft } from "lucide-react";
+import { Upload, Type, Sparkles, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash, Lightbulb, Play, Pause, Volume2, ShoppingBag, Folder, FolderOpen, ChevronRight, ChevronLeft, Maximize2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
