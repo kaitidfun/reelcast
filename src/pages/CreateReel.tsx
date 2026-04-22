@@ -82,6 +82,8 @@ const CreateReel = () => {
   const [showLogo, setShowLogo] = useState(true);
   const [showProduct, setShowProduct] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<LibraryProduct | null>(null);
   const { toast } = useToast();
 
   const inputOptions = [
