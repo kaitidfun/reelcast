@@ -649,82 +649,69 @@ const CreateReel = () => {
             </div>
           </div>
 
-          {/* Quick templates strip */}
-          <div className="space-y-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Quick prompts</p>
-            <div className="flex flex-wrap gap-2">
-              {promptTemplates.map((t) => (
-                <button
-                  key={t.label}
-                  onClick={() => setPromptText(t.prompt)}
-                  className="rounded-full border border-border bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-foreground transition-all"
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* History strip */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Recent outputs</p>
-              <button className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground">View all</button>
-            </div>
-            <div className="flex gap-3 overflow-x-auto pb-2">
-              {mockHistory.map((h) => (
-                <button
-                  key={h.id}
-                  className={`relative h-24 w-16 shrink-0 overflow-hidden rounded-xl border border-border bg-gradient-to-br ${h.gradient} flex items-center justify-center text-3xl ring-1 ring-inset ring-white/5 hover:ring-primary/40 hover:-translate-y-0.5 transition-all`}
-                  title={`Reel · ${h.duration}`}
-                >
-                  <span className="drop-shadow">{h.emoji}</span>
-                  <span className="absolute bottom-1 left-1 right-1 rounded-md bg-black/50 backdrop-blur px-1 py-0.5 text-[9px] font-mono text-white text-center">{h.duration}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Overlays + platforms (compact card) */}
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
-            <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">Output settings</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-xs font-medium text-foreground">Brand Logo</span>
+          {/* Collapsed extras: Quick prompts + Output settings */}
+          <Accordion type="multiple" className="rounded-2xl border border-border bg-card/40 px-4">
+            <AccordionItem value="prompts" className="border-b border-border/60">
+              <AccordionTrigger className="py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:no-underline">
+                Quick prompts
+              </AccordionTrigger>
+              <AccordionContent className="pb-3">
+                <div className="flex flex-wrap gap-2">
+                  {promptTemplates.map((t) => (
+                    <button
+                      key={t.label}
+                      onClick={() => setPromptText(t.prompt)}
+                      className="rounded-full border border-border bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-foreground transition-all"
+                    >
+                      {t.label}
+                    </button>
+                  ))}
                 </div>
-                <Switch checked={showLogo} onCheckedChange={setShowLogo} />
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
-                <div className="flex items-center gap-2">
-                  <ShoppingBag className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-xs font-medium text-foreground">Product Overlay</span>
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="output" className="border-b-0">
+              <AccordionTrigger className="py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:no-underline">
+                Output settings & platforms
+              </AccordionTrigger>
+              <AccordionContent className="pb-3 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-3.5 w-3.5 text-primary" />
+                      <span className="text-xs font-medium text-foreground">Brand Logo</span>
+                    </div>
+                    <Switch checked={showLogo} onCheckedChange={setShowLogo} />
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                      <span className="text-xs font-medium text-foreground">Product Overlay</span>
+                    </div>
+                    <Switch checked={showProduct} onCheckedChange={setShowProduct} />
+                  </div>
                 </div>
-                <Switch checked={showProduct} onCheckedChange={setShowProduct} />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-foreground">Target Platforms</label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {platformOptions.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => togglePlatform(p.id)}
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition-all ${
-                      selectedPlatforms.includes(p.id)
-                        ? "border-primary/40 bg-primary/5 text-foreground ring-1 ring-primary/20"
-                        : "border-border text-muted-foreground hover:border-primary/20"
-                    }`}
-                  >
-                    <span>{p.icon}</span>
-                    <span className="truncate">{p.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-foreground">Target Platforms</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {platformOptions.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => togglePlatform(p.id)}
+                        className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition-all ${
+                          selectedPlatforms.includes(p.id)
+                            ? "border-primary/40 bg-primary/5 text-foreground ring-1 ring-primary/20"
+                            : "border-border text-muted-foreground hover:border-primary/20"
+                        }`}
+                      >
+                        <span>{p.icon}</span>
+                        <span className="truncate">{p.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
 
           {/* Publish */}
           {generationStatus === "done" && (
