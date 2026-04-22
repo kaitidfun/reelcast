@@ -320,11 +320,12 @@ const CreateReel = () => {
   const musicLabel = musicOptions.find((m) => m.value === bgMusic)?.label ?? bgMusic;
 
   return (
-    <div className="space-y-6">
+    <TooltipProvider delayDuration={150}>
+    <div className="space-y-4">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Create Reel</h1>
-          <p className="mt-1 text-muted-foreground">Describe what you want — AI handles the rest. Powered by Gemini + Veo.</p>
+          <p className="text-xs text-muted-foreground">Describe what you want — AI handles the rest. Powered by Gemini + Veo.</p>
         </div>
         <div className="flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs font-mono text-muted-foreground backdrop-blur">
           <span className="size-1.5 rounded-full bg-success animate-pulse" />
@@ -334,7 +335,7 @@ const CreateReel = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
         {/* ============ LEFT: Composer (Sora-style monolith) ============ */}
         <div className="lg:col-span-3 space-y-5">
           {/* THE MONOLITH */}
