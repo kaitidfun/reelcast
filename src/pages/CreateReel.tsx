@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Upload, Type, Sparkles, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash, Lightbulb, Play, Pause, Volume2, ShoppingBag, Folder, FolderOpen, ChevronRight, ArrowLeft } from "lucide-react";
+import { Upload, Type, Sparkles, Video, Wand2, Send, Check, Loader2, Brain, Film, Scissors, RefreshCw, Hash, Lightbulb, Play, Pause, Volume2, ShoppingBag, Folder, FolderOpen, ChevronRight, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -513,7 +513,7 @@ const CreateReel = () => {
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Browse Campaigns
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
                   {productLibrary.map((campaign) => (
                     <button
                       key={campaign.id}
@@ -546,23 +546,15 @@ const CreateReel = () => {
 
             {pickerView === "products" && activeCampaign && (
               <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
+                <div className="flex items-center">
+                  <ChevronLeft
+                    className="w-5 h-5 mr-2 cursor-pointer hover:text-primary transition-colors text-muted-foreground"
                     onClick={() => {
                       setPickerView("campaigns");
                       setActiveCampaignId(null);
                     }}
-                    className="gap-1.5 -ml-2"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                    Back to Campaigns
-                  </Button>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <div className={`h-10 w-10 rounded-md bg-gradient-to-br ${activeCampaign.banner} flex items-center justify-center text-xl`}>
+                  />
+                  <div className={`h-10 w-10 rounded-md bg-gradient-to-br ${activeCampaign.banner} flex items-center justify-center text-xl mr-2.5`}>
                     {activeCampaign.emoji}
                   </div>
                   <div>
