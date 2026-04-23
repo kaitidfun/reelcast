@@ -197,6 +197,7 @@ const CreateReel = () => {
   const [showLogo, setShowLogo] = useState(true);
   const [showProduct, setShowProduct] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [credits] = useState(120);
 
   // Product picker
