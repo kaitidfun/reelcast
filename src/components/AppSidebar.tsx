@@ -40,9 +40,9 @@ const RailContent = () => {
         <Tooltip>
           <TooltipTrigger asChild>
             <NavLink
-              to="/home"
+              to="/"
               className={`flex h-10 w-10 items-center justify-center rounded-xl gradient-primary shadow-glow transition-transform duration-200 hover:scale-105 ${
-                location.pathname === "/home" ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-sidebar" : ""
+                location.pathname === "/" ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-sidebar" : ""
               }`}
               aria-label="Home"
             >
