@@ -862,7 +862,7 @@ const CreateReel = () => {
                 </div>
               </div>
 
-              {/* Inline pipeline (compact dots) */}
+              {/* Compact progress bar */}
               {generationStatus !== "idle" && (
                 <div className="mt-3 flex items-center justify-center gap-1.5 px-2">
                   {generationTasks.map((task, i) => {
@@ -879,6 +879,58 @@ const CreateReel = () => {
                 </div>
               )}
             </div>
+
+            {/* Real-time generation pipeline (detailed list — visible during generating) */}
+            {generationStatus === "generating" && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-border bg-card p-3 shadow-card space-y-2"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Loader2 className="h-3 w-3 text-primary animate-spin" />
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI Pipeline · Live</p>
+                  </div>
+                  <span className="text-[9px] font-mono text-muted-foreground">~{Math.max(1, 4 - Math.floor(Date.now() / 1000) % 4)}s</span>
+                </div>
+                <div className="space-y-1.5">
+                  {generationTasks.map((task, i) => {
+                    const Icon = task.icon;
+                    const isDone = i < 2;
+                    const isActive = i === 2;
+                    const isPending = i > 2;
+                    return (
+                      <div
+                        key={i}
+                        className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-all ${
+                          isActive ? "bg-primary/5 ring-1 ring-primary/20" : ""
+                        }`}
+                      >
+                        <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
+                          isDone ? "bg-success/15 text-success" :
+                          isActive ? "bg-primary/15 text-primary" :
+                          "bg-muted text-muted-foreground/50"
+                        }`}>
+                          {isDone ? <Check className="h-3 w-3" /> :
+                           isActive ? <Loader2 className="h-3 w-3 animate-spin" /> :
+                           <Icon className="h-3 w-3" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-[11px] font-medium leading-tight truncate ${
+                            isPending ? "text-muted-foreground" : "text-foreground"
+                          }`}>{task.label}</p>
+                          <p className="text-[9px] text-muted-foreground leading-tight">{task.detail}</p>
+                        </div>
+                        {isActive && (
+                          <span className="text-[9px] font-mono text-primary animate-pulse">running</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
 
             {/* Caption + Actions (only when done) */}
             {generationStatus === "done" ? (
