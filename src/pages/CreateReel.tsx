@@ -956,8 +956,8 @@ const CreateReel = () => {
                   </Button>
                 </div>
               </motion.div>
-            ) : (
-              /* Live Spec card (idle / generating) */
+            ) : generationStatus === "idle" ? (
+              /* Live Spec card (idle only) */
               <div className="rounded-2xl border border-border bg-card p-3 shadow-card">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Generation spec</p>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
@@ -969,7 +969,7 @@ const CreateReel = () => {
                   <div className="flex justify-between"><span className="text-muted-foreground">Aspect</span><span className="text-foreground font-medium">{aspectRatio}</span></div>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
