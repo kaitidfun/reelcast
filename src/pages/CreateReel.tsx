@@ -401,17 +401,62 @@ const CreateReel = () => {
             <div className="pointer-events-none absolute inset-0 opacity-0 group-focus-within:opacity-100 transition-opacity duration-700"
                  style={{ background: "radial-gradient(ellipse at top, hsl(var(--primary) / 0.08), transparent 60%)" }} />
 
-            {/* Prompt header label */}
-            <div className="flex items-center justify-between px-5 pt-4 pb-1">
-              <div className="flex items-center gap-2">
+            {/* Prompt header label + Reference widget (optional, top-right, dashed) */}
+            <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-1">
+              <div className="flex items-center gap-2 pt-1">
                 <Wand2 className="h-3.5 w-3.5 text-primary" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-foreground">Prompt</span>
                 <span className="rounded-full bg-primary/10 text-primary text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 ring-1 ring-primary/20">Required</span>
               </div>
+
+              {/* Reference — Optional, dashed border, distinct from required blocks */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*"
+                hidden
+                onChange={handleReferenceChange}
+              />
+              {referenceFile ? (
+                <div className="flex items-center gap-2 rounded-xl border border-dashed border-muted-foreground/40 bg-muted/20 p-1.5 pr-2 max-w-[220px]">
+                  <div className="h-8 w-8 shrink-0 rounded-md overflow-hidden bg-muted ring-1 ring-border flex items-center justify-center">
+                    {referencePreview && referenceFile.type.startsWith("image/") ? (
+                      <img src={referencePreview} alt="reference" className="h-full w-full object-cover" />
+                    ) : referencePreview && referenceFile.type.startsWith("video/") ? (
+                      <video src={referencePreview} className="h-full w-full object-cover" muted />
+                    ) : (
+                      <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-medium text-foreground truncate leading-tight">{referenceFile.name}</p>
+                    <p className="text-[9px] text-muted-foreground leading-tight">Reference · optional</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeReference}
+                    className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    aria-label="Remove reference"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleAttachReference}
+                  className="group inline-flex items-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/40 bg-transparent px-2.5 py-1.5 text-[10px] text-muted-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all"
+                  title="Attach an image or short clip — AI mimics its look. Skip if not needed."
+                >
+                  <Paperclip className="h-3 w-3" />
+                  <span className="font-medium">+ Reference</span>
+                  <span className="text-[9px] text-muted-foreground/70 group-hover:text-primary/70 hidden sm:inline">optional</span>
+                </button>
+              )}
             </div>
 
             {/* Prompt textarea */}
-            <div className="px-5 pt-4 pb-2">
+            <div className="px-5 pt-3 pb-2">
               <Textarea
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
