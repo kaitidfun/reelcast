@@ -24,6 +24,7 @@ import {
   X,
   Shuffle,
   Maximize2,
+  Expand,
   Clock,
   Camera,
   Music2,
@@ -196,6 +197,7 @@ const CreateReel = () => {
   const [showLogo, setShowLogo] = useState(true);
   const [showProduct, setShowProduct] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [credits] = useState(120);
 
   // Product picker
@@ -399,17 +401,62 @@ const CreateReel = () => {
             <div className="pointer-events-none absolute inset-0 opacity-0 group-focus-within:opacity-100 transition-opacity duration-700"
                  style={{ background: "radial-gradient(ellipse at top, hsl(var(--primary) / 0.08), transparent 60%)" }} />
 
-            {/* Prompt header label */}
-            <div className="flex items-center justify-between px-5 pt-4 pb-1">
-              <div className="flex items-center gap-2">
+            {/* Prompt header label + Reference widget (optional, top-right, dashed) */}
+            <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-1">
+              <div className="flex items-center gap-2 pt-1">
                 <Wand2 className="h-3.5 w-3.5 text-primary" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-foreground">Prompt</span>
                 <span className="rounded-full bg-primary/10 text-primary text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 ring-1 ring-primary/20">Required</span>
               </div>
+
+              {/* Reference — Optional, dashed border, distinct from required blocks */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*"
+                hidden
+                onChange={handleReferenceChange}
+              />
+              {referenceFile ? (
+                <div className="flex items-center gap-2 rounded-xl border border-dashed border-muted-foreground/40 bg-muted/20 p-1.5 pr-2 max-w-[220px]">
+                  <div className="h-8 w-8 shrink-0 rounded-md overflow-hidden bg-muted ring-1 ring-border flex items-center justify-center">
+                    {referencePreview && referenceFile.type.startsWith("image/") ? (
+                      <img src={referencePreview} alt="reference" className="h-full w-full object-cover" />
+                    ) : referencePreview && referenceFile.type.startsWith("video/") ? (
+                      <video src={referencePreview} className="h-full w-full object-cover" muted />
+                    ) : (
+                      <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-medium text-foreground truncate leading-tight">{referenceFile.name}</p>
+                    <p className="text-[9px] text-muted-foreground leading-tight">Reference · optional</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeReference}
+                    className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    aria-label="Remove reference"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleAttachReference}
+                  className="group inline-flex items-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/40 bg-transparent px-2.5 py-1.5 text-[10px] text-muted-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all"
+                  title="Attach an image or short clip — AI mimics its look. Skip if not needed."
+                >
+                  <Paperclip className="h-3 w-3" />
+                  <span className="font-medium">+ Reference</span>
+                  <span className="text-[9px] text-muted-foreground/70 group-hover:text-primary/70 hidden sm:inline">optional</span>
+                </button>
+              )}
             </div>
 
             {/* Prompt textarea */}
-            <div className="px-5 pt-4 pb-2">
+            <div className="px-5 pt-3 pb-2">
               <Textarea
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
@@ -420,13 +467,6 @@ const CreateReel = () => {
 
             {/* Chip toolbar */}
             <div className="px-4 pb-3 flex flex-wrap items-center gap-1.5">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,video/*"
-                hidden
-                onChange={handleReferenceChange}
-              />
 
               {/* Aspect popover */}
               <Popover>
@@ -661,59 +701,6 @@ const CreateReel = () => {
             </div>
           </div>
 
-          {/* REFERENCE — OPTIONAL block (visually distinct: dashed) */}
-          <div className="rounded-2xl border border-dashed border-border bg-muted/10 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-dashed border-border bg-muted/20">
-              <div className="flex items-center gap-2">
-                <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reference</span>
-                <span className="rounded-full bg-muted text-muted-foreground text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 ring-1 ring-border">Optional</span>
-              </div>
-              <span className="text-[10px] text-muted-foreground/70 italic hidden sm:inline">For style guidance only</span>
-            </div>
-            <div className="p-3">
-              {referenceFile ? (
-                <div className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-card/50 p-2.5">
-                  <div className="h-12 w-12 shrink-0 rounded-lg overflow-hidden bg-muted ring-1 ring-border flex items-center justify-center">
-                    {referencePreview && referenceFile.type.startsWith("image/") ? (
-                      <img src={referencePreview} alt="reference" className="h-full w-full object-cover" />
-                    ) : referencePreview && referenceFile.type.startsWith("video/") ? (
-                      <video src={referencePreview} className="h-full w-full object-cover" muted />
-                    ) : (
-                      <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-foreground truncate">{referenceFile.name}</p>
-                    <p className="text-[10px] text-muted-foreground">Style reference attached</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={removeReference}
-                    className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                    aria-label="Remove reference"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleAttachReference}
-                  className="flex w-full items-center gap-3 rounded-xl border border-dashed border-border/70 bg-transparent px-4 py-3 text-left hover:border-primary/40 hover:bg-primary/5 transition-all group"
-                >
-                  <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
-                    <Paperclip className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-medium text-foreground">Add a style reference <span className="text-muted-foreground font-normal">(optional)</span></p>
-                    <p className="text-[10px] text-muted-foreground">Upload an image or video — AI mimics its look & feel. Skip if not needed.</p>
-                  </div>
-                </button>
-              )}
-            </div>
-          </div>
-
           {/* Overlays + platforms (compact card) */}
           <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
             <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">Output settings</h2>
@@ -829,6 +816,17 @@ const CreateReel = () => {
                           {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white ml-0.5" />}
                         </div>
                       </button>
+
+                      {/* Fullscreen button */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setFullscreenOpen(true); }}
+                        className="absolute top-2.5 left-2.5 flex h-7 w-7 items-center justify-center rounded-md bg-black/50 backdrop-blur-md ring-1 ring-white/15 hover:bg-black/70 transition-all z-10"
+                        aria-label="Expand fullscreen"
+                        title="Open fullscreen"
+                      >
+                        <Expand className="h-3.5 w-3.5 text-white" />
+                      </button>
+
                       <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[9px] text-white/80 font-mono">0:08</span>
@@ -864,7 +862,7 @@ const CreateReel = () => {
                 </div>
               </div>
 
-              {/* Inline pipeline (compact dots) */}
+              {/* Compact progress bar */}
               {generationStatus !== "idle" && (
                 <div className="mt-3 flex items-center justify-center gap-1.5 px-2">
                   {generationTasks.map((task, i) => {
@@ -881,6 +879,58 @@ const CreateReel = () => {
                 </div>
               )}
             </div>
+
+            {/* Real-time generation pipeline (detailed list — visible during generating) */}
+            {generationStatus === "generating" && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-border bg-card p-3 shadow-card space-y-2"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Loader2 className="h-3 w-3 text-primary animate-spin" />
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI Pipeline · Live</p>
+                  </div>
+                  <span className="text-[9px] font-mono text-muted-foreground">~{Math.max(1, 4 - Math.floor(Date.now() / 1000) % 4)}s</span>
+                </div>
+                <div className="space-y-1.5">
+                  {generationTasks.map((task, i) => {
+                    const Icon = task.icon;
+                    const isDone = i < 2;
+                    const isActive = i === 2;
+                    const isPending = i > 2;
+                    return (
+                      <div
+                        key={i}
+                        className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-all ${
+                          isActive ? "bg-primary/5 ring-1 ring-primary/20" : ""
+                        }`}
+                      >
+                        <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
+                          isDone ? "bg-success/15 text-success" :
+                          isActive ? "bg-primary/15 text-primary" :
+                          "bg-muted text-muted-foreground/50"
+                        }`}>
+                          {isDone ? <Check className="h-3 w-3" /> :
+                           isActive ? <Loader2 className="h-3 w-3 animate-spin" /> :
+                           <Icon className="h-3 w-3" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-[11px] font-medium leading-tight truncate ${
+                            isPending ? "text-muted-foreground" : "text-foreground"
+                          }`}>{task.label}</p>
+                          <p className="text-[9px] text-muted-foreground leading-tight">{task.detail}</p>
+                        </div>
+                        {isActive && (
+                          <span className="text-[9px] font-mono text-primary animate-pulse">running</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
 
             {/* Caption + Actions (only when done) */}
             {generationStatus === "done" ? (
@@ -906,8 +956,8 @@ const CreateReel = () => {
                   </Button>
                 </div>
               </motion.div>
-            ) : (
-              /* Live Spec card (idle / generating) */
+            ) : generationStatus === "idle" ? (
+              /* Live Spec card (idle only) */
               <div className="rounded-2xl border border-border bg-card p-3 shadow-card">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Generation spec</p>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
@@ -919,7 +969,7 @@ const CreateReel = () => {
                   <div className="flex justify-between"><span className="text-muted-foreground">Aspect</span><span className="text-foreground font-medium">{aspectRatio}</span></div>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
@@ -1006,6 +1056,63 @@ const CreateReel = () => {
                 </div>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fullscreen Reel Preview */}
+      <Dialog open={fullscreenOpen} onOpenChange={setFullscreenOpen}>
+        <DialogContent className="max-w-[420px] p-0 bg-black border-border overflow-hidden">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Fullscreen Reel preview</DialogTitle>
+            <DialogDescription>Watch the generated Reel in fullscreen</DialogDescription>
+          </DialogHeader>
+          <div className="relative aspect-[9/16] w-full overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage:
+                  "radial-gradient(circle at 30% 40%, hsl(var(--primary) / 0.45), transparent 55%), radial-gradient(circle at 70% 75%, hsl(var(--accent) / 0.4), transparent 55%)",
+              }}
+            />
+            {showLogo && (
+              <div className="absolute top-4 right-4 flex items-center gap-1.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 px-2.5 py-1 shadow-lg">
+                <div className="h-5 w-5 rounded-md gradient-primary flex items-center justify-center">
+                  <Sparkles className="h-3 w-3 text-primary-foreground" />
+                </div>
+                <span className="text-[11px] font-bold text-white">REELCAST</span>
+              </div>
+            )}
+            {showProduct && (
+              <div className="absolute bottom-20 left-4 right-4 flex items-center gap-3 rounded-xl bg-black/55 backdrop-blur-md border border-white/10 p-3 shadow-2xl">
+                <div className="h-14 w-14 shrink-0 rounded-lg bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center text-3xl">
+                  {selectedProduct?.thumbnail ?? <ShoppingBag className="h-6 w-6 text-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{selectedProduct?.name ?? "Summer Dress"}</p>
+                  <p className="text-xs text-white/70">Tap to shop · $49.99</p>
+                </div>
+                <Button size="sm" className="gradient-primary text-primary-foreground h-8 px-3 text-xs">Shop</Button>
+              </div>
+            )}
+            <button
+              onClick={() => setIsPlaying((p) => !p)}
+              className="absolute inset-0 flex items-center justify-center group"
+              aria-label={isPlaying ? "Pause" : "Play"}
+            >
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/15 backdrop-blur-md ring-1 ring-white/25 group-hover:bg-white/25 transition-all">
+                {isPlaying ? <Pause className="h-7 w-7 text-white" /> : <Play className="h-7 w-7 text-white ml-1" />}
+              </div>
+            </button>
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-white/80 font-mono">0:08</span>
+                <div className="flex-1 h-1 rounded-full bg-white/20 overflow-hidden">
+                  <div className="h-full w-1/3 rounded-full bg-white" />
+                </div>
+                <span className="text-xs text-white/80 font-mono">0:{duration.toString().padStart(2, "0")}</span>
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
