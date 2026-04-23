@@ -132,7 +132,7 @@ const DrawerContent = ({ onNavigate }: { onNavigate: () => void }) => {
   return (
     <>
       <NavLink
-        to="/home"
+        to="/"
         onClick={onNavigate}
         className="flex items-center gap-3 px-6 py-6 hover:opacity-80 transition-opacity"
       >
@@ -210,7 +210,7 @@ export const MobileHeader = () => {
           </div>
         </SheetContent>
       </Sheet>
-      <NavLink to="/home" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+      <NavLink to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-primary shadow-glow">
           <Sparkles className="h-4 w-4 text-primary-foreground" />
         </div>
