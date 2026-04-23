@@ -667,23 +667,56 @@ const CreateReel = () => {
             </div>
           </div>
 
-          {/* History strip */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Recent outputs</p>
-              <button className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground">View all</button>
+          {/* REFERENCE — OPTIONAL block (visually distinct: dashed) */}
+          <div className="rounded-2xl border border-dashed border-border bg-muted/10 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-dashed border-border bg-muted/20">
+              <div className="flex items-center gap-2">
+                <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reference</span>
+                <span className="rounded-full bg-muted text-muted-foreground text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 ring-1 ring-border">Optional</span>
+              </div>
+              <span className="text-[10px] text-muted-foreground/70 italic hidden sm:inline">For style guidance only</span>
             </div>
-            <div className="flex gap-3 overflow-x-auto pb-2">
-              {mockHistory.map((h) => (
+            <div className="p-3">
+              {referenceFile ? (
+                <div className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-card/50 p-2.5">
+                  <div className="h-12 w-12 shrink-0 rounded-lg overflow-hidden bg-muted ring-1 ring-border flex items-center justify-center">
+                    {referencePreview && referenceFile.type.startsWith("image/") ? (
+                      <img src={referencePreview} alt="reference" className="h-full w-full object-cover" />
+                    ) : referencePreview && referenceFile.type.startsWith("video/") ? (
+                      <video src={referencePreview} className="h-full w-full object-cover" muted />
+                    ) : (
+                      <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-foreground truncate">{referenceFile.name}</p>
+                    <p className="text-[10px] text-muted-foreground">Style reference attached</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeReference}
+                    className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    aria-label="Remove reference"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
                 <button
-                  key={h.id}
-                  className={`relative h-24 w-16 shrink-0 overflow-hidden rounded-xl border border-border bg-gradient-to-br ${h.gradient} flex items-center justify-center text-3xl ring-1 ring-inset ring-white/5 hover:ring-primary/40 hover:-translate-y-0.5 transition-all`}
-                  title={`Reel · ${h.duration}`}
+                  type="button"
+                  onClick={handleAttachReference}
+                  className="flex w-full items-center gap-3 rounded-xl border border-dashed border-border/70 bg-transparent px-4 py-3 text-left hover:border-primary/40 hover:bg-primary/5 transition-all group"
                 >
-                  <span className="drop-shadow">{h.emoji}</span>
-                  <span className="absolute bottom-1 left-1 right-1 rounded-md bg-black/50 backdrop-blur px-1 py-0.5 text-[9px] font-mono text-white text-center">{h.duration}</span>
+                  <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                    <Paperclip className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs font-medium text-foreground">Add a style reference <span className="text-muted-foreground font-normal">(optional)</span></p>
+                    <p className="text-[10px] text-muted-foreground">Upload an image or video — AI mimics its look & feel. Skip if not needed.</p>
+                  </div>
                 </button>
-              ))}
+              )}
             </div>
           </div>
 
