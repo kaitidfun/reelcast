@@ -701,59 +701,6 @@ const CreateReel = () => {
             </div>
           </div>
 
-          {/* REFERENCE — OPTIONAL block (visually distinct: dashed) */}
-          <div className="rounded-2xl border border-dashed border-border bg-muted/10 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-dashed border-border bg-muted/20">
-              <div className="flex items-center gap-2">
-                <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reference</span>
-                <span className="rounded-full bg-muted text-muted-foreground text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 ring-1 ring-border">Optional</span>
-              </div>
-              <span className="text-[10px] text-muted-foreground/70 italic hidden sm:inline">For style guidance only</span>
-            </div>
-            <div className="p-3">
-              {referenceFile ? (
-                <div className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-card/50 p-2.5">
-                  <div className="h-12 w-12 shrink-0 rounded-lg overflow-hidden bg-muted ring-1 ring-border flex items-center justify-center">
-                    {referencePreview && referenceFile.type.startsWith("image/") ? (
-                      <img src={referencePreview} alt="reference" className="h-full w-full object-cover" />
-                    ) : referencePreview && referenceFile.type.startsWith("video/") ? (
-                      <video src={referencePreview} className="h-full w-full object-cover" muted />
-                    ) : (
-                      <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-foreground truncate">{referenceFile.name}</p>
-                    <p className="text-[10px] text-muted-foreground">Style reference attached</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={removeReference}
-                    className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                    aria-label="Remove reference"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleAttachReference}
-                  className="flex w-full items-center gap-3 rounded-xl border border-dashed border-border/70 bg-transparent px-4 py-3 text-left hover:border-primary/40 hover:bg-primary/5 transition-all group"
-                >
-                  <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
-                    <Paperclip className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-medium text-foreground">Add a style reference <span className="text-muted-foreground font-normal">(optional)</span></p>
-                    <p className="text-[10px] text-muted-foreground">Upload an image or video — AI mimics its look & feel. Skip if not needed.</p>
-                  </div>
-                </button>
-              )}
-            </div>
-          </div>
-
           {/* Overlays + platforms (compact card) */}
           <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
             <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">Output settings</h2>
