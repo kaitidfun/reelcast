@@ -39,8 +39,8 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/home" element={<Home />} />
+              <Route path="/" element={<Home />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/create" element={<CreateReel />} />
               <Route path="/library" element={<ContentLibrary />} />
               <Route path="/library/product/:productId" element={<ProductReels />} />

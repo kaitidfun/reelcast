@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Video, Library, Link2, Send, Sparkles, Menu, LogOut } from "lucide-react";
+import { Home as HomeIcon, Video, Library, Link2, Send, Sparkles, Menu, LogOut, LayoutDashboard } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -7,7 +7,8 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/", icon: HomeIcon, label: "Home" },
+  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/create", icon: Video, label: "Create" },
   { to: "/library", icon: Library, label: "Library" },
   { to: "/links", icon: Link2, label: "Links" },
@@ -39,9 +40,9 @@ const RailContent = () => {
         <Tooltip>
           <TooltipTrigger asChild>
             <NavLink
-              to="/home"
+              to="/"
               className={`flex h-10 w-10 items-center justify-center rounded-xl gradient-primary shadow-glow transition-transform duration-200 hover:scale-105 ${
-                location.pathname === "/home" ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-sidebar" : ""
+                location.pathname === "/" ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-sidebar" : ""
               }`}
               aria-label="Home"
             >
@@ -131,7 +132,7 @@ const DrawerContent = ({ onNavigate }: { onNavigate: () => void }) => {
   return (
     <>
       <NavLink
-        to="/home"
+        to="/"
         onClick={onNavigate}
         className="flex items-center gap-3 px-6 py-6 hover:opacity-80 transition-opacity"
       >
@@ -209,7 +210,7 @@ export const MobileHeader = () => {
           </div>
         </SheetContent>
       </Sheet>
-      <NavLink to="/home" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+      <NavLink to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-primary shadow-glow">
           <Sparkles className="h-4 w-4 text-primary-foreground" />
         </div>
