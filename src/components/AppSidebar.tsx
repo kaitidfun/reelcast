@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Video, Library, Link2, Send, Sparkles, Menu, LogOut } from "lucide-react";
+import { Home as HomeIcon, Video, Library, Link2, Send, Sparkles, Menu, LogOut, LayoutDashboard } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -7,7 +7,8 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/", icon: HomeIcon, label: "Home" },
+  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/create", icon: Video, label: "Create" },
   { to: "/library", icon: Library, label: "Library" },
   { to: "/links", icon: Link2, label: "Links" },
