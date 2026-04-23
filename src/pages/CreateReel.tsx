@@ -24,6 +24,7 @@ import {
   X,
   Shuffle,
   Maximize2,
+  Expand,
   Clock,
   Camera,
   Music2,
