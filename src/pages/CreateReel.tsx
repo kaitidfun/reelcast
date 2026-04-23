@@ -816,6 +816,17 @@ const CreateReel = () => {
                           {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white ml-0.5" />}
                         </div>
                       </button>
+
+                      {/* Fullscreen button */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setFullscreenOpen(true); }}
+                        className="absolute top-2.5 left-2.5 flex h-7 w-7 items-center justify-center rounded-md bg-black/50 backdrop-blur-md ring-1 ring-white/15 hover:bg-black/70 transition-all z-10"
+                        aria-label="Expand fullscreen"
+                        title="Open fullscreen"
+                      >
+                        <Expand className="h-3.5 w-3.5 text-white" />
+                      </button>
+
                       <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[9px] text-white/80 font-mono">0:08</span>
