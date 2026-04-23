@@ -166,12 +166,6 @@ const lightingOptions = [
   { value: "neon", label: "Neon / Night" },
 ];
 
-const mockHistory = [
-  { id: "h1", emoji: "🏖️", gradient: "from-amber-500/40 via-orange-500/30 to-pink-500/40", duration: "0:15" },
-  { id: "h2", emoji: "💄", gradient: "from-pink-500/40 via-fuchsia-500/30 to-purple-500/40", duration: "0:30" },
-  { id: "h3", emoji: "🎧", gradient: "from-sky-500/40 via-indigo-500/30 to-violet-500/40", duration: "0:30" },
-  { id: "h4", emoji: "⌚", gradient: "from-yellow-500/40 via-amber-400/30 to-rose-500/40", duration: "0:60" },
-];
 
 const CreateReel = () => {
   const { toast } = useToast();
