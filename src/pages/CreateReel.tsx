@@ -774,150 +774,160 @@ const CreateReel = () => {
           )}
         </div>
 
-        {/* ============ RIGHT: Preview (kept) ============ */}
-        <div className="lg:col-span-2 space-y-5">
-          {/* Balance reminder */}
-          <div className="flex items-center justify-between rounded-2xl border border-border bg-card/60 px-4 py-2.5 text-xs">
-            <span className="text-muted-foreground">Estimated cost</span>
-            <span className="font-mono text-foreground">⚡ {generateCost} <span className="text-muted-foreground">/ {credits}</span></span>
-          </div>
-
-          {/* AI Pipeline Progress */}
-          {generationStatus !== "idle" && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-card">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">AI Pipeline</h3>
-              <div className="space-y-3">
-                {generationTasks.map((task, i) => {
-                  const isDone = generationStatus === "done" || (generationStatus === "generating" && i < 2);
-                  const isActive = generationStatus === "generating" && i === 2;
-                  const TaskIcon = task.icon;
-                  return (
-                    <div key={i} className="flex items-center gap-3">
-                      <div className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs shrink-0 ${
-                        isDone ? "bg-success/15 ring-1 ring-success/30"
-                        : isActive ? "bg-primary/15 ring-1 ring-primary/30"
-                        : "bg-muted ring-1 ring-border"
-                      }`}>
-                        {isDone ? <Check className="h-3.5 w-3.5 text-success" />
-                        : isActive ? <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
-                        : <TaskIcon className="h-3.5 w-3.5 text-muted-foreground" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className={`text-sm ${isDone ? "text-foreground" : isActive ? "text-primary" : "text-muted-foreground"}`}>{task.label}</span>
-                        <p className="text-[10px] text-muted-foreground">{task.detail}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Video Preview */}
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-card space-y-4">
-            <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-              {generationStatus === "done" ? (
-                <>
-                  <div className="absolute inset-0" style={{
-                    backgroundImage: "radial-gradient(circle at 30% 40%, hsl(var(--primary) / 0.35), transparent 55%), radial-gradient(circle at 70% 75%, hsl(var(--accent) / 0.3), transparent 55%)"
-                  }} />
-                  {showLogo && (
-                    <div className="absolute top-3 right-3 flex items-center gap-1.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 px-2 py-1 shadow-lg">
-                      <div className="h-5 w-5 rounded-md gradient-primary flex items-center justify-center">
-                        <Sparkles className="h-3 w-3 text-primary-foreground" />
-                      </div>
-                      <span className="text-[10px] font-bold text-white">REELCAST</span>
-                    </div>
-                  )}
-                  {showProduct && (
-                    <div className="absolute bottom-16 left-3 right-3 flex items-center gap-2.5 rounded-xl bg-black/50 backdrop-blur-md border border-white/10 p-2.5 shadow-xl">
-                      <div className="h-12 w-12 shrink-0 rounded-lg bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center text-2xl">
-                        {selectedProduct?.thumbnail ?? <ShoppingBag className="h-5 w-5 text-white" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-semibold text-white truncate">{selectedProduct?.name ?? "Summer Dress Collection"}</p>
-                        <p className="text-[10px] text-white/70">Tap to shop · $49.99</p>
-                      </div>
-                    </div>
-                  )}
-                  <button
-                    onClick={() => setIsPlaying((p) => !p)}
-                    className="absolute inset-0 flex items-center justify-center group"
-                    aria-label={isPlaying ? "Pause" : "Play"}
-                  >
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/15 backdrop-blur-md ring-1 ring-white/20 group-hover:bg-white/25 transition-all">
-                      {isPlaying ? <Pause className="h-6 w-6 text-white" /> : <Play className="h-6 w-6 text-white ml-0.5" />}
-                    </div>
-                  </button>
-                  <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/70 to-transparent">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setIsPlaying((p) => !p)} className="text-white shrink-0" aria-label="Toggle play">
-                        {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                      </button>
-                      <span className="text-[10px] text-white/80 font-mono">0:08</span>
-                      <div className="flex-1 h-1 rounded-full bg-white/20 overflow-hidden">
-                        <div className="h-full w-1/3 rounded-full bg-white" />
-                      </div>
-                      <span className="text-[10px] text-white/80 font-mono">0:{duration.toString().padStart(2, "0")}</span>
-                      <Volume2 className="h-3.5 w-3.5 text-white shrink-0" />
-                    </div>
-                  </div>
-                </>
-              ) : generationStatus === "generating" ? (
-                <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
-                  <div className="relative">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted-foreground/10">
-                      <Wand2 className="h-8 w-8 text-muted-foreground/40 animate-pulse" />
-                    </div>
-                    <div className="absolute -inset-3 animate-pulse rounded-2xl gradient-primary opacity-10 blur-xl" />
-                  </div>
-                  <p className="text-sm text-muted-foreground">Veo is generating B-Roll…</p>
+        {/* ============ RIGHT: Preview (compact, no-scroll) ============ */}
+        <div className="lg:col-span-2">
+          <div className="lg:sticky lg:top-4 space-y-3">
+            {/* Device-style Preview Card */}
+            <div className="relative rounded-3xl border border-border bg-gradient-to-b from-card to-card/60 p-3 shadow-elevated overflow-hidden">
+              {/* top status bar */}
+              <div className="flex items-center justify-between px-1 pb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className={`h-1.5 w-1.5 rounded-full ${
+                    generationStatus === "done" ? "bg-success" :
+                    generationStatus === "generating" ? "bg-primary animate-pulse" : "bg-muted-foreground/40"
+                  }`} />
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                    {generationStatus === "done" ? "Ready" : generationStatus === "generating" ? "Rendering" : "Standby"}
+                  </span>
                 </div>
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted-foreground/10">
-                    <Video className="h-8 w-8 text-muted-foreground/30" />
-                  </div>
-                  <p className="text-xs text-muted-foreground max-w-[28ch]">Awaiting command. Describe your Reel and hit Generate.</p>
-                  <div className="absolute top-3 left-3 w-3 h-3 border-t border-l border-white/10" />
-                  <div className="absolute top-3 right-3 w-3 h-3 border-t border-r border-white/10" />
-                  <div className="absolute bottom-3 left-3 w-3 h-3 border-b border-l border-white/10" />
-                  <div className="absolute bottom-3 right-3 w-3 h-3 border-b border-r border-white/10" />
+                <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground">
+                  <span>{aspectRatio}</span>
+                  <span className="h-2.5 w-px bg-border" />
+                  <span>{resolution}</span>
+                  <span className="h-2.5 w-px bg-border" />
+                  <span className="text-foreground">⚡{generateCost}</span>
+                </div>
+              </div>
+
+              {/* Phone frame */}
+              <div className="relative mx-auto w-full max-w-[260px]">
+                <div className="relative aspect-[9/16] w-full overflow-hidden rounded-[28px] border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 ring-1 ring-inset ring-white/5">
+                  {generationStatus === "done" ? (
+                    <>
+                      <div className="absolute inset-0" style={{
+                        backgroundImage: "radial-gradient(circle at 30% 40%, hsl(var(--primary) / 0.35), transparent 55%), radial-gradient(circle at 70% 75%, hsl(var(--accent) / 0.3), transparent 55%)"
+                      }} />
+                      {showLogo && (
+                        <div className="absolute top-2.5 right-2.5 flex items-center gap-1 rounded-md bg-black/40 backdrop-blur-md border border-white/10 px-1.5 py-0.5 shadow-lg">
+                          <div className="h-3.5 w-3.5 rounded-sm gradient-primary flex items-center justify-center">
+                            <Sparkles className="h-2 w-2 text-primary-foreground" />
+                          </div>
+                          <span className="text-[8px] font-bold text-white">REELCAST</span>
+                        </div>
+                      )}
+                      {showProduct && (
+                        <div className="absolute bottom-12 left-2 right-2 flex items-center gap-2 rounded-lg bg-black/50 backdrop-blur-md border border-white/10 p-1.5 shadow-xl">
+                          <div className="h-9 w-9 shrink-0 rounded-md bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center text-lg">
+                            {selectedProduct?.thumbnail ?? <ShoppingBag className="h-4 w-4 text-white" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-semibold text-white truncate">{selectedProduct?.name ?? "Summer Dress"}</p>
+                            <p className="text-[9px] text-white/70">Tap to shop · $49.99</p>
+                          </div>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => setIsPlaying((p) => !p)}
+                        className="absolute inset-0 flex items-center justify-center group"
+                        aria-label={isPlaying ? "Pause" : "Play"}
+                      >
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 backdrop-blur-md ring-1 ring-white/20 group-hover:bg-white/25 transition-all">
+                          {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white ml-0.5" />}
+                        </div>
+                      </button>
+                      <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] text-white/80 font-mono">0:08</span>
+                          <div className="flex-1 h-0.5 rounded-full bg-white/20 overflow-hidden">
+                            <div className="h-full w-1/3 rounded-full bg-white" />
+                          </div>
+                          <span className="text-[9px] text-white/80 font-mono">0:{duration.toString().padStart(2, "0")}</span>
+                        </div>
+                      </div>
+                    </>
+                  ) : generationStatus === "generating" ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-2.5 p-4">
+                      <div className="relative">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted-foreground/10">
+                          <Wand2 className="h-6 w-6 text-muted-foreground/40 animate-pulse" />
+                        </div>
+                        <div className="absolute -inset-2 animate-pulse rounded-2xl gradient-primary opacity-10 blur-xl" />
+                      </div>
+                      <p className="text-[11px] text-muted-foreground text-center">Veo is rendering<br/>your B-Roll…</p>
+                    </div>
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted-foreground/10">
+                        <Video className="h-6 w-6 text-muted-foreground/30" />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground max-w-[22ch]">Preview will appear here once generated</p>
+                      <div className="absolute top-2 left-2 w-2 h-2 border-t border-l border-white/10" />
+                      <div className="absolute top-2 right-2 w-2 h-2 border-t border-r border-white/10" />
+                      <div className="absolute bottom-2 left-2 w-2 h-2 border-b border-l border-white/10" />
+                      <div className="absolute bottom-2 right-2 w-2 h-2 border-b border-r border-white/10" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Inline pipeline (compact dots) */}
+              {generationStatus !== "idle" && (
+                <div className="mt-3 flex items-center justify-center gap-1.5 px-2">
+                  {generationTasks.map((task, i) => {
+                    const isDone = generationStatus === "done" || (generationStatus === "generating" && i < 2);
+                    const isActive = generationStatus === "generating" && i === 2;
+                    return (
+                      <div key={i} className="flex items-center gap-1.5 group" title={task.label}>
+                        <div className={`h-1.5 w-6 rounded-full transition-colors ${
+                          isDone ? "bg-success" : isActive ? "bg-primary animate-pulse" : "bg-muted"
+                        }`} />
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            {generationStatus === "done" && (
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
+            {/* Caption + Actions (only when done) */}
+            {generationStatus === "done" ? (
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-3 shadow-card space-y-2.5">
                 <div className="flex items-center gap-1.5">
-                  <Brain className="h-3.5 w-3.5 text-primary" />
-                  <label className="text-xs font-medium text-foreground">AI Caption & Hashtags (Gemini)</label>
+                  <Brain className="h-3 w-3 text-primary" />
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Caption · Gemini</label>
                 </div>
                 <Textarea
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
-                  rows={4}
-                  className="bg-muted/50 border-border resize-none text-xs"
+                  rows={2}
+                  className="bg-muted/40 border-border resize-none text-[11px] leading-relaxed min-h-0"
                 />
-                <p className="text-[10px] text-muted-foreground">Editable — tweak before approving</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="outline" onClick={handleRegenerate} size="sm" className="gap-1.5 h-9 text-xs">
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Regenerate
+                  </Button>
+                  <Button onClick={handleApprove} size="sm" className="gradient-primary gap-1.5 text-primary-foreground shadow-glow h-9 text-xs">
+                    <Check className="h-3.5 w-3.5" />
+                    Approve
+                  </Button>
+                </div>
               </motion.div>
-            )}
-
-            {generationStatus === "done" && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={handleRegenerate} className="gap-2 h-11">
-                  <RefreshCw className="h-4 w-4" />
-                  Regenerate
-                </Button>
-                <Button onClick={handleApprove} className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-11">
-                  <Check className="h-4 w-4" />
-                  Approve & Save
-                </Button>
-              </motion.div>
+            ) : (
+              /* Live Spec card (idle / generating) */
+              <div className="rounded-2xl border border-border bg-card p-3 shadow-card">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Generation spec</p>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Style</span><span className="text-foreground font-medium truncate ml-2">{styleLabel}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Duration</span><span className="text-foreground font-medium">{duration}s</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Camera</span><span className="text-foreground font-medium truncate ml-2">{cameraLabel}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Music</span><span className="text-foreground font-medium truncate ml-2">{musicLabel}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Voiceover</span><span className="text-foreground font-medium">{voiceover ? "On" : "Off"}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Aspect</span><span className="text-foreground font-medium">{aspectRatio}</span></div>
+                </div>
+              </div>
             )}
           </div>
         </div>
-      </div>
 
       {/* Product Picker Dialog */}
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
