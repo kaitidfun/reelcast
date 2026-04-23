@@ -426,15 +426,6 @@ const CreateReel = () => {
 
             {/* Chip toolbar */}
             <div className="px-4 pb-3 flex flex-wrap items-center gap-1.5">
-              {/* Attach reference */}
-              <button
-                type="button"
-                onClick={handleAttachReference}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5 transition-colors"
-              >
-                <Paperclip className="h-3.5 w-3.5" />
-                Reference
-              </button>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -442,16 +433,6 @@ const CreateReel = () => {
                 hidden
                 onChange={handleReferenceChange}
               />
-
-              {/* Product library */}
-              <button
-                type="button"
-                onClick={openPicker}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-primary/5 transition-colors"
-              >
-                <FolderOpen className="h-3.5 w-3.5" />
-                {selectedProduct ? "Change product" : "Product library"}
-              </button>
 
               {/* Aspect popover */}
               <Popover>
