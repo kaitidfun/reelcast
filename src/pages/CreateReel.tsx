@@ -341,60 +341,78 @@ const CreateReel = () => {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         {/* ============ LEFT: Composer (Sora-style monolith) ============ */}
         <div className="lg:col-span-3 space-y-5">
-          {/* THE MONOLITH */}
+          {/* PRODUCT — REQUIRED block (separate from prompt) */}
+          <div className="rounded-2xl border border-border bg-card shadow-card overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-2">
+                <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-foreground">Product</span>
+                <span className="rounded-full bg-primary/10 text-primary text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 ring-1 ring-primary/20">Required</span>
+              </div>
+              {selectedProduct && (
+                <button
+                  type="button"
+                  onClick={openPicker}
+                  className="text-[11px] text-muted-foreground hover:text-primary transition-colors"
+                >
+                  Change
+                </button>
+              )}
+            </div>
+            <div className="p-4">
+              {selectedProduct ? (
+                <div className="flex items-center gap-3">
+                  <div className="h-14 w-14 shrink-0 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-3xl ring-1 ring-border">
+                    {selectedProduct.thumbnail}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground truncate">{selectedProduct.name}</p>
+                    <p className="text-[11px] text-muted-foreground line-clamp-1">{selectedProduct.highlights}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedProduct(null)}
+                    className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    aria-label="Remove product"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openPicker}
+                  className="flex w-full items-center justify-between rounded-xl border border-border bg-muted/40 px-4 py-3 hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <FolderOpen className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-medium text-foreground">Select a product</p>
+                      <p className="text-[11px] text-muted-foreground">Pick from your campaign library</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* THE MONOLITH (Prompt) */}
           <div className="relative rounded-3xl border border-border bg-card shadow-elevated overflow-hidden group focus-within:border-primary/30 transition-colors">
             {/* subtle glow */}
             <div className="pointer-events-none absolute inset-0 opacity-0 group-focus-within:opacity-100 transition-opacity duration-700"
                  style={{ background: "radial-gradient(ellipse at top, hsl(var(--primary) / 0.08), transparent 60%)" }} />
 
-            {/* Reference chip (optional, attached on top of prompt) */}
-            {referenceFile && (
-              <div className="px-5 pt-4">
-                <div className="inline-flex items-center gap-2 rounded-xl border border-border bg-muted/60 p-2 pr-3 max-w-full">
-                  <div className="h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-muted ring-1 ring-border flex items-center justify-center">
-                    {referencePreview && referenceFile.type.startsWith("image/") ? (
-                      <img src={referencePreview} alt="reference" className="h-full w-full object-cover" />
-                    ) : referencePreview && referenceFile.type.startsWith("video/") ? (
-                      <video src={referencePreview} className="h-full w-full object-cover" muted />
-                    ) : (
-                      <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-foreground truncate max-w-[200px]">{referenceFile.name}</p>
-                    <p className="text-[10px] text-muted-foreground">Style reference · optional</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={removeReference}
-                    className="ml-1 rounded-full p-1 text-muted-foreground hover:bg-background hover:text-foreground transition-colors"
-                    aria-label="Remove reference"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+            {/* Prompt header label */}
+            <div className="flex items-center justify-between px-5 pt-4 pb-1">
+              <div className="flex items-center gap-2">
+                <Wand2 className="h-3.5 w-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-foreground">Prompt</span>
+                <span className="rounded-full bg-primary/10 text-primary text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 ring-1 ring-primary/20">Required</span>
               </div>
-            )}
-
-            {/* Selected product chip */}
-            {selectedProduct && (
-              <div className="px-5 pt-4">
-                <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 py-1 pl-1 pr-2 max-w-full">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-accent/20 text-sm">
-                    {selectedProduct.thumbnail}
-                  </div>
-                  <span className="text-xs font-medium text-foreground truncate max-w-[200px]">{selectedProduct.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedProduct(null)}
-                    className="rounded-full p-0.5 text-muted-foreground hover:text-foreground"
-                    aria-label="Remove product"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              </div>
-            )}
+            </div>
 
             {/* Prompt textarea */}
             <div className="px-5 pt-4 pb-2">
