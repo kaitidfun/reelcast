@@ -1059,6 +1059,63 @@ const CreateReel = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Fullscreen Reel Preview */}
+      <Dialog open={fullscreenOpen} onOpenChange={setFullscreenOpen}>
+        <DialogContent className="max-w-[420px] p-0 bg-black border-border overflow-hidden">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Fullscreen Reel preview</DialogTitle>
+            <DialogDescription>Watch the generated Reel in fullscreen</DialogDescription>
+          </DialogHeader>
+          <div className="relative aspect-[9/16] w-full overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage:
+                  "radial-gradient(circle at 30% 40%, hsl(var(--primary) / 0.45), transparent 55%), radial-gradient(circle at 70% 75%, hsl(var(--accent) / 0.4), transparent 55%)",
+              }}
+            />
+            {showLogo && (
+              <div className="absolute top-4 right-4 flex items-center gap-1.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 px-2.5 py-1 shadow-lg">
+                <div className="h-5 w-5 rounded-md gradient-primary flex items-center justify-center">
+                  <Sparkles className="h-3 w-3 text-primary-foreground" />
+                </div>
+                <span className="text-[11px] font-bold text-white">REELCAST</span>
+              </div>
+            )}
+            {showProduct && (
+              <div className="absolute bottom-20 left-4 right-4 flex items-center gap-3 rounded-xl bg-black/55 backdrop-blur-md border border-white/10 p-3 shadow-2xl">
+                <div className="h-14 w-14 shrink-0 rounded-lg bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center text-3xl">
+                  {selectedProduct?.thumbnail ?? <ShoppingBag className="h-6 w-6 text-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{selectedProduct?.name ?? "Summer Dress"}</p>
+                  <p className="text-xs text-white/70">Tap to shop · $49.99</p>
+                </div>
+                <Button size="sm" className="gradient-primary text-primary-foreground h-8 px-3 text-xs">Shop</Button>
+              </div>
+            )}
+            <button
+              onClick={() => setIsPlaying((p) => !p)}
+              className="absolute inset-0 flex items-center justify-center group"
+              aria-label={isPlaying ? "Pause" : "Play"}
+            >
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/15 backdrop-blur-md ring-1 ring-white/25 group-hover:bg-white/25 transition-all">
+                {isPlaying ? <Pause className="h-7 w-7 text-white" /> : <Play className="h-7 w-7 text-white ml-1" />}
+              </div>
+            </button>
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-white/80 font-mono">0:08</span>
+                <div className="flex-1 h-1 rounded-full bg-white/20 overflow-hidden">
+                  <div className="h-full w-1/3 rounded-full bg-white" />
+                </div>
+                <span className="text-xs text-white/80 font-mono">0:{duration.toString().padStart(2, "0")}</span>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
