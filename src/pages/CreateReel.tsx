@@ -928,6 +928,7 @@ const CreateReel = () => {
             )}
           </div>
         </div>
+      </div>
 
       {/* Product Picker Dialog */}
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
