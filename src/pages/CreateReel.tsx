@@ -467,13 +467,6 @@ const CreateReel = () => {
 
             {/* Chip toolbar */}
             <div className="px-4 pb-3 flex flex-wrap items-center gap-1.5">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,video/*"
-                hidden
-                onChange={handleReferenceChange}
-              />
 
               {/* Aspect popover */}
               <Popover>
