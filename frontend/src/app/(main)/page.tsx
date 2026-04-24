@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Search, Plus, Play, Folder, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -25,7 +25,6 @@ const fadeUp = {
 };
 
 export default function Home() {
-  const router = useRouter();
   const { user } = useAuth();
   const firstName = user?.displayName?.split(" ")[0] ?? "Creator";
 
@@ -59,8 +58,8 @@ export default function Home() {
         transition={{ duration: 0.4, delay: 0.1 }}
         className="grid grid-cols-1 md:grid-cols-2 gap-6"
       >
-        <button
-          onClick={() => router.push("/create")}
+        <Link
+          href="/create"
           className="group relative overflow-hidden rounded-2xl border-gradient bg-card p-8 min-h-[160px] flex flex-col items-center justify-center gap-3 transition-all duration-300 hover:shadow-glow-lg hover:scale-[1.01]"
         >
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl gradient-primary shadow-glow transition-transform duration-300 group-hover:scale-110">
@@ -68,10 +67,10 @@ export default function Home() {
           </div>
           <span className="font-display text-lg font-semibold text-foreground">Create new video</span>
           <span className="text-xs text-muted-foreground">Generate a Reel with AI</span>
-        </button>
+        </Link>
 
-        <button
-          onClick={() => router.push("/library")}
+        <Link
+          href="/library"
           className="group relative overflow-hidden rounded-2xl border border-border bg-card p-8 min-h-[160px] flex flex-col items-center justify-center gap-3 transition-all duration-300 hover:border-primary/40 hover:shadow-card hover:scale-[1.01]"
         >
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary transition-transform duration-300 group-hover:scale-110">
@@ -79,7 +78,7 @@ export default function Home() {
           </div>
           <span className="font-display text-lg font-semibold text-foreground">Create new product</span>
           <span className="text-xs text-muted-foreground">Add to your product library</span>
-        </button>
+        </Link>
       </motion.div>
 
       {/* Recent Videos */}
