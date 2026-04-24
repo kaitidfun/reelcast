@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -8,7 +10,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { User, Mail, Shield, Calendar, LogOut, Save, Crown, ToggleLeft, ToggleRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 
@@ -21,7 +24,7 @@ interface PlatformToggle {
 
 const Account = () => {
   const { user, updateProfile, logout } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
 
@@ -54,7 +57,7 @@ const Account = () => {
 
   const handleLogout = () => {
     logout();
-    navigate("/login", { replace: true });
+    router.replace("/login");
   };
 
   const toggleSocial = (id: string) => {
@@ -249,3 +252,6 @@ const Account = () => {
 };
 
 export default Account;
+
+
+

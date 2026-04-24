@@ -1,9 +1,12 @@
+"use client";
+
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Video, Eye, Link2, TrendingUp, Play, Clock, BarChart3, ArrowRight, Sparkles, Zap, ShoppingCart, DollarSign, MousePointerClick } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StatCard from "@/components/StatCard";
-import { useNavigate } from "react-router-dom";
+import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
+import Link from "next/link";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 
 const socialData = [
@@ -46,7 +49,7 @@ const recentReels = [
 ];
 
 const Dashboard = () => {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [activeMetrics, setActiveMetrics] = useState<string[]>(["views", "clicks", "conversions"]);
   const [chartTab, setChartTab] = useState<"social" | "ecommerce" | "platform">("social");
 
@@ -72,7 +75,7 @@ const Dashboard = () => {
               <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Hello, Welcome Back 👋</h1>
               <p className="mt-2 text-muted-foreground max-w-lg">Overview of your content, sales, and engagement across all platforms</p>
             </div>
-            <Button onClick={() => navigate("/create")} className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto">
+            <Button onClick={() => router.push("/create")} className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto">
               <Sparkles className="h-4 w-4" />Create New Reel
             </Button>
           </div>
@@ -243,3 +246,6 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+
+
+

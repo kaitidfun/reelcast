@@ -1,5 +1,8 @@
+"use client";
+
 import { useState, useMemo } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
+import Link from "next/link";
 import {
   Sparkles,
   Mail,
@@ -59,7 +62,7 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const strength = useMemo(() => getStrength(password), [password]);
 
@@ -71,7 +74,7 @@ const Register = () => {
     });
     const ok = await login(`${provider}.user@reelcast.ai`, "oauth");
     setLoading(false);
-    if (ok) navigate("/", { replace: true });
+    if (ok) router.replace("/dashboard");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -97,7 +100,7 @@ const Register = () => {
     const ok = await login(email, password);
     setLoading(false);
     if (ok) {
-      navigate("/", { replace: true });
+      router.replace("/dashboard");
     } else {
       setError("Registration failed");
     }
@@ -119,7 +122,7 @@ const Register = () => {
           <div className="relative hidden overflow-hidden border-r border-border bg-gradient-to-br from-card via-card to-muted/40 lg:order-1 lg:flex">
             <div className="absolute inset-0 gradient-glow opacity-80 pointer-events-none" />
             <img
-              src={authHero}
+              src={authHero.src}
               alt="ReelCast creator community"
               width={896}
               height={1216}
@@ -379,7 +382,7 @@ const Register = () => {
 
             <p className="mt-4 text-center text-xs text-muted-foreground">
               Already have an account?{" "}
-              <Link to="/login" className="text-primary hover:underline font-medium">
+              <Link href="/login" className="text-primary hover:underline font-medium">
                 Sign in
               </Link>
             </p>
@@ -401,3 +404,8 @@ const Register = () => {
 };
 
 export default Register;
+
+
+
+
+

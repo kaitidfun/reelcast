@@ -1,3 +1,5 @@
+"use client";
+
 import React, { createContext, useContext, useState, useCallback } from "react";
 
 export interface MockUser {
@@ -21,6 +23,7 @@ const MOCK_USER: MockUser = {
 interface AuthContextType {
   user: MockUser | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   updateProfile: (updates: Partial<MockUser>) => void;
@@ -35,10 +38,16 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<MockUser | null>(() => {
+  const [user, setUser] = useState<MockUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  React.useEffect(() => {
     const saved = localStorage.getItem("rf_mock_user");
-    return saved ? JSON.parse(saved) : null;
-  });
+    if (saved) {
+      setUser(JSON.parse(saved));
+    }
+    setIsLoading(false);
+  }, []);
 
   const login = useCallback(async (email: string, _password: string) => {
     // Mock: accept any non-empty credentials
@@ -64,8 +73,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout, updateProfile }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );
 };
+

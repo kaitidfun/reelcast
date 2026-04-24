@@ -1,5 +1,8 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
+import Link from "next/link";
 import {
   Sparkles,
   Mail,
@@ -164,7 +167,7 @@ const ForgotPassword = () => {
               size="sm"
               className="w-full text-muted-foreground hover:text-foreground"
             >
-              <Link to="/login">
+              <Link href="/login">
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Back to Sign In
               </Link>
@@ -192,3 +195,6 @@ const ForgotPassword = () => {
 };
 
 export default ForgotPassword;
+
+
+

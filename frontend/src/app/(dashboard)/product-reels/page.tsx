@@ -1,3 +1,5 @@
+"use client";
+
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -9,7 +11,8 @@ import {
   List,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -65,8 +68,8 @@ const formatDate = (iso: string) => {
 
 const ProductReels = () => {
   const { productId = "" } = useParams();
-  const navigate = useNavigate();
-  const product = PRODUCT_LOOKUP[productId];
+  const router = useRouter();
+  const product = PRODUCT_LOOKUP[Array.isArray(productId) ? productId[0] : productId];
 
   const [search, setSearch] = useState("");
   const [platformFilter, setPlatformFilter] = useState<"all" | ReelPlatform>("all");
@@ -75,7 +78,7 @@ const ProductReels = () => {
 
   const reels = useMemo(() => {
     if (!product) return [];
-    return getMockReelsForProduct(productId, product.name, product.reelsGenerated);
+    return getMockReelsForProduct(Array.isArray(productId) ? productId[0] : productId, product.name, product.reelsGenerated);
   }, [productId, product]);
 
   const filteredReels = useMemo(() => {
@@ -91,7 +94,7 @@ const ProductReels = () => {
   if (!product) {
     return (
       <div className="space-y-6">
-        <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2">
+        <Button variant="ghost" onClick={() => router.back()} className="gap-2">
           <ArrowLeft className="h-4 w-4" />
           Back
         </Button>
@@ -103,13 +106,7 @@ const ProductReels = () => {
   }
 
   const handleCreateReel = () => {
-    navigate("/create", {
-      state: {
-        productId,
-        productName: product.name,
-        campaignId: product.campaignId,
-      },
-    });
+    router.push(`/create?productId=${encodeURIComponent(Array.isArray(productId) ? productId[0] : productId)}&productName=${encodeURIComponent(product.name)}&campaignId=${encodeURIComponent(product.campaignId || "")}`);
   };
 
   return (
@@ -118,7 +115,7 @@ const ProductReels = () => {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink
-              onClick={() => navigate(`/library?campaign=${product.campaignId}`)}
+              onClick={() => router.push(`/library?campaign=${product.campaignId}`)}
               className="cursor-pointer"
             >
               {product.campaignName}
@@ -300,3 +297,9 @@ const ProductReels = () => {
 };
 
 export default ProductReels;
+
+
+
+
+
+

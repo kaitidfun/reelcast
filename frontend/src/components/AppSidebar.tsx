@@ -1,4 +1,5 @@
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { usePathname, useRouter } from "next/navigation";
+import { NavLink } from "./NavLink";
 import { Home as HomeIcon, Video, Library, Link2, Send, Sparkles, Menu, LogOut } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -7,17 +8,17 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
-  { to: "/dashboard", icon: HomeIcon, label: "Dashboard" },
-  { to: "/create", icon: Video, label: "Create" },
-  { to: "/library", icon: Library, label: "Library" },
-  { to: "/links", icon: Link2, label: "Links" },
-  { to: "/distribute", icon: Send, label: "Distribute" },
+  { href: "/dashboard", icon: HomeIcon, label: "Dashboard" },
+  { href: "/create", icon: Video, label: "Create" },
+  { href: "/library", icon: Library, label: "Library" },
+  { href: "/links", icon: Link2, label: "Links" },
+  { href: "/distribute", icon: Send, label: "Distribute" },
 ];
 
 /* ---------- Desktop narrow rail ---------- */
 const RailContent = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
+  const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
 
   const initials = user?.displayName
@@ -29,7 +30,7 @@ const RailContent = () => {
 
   const handleLogout = () => {
     logout();
-    navigate("/login", { replace: true });
+    router.replace("/login");
   };
 
   return (
@@ -39,9 +40,9 @@ const RailContent = () => {
         <Tooltip>
           <TooltipTrigger asChild>
             <NavLink
-              to="/"
+              href="/"
               className={`flex h-10 w-10 items-center justify-center rounded-xl gradient-primary shadow-glow transition-transform duration-200 hover:scale-105 ${
-                location.pathname === "/" ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-sidebar" : ""
+                pathname === "/" ? "ring-2 ring-primary/50 ring-offset-2 ring-offset-sidebar" : ""
               }`}
               aria-label="Home"
             >
@@ -54,12 +55,12 @@ const RailContent = () => {
 
       {/* Nav */}
       <nav className="flex-1 space-y-1 px-2 py-2">
-        {navItems.map(({ to, icon: Icon, label }) => {
-          const isActive = location.pathname === to;
+        {navItems.map(({ href, icon: Icon, label }) => {
+          const isActive = pathname === href;
           return (
             <NavLink
-              key={to}
-              to={to}
+              key={href}
+              href={href}
               className={`group flex flex-col items-center justify-center gap-1 rounded-xl px-1 py-2.5 transition-all duration-200 ${
                 isActive
                   ? "gradient-primary text-primary-foreground shadow-glow"
@@ -78,9 +79,9 @@ const RailContent = () => {
         <Tooltip>
           <TooltipTrigger asChild>
             <NavLink
-              to="/account"
+              href="/account"
               className={`rounded-full transition-all duration-200 ${
-                location.pathname === "/account" ? "ring-2 ring-primary ring-offset-2 ring-offset-sidebar" : "hover:opacity-80"
+                pathname === "/account" ? "ring-2 ring-primary ring-offset-2 ring-offset-sidebar" : "hover:opacity-80"
               }`}
             >
               <Avatar className="h-9 w-9">
@@ -111,8 +112,8 @@ const RailContent = () => {
 
 /* ---------- Mobile drawer (full labels) ---------- */
 const DrawerContent = ({ onNavigate }: { onNavigate: () => void }) => {
-  const location = useLocation();
-  const navigate = useNavigate();
+  const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
 
   const initials = user?.displayName
@@ -125,13 +126,13 @@ const DrawerContent = ({ onNavigate }: { onNavigate: () => void }) => {
   const handleLogout = () => {
     onNavigate();
     logout();
-    navigate("/login", { replace: true });
+    router.replace("/login");
   };
 
   return (
     <>
       <NavLink
-        to="/"
+        href="/"
         onClick={onNavigate}
         className="flex items-center gap-3 px-6 py-6 hover:opacity-80 transition-opacity"
       >
@@ -144,12 +145,12 @@ const DrawerContent = ({ onNavigate }: { onNavigate: () => void }) => {
         </div>
       </NavLink>
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {navItems.map(({ to, icon: Icon, label }) => {
-          const isActive = location.pathname === to;
+        {navItems.map(({ href, icon: Icon, label }) => {
+          const isActive = pathname === href;
           return (
             <NavLink
-              key={to}
-              to={to}
+              key={href}
+              href={href}
               onClick={onNavigate}
               className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
                 isActive
@@ -165,10 +166,10 @@ const DrawerContent = ({ onNavigate }: { onNavigate: () => void }) => {
       </nav>
       <div className="p-3 space-y-1">
         <NavLink
-          to="/account"
+          href="/account"
           onClick={onNavigate}
           className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
-            location.pathname === "/account"
+            pathname === "/account"
               ? "gradient-primary text-primary-foreground shadow-glow"
               : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           }`}
@@ -209,7 +210,7 @@ export const MobileHeader = () => {
           </div>
         </SheetContent>
       </Sheet>
-      <NavLink to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+      <NavLink href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-primary shadow-glow">
           <Sparkles className="h-4 w-4 text-primary-foreground" />
         </div>
@@ -228,3 +229,11 @@ const AppSidebar = () => {
 };
 
 export default AppSidebar;
+
+
+
+
+
+
+
+

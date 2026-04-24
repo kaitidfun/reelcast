@@ -1,5 +1,8 @@
+"use client";
+
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
+import Link from "next/link";
 import {
   Sparkles,
   Mail,
@@ -25,7 +28,7 @@ const Login = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
   const { toast } = useToast();
 
   const handleSocialLogin = async (provider: "google" | "facebook") => {
@@ -36,7 +39,7 @@ const Login = () => {
     });
     const ok = await login(`${provider}.user@reelcast.ai`, "oauth");
     setLoading(false);
-    if (ok) navigate("/", { replace: true });
+    if (ok) router.replace("/dashboard");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,7 +53,7 @@ const Login = () => {
     const ok = await login(email, password);
     setLoading(false);
     if (ok) {
-      navigate("/", { replace: true });
+      router.replace("/dashboard");
     } else {
       setError("Login failed");
     }
@@ -72,7 +75,7 @@ const Login = () => {
           <div className="relative hidden overflow-hidden border-r border-border bg-gradient-to-br from-card via-card to-muted/40 lg:order-1 lg:flex">
             <div className="absolute inset-0 gradient-glow opacity-80 pointer-events-none" />
             <img
-              src={authHero}
+              src={authHero.src}
               alt="ReelCast AI commerce reel preview"
               width={896}
               height={1216}
@@ -192,8 +195,7 @@ const Login = () => {
                   />
                   Remember me
                 </label>
-                <Link
-                  to="/forgot-password"
+                <Link href="/forgot-password"
                   className="text-sm font-medium text-primary hover:underline"
                 >
                   Forgot password?
@@ -258,8 +260,7 @@ const Login = () => {
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
               New to ReelCast?{" "}
-              <Link
-                to="/register"
+              <Link href="/register"
                 className="text-primary hover:underline font-medium"
               >
                 Create an account
@@ -289,3 +290,9 @@ const Login = () => {
 };
 
 export default Login;
+
+
+
+
+
+

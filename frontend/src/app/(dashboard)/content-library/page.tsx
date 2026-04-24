@@ -1,3 +1,5 @@
+"use client";
+
 import { motion } from "framer-motion";
 import {
   Plus,
@@ -16,7 +18,8 @@ import {
   Clock,
 } from "lucide-react";
 import { useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
+import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -199,15 +202,15 @@ const sortItems = <T extends { name: string; createdAt: string; updatedAt: strin
 
 const ContentLibrary = () => {
   const { toast } = useToast();
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
   const openCampaignId = searchParams.get("campaign");
   const setOpenCampaignId = (id: string | null) => {
     if (id) {
-      setSearchParams({ campaign: id });
+      router.push(`?campaign=${id}`)
     } else {
-      setSearchParams({});
+      router.push(`?`)
     }
   };
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
@@ -392,13 +395,7 @@ const ContentLibrary = () => {
   };
 
   const handleCreateReel = (product: Product) => {
-    navigate("/create", {
-      state: {
-        productId: product.id,
-        productName: product.name,
-        campaignId: currentCampaign?.id,
-      },
-    });
+    router.push(`/create?productId=${encodeURIComponent(product.id)}&productName=${encodeURIComponent(product.name)}&campaignId=${encodeURIComponent(currentCampaign?.id || "")}`);
   };
 
   // ============ Campaign CRUD ============
@@ -982,7 +979,7 @@ const ContentLibrary = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
-              onClick={() => navigate(`/library/product/${product.id}`)}
+              onClick={() => router.push(`/library/product/${product.id}`)}
               className="rounded-2xl border border-border bg-card overflow-hidden card-shine hover:border-primary/30 hover:shadow-elevated transition-all duration-300 cursor-pointer"
             >
               <div className="aspect-video bg-muted flex items-center justify-center text-5xl relative group/img">
@@ -1101,7 +1098,7 @@ const ContentLibrary = () => {
               {filteredProducts.map((product) => (
                 <TableRow
                   key={product.id}
-                  onClick={() => navigate(`/library/product/${product.id}`)}
+                  onClick={() => router.push(`/library/product/${product.id}`)}
                   className="cursor-pointer"
                 >
                   <TableCell>
@@ -1320,3 +1317,9 @@ const ContentLibrary = () => {
 };
 
 export default ContentLibrary;
+
+
+
+
+
+

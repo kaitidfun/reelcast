@@ -1,3 +1,5 @@
+"use client";
+
 import { motion } from "framer-motion";
 import { Link2, Plus, Copy, ExternalLink, TrendingUp, MousePointerClick, BarChart3, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -138,3 +140,6 @@ const AffiliateLinks = () => {
 };
 
 export default AffiliateLinks;
+
+
+
