@@ -39,7 +39,7 @@ const Login = () => {
     });
     const ok = await login(`${provider}.user@reelcast.ai`, "oauth");
     setLoading(false);
-    if (ok) router.replace("/dashboard");
+    if (ok) router.replace("/");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,7 +53,7 @@ const Login = () => {
     const ok = await login(email, password);
     setLoading(false);
     if (ok) {
-      router.replace("/dashboard");
+      router.replace("/");
     } else {
       setError("Login failed");
     }
