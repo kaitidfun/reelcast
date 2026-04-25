@@ -60,7 +60,7 @@ const Register = () => {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, register } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -97,12 +97,12 @@ const Register = () => {
       return;
     }
     setLoading(true);
-    const ok = await login(email, password);
+    const ok = await register(email, password, displayName);
     setLoading(false);
     if (ok) {
       router.replace("/");
     } else {
-      setError("Registration failed");
+      setError("Registration failed. Email might already exist.");
     }
   };
 

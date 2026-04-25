@@ -11,20 +11,14 @@ export interface MockUser {
   joinedAt: string;
 }
 
-const MOCK_USER: MockUser = {
-  id: "usr_001",
-  email: "creator@reelcast.ai",
-  displayName: "Alex Creator",
-  avatar: "",
-  plan: "pro",
-  joinedAt: "2025-09-15",
-};
+const API_URL = "http://localhost:8000";
 
 interface AuthContextType {
   user: MockUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
+  register: (email: string, password: string, displayName: string) => Promise<boolean>;
   logout: () => void;
   updateProfile: (updates: Partial<MockUser>) => void;
 }
@@ -41,39 +35,119 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<MockUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  React.useEffect(() => {
-    const saved = localStorage.getItem("rf_mock_user");
-    if (saved) {
-      setUser(JSON.parse(saved));
+  const fetchUser = useCallback(async (token: string) => {
+    try {
+      const res = await fetch(`${API_URL}/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUser({
+          id: data.id.toString(),
+          email: data.email,
+          displayName: data.display_name || "Creator",
+          avatar: "",
+          plan: data.plan || "free",
+          joinedAt: new Date().toISOString(),
+        });
+      } else {
+        localStorage.removeItem("rf_token");
+        setUser(null);
+      }
+    } catch (e) {
+      console.error(e);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (email: string, _password: string) => {
-    // Mock: accept any non-empty credentials
-    if (!email) return false;
-    const mockUser = { ...MOCK_USER, email };
-    setUser(mockUser);
-    localStorage.setItem("rf_mock_user", JSON.stringify(mockUser));
-    return true;
+  React.useEffect(() => {
+    const token = localStorage.getItem("rf_token");
+    if (token) {
+      fetchUser(token);
+    } else {
+      setIsLoading(false);
+    }
+  }, [fetchUser]);
+
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      const formData = new URLSearchParams();
+      formData.append("username", email);
+      formData.append("password", password);
+      
+      const res = await fetch(`${API_URL}/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem("rf_token", data.access_token);
+        setUser({
+          id: data.user.id.toString(),
+          email: data.user.email,
+          displayName: data.user.display_name || "Creator",
+          avatar: "",
+          plan: data.user.plan || "free",
+          joinedAt: new Date().toISOString(),
+        });
+        return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
+  }, []);
+
+  const register = useCallback(async (email: string, password: string, displayName: string) => {
+    try {
+      const res = await fetch(`${API_URL}/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password, display_name: displayName }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem("rf_token", data.access_token);
+        setUser({
+          id: data.user.id.toString(),
+          email: data.user.email,
+          displayName: data.user.display_name || "Creator",
+          avatar: "",
+          plan: data.user.plan || "free",
+          joinedAt: new Date().toISOString(),
+        });
+        return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
-    localStorage.removeItem("rf_mock_user");
+    localStorage.removeItem("rf_token");
   }, []);
 
   const updateProfile = useCallback((updates: Partial<MockUser>) => {
     setUser((prev) => {
       if (!prev) return prev;
       const updated = { ...prev, ...updates };
-      localStorage.setItem("rf_mock_user", JSON.stringify(updated));
       return updated;
     });
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout, updateProfile }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, register, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );
