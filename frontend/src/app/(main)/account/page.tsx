@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { User, Mail, Shield, Calendar, LogOut, Save, Crown, ToggleLeft, ToggleRight } from "lucide-react";
+import { User, Mail, Shield, Calendar, LogOut, Save, ToggleLeft, ToggleRight } from "lucide-react";
 import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -80,12 +80,6 @@ const Account = () => {
     }
   };
 
-  const planColors: Record<string, string> = {
-    free: "bg-muted text-muted-foreground",
-    pro: "gradient-primary text-primary-foreground",
-    enterprise: "bg-accent text-accent-foreground",
-  };
-
   const PlatformRow = ({ platform, onToggle }: { platform: PlatformToggle; onToggle: (id: string) => void }) => (
     <div className="flex items-center justify-between py-2.5">
       <div className="flex items-center gap-3">
@@ -132,10 +126,6 @@ const Account = () => {
                 <CardTitle className="text-lg">{user.displayName}</CardTitle>
                 <CardDescription>{user.email}</CardDescription>
                 <div className="mt-2 flex items-center gap-2">
-                  <Badge className={`${planColors[user.plan]} text-xs`}>
-                    <Crown className="mr-1 h-3 w-3" />
-                    {user.plan.toUpperCase()}
-                  </Badge>
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Calendar className="h-3 w-3" />
                     Joined {new Date(user.joinedAt).toLocaleDateString("en-US")}
