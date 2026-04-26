@@ -8,6 +8,7 @@ export interface MockUser {
   displayName: string;
   avatar: string;
   joinedAt: string;
+  is2faEnabled?: boolean;
 }
 
 const API_URL = "http://localhost:8000";
@@ -16,10 +17,12 @@ interface AuthContextType {
   user: MockUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ ok: boolean; requires2fa?: boolean; tempToken?: string }>;
+  verify2faLogin: (tempToken: string, code: string) => Promise<boolean>;
   register: (email: string, password: string, displayName: string) => Promise<boolean>;
   logout: () => void;
   updateProfile: (updates: Partial<MockUser>) => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -49,6 +52,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           displayName: data.display_name || "Creator",
           avatar: "",
           joinedAt: new Date().toISOString(),
+          is2faEnabled: data.is_2fa_enabled ?? false,
         });
       } else {
         localStorage.removeItem("rf_token");
@@ -61,6 +65,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoading(false);
     }
   }, []);
+
+  const refreshUser = useCallback(async () => {
+    const token = localStorage.getItem("rf_token");
+    if (token) {
+      await fetchUser(token);
+    }
+  }, [fetchUser]);
 
   React.useEffect(() => {
     const token = localStorage.getItem("rf_token");
@@ -84,6 +95,46 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         },
         body: formData,
       });
+
+      if (res.ok) {
+        const data = await res.json();
+        
+        // If 2FA is required, return the temp token
+        if (data.requires_2fa) {
+          return { ok: true, requires2fa: true, tempToken: data.temp_token };
+        }
+        
+        // Normal login (no 2FA)
+        localStorage.setItem("rf_token", data.access_token);
+        setUser({
+          id: data.user.id.toString(),
+          email: data.user.email,
+          displayName: data.user.display_name || "Creator",
+          avatar: "",
+          joinedAt: new Date().toISOString(),
+          is2faEnabled: data.user.is_2fa_enabled ?? false,
+        });
+        return { ok: true };
+      } else {
+        const errorData = await res.json().catch(() => null);
+        return { ok: false, error: errorData?.detail || "Login failed" };
+      }
+    } catch (e) {
+      console.error(e);
+      return { ok: false };
+    }
+  }, []);
+
+  const verify2faLogin = useCallback(async (tempToken: string, code: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/2fa/verify`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ temp_token: tempToken, code }),
+      });
+
       if (res.ok) {
         const data = await res.json();
         localStorage.setItem("rf_token", data.access_token);
@@ -93,6 +144,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           displayName: data.user.display_name || "Creator",
           avatar: "",
           joinedAt: new Date().toISOString(),
+          is2faEnabled: data.user.is_2fa_enabled ?? false,
         });
         return true;
       }
@@ -135,9 +187,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, register, logout, updateProfile }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, verify2faLogin, register, logout, updateProfile, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
 };
-

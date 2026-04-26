@@ -10,6 +10,8 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
+  ShieldCheck,
+  ArrowLeft,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -17,7 +19,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/contexts/AuthContext";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from "@/components/ui/input-otp";
 import authHero from "@/assets/auth-hero-login.jpg";
 
 const Login = () => {
@@ -27,9 +30,15 @@ const Login = () => {
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, verify2faLogin } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+
+  // 2FA state
+  const [show2fa, setShow2fa] = useState(false);
+  const [tempToken, setTempToken] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [verifying2fa, setVerifying2fa] = useState(false);
 
   const searchParams = useSearchParams();
   const tokenFromUrl = searchParams.get("token");
@@ -77,13 +86,54 @@ const Login = () => {
       return;
     }
     setLoading(true);
-    const ok = await login(email, password);
+    const result = await login(email, password);
     setLoading(false);
+
+    if (result.ok) {
+      if (result.requires2fa && result.tempToken) {
+        // Show 2FA challenge screen
+        setTempToken(result.tempToken);
+        setShow2fa(true);
+        setOtpCode("");
+      } else {
+        // Direct login success
+        router.replace("/");
+      }
+    } else {
+      setError("Login failed. Check your email and password.");
+    }
+  };
+
+  const handle2faVerify = async () => {
+    if (otpCode.length !== 6) {
+      setError("Please enter a 6-digit code");
+      return;
+    }
+    setError("");
+    setVerifying2fa(true);
+    const ok = await verify2faLogin(tempToken, otpCode);
+    setVerifying2fa(false);
     if (ok) {
       router.replace("/");
     } else {
-      setError("Login failed");
+      setError("Invalid authentication code. Please try again.");
+      setOtpCode("");
     }
+  };
+
+  // Auto-submit when 6 digits are entered
+  useEffect(() => {
+    if (show2fa && otpCode.length === 6) {
+      handle2faVerify();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otpCode]);
+
+  const handleBack = () => {
+    setShow2fa(false);
+    setTempToken("");
+    setOtpCode("");
+    setError("");
   };
 
   return (
@@ -164,135 +214,209 @@ const Login = () => {
               </div>
             </div>
 
-            <h2 className="font-display text-2xl font-bold text-foreground mb-1">
-              Welcome back
-            </h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              Sign in to continue creating reels that convert.
-            </p>
+            <AnimatePresence mode="wait">
+              {!show2fa ? (
+                <motion.div
+                  key="login-form"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <h2 className="font-display text-2xl font-bold text-foreground mb-1">
+                    Welcome back
+                  </h2>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Sign in to continue creating reels that convert.
+                  </p>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Work email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10"
-                    placeholder="you@company.com"
-                  />
-                </div>
-              </div>
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Work email</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="email"
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="pl-10"
+                          placeholder="you@company.com"
+                        />
+                      </div>
+                    </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-10"
-                    placeholder="••••••••"
-                  />
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Password</Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="pl-10 pr-10"
+                          placeholder="••••••••"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((s) => !s)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                        <Checkbox
+                          checked={remember}
+                          onCheckedChange={(v) => setRemember(!!v)}
+                        />
+                        Remember me
+                      </label>
+                      <Link href="/forgot-password"
+                        className="text-sm font-medium text-primary hover:underline"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
+
+                    {error && <p className="text-sm text-destructive">{error}</p>}
+
+                    <Button
+                      type="submit"
+                      className="w-full gradient-primary text-primary-foreground shadow-glow"
+                      disabled={loading}
+                    >
+                      {loading ? "Signing in..." : "Sign in"}
+                      {!loading && <ArrowRight className="h-4 w-4" />}
+                    </Button>
+                  </form>
+
+                  <div className="relative my-5">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-border" />
+                    </div>
+                    <div className="relative flex justify-center">
+                      <span className="bg-card px-2 text-xs uppercase tracking-wider text-muted-foreground">
+                        Or continue with
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleSocialLogin("google")}
+                      disabled={loading}
+                      className="w-full"
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          fill="#EA4335"
+                          d="M12 10.2v3.9h5.5c-.2 1.4-1.6 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.7 3.4 14.6 2.5 12 2.5 6.8 2.5 2.6 6.7 2.6 12s4.2 9.5 9.4 9.5c5.4 0 9-3.8 9-9.2 0-.6-.1-1.1-.2-1.6H12z"
+                        />
+                      </svg>
+                      Google
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleSocialLogin("facebook")}
+                      disabled={loading}
+                      className="w-full"
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          fill="#1877F2"
+                          d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.4v7A10 10 0 0 0 22 12z"
+                        />
+                      </svg>
+                      Facebook
+                    </Button>
+                  </div>
+
+                  <p className="mt-6 text-center text-sm text-muted-foreground">
+                    New to ReelCast?{" "}
+                    <Link href="/register"
+                      className="text-primary hover:underline font-medium"
+                    >
+                      Create an account
+                    </Link>
+                  </p>
+                </motion.div>
+              ) : (
+                /* ==================== 2FA CHALLENGE SCREEN ==================== */
+                <motion.div
+                  key="2fa-challenge"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.3 }}
+                  className="flex flex-col items-center text-center"
+                >
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 mb-5">
+                    <ShieldCheck className="h-8 w-8 text-primary" />
+                  </div>
+
+                  <h2 className="font-display text-2xl font-bold text-foreground mb-2">
+                    Two-Factor Authentication
+                  </h2>
+                  <p className="text-sm text-muted-foreground mb-8 max-w-xs">
+                    Enter the 6-digit code from your authenticator app to complete sign in.
+                  </p>
+
+                  <div className="flex justify-center mb-6">
+                    <InputOTP
+                      maxLength={6}
+                      value={otpCode}
+                      onChange={setOtpCode}
+                      disabled={verifying2fa}
+                    >
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} className="h-12 w-12 text-lg font-semibold" />
+                        <InputOTPSlot index={1} className="h-12 w-12 text-lg font-semibold" />
+                        <InputOTPSlot index={2} className="h-12 w-12 text-lg font-semibold" />
+                      </InputOTPGroup>
+                      <InputOTPSeparator />
+                      <InputOTPGroup>
+                        <InputOTPSlot index={3} className="h-12 w-12 text-lg font-semibold" />
+                        <InputOTPSlot index={4} className="h-12 w-12 text-lg font-semibold" />
+                        <InputOTPSlot index={5} className="h-12 w-12 text-lg font-semibold" />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+
+                  {error && <p className="text-sm text-destructive mb-4">{error}</p>}
+
+                  <Button
+                    onClick={handle2faVerify}
+                    className="w-full gradient-primary text-primary-foreground shadow-glow mb-4"
+                    disabled={verifying2fa || otpCode.length !== 6}
+                  >
+                    {verifying2fa ? "Verifying..." : "Verify & Sign In"}
+                    {!verifying2fa && <ShieldCheck className="h-4 w-4" />}
+                  </Button>
+
                   <button
                     type="button"
-                    onClick={() => setShowPassword((s) => !s)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    onClick={handleBack}
+                    className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    Back to sign in
                   </button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
-                  <Checkbox
-                    checked={remember}
-                    onCheckedChange={(v) => setRemember(!!v)}
-                  />
-                  Remember me
-                </label>
-                <Link href="/forgot-password"
-                  className="text-sm font-medium text-primary hover:underline"
-                >
-                  Forgot password?
-                </Link>
-              </div>
-
-              {error && <p className="text-sm text-destructive">{error}</p>}
-
-              <Button
-                type="submit"
-                className="w-full gradient-primary text-primary-foreground shadow-glow"
-                disabled={loading}
-              >
-                {loading ? "Signing in..." : "Sign in"}
-                {!loading && <ArrowRight className="h-4 w-4" />}
-              </Button>
-            </form>
-
-            <div className="relative my-5">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-border" />
-              </div>
-              <div className="relative flex justify-center">
-                <span className="bg-card px-2 text-xs uppercase tracking-wider text-muted-foreground">
-                  Or continue with
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleSocialLogin("google")}
-                disabled={loading}
-                className="w-full"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-                  <path
-                    fill="#EA4335"
-                    d="M12 10.2v3.9h5.5c-.2 1.4-1.6 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.7 3.4 14.6 2.5 12 2.5 6.8 2.5 2.6 6.7 2.6 12s4.2 9.5 9.4 9.5c5.4 0 9-3.8 9-9.2 0-.6-.1-1.1-.2-1.6H12z"
-                  />
-                </svg>
-                Google
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleSocialLogin("facebook")}
-                disabled={loading}
-                className="w-full"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-                  <path
-                    fill="#1877F2"
-                    d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.4v7A10 10 0 0 0 22 12z"
-                  />
-                </svg>
-                Facebook
-              </Button>
-            </div>
-
-            <p className="mt-6 text-center text-sm text-muted-foreground">
-              New to ReelCast?{" "}
-              <Link href="/register"
-                className="text-primary hover:underline font-medium"
-              >
-                Create an account
-              </Link>
-            </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
         </div>
@@ -317,9 +441,3 @@ const Login = () => {
 };
 
 export default Login;
-
-
-
-
-
-

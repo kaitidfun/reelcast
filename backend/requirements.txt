@@ -6,4 +6,10 @@ pydantic-settings
 passlib[bcrypt]
 python-jose[cryptography]
 python-multipart
-cors
+bcrypt
+python-dotenv
+authlib
+httpx
+itsdangerous
+pyotp
+qrcode[pil]
