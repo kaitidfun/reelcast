@@ -76,6 +76,12 @@ def get_db():
         db.close()
 
 import os
+from dotenv import load_dotenv
+
+# Load env variables before OAuth setup
+load_dotenv(".env.local")
+load_dotenv()
+
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
@@ -110,7 +116,7 @@ oauth.register(
     api_base_url='https://graph.facebook.com/',
     access_token_url='https://graph.facebook.com/v13.0/oauth/access_token',
     authorize_url='https://www.facebook.com/v13.0/dialog/oauth',
-    client_kwargs={'scope': 'email public_profile'}
+    client_kwargs={'scope': 'public_profile'}
 )
 
 @app.get("/auth/{provider}/login")
@@ -134,9 +140,9 @@ async def auth_callback(provider: str, request: Request, db: Session = Depends(g
         email = user_info.get("email")
         display_name = user_info.get("name", "Google User")
     elif provider == "facebook":
-        resp = await client.get('me?fields=id,name,email', token=token)
+        resp = await client.get('me?fields=id,name', token=token)
         user_info = resp.json()
-        email = user_info.get("email")
+        email = f"{user_info.get('id')}@facebook.com" # Use ID as mock email if email scope is denied
         display_name = user_info.get("name", "Facebook User")
     else:
         return RedirectResponse(url="http://localhost:3000/login?error=InvalidProvider")
