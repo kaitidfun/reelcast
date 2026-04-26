@@ -22,7 +22,6 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     display_name = Column(String)
     hashed_password = Column(String)
-    plan = Column(String, default="free")
 
 Base.metadata.create_all(bind=engine)
 
@@ -59,7 +58,6 @@ class UserResponse(BaseModel):
     id: int
     email: str
     display_name: str
-    plan: str
     
     class Config:
         from_attributes = True

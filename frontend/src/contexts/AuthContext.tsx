@@ -7,7 +7,6 @@ export interface MockUser {
   email: string;
   displayName: string;
   avatar: string;
-  plan: "free" | "pro" | "enterprise";
   joinedAt: string;
 }
 
@@ -49,7 +48,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           email: data.email,
           displayName: data.display_name || "Creator",
           avatar: "",
-          plan: data.plan || "free",
           joinedAt: new Date().toISOString(),
         });
       } else {
@@ -94,7 +92,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           email: data.user.email,
           displayName: data.user.display_name || "Creator",
           avatar: "",
-          plan: data.user.plan || "free",
           joinedAt: new Date().toISOString(),
         });
         return true;
@@ -122,7 +119,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           email: data.user.email,
           displayName: data.user.display_name || "Creator",
           avatar: "",
-          plan: data.user.plan || "free",
           joinedAt: new Date().toISOString(),
         });
         return true;
