@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -31,15 +31,33 @@ const Login = () => {
   const router = useRouter();
   const { toast } = useToast();
 
+  const searchParams = useSearchParams();
+  const tokenFromUrl = searchParams.get("token");
+
+  useEffect(() => {
+    if (tokenFromUrl) {
+      setLoading(true);
+      toast({
+        title: "Completing social login...",
+        description: "Authenticating and fetching your profile.",
+      });
+      // Store token and redirect
+      localStorage.setItem("rf_token", tokenFromUrl);
+      // Wait a moment for context to pick it up or just redirect
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 500);
+    }
+  }, [tokenFromUrl, toast]);
+
   const handleSocialLogin = async (provider: "google" | "facebook") => {
     setLoading(true);
     toast({
-      title: `Connecting to ${provider === "google" ? "Google" : "Facebook"}...`,
-      description: "Demo mode — signing you in with a mock account.",
+      title: `Redirecting to ${provider === "google" ? "Google" : "Facebook"}...`,
+      description: "Please wait while we redirect you to the authorization page.",
     });
-    const ok = await login(`${provider}.user@reelcast.ai`, "oauth");
-    setLoading(false);
-    if (ok) router.replace("/");
+    // Redirect to backend OAuth endpoint
+    window.location.href = `http://localhost:8000/auth/${provider}/login`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

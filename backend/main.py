@@ -75,9 +75,16 @@ def get_db():
     finally:
         db.close()
 
+import os
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
+from starlette.responses import RedirectResponse
+from authlib.integrations.starlette_client import OAuth, OAuthError
+
 # App setup
 app = FastAPI(title="ReelCast Auth API")
 
+app.add_middleware(SessionMiddleware, secret_key="supersecret-session-key")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"], # Frontend URL
@@ -85,6 +92,70 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# OAuth Setup
+oauth = OAuth()
+oauth.register(
+    name='google',
+    client_id=os.getenv("GOOGLE_CLIENT_ID", "dummy-client-id"),
+    client_secret=os.getenv("GOOGLE_CLIENT_SECRET", "dummy-client-secret"),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'}
+)
+
+oauth.register(
+    name='facebook',
+    client_id=os.getenv("FACEBOOK_CLIENT_ID", "dummy-client-id"),
+    client_secret=os.getenv("FACEBOOK_CLIENT_SECRET", "dummy-client-secret"),
+    api_base_url='https://graph.facebook.com/',
+    access_token_url='https://graph.facebook.com/v13.0/oauth/access_token',
+    authorize_url='https://www.facebook.com/v13.0/dialog/oauth',
+    client_kwargs={'scope': 'email public_profile'}
+)
+
+@app.get("/auth/{provider}/login")
+async def login_via_social(provider: str, request: Request):
+    redirect_uri = f"http://localhost:8000/auth/{provider}/callback"
+    client = oauth.create_client(provider)
+    return await client.authorize_redirect(request, redirect_uri)
+
+@app.get("/auth/{provider}/callback")
+async def auth_callback(provider: str, request: Request, db: Session = Depends(get_db)):
+    client = oauth.create_client(provider)
+    try:
+        token = await client.authorize_access_token(request)
+    except OAuthError:
+        return RedirectResponse(url="http://localhost:3000/login?error=OAuthError")
+
+    if provider == "google":
+        user_info = token.get('userinfo')
+        if not user_info:
+            user_info = await client.parse_id_token(request, token)
+        email = user_info.get("email")
+        display_name = user_info.get("name", "Google User")
+    elif provider == "facebook":
+        resp = await client.get('me?fields=id,name,email', token=token)
+        user_info = resp.json()
+        email = user_info.get("email")
+        display_name = user_info.get("name", "Facebook User")
+    else:
+        return RedirectResponse(url="http://localhost:3000/login?error=InvalidProvider")
+
+    if not email:
+        return RedirectResponse(url="http://localhost:3000/login?error=NoEmail")
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        user = User(email=email, display_name=display_name, hashed_password=None)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    access_token = create_access_token(
+        data={"sub": user.email}, 
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    return RedirectResponse(url=f"http://localhost:3000/login?token={access_token}")
 
 @app.get("/api/health")
 def health_check():
