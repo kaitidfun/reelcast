@@ -1,5 +1,8 @@
 ### Node
 
+# Dependencies
+node_modules/
+
 # Logs
 *.log
 
@@ -89,3 +92,23 @@ $RECYCLE.BIN/
 
 # NFS temporary files
 .nfs*
+
+### Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+### Database
+*.db
+*.sqlite3
+
+### IDE
+.vscode/
+.idea/
+
+### Bun
+bun.lock
+bun.lockb
