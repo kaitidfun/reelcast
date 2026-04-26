@@ -112,15 +112,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         body: JSON.stringify({ email, password, display_name: displayName }),
       });
       if (res.ok) {
-        const data = await res.json();
-        localStorage.setItem("rf_token", data.access_token);
-        setUser({
-          id: data.user.id.toString(),
-          email: data.user.email,
-          displayName: data.user.display_name || "Creator",
-          avatar: "",
-          joinedAt: new Date().toISOString(),
-        });
+        // Registration succeeds, but user must verify email before login.
         return true;
       }
     } catch (e) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Sparkles,
@@ -33,7 +33,16 @@ const Login = () => {
 
   const searchParams = useSearchParams();
   const tokenFromUrl = searchParams.get("token");
+  const verifyEmailSent = searchParams.get("verify_email_sent");
 
+  useEffect(() => {
+    if (verifyEmailSent === "1") {
+      toast({
+        title: "Verification email sent",
+        description: "Please check your inbox and click the verification link.",
+      });
+    }
+  }, [verifyEmailSent, toast]);
   useEffect(() => {
     if (tokenFromUrl) {
       setLoading(true);

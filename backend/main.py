@@ -1,13 +1,16 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy import create_engine, Column, Integer, String, Boolean
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from pydantic import BaseModel, EmailStr
 import bcrypt
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional
+import smtplib
+from email.message import EmailMessage
+import os
 
 # Database setup
 SQLALCHEMY_DATABASE_URL = "sqlite:///./reelcast.db"
@@ -22,6 +25,7 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     display_name = Column(String)
     hashed_password = Column(String)
+    is_email_verified = Column(Boolean, default=False)
 
 Base.metadata.create_all(bind=engine)
 
@@ -58,6 +62,7 @@ class UserResponse(BaseModel):
     id: int
     email: str
     display_name: str
+    is_email_verified: bool
     
     class Config:
         from_attributes = True
@@ -67,6 +72,9 @@ class Token(BaseModel):
     token_type: str
     user: UserResponse
 
+class VerifyEmailRequest(BaseModel):
+    token: str
+
 # Dependency
 def get_db():
     db = SessionLocal()
@@ -75,7 +83,6 @@ def get_db():
     finally:
         db.close()
 
-import os
 from dotenv import load_dotenv
 
 # Load env variables before OAuth setup
@@ -98,6 +105,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Email Settings
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+SMTP_USERNAME = os.getenv("SMTP_USERNAME")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+
+def send_verification_email(email_to: str, token: str):
+    if not SMTP_USERNAME or not SMTP_PASSWORD:
+        print("SMTP_USERNAME or SMTP_PASSWORD not set. Email will only be printed to console.")
+        return
+
+    msg = EmailMessage()
+    msg['Subject'] = 'Verify your ReelCast Account'
+    msg['From'] = SMTP_USERNAME
+    msg['To'] = email_to
+    
+    verify_url = f"http://localhost:3000/verify-email?token={token}"
+    msg.set_content(f"Welcome to ReelCast!\n\nPlease verify your email by clicking the link below:\n\n{verify_url}")
+
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(msg)
+            print(f"[{email_to}] Verification email sent successfully!")
+    except Exception as e:
+        print(f"Failed to send email to {email_to}: {e}")
 
 # OAuth Setup
 oauth = OAuth()
@@ -191,19 +226,56 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     return user
 
 @app.post("/register", response_model=Token)
-def register(user: UserCreate, db: Session = Depends(get_db)):
+def register(user: UserCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
     hashed_password = get_password_hash(user.password)
-    new_user = User(email=user.email, display_name=user.display_name, hashed_password=hashed_password)
+    new_user = User(email=user.email, display_name=user.display_name, hashed_password=hashed_password, is_email_verified=False)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     
+    # Generate an email verification token
+    verification_token = create_access_token(
+        data={"sub": new_user.email, "type": "verify_email"},
+        expires_delta=timedelta(hours=24)
+    )
+    verification_link = f"http://localhost:3000/verify-email?token={verification_token}"
+    print(f"\n[EMAIL LOG] Target Verification Link: {verification_link}\n")
+    
+    # Trigger actual email send in background
+    background_tasks.add_task(send_verification_email, new_user.email, verification_token)
+    
     access_token = create_access_token(data={"sub": new_user.email}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return {"access_token": access_token, "token_type": "bearer", "user": new_user}
+
+@app.post("/api/verify-email")
+def verify_email_api(payload: VerifyEmailRequest, db: Session = Depends(get_db)):
+    token = payload.token
+    if not token:
+        raise HTTPException(status_code=400, detail="Token is missing")
+    try:
+        payload_data = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload_data.get("sub")
+        token_type: str = payload_data.get("type")
+        if email is None or token_type != "verify_email":
+            raise HTTPException(status_code=400, detail="Invalid token payload")
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+        
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    if user.is_email_verified:
+        return {"message": "Email is already verified", "status": "success"}
+        
+    user.is_email_verified = True
+    db.commit()
+    
+    return {"message": "Email successfully verified!", "status": "success"}
 
 @app.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -213,6 +285,11 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user.is_email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email before logging in",
         )
     access_token = create_access_token(data={"sub": user.email}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return {"access_token": access_token, "token_type": "bearer", "user": user}

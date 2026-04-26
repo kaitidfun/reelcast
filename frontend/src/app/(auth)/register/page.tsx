@@ -100,7 +100,11 @@ const Register = () => {
     const ok = await register(email, password, displayName);
     setLoading(false);
     if (ok) {
-      router.replace("/");
+      toast({
+        title: "Check your email",
+        description: "We sent a verification link to your email address.",
+      });
+      router.replace("/login?verify_email_sent=1");
     } else {
       setError("Registration failed. Email might already exist.");
     }
