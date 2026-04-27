@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Sparkles,
@@ -9,17 +8,22 @@ import {
   ArrowLeft,
   CheckCircle2,
   KeyRound,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
+
+const API_URL = "http://localhost:8000";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -27,29 +31,50 @@ const ForgotPassword = () => {
     return () => clearInterval(t);
   }, [cooldown]);
 
-  const sendEmail = async () => {
+  const sendResetEmail = async () => {
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
+    setError("");
+    try {
+      const res = await fetch(`${API_URL}/api/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (res.ok) {
+        setSubmitted(true);
+        setCooldown(60);
+        toast.success("Reset link sent! Check your email.");
+      } else {
+        const data = await res.json().catch(() => ({ detail: "Something went wrong" }));
+        setError(data.detail || "Failed to send reset link");
+        toast.error(data.detail || "Failed to send reset link");
+      }
+    } catch {
+      setError("Failed to connect to server");
+      toast.error("Failed to connect to server");
+    }
     setLoading(false);
-    setSubmitted(true);
-    setCooldown(30);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
-    await sendEmail();
+    if (!email) {
+      setError("Please enter your email address");
+      return;
+    }
+    await sendResetEmail();
   };
 
   const handleResend = async () => {
     if (cooldown > 0) return;
-    await sendEmail();
+    await sendResetEmail();
   };
 
   const handleTryDifferent = () => {
     setSubmitted(false);
     setEmail("");
     setCooldown(0);
+    setError("");
   };
 
   return (
@@ -103,25 +128,42 @@ const ForgotPassword = () => {
                       id="email"
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => { setEmail(e.target.value); setError(""); }}
                       className="pl-10"
                       placeholder="you@company.com"
                       autoFocus
+                      disabled={loading}
                     />
                   </div>
                 </div>
 
+                {error && (
+                  <p className="text-sm text-destructive">{error}</p>
+                )}
+
                 <Button
                   type="submit"
                   className="w-full gradient-primary text-primary-foreground shadow-glow"
-                  disabled={loading}
+                  disabled={loading || !email}
                 >
-                  {loading ? "Sending..." : "Send reset link"}
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    "Send reset link"
+                  )}
                 </Button>
               </form>
             </>
           ) : (
-            <div className="flex flex-col items-center text-center">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center text-center"
+            >
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 mb-4">
                 <CheckCircle2 className="h-7 w-7 text-primary" />
               </div>
@@ -146,7 +188,12 @@ const ForgotPassword = () => {
                   {cooldown > 0
                     ? `Resend email in ${cooldown}s`
                     : loading
-                    ? "Resending..."
+                    ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Resending...
+                      </>
+                    )
                     : "Resend email"}
                 </Button>
                 <button
@@ -157,7 +204,7 @@ const ForgotPassword = () => {
                   Try a different email
                 </button>
               </div>
-            </div>
+            </motion.div>
           )}
 
           <div className="mt-6 border-t border-border pt-4">
@@ -195,6 +242,3 @@ const ForgotPassword = () => {
 };
 
 export default ForgotPassword;
-
-
-

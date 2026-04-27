@@ -13,7 +13,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from "@/components/ui/input-otp";
-import { User, Mail, Shield, Calendar, LogOut, Save, ToggleLeft, ToggleRight, ShieldCheck, ShieldOff, Copy, Check, Loader2, Lock, Eye, EyeOff } from "lucide-react";
+import { User, Mail, Shield, Calendar, LogOut, Save, ToggleLeft, ToggleRight, ShieldCheck, ShieldOff, Copy, Check, Loader2, Lock, Eye, EyeOff, CheckCircle2, KeyRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -45,6 +45,17 @@ const Account = () => {
   const [disablePassword, setDisablePassword] = useState("");
   const [showDisablePassword, setShowDisablePassword] = useState(false);
   const [disabling, setDisabling] = useState(false);
+
+  // Change Password State
+  const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [changePasswordError, setChangePasswordError] = useState("");
 
   const [socialPlatforms, setSocialPlatforms] = useState<PlatformToggle[]>([
     { id: "youtube", name: "YouTube", icon: "🎬", active: true },
@@ -158,6 +169,63 @@ const Account = () => {
     setDisabling(false);
   };
 
+  // ===== Change Password Flow =====
+  const getPasswordStrength = (pass: string) => {
+    if (!pass) return { score: 0, label: "", color: "" };
+    let score = 0;
+    if (pass.length >= 6) score++;
+    if (pass.length >= 8) score++;
+    if (/[A-Z]/.test(pass)) score++;
+    if (/[0-9]/.test(pass)) score++;
+    if (/[^A-Za-z0-9]/.test(pass)) score++;
+    if (score <= 1) return { score: 1, label: "Weak", color: "bg-red-500" };
+    if (score <= 2) return { score: 2, label: "Fair", color: "bg-orange-500" };
+    if (score <= 3) return { score: 3, label: "Good", color: "bg-yellow-500" };
+    if (score <= 4) return { score: 4, label: "Strong", color: "bg-green-400" };
+    return { score: 5, label: "Excellent", color: "bg-emerald-500" };
+  };
+  const pwStrength = getPasswordStrength(newPassword);
+
+  const openChangePassword = () => {
+    setShowChangePasswordDialog(true);
+    setCurrentPassword(""); setNewPassword(""); setConfirmNewPassword("");
+    setChangePasswordError("");
+    setShowCurrentPw(false); setShowNewPw(false); setShowConfirmPw(false);
+  };
+
+  const handleChangePassword = async () => {
+    setChangePasswordError("");
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      setChangePasswordError("Please fill in all fields"); return;
+    }
+    if (newPassword.length < 6) {
+      setChangePasswordError("New password must be at least 6 characters"); return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setChangePasswordError("New passwords do not match"); return;
+    }
+    setChangingPassword(true);
+    try {
+      const res = await fetch(`${API_URL}/api/change-password`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      });
+      if (res.ok) {
+        toast.success("Password changed successfully!");
+        setShowChangePasswordDialog(false);
+      } else {
+        const err = await res.json().catch(() => ({ detail: "Failed to change password" }));
+        setChangePasswordError(err.detail);
+        toast.error(err.detail);
+      }
+    } catch {
+      setChangePasswordError("Failed to connect to server");
+      toast.error("Failed to connect to server");
+    }
+    setChangingPassword(false);
+  };
+
   const PlatformRow = ({ platform, onToggle }: { platform: PlatformToggle; onToggle: (id: string) => void }) => (
     <div className="flex items-center justify-between py-2.5">
       <div className="flex items-center gap-3">
@@ -232,7 +300,7 @@ const Account = () => {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div><p className="text-sm font-medium text-foreground">Password</p><p className="text-xs text-muted-foreground">Change your account password</p></div>
-              <Button variant="outline" size="sm" onClick={() => toast.info("Mock mode — cannot change password")}>Change Password</Button>
+              <Button variant="outline" size="sm" onClick={openChangePassword}><KeyRound className="h-3.5 w-3.5" /> Change Password</Button>
             </div>
             <Separator />
             {/* 2FA Row */}
@@ -393,6 +461,69 @@ const Account = () => {
             </div>
             <Button className="w-full" variant="destructive" onClick={handleDisable2fa} disabled={disabling || disableOtp.length !== 6 || !disablePassword}>
               {disabling ? <><Loader2 className="h-4 w-4 animate-spin" /> Disabling...</> : "Disable 2FA"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== CHANGE PASSWORD DIALOG ===== */}
+      <Dialog open={showChangePasswordDialog} onOpenChange={setShowChangePasswordDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5 text-primary" /> Change Password</DialogTitle>
+            <DialogDescription>Enter your current password and choose a new one.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Current Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input type={showCurrentPw ? "text" : "password"} value={currentPassword} onChange={(e) => { setCurrentPassword(e.target.value); setChangePasswordError(""); }} className="pl-10 pr-10" placeholder="Enter current password" disabled={changingPassword} />
+                <button type="button" onClick={() => setShowCurrentPw((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                  {showCurrentPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <Separator />
+            <div className="space-y-2">
+              <Label>New Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input type={showNewPw ? "text" : "password"} value={newPassword} onChange={(e) => { setNewPassword(e.target.value); setChangePasswordError(""); }} className="pl-10 pr-10" placeholder="Enter new password" disabled={changingPassword} />
+                <button type="button" onClick={() => setShowNewPw((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                  {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {newPassword && (
+                <div className="space-y-1.5">
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div key={i} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${i <= pwStrength.score ? pwStrength.color : "bg-muted"}`} />
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Strength: <span className="font-medium text-foreground">{pwStrength.label}</span></p>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Confirm New Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input type={showConfirmPw ? "text" : "password"} value={confirmNewPassword} onChange={(e) => { setConfirmNewPassword(e.target.value); setChangePasswordError(""); }} className="pl-10 pr-10" placeholder="Confirm new password" disabled={changingPassword} />
+                <button type="button" onClick={() => setShowConfirmPw((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                  {showConfirmPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {confirmNewPassword && newPassword && confirmNewPassword !== newPassword && (
+                <p className="text-xs text-destructive">Passwords do not match</p>
+              )}
+              {confirmNewPassword && newPassword && confirmNewPassword === newPassword && (
+                <p className="text-xs text-green-500 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Passwords match</p>
+              )}
+            </div>
+            {changePasswordError && <p className="text-sm text-destructive">{changePasswordError}</p>}
+            <Button className="w-full gradient-primary text-primary-foreground shadow-glow" onClick={handleChangePassword} disabled={changingPassword || !currentPassword || !newPassword || !confirmNewPassword}>
+              {changingPassword ? <><Loader2 className="h-4 w-4 animate-spin" /> Changing...</> : "Change Password"}
             </Button>
           </div>
         </DialogContent>

@@ -100,6 +100,17 @@ class TwoFactorDisableRequest(BaseModel):
     code: str
     password: str
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
 # Dependency
 def get_db():
     db = SessionLocal()
@@ -158,6 +169,36 @@ def send_verification_email(email_to: str, token: str):
             print(f"[{email_to}] Verification email sent successfully!")
     except Exception as e:
         print(f"Failed to send email to {email_to}: {e}")
+
+def send_password_reset_email(email_to: str, token: str):
+    if not SMTP_USERNAME or not SMTP_PASSWORD:
+        print("SMTP_USERNAME or SMTP_PASSWORD not set. Password reset email will only be printed to console.")
+        return
+
+    msg = EmailMessage()
+    msg['Subject'] = 'Reset your ReelCast Password'
+    msg['From'] = SMTP_USERNAME
+    msg['To'] = email_to
+    
+    reset_url = f"http://localhost:3000/reset-password?token={token}"
+    msg.set_content(
+        f"Hello,\n\n"
+        f"We received a request to reset your ReelCast account password.\n\n"
+        f"Click the link below to reset your password:\n\n"
+        f"{reset_url}\n\n"
+        f"This link will expire in 30 minutes.\n\n"
+        f"If you didn't request this, you can safely ignore this email.\n\n"
+        f"— The ReelCast Team"
+    )
+
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(msg)
+            print(f"[{email_to}] Password reset email sent successfully!")
+    except Exception as e:
+        print(f"Failed to send password reset email to {email_to}: {e}")
 
 # OAuth Setup
 oauth = OAuth()
@@ -334,6 +375,96 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 @app.get("/me", response_model=UserResponse)
 def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+# ==================== Password Management Endpoints ====================
+
+@app.post("/api/change-password")
+def change_password(
+    body: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Change password for the currently authenticated user.
+    Requires the current password for verification.
+    """
+    # Verify current password
+    if not current_user.hashed_password or not verify_password(body.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    
+    # Validate new password
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+    
+    if body.current_password == body.new_password:
+        raise HTTPException(status_code=400, detail="New password must be different from current password")
+    
+    # Update password
+    current_user.hashed_password = get_password_hash(body.new_password)
+    db.commit()
+    
+    return {"message": "Password changed successfully"}
+
+@app.post("/api/forgot-password")
+def forgot_password(
+    body: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Request a password reset email.
+    Always returns success to prevent email enumeration attacks.
+    """
+    user = db.query(User).filter(User.email == body.email).first()
+    
+    if user and user.hashed_password:
+        # Generate a password reset token (30 min expiry)
+        reset_token = create_access_token(
+            data={"sub": user.email, "type": "password_reset"},
+            expires_delta=timedelta(minutes=30)
+        )
+        reset_link = f"http://localhost:3000/reset-password?token={reset_token}"
+        print(f"\n[PASSWORD RESET] Reset link for {user.email}: {reset_link}\n")
+        
+        # Send email in background
+        background_tasks.add_task(send_password_reset_email, user.email, reset_token)
+    else:
+        # Don't reveal whether the email exists
+        print(f"\n[PASSWORD RESET] No account found for {body.email} (or OAuth-only account)\n")
+    
+    return {
+        "message": "If an account with that email exists, a password reset link has been sent.",
+        "status": "success"
+    }
+
+@app.post("/api/reset-password")
+def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Reset password using a valid reset token from the email link.
+    """
+    # Validate the reset token
+    try:
+        payload = jwt.decode(body.token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        token_type: str = payload.get("type")
+        if email is None or token_type != "password_reset":
+            raise HTTPException(status_code=400, detail="Invalid reset token")
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Validate new password
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    # Update password
+    user.hashed_password = get_password_hash(body.new_password)
+    db.commit()
+    
+    return {"message": "Password has been reset successfully", "status": "success"}
 
 # ==================== 2FA Endpoints ====================
 
