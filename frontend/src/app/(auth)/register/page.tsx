@@ -9,9 +9,6 @@ import {
   Lock,
   User,
   ArrowRight,
-  Store,
-  TrendingUp,
-  Briefcase,
   Eye,
   EyeOff,
   Users,
@@ -22,14 +19,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import authHero from "@/assets/auth-hero-register.jpg";
 
-const roles = [
-  { id: "merchant", label: "Online Merchant", icon: Store, desc: "I sell on marketplaces" },
-  { id: "affiliate", label: "Affiliate", icon: TrendingUp, desc: "I promote products" },
-  { id: "brand", label: "Brand Owner", icon: Briefcase, desc: "I own a brand" },
-];
 
 function getStrength(pw: string) {
   let score = 0;
@@ -56,26 +48,15 @@ const Register = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedRole, setSelectedRole] = useState("merchant");
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login, register } = useAuth();
+  const { register } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
   const strength = useMemo(() => getStrength(password), [password]);
-
-  const handleSocialLogin = async (provider: "google" | "facebook") => {
-    setLoading(true);
-    toast({
-      title: `Connecting to ${provider === "google" ? "Google" : "Facebook"}...`,
-      description: "Demo mode — creating an account with a mock profile.",
-    });
-    const ok = await login(`${provider}.user@reelcast.ai`, "oauth");
-    setLoading(false);
-    if (ok) router.replace("/");
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,16 +162,24 @@ const Register = () => {
               </div>
             </div>
 
-            <h2 className="font-display text-xl font-bold text-foreground mb-1">
-              Start creating in minutes
-            </h2>
-            <p className="text-xs text-muted-foreground mb-4">
-              Free to try. No credit card required.
-            </p>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="register-form"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <h2 className="font-display text-xl font-bold text-foreground mb-1">
+                  Start creating in minutes
+                </h2>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Free to try. No credit card required.
+                </p>
 
-            <form onSubmit={handleSubmit} className="space-y-3">
+                <form onSubmit={handleSubmit} className="space-y-3">
               <div className="space-y-1.5">
-                <Label htmlFor="name" className="text-xs">Full name</Label>
+                <Label htmlFor="name" className="text-xs">Username</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -198,13 +187,13 @@ const Register = () => {
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     className="pl-10 h-9"
-                    placeholder="Jane Doe"
+                    placeholder="username"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-xs">Work email</Label>
+                <Label htmlFor="email" className="text-xs">Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -213,13 +202,13 @@ const Register = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 h-9"
-                    placeholder="you@company.com"
+                    placeholder="youremail@example.com"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-xs">Password</Label>
+                <Label htmlFor="password" className="text-xs">Password <span className="text-muted-foreground text-xs">(At least 6 characters)</span></Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -228,7 +217,7 @@ const Register = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10 h-9"
-                    placeholder="At least 6 characters"
+                    placeholder="password"
                   />
                   <button
                     type="button"
@@ -249,9 +238,8 @@ const Register = () => {
                       {[0, 1, 2, 3].map((i) => (
                         <div
                           key={i}
-                          className={`h-1 flex-1 rounded-full transition-colors ${
-                            i < strength ? strengthColors[strength] : "bg-muted"
-                          }`}
+                          className={`h-1 flex-1 rounded-full transition-colors ${i < strength ? strengthColors[strength] : "bg-muted"
+                            }`}
                         />
                       ))}
                     </div>
@@ -268,12 +256,24 @@ const Register = () => {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="confirm"
-                    type={showPassword ? "text" : "password"}
+                    type={showConfirmPassword ? "text" : "password"}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="pl-10 h-9"
-                    placeholder="Re-type your password"
+                    className="pl-10 pr-10 h-9"
+                    placeholder="re-type your password"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((s) => !s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -314,6 +314,8 @@ const Register = () => {
                 Sign in
               </Link>
             </p>
+              </motion.div>
+            </AnimatePresence>
           </div>
 
         </div>

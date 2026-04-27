@@ -24,8 +24,8 @@ import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from "@/comp
 import authHero from "@/assets/auth-hero-login.jpg";
 
 const Login = () => {
-  const [email, setEmail] = useState("creator@reelcast.ai");
-  const [password, setPassword] = useState("demo123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
@@ -196,10 +196,6 @@ const Login = () => {
 
           {/* FORM PANEL (right on desktop) */}
           <div className="relative p-6 sm:p-10 lg:order-2">
-            <span className="absolute right-4 top-4 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Demo mode
-            </span>
-
             <div className="mb-7 flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl gradient-primary shadow-glow">
                 <Sparkles className="h-5 w-5 text-primary-foreground" />
@@ -232,7 +228,7 @@ const Login = () => {
 
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="email">Work email</Label>
+                      <Label htmlFor="email">Email</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -241,7 +237,7 @@ const Login = () => {
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           className="pl-10"
-                          placeholder="you@company.com"
+                          placeholder="youremail@example.com"
                         />
                       </div>
                     </div>
@@ -256,7 +252,7 @@ const Login = () => {
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           className="pl-10 pr-10"
-                          placeholder="••••••••"
+                          placeholder="password"
                         />
                         <button
                           type="button"
