@@ -13,3 +13,4 @@ httpx
 itsdangerous
 pyotp
 qrcode[pil]
+email-validator
