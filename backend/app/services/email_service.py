@@ -35,6 +35,7 @@ def send_verification_email(email_to: str, token: str):
             print(f"[{email_to}] Verification email sent successfully!")
     except Exception as e:
         print(f"Failed to send email to {email_to}: {e}")
+        raise
 
 
 def send_password_reset_email(email_to: str, token: str):

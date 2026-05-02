@@ -40,7 +40,6 @@ router = APIRouter()
 @router.post("/register", response_model=Token)
 def register(
     user: UserCreate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     db_user = db.query(User).filter(User.email == user.email).first()
@@ -66,8 +65,18 @@ def register(
     verification_link = f"{FRONTEND_URL}/verify-email?token={verification_token}"
     print(f"\n[EMAIL LOG] Target Verification Link: {verification_link}\n")
 
-    # Trigger actual email send in background
-    background_tasks.add_task(send_verification_email, new_user.email, verification_token)
+    # Send verification email synchronously so failures can be caught
+    try:
+        send_verification_email(new_user.email, verification_token)
+    except Exception as e:
+        # Rollback the user creation to prevent orphaned records
+        print(f"\n[REGISTER ERROR] Email sending failed, rolling back user creation: {e}\n")
+        db.delete(new_user)
+        db.commit()
+        raise HTTPException(
+            status_code=500,
+            detail="Registration failed due to an email delivery issue. Please try again later.",
+        )
 
     access_token = create_access_token(
         data={"sub": new_user.email},

@@ -19,7 +19,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; requires2fa?: boolean; tempToken?: string }>;
   verify2faLogin: (tempToken: string, code: string) => Promise<boolean>;
-  register: (email: string, password: string, displayName: string) => Promise<boolean>;
+  register: (email: string, password: string, displayName: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   updateProfile: (updates: Partial<MockUser>) => void;
   refreshUser: () => Promise<void>;
@@ -165,12 +165,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
       if (res.ok) {
         // Registration succeeds, but user must verify email before login.
-        return true;
+        return { ok: true };
+      } else {
+        const errorData = await res.json().catch(() => null);
+        return { ok: false, error: errorData?.detail || "Registration failed. Please try again." };
       }
     } catch (e) {
       console.error(e);
+      return { ok: false, error: "Network error. Please check your connection." };
     }
-    return false;
   }, []);
 
   const logout = useCallback(() => {
