@@ -8,7 +8,7 @@ import io
 import base64
 
 from app.dependencies import get_db, get_current_user
-from app.models.user import User
+from app.models.models import User
 from app.schemas.user import TwoFactorVerifyRequest, TwoFactorLoginRequest, TwoFactorDisableRequest
 from app.services.auth_service import verify_password, create_access_token
 from app.core.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
@@ -138,7 +138,7 @@ def verify_2fa_login(body: TwoFactorLoginRequest, db: Session = Depends(get_db))
         "access_token": access_token,
         "token_type": "bearer",
         "user": {
-            "id": user.id,
+            "id": str(user.user_id),
             "email": user.email,
             "display_name": user.display_name,
             "is_email_verified": user.is_email_verified,

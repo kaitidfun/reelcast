@@ -12,7 +12,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "supersecret-session-key")
 
 # Database
-SQLALCHEMY_DATABASE_URL = "sqlite:///./reelcast.db"
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:tonnoon2005@localhost:5432/reel_cast")
 
 # CORS
 ALLOWED_ORIGINS = [

@@ -3,11 +3,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.core.config import ALLOWED_ORIGINS, SESSION_SECRET_KEY
-from app.database import engine, Base
+from app.database import engine, Base, SessionLocal
+import app.models.models  # Import models so Base knows about them
 from app.routes import auth_routes, twofa_routes, oauth_routes
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
+
+def get_db():
+    """Dependency to yield database session."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # App setup
 app = FastAPI(title="ReelCast Auth API")

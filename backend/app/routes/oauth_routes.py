@@ -6,7 +6,7 @@ from authlib.integrations.starlette_client import OAuth, OAuthError
 from datetime import timedelta
 
 from app.dependencies import get_db
-from app.models.user import User
+from app.models.models import User
 from app.services.auth_service import create_access_token
 from app.core.config import (
     ACCESS_TOKEN_EXPIRE_MINUTES,

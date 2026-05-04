@@ -8,8 +8,10 @@ class UserCreate(BaseModel):
     display_name: str
 
 
+from uuid import UUID
+
 class UserResponse(BaseModel):
-    id: int
+    id: UUID
     email: str
     display_name: str
     is_email_verified: bool

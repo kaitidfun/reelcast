@@ -14,3 +14,4 @@ itsdangerous
 pyotp
 qrcode[pil]
 email-validator
+psycopg2-binary
