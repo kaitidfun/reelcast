@@ -83,21 +83,26 @@ interface Campaign {
   name: string;
   description: string;
   reelsCount: number;
-  banner: string; // tailwind gradient classes for banner background (fallback)
-  bannerImage?: string; // data URL or remote URL — overrides gradient when present
+  bannerColor: string; // The enum value from backend
+  bannerImage?: string; // data URL or remote URL — overrides color when present
   products: Product[];
   createdAt: string; // ISO
   updatedAt: string; // ISO
 }
 
-const BANNER_PRESETS: { label: string; value: string }[] = [
-  { label: "Sunset", value: "from-orange-500 via-pink-500 to-purple-600" },
-  { label: "Ocean", value: "from-cyan-500 via-blue-500 to-indigo-600" },
-  { label: "Forest", value: "from-emerald-500 via-teal-500 to-cyan-600" },
-  { label: "Royal", value: "from-violet-500 via-purple-500 to-fuchsia-600" },
-  { label: "Ember", value: "from-rose-500 via-red-500 to-orange-500" },
-  { label: "Mint", value: "from-lime-400 via-emerald-500 to-teal-600" },
+const BANNER_PRESETS: { label: string; value: string; gradient: string }[] = [
+  { label: "Twilight", value: "Twilight", gradient: "from-orange-500 via-pink-500 to-purple-600" },
+  { label: "Pacific", value: "Pacific", gradient: "from-cyan-500 via-blue-500 to-indigo-600" },
+  { label: "Seafoam", value: "Seafoam", gradient: "from-emerald-500 via-teal-500 to-cyan-600" },
+  { label: "Amethyst", value: "Amethyst", gradient: "from-violet-500 via-purple-500 to-fuchsia-600" },
+  { label: "Sunrise", value: "Sunrise", gradient: "from-rose-500 via-red-500 to-orange-500" },
+  { label: "Aurora", value: "Aurora", gradient: "from-lime-400 via-emerald-500 to-teal-600" },
 ];
+
+const getBannerGradient = (color: string) => {
+  const preset = BANNER_PRESETS.find((p) => p.value === color);
+  return preset ? preset.gradient : BANNER_PRESETS[0].gradient;
+};
 
 // Helper: produce a deterministic ISO date offset by N days back from now
 const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
@@ -172,7 +177,8 @@ const ContentLibrary = () => {
           name: c.name,
           description: c.description || "",
           reelsCount: 0,
-          banner: "from-blue-500 via-indigo-500 to-purple-600",
+          bannerColor: c.banner_color || "Twilight",
+          bannerImage: c.banner_image_url || undefined,
           products: prodData.products.filter((p: any) => p.campaign_id === c.campaign_id).map((p: any) => {
              const primaryImage = p.images?.find((img: any) => img.is_primary)?.image_url || p.images?.[0]?.image_url;
              return {
@@ -222,7 +228,7 @@ const ContentLibrary = () => {
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
   const [cName, setCName] = useState("");
   const [cDescription, setCDescription] = useState("");
-  const [cBanner, setCBanner] = useState<string>(BANNER_PRESETS[0].value);
+  const [cBanner, setCBanner] = useState<string>("Twilight");
   const [cBannerImage, setCBannerImage] = useState<string>("");
   const cBannerInputRef = useRef<HTMLInputElement>(null);
 
@@ -462,7 +468,7 @@ const ContentLibrary = () => {
   const resetCampaignForm = () => {
     setCName("");
     setCDescription("");
-    setCBanner(BANNER_PRESETS[0].value);
+    setCBanner("Twilight");
     setCBannerImage("");
     setEditingCampaignId(null);
   };
@@ -477,7 +483,7 @@ const ContentLibrary = () => {
     setEditingCampaignId(campaign.id);
     setCName(campaign.name);
     setCDescription(campaign.description);
-    setCBanner(campaign.banner);
+    setCBanner(campaign.bannerColor || "Twilight");
     setCBannerImage(campaign.bannerImage ?? "");
     setIsCampaignDialogOpen(true);
   };
@@ -509,7 +515,9 @@ const ContentLibrary = () => {
         headers,
         body: JSON.stringify({
           name: cName.trim(),
-          description: cDescription.trim()
+          description: cDescription.trim(),
+          banner_color: cBanner,
+          banner_image_url: cBannerImage
         })
       });
       toast({ title: "Campaign updated" });
@@ -519,7 +527,9 @@ const ContentLibrary = () => {
         headers,
         body: JSON.stringify({
           name: cName.trim(),
-          description: cDescription.trim()
+          description: cDescription.trim(),
+          banner_color: cBanner,
+          banner_image_url: cBannerImage
         })
       });
       toast({ title: "Campaign created" });
@@ -559,7 +569,7 @@ const ContentLibrary = () => {
             {/* Banner preview */}
             <div
               className={`relative h-28 rounded-xl overflow-hidden ${
-                cBannerImage ? "" : `bg-gradient-to-br ${cBanner}`
+                cBannerImage ? "" : `bg-gradient-to-br ${getBannerGradient(cBanner)}`
               }`}
               style={cBannerImage ? { backgroundImage: `url(${cBannerImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
             >
@@ -618,7 +628,7 @@ const ContentLibrary = () => {
                       setCBannerImage("");
                     }}
                     title={preset.label}
-                    className={`h-10 rounded-lg bg-gradient-to-br ${preset.value} ring-2 transition-all ${
+                    className={`h-10 rounded-lg bg-gradient-to-br ${preset.gradient} transition-all ring-2 ring-offset-2 ring-offset-background ${
                       cBanner === preset.value && !cBannerImage
                         ? "ring-primary scale-105"
                         : "ring-transparent hover:ring-border"
@@ -766,7 +776,7 @@ const ContentLibrary = () => {
                 >
                   {/* Banner */}
                   <div
-                    className={`relative h-28 overflow-hidden ${campaign.bannerImage ? "" : `bg-gradient-to-br ${campaign.banner}`}`}
+                    className={`relative h-28 overflow-hidden ${campaign.bannerImage ? "" : `bg-gradient-to-br ${getBannerGradient(campaign.bannerColor)}`}`}
                     style={campaign.bannerImage ? { backgroundImage: `url(${campaign.bannerImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
                   >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.25),transparent_60%)]" />
@@ -873,7 +883,7 @@ const ContentLibrary = () => {
                   className="group flex items-center gap-4 p-4 rounded-2xl border border-border bg-card cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
                 >
                   <div
-                    className={`relative h-12 w-16 rounded-lg shrink-0 overflow-hidden ${campaign.bannerImage ? "" : `bg-gradient-to-br ${campaign.banner}`}`}
+                    className={`relative h-12 w-16 rounded-lg shrink-0 overflow-hidden ${campaign.bannerImage ? "" : `bg-gradient-to-br ${getBannerGradient(campaign.bannerColor)}`}`}
                     style={campaign.bannerImage ? { backgroundImage: `url(${campaign.bannerImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
                   >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.3),transparent_60%)]" />

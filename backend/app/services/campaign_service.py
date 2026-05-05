@@ -18,11 +18,15 @@ def create_campaign(
     user_id: UUID,
     name: str,
     description: Optional[str] = None,
+    banner_color: Optional[str] = None,
+    banner_image_url: Optional[str] = None,
 ) -> Campaign:
     campaign = Campaign(
         user_id=user_id,
         name=name,
         description=description,
+        banner_color=banner_color or "Twilight",
+        banner_image_url=banner_image_url,
     )
     db.add(campaign)
     db.commit()
@@ -64,11 +68,17 @@ def update_campaign(
     campaign: Campaign,
     name: Optional[str] = None,
     description: Optional[str] = None,
+    banner_color: Optional[str] = None,
+    banner_image_url: Optional[str] = None,
 ) -> Campaign:
     if name is not None:
         campaign.name = name
     if description is not None:
         campaign.description = description
+    if banner_color is not None:
+        campaign.banner_color = banner_color
+    if banner_image_url is not None:
+        campaign.banner_image_url = banner_image_url
     db.commit()
     db.refresh(campaign)
     return campaign

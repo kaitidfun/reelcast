@@ -28,6 +28,8 @@ def create_campaign(
         user_id=current_user.user_id,
         name=campaign_in.name,
         description=campaign_in.description,
+        banner_color=campaign_in.banner_color,
+        banner_image_url=None if campaign_in.banner_image_url == "" else campaign_in.banner_image_url,
     )
     db.add(new_campaign)
     db.commit()
@@ -97,6 +99,10 @@ def update_campaign(
         campaign.name = campaign_in.name
     if campaign_in.description is not None:
         campaign.description = campaign_in.description
+    if campaign_in.banner_color is not None:
+        campaign.banner_color = campaign_in.banner_color
+    if campaign_in.banner_image_url is not None:
+        campaign.banner_image_url = None if campaign_in.banner_image_url == "" else campaign_in.banner_image_url
         
     db.commit()
     db.refresh(campaign)

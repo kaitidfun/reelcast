@@ -4,7 +4,17 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP, JSONB
 from sqlalchemy.orm import relationship
+import enum
 from app.database import Base
+
+
+class BannerColor(str, enum.Enum):
+    Twilight = "Twilight"
+    Pacific = "Pacific"
+    Seafoam = "Seafoam"
+    Amethyst = "Amethyst"
+    Sunrise = "Sunrise"
+    Aurora = "Aurora"
 
 
 class User(Base):
@@ -96,6 +106,13 @@ class Campaign(Base):
     )
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
+    banner_color = Column(
+        Enum(BannerColor, name="banner_color_enum"),
+        nullable=False,
+        server_default="Twilight",
+        default=BannerColor.Twilight
+    )
+    banner_image_url = Column(String, nullable=True)
     created_at = Column(
         TIMESTAMP(timezone=True),
         nullable=False,

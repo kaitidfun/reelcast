@@ -52,16 +52,30 @@ type LibraryProduct = {
 type LibraryCampaign = {
   id: string;
   name: string;
-  banner: string;
+  bannerColor: string;
   emoji: string;
   products: LibraryProduct[];
+};
+
+const BANNER_PRESETS: { label: string; value: string; gradient: string }[] = [
+  { label: "Twilight", value: "Twilight", gradient: "from-orange-500 via-pink-500 to-purple-600" },
+  { label: "Pacific", value: "Pacific", gradient: "from-cyan-500 via-blue-500 to-indigo-600" },
+  { label: "Seafoam", value: "Seafoam", gradient: "from-emerald-500 via-teal-500 to-cyan-600" },
+  { label: "Amethyst", value: "Amethyst", gradient: "from-violet-500 via-purple-500 to-fuchsia-600" },
+  { label: "Sunrise", value: "Sunrise", gradient: "from-rose-500 via-red-500 to-orange-500" },
+  { label: "Aurora", value: "Aurora", gradient: "from-lime-400 via-emerald-500 to-teal-600" },
+];
+
+const getBannerGradient = (color: string) => {
+  const preset = BANNER_PRESETS.find((p) => p.value === color);
+  return preset ? preset.gradient : BANNER_PRESETS[0].gradient;
 };
 
 const productLibrary: LibraryCampaign[] = [
   {
     id: "summer-2026",
     name: "Summer Sale 2026",
-    banner: "from-amber-500/40 via-orange-500/30 to-pink-500/40",
+    bannerColor: "Sunrise",
     emoji: "🏖️",
     products: [
       { id: "p1", name: "Summer Dress Collection", thumbnail: "🏖️", highlights: "Lightweight fabric, breezy fit, 5 pastel colors for summer outings" },
@@ -72,7 +86,7 @@ const productLibrary: LibraryCampaign[] = [
   {
     id: "accessories",
     name: "Accessories Launch",
-    banner: "from-yellow-500/40 via-amber-400/30 to-rose-500/40",
+    bannerColor: "Twilight",
     emoji: "⌚",
     products: [
       { id: "p4", name: "Minimal Watch — Gold", thumbnail: "⌚", highlights: "Sapphire glass, 18K gold plating, quiet quartz movement" },
@@ -83,7 +97,7 @@ const productLibrary: LibraryCampaign[] = [
   {
     id: "beauty-week",
     name: "Beauty Week",
-    banner: "from-pink-500/40 via-fuchsia-500/30 to-purple-500/40",
+    bannerColor: "Amethyst",
     emoji: "💄",
     products: [
       { id: "p7", name: "Skincare Bundle Set", thumbnail: "🧴", highlights: "Cleanser, serum & moisturizer — clinically tested glow routine" },
@@ -93,7 +107,7 @@ const productLibrary: LibraryCampaign[] = [
   {
     id: "tech-deals",
     name: "Tech Deals",
-    banner: "from-sky-500/40 via-indigo-500/30 to-violet-500/40",
+    bannerColor: "Pacific",
     emoji: "🎧",
     products: [
       { id: "p9", name: "Wireless Earbuds Pro", thumbnail: "🎧", highlights: "Active noise cancelling, 30h battery, hi-res audio" },
@@ -1001,7 +1015,7 @@ const CreateReel = () => {
                       onClick={() => { setActiveCampaignId(campaign.id); setPickerView("products"); }}
                       className="group rounded-lg border border-border bg-card overflow-hidden text-left cursor-pointer transition-all hover:ring-2 hover:ring-primary hover:-translate-y-0.5 hover:shadow-glow"
                     >
-                      <div className={`h-24 w-full bg-gradient-to-br ${campaign.banner} flex items-center justify-center text-4xl`}>
+                      <div className={`h-24 w-full bg-gradient-to-br ${getBannerGradient(campaign.bannerColor)} flex items-center justify-center text-4xl`}>
                         <span className="drop-shadow-sm">{campaign.emoji}</span>
                       </div>
                       <div className="p-3 space-y-1">
@@ -1024,7 +1038,7 @@ const CreateReel = () => {
                     className="w-5 h-5 mr-2 cursor-pointer hover:text-primary transition-colors text-muted-foreground"
                     onClick={() => { setPickerView("campaigns"); setActiveCampaignId(null); }}
                   />
-                  <div className={`h-10 w-10 rounded-md bg-gradient-to-br ${activeCampaign.banner} flex items-center justify-center text-xl mr-2.5`}>
+                  <div className={`h-10 w-10 rounded-md bg-gradient-to-br ${getBannerGradient(activeCampaign.bannerColor)} flex items-center justify-center text-xl mr-2.5`}>
                     {activeCampaign.emoji}
                   </div>
                   <div>
