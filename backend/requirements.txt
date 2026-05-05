@@ -15,3 +15,4 @@ pyotp
 qrcode[pil]
 email-validator
 psycopg2-binary
+boto3
