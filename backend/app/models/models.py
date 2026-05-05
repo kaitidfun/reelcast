@@ -164,7 +164,11 @@ class Product(Base):
 class ProductImage(Base):
     __tablename__ = "product_images"
 
-    image_id = Column(UUID(as_uuid=True), primary_key=True)
+    image_id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
     product_id = Column(
         UUID(as_uuid=True),
         ForeignKey("products.product_id", ondelete="CASCADE"),

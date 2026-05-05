@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from uuid import UUID
+import uuid
 from typing import List
 
 from app.dependencies import get_db, get_current_user
@@ -50,6 +51,7 @@ def create_product(
     if product_in.images:
         for img_data in product_in.images:
             new_img = ProductImage(
+                image_id=uuid.uuid4(),
                 product_id=new_product.product_id,
                 image_url=img_data.image_url,
                 is_primary=img_data.is_primary
@@ -253,6 +255,7 @@ async def upload_product_image(
                 img.is_primary = False
         
     new_image = ProductImage(
+        image_id=uuid.uuid4(),
         product_id=product.product_id,
         image_url=result["key"],
         is_primary=is_primary

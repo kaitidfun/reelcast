@@ -75,6 +75,7 @@ interface Product {
   campaignId?: string;
   campaignName?: string;
   images?: { url: string; isPrimary: boolean }[];
+  logo?: string;
 }
 
 interface Campaign {
@@ -184,7 +185,8 @@ const ContentLibrary = () => {
                 reelsGenerated: 0,
                 createdAt: p.created_at || new Date().toISOString(),
                 updatedAt: p.updated_at || new Date().toISOString(),
-                images: p.images?.map((img: any) => ({ url: `http://localhost:8000/api/upload/images/${img.image_url}`, isPrimary: img.is_primary })) || []
+                images: p.images?.map((img: any) => ({ url: `http://localhost:8000/api/upload/images/${img.image_url}`, isPrimary: img.is_primary })) || [],
+                logo: p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : undefined
              };
           }),
           createdAt: c.created_at || new Date().toISOString(),
@@ -312,7 +314,7 @@ const ContentLibrary = () => {
     setPLink(product.affiliateLink);
     setPCta("Shop Now");
     setPImages(product.images?.map(img => ({url: img.url, file: null})) || []);
-    setPLogo("");
+    setPLogo(product.logo || "");
     setPLogoFile(null);
     setIsProductDialogOpen(true);
   };
@@ -1260,14 +1262,21 @@ const ContentLibrary = () => {
                 </div>
                 <div>
                   <Label className="mb-2 block">Brand Logo</Label>
-                  <label className="relative overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-primary/40 hover:bg-muted/30 cursor-pointer transition-all min-h-[160px]">
+                  <label className="relative overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-primary/40 hover:bg-muted/30 cursor-pointer transition-all min-h-[160px] bg-card">
                     {pLogo ? (
-                      <img src={pLogo} alt="Logo preview" className="h-full w-full object-contain p-2 absolute inset-0" />
+                      <>
+                        <img src={pLogo} alt="Logo preview" className="h-full w-full object-contain p-2 absolute inset-0 bg-card" />
+                        <div className="absolute inset-0 bg-background/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                           <p className="text-xs font-medium text-foreground bg-background/80 px-2 py-1 rounded-md">Change Logo</p>
+                        </div>
+                      </>
                     ) : (
-                      <UploadCloud className="h-6 w-6 text-muted-foreground mb-2" />
+                      <>
+                        <UploadCloud className="h-6 w-6 text-muted-foreground mb-2" />
+                        <p className="text-xs text-foreground">Upload logo</p>
+                        <p className="text-[10px] text-muted-foreground mt-1">PNG up to 2MB</p>
+                      </>
                     )}
-                    <p className="text-xs text-foreground">Upload logo</p>
-                    <p className="text-[10px] text-muted-foreground mt-1">PNG up to 2MB</p>
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => { if(e.target.files?.[0]) { setPLogoFile(e.target.files[0]); setPLogo(URL.createObjectURL(e.target.files[0])); } }} />
                   </label>
                 </div>
