@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Sparkles,
   Play,
+  Package,
   Clock,
   Search,
   LayoutGrid,
@@ -69,7 +70,7 @@ const ProductReels = () => {
             keyPoints: p.description || "",
             affiliateLink: p.affiliate_link || "",
             status: "Active",
-            thumbnail: primaryImage ? `http://localhost:8000/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : "📦"),
+            thumbnail: primaryImage ? `http://localhost:8000/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : null),
             reelsGenerated: 0,
             campaignId: p.campaign_id,
             campaignName: "Campaign" // Could fetch campaign if needed
@@ -146,7 +147,7 @@ const ProductReels = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-4">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted text-4xl ring-1 ring-border">
-            {product.thumbnail.startsWith("http") ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : product.thumbnail}
+            {product.thumbnail ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
           </div>
           <div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">

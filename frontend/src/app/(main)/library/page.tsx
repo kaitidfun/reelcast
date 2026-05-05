@@ -72,6 +72,9 @@ interface Product {
   reelsGenerated: number;
   createdAt: string; // ISO
   updatedAt: string; // ISO
+  campaignId?: string;
+  campaignName?: string;
+  images?: { url: string; isPrimary: boolean }[];
 }
 
 interface Campaign {
@@ -177,10 +180,11 @@ const ContentLibrary = () => {
                 keyPoints: p.description || "",
                 affiliateLink: p.affiliate_link || "",
                 status: "Active",
-                thumbnail: primaryImage ? `http://localhost:8000/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : "📦"),
+                thumbnail: primaryImage ? `http://localhost:8000/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : null),
                 reelsGenerated: 0,
                 createdAt: p.created_at || new Date().toISOString(),
-                updatedAt: p.updated_at || new Date().toISOString()
+                updatedAt: p.updated_at || new Date().toISOString(),
+                images: p.images?.map((img: any) => ({ url: `http://localhost:8000/api/upload/images/${img.image_url}`, isPrimary: img.is_primary })) || []
              };
           }),
           createdAt: c.created_at || new Date().toISOString(),
@@ -236,10 +240,25 @@ const ContentLibrary = () => {
   const [pPoints, setPPoints] = useState("");
   const [pLink, setPLink] = useState("");
   const [pCta, setPCta] = useState("Shop Now");
-  const [pImage, setPImage] = useState<string>("");
+  const [pImages, setPImages] = useState<{url: string, file: File | null}[]>([]);
   const [pLogo, setPLogo] = useState<string>("");
-  const [pImageFile, setPImageFile] = useState<File | null>(null);
   const [pLogoFile, setPLogoFile] = useState<File | null>(null);
+
+  const handleMultipleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      const newImages = filesArray.map(file => ({
+        url: URL.createObjectURL(file),
+        file
+      }));
+      setPImages(prev => [...prev, ...newImages].slice(0, 5)); // Limit to 5
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setPImages(prev => prev.filter((_, i) => i !== index));
+  };
+
 
   const currentCampaign = campaigns.find((c) => c.id === openCampaignId) ?? null;
 
@@ -275,9 +294,8 @@ const ContentLibrary = () => {
     setPPoints("");
     setPLink("");
     setPCta("Shop Now");
-    setPImage("");
+    setPImages([]);
     setPLogo("");
-    setPImageFile(null);
     setPLogoFile(null);
     setEditingProductId(null);
   };
@@ -293,9 +311,8 @@ const ContentLibrary = () => {
     setPPoints(product.keyPoints);
     setPLink(product.affiliateLink);
     setPCta("Shop Now");
-    setPImage(product.thumbnail);
+    setPImages(product.images?.map(img => ({url: img.url, file: null})) || []);
     setPLogo("");
-    setPImageFile(null);
     setPLogoFile(null);
     setIsProductDialogOpen(true);
   };
@@ -347,17 +364,21 @@ const ContentLibrary = () => {
         toast({ title: "Product added" });
       }
 
-      if (productId && (pImageFile || pLogoFile)) {
+      if (productId && (pImages.some(img => img.file) || pLogoFile)) {
           try {
-              if (pImageFile) {
-                  const formData = new FormData();
-                  formData.append("file", pImageFile);
-                  const imgRes = await fetch(`http://localhost:8000/api/products/${productId}/images?is_primary=true`, {
-                      method: "POST",
-                      headers: { Authorization: `Bearer ${token}` },
-                      body: formData
-                  });
-                  if (!imgRes.ok) throw new Error("Failed to upload image");
+              for (let i = 0; i < pImages.length; i++) {
+                  const img = pImages[i];
+                  if (img.file) {
+                      const formData = new FormData();
+                      formData.append("file", img.file);
+                      const isPrimary = i === 0;
+                      const imgRes = await fetch(`http://localhost:8000/api/products/${productId}/images?is_primary=${isPrimary}`, {
+                          method: "POST",
+                          headers: { Authorization: `Bearer ${token}` },
+                          body: formData
+                      });
+                      if (!imgRes.ok) throw new Error("Failed to upload image");
+                  }
               }
               if (pLogoFile) {
                   const formDataLogo = new FormData();
@@ -751,7 +772,7 @@ const ContentLibrary = () => {
                     {!campaign.bannerImage && (
                       <div className="absolute inset-0 flex items-center justify-center gap-1.5 opacity-90">
                         {campaign.products.slice(0, 4).map((p, idx) => (
-                          <span key={idx} className="text-3xl drop-shadow-lg">{p.thumbnail}</span>
+                          <span key={idx} className="text-3xl drop-shadow-lg">{p.thumbnail ? <img src={p.thumbnail} alt={p.name} className="h-full w-full object-cover" /> : <Package className="h-4 w-4 text-muted-foreground/50" />}</span>
                         ))}
                       </div>
                     )}
@@ -798,7 +819,7 @@ const ContentLibrary = () => {
                               key={idx}
                               className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xl"
                             >
-                              {product.thumbnail.startsWith("http") ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : product.thumbnail}
+                              {product.thumbnail ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
                             </div>
                           );
                         }
@@ -881,7 +902,7 @@ const ContentLibrary = () => {
                         key={idx}
                         className="h-9 w-9 rounded-lg bg-muted ring-2 ring-card flex items-center justify-center text-base"
                       >
-                        {p.thumbnail}
+                        {p.thumbnail ? <img src={p.thumbnail} alt={p.name} className="h-full w-full object-cover" /> : <Package className="h-4 w-4 text-muted-foreground/50" />}
                       </div>
                     ))}
                   </div>
@@ -1013,7 +1034,7 @@ const ContentLibrary = () => {
               className="rounded-2xl border border-border bg-card overflow-hidden card-shine hover:border-primary/30 hover:shadow-elevated transition-all duration-300 cursor-pointer"
             >
               <div className="aspect-video bg-muted flex items-center justify-center text-5xl relative group/img">
-                {product.thumbnail.startsWith("http") ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : product.thumbnail}
+                {product.thumbnail ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
                 <Badge
                   variant="outline"
                   className={
@@ -1044,34 +1065,6 @@ const ContentLibrary = () => {
                 <p className="text-xs text-muted-foreground line-clamp-2 min-h-[2rem]">
                   {product.keyPoints}
                 </p>
-
-                {/* Mini reels preview strip */}
-                {previewReels.length > 0 && (
-                  <div className="pt-1">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground/80 font-medium">
-                        Reels generated
-                      </span>
-                      {product.reelsGenerated > previewReels.length && (
-                        <span className="text-[11px] text-muted-foreground">
-                          +{product.reelsGenerated - previewReels.length} more
-                        </span>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {previewReels.map((reel) => (
-                        <div
-                          key={reel.id}
-                          className={`relative aspect-[9/16] rounded-md bg-gradient-to-br ${reel.gradient} flex items-center justify-center text-base overflow-hidden ring-1 ring-border/50`}
-                          title={reel.title}
-                        >
-                          <span className="drop-shadow-sm">{reel.thumbnail}</span>
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 <div className="flex items-center justify-between gap-2 pt-2">
                   <Button
@@ -1133,7 +1126,7 @@ const ContentLibrary = () => {
                 >
                   <TableCell>
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-xl ring-1 ring-border">
-                      {product.thumbnail.startsWith("http") ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : product.thumbnail}
+                      {product.thumbnail ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
                     </div>
                   </TableCell>
                   <TableCell className="font-medium text-foreground">{product.name}</TableCell>
@@ -1237,22 +1230,42 @@ const ContentLibrary = () => {
               {/* Image uploads — two-column */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="sm:col-span-2">
-                  <Label className="mb-2 block">Product Image</Label>
-                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-primary/40 hover:bg-muted/30 cursor-pointer transition-all min-h-[160px]">
-                    {pImage && pImage.length <= 4 ? (
-                      <div className="text-5xl mb-2">{pImage}</div>
-                    ) : (
+                  <Label className="mb-2 block">Product Images (up to 5)</Label>
+                  {pImages.length > 0 ? (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                      {pImages.map((img, i) => (
+                        <div key={i} className="relative aspect-square rounded-xl overflow-hidden ring-1 ring-border group bg-muted flex items-center justify-center">
+                          <img src={img.url} alt="Preview" className="h-full w-full object-cover" />
+                          <button onClick={(e) => { e.preventDefault(); removeImage(i); }} className="absolute top-1.5 right-1.5 bg-background/80 text-foreground p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background">
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </button>
+                          {i === 0 && <Badge className="absolute bottom-1.5 left-1.5 text-[10px] px-1.5 py-0 shadow">Primary</Badge>}
+                        </div>
+                      ))}
+                      {pImages.length < 5 && (
+                        <label className="relative flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl text-center hover:border-primary/40 hover:bg-muted/30 cursor-pointer transition-all aspect-square bg-card">
+                           <Plus className="h-6 w-6 text-muted-foreground" />
+                           <input type="file" accept="image/*" multiple className="hidden" onChange={handleMultipleImageUpload} />
+                        </label>
+                      )}
+                    </div>
+                  ) : (
+                    <label className="relative overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-primary/40 hover:bg-muted/30 cursor-pointer transition-all min-h-[160px]">
                       <UploadCloud className="h-8 w-8 text-muted-foreground mb-2" />
-                    )}
-                    <p className="text-sm text-foreground">Drag & drop or click to upload</p>
-                    <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { if(e.target.files?.[0]) { setPImageFile(e.target.files[0]); setPImage(URL.createObjectURL(e.target.files[0])); } }} />
-                  </label>
+                      <p className="text-sm text-foreground">Drag & drop or click to upload</p>
+                      <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
+                      <input type="file" accept="image/*" multiple className="hidden" onChange={handleMultipleImageUpload} />
+                    </label>
+                  )}
                 </div>
                 <div>
                   <Label className="mb-2 block">Brand Logo</Label>
-                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-primary/40 hover:bg-muted/30 cursor-pointer transition-all min-h-[160px]">
-                    <UploadCloud className="h-6 w-6 text-muted-foreground mb-2" />
+                  <label className="relative overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-primary/40 hover:bg-muted/30 cursor-pointer transition-all min-h-[160px]">
+                    {pLogo ? (
+                      <img src={pLogo} alt="Logo preview" className="h-full w-full object-contain p-2 absolute inset-0" />
+                    ) : (
+                      <UploadCloud className="h-6 w-6 text-muted-foreground mb-2" />
+                    )}
                     <p className="text-xs text-foreground">Upload logo</p>
                     <p className="text-[10px] text-muted-foreground mt-1">PNG up to 2MB</p>
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => { if(e.target.files?.[0]) { setPLogoFile(e.target.files[0]); setPLogo(URL.createObjectURL(e.target.files[0])); } }} />
