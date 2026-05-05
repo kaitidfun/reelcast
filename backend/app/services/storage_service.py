@@ -280,3 +280,22 @@ async def delete_file(object_key: str, *, bucket: Optional[str] = None) -> bool:
     except (BotoCoreError, ClientError) as exc:
         logger.error("R2 delete failed for '%s': %s", object_key, exc)
         return False
+
+
+def get_file(object_key: str, *, bucket: Optional[str] = None) -> dict:
+    """
+    Fetch an object from R2 by its key.
+
+    Returns the boto3 get_object response (contains 'Body' stream and metadata).
+
+    Raises:
+        RuntimeError: If the file cannot be retrieved.
+    """
+    target_bucket = bucket or R2_BUCKET_NAME
+    try:
+        s3 = _get_s3_client()
+        response = s3.get_object(Bucket=target_bucket, Key=object_key)
+        return response
+    except (BotoCoreError, ClientError) as exc:
+        logger.error("R2 get failed for '%s': %s", object_key, exc)
+        raise RuntimeError(f"Failed to retrieve file from R2: {exc}") from exc

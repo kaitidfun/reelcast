@@ -1,19 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from "@/components/ui/input-otp";
-import { User, Mail, Shield, Calendar, LogOut, Save, ToggleLeft, ToggleRight, ShieldCheck, ShieldOff, Copy, Check, Loader2, Lock, Eye, EyeOff, CheckCircle2, KeyRound } from "lucide-react";
+import { User, Mail, Shield, Calendar, LogOut, Save, ToggleLeft, ToggleRight, ShieldCheck, ShieldOff, Copy, Check, Loader2, Lock, Eye, EyeOff, CheckCircle2, KeyRound, Camera } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -29,6 +29,8 @@ const Account = () => {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 2FA Setup State
   const [showSetupDialog, setShowSetupDialog] = useState(false);
@@ -78,6 +80,52 @@ const Account = () => {
 
   const handleSave = () => { updateProfile({ displayName, email }); toast.success("Profile saved successfully"); };
   const handleLogout = () => { logout(); router.replace("/login"); };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowed = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
+    const ext = "." + file.name.split(".").pop()?.toLowerCase();
+    if (!allowed.includes(ext)) {
+      toast.error("Invalid file type. Allowed: JPG, PNG, GIF, WebP");
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File is too large. Maximum size is 5MB.");
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(`${API_URL}/api/upload/profile-image`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: formData,
+      });
+
+      if (res.ok) {
+        // Refresh user from /me to update profileImage in context (with new cache-busting)
+        await refreshUser();
+        toast.success("Profile image updated!");
+      } else {
+        const err = await res.json().catch(() => ({ detail: "Upload failed" }));
+        toast.error(err.detail);
+      }
+    } catch {
+      toast.error("Failed to upload image");
+    } finally {
+      setUploadingAvatar(false);
+      // Reset file input so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const toggleSocial = (id: string) => {
     setSocialPlatforms((prev) => prev.map((p) => (p.id === id ? { ...p, active: !p.active } : p)));
@@ -253,9 +301,40 @@ const Account = () => {
         <Card className="border-border bg-card">
           <CardHeader>
             <div className="flex items-center gap-4">
-              <Avatar className="h-16 w-16 ring-2 ring-primary/30">
-                <AvatarFallback className="gradient-primary text-primary-foreground text-lg font-bold">{initials}</AvatarFallback>
-              </Avatar>
+              {/* Clickable Avatar with Upload */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                className="hidden"
+                onChange={handleAvatarUpload}
+                id="avatar-upload"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="group relative cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-full"
+                aria-label="Change profile picture"
+              >
+                <Avatar className="h-16 w-16 ring-2 ring-primary/30 transition-all group-hover:ring-primary/60">
+                  {user.profileImage ? (
+                    <AvatarImage src={user.profileImage} alt={user.displayName} className="object-cover" />
+                  ) : null}
+                  <AvatarFallback className="gradient-primary text-primary-foreground text-lg font-bold">{initials}</AvatarFallback>
+                </Avatar>
+                {/* Hover overlay */}
+                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 transition-all duration-200 group-hover:bg-black/50">
+                  {uploadingAvatar ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-white" />
+                  ) : (
+                    <div className="flex flex-col items-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                      <Camera className="h-4 w-4 text-white" />
+                      <span className="text-[9px] font-medium text-white mt-0.5">Update</span>
+                    </div>
+                  )}
+                </div>
+              </button>
               <div className="flex-1">
                 <CardTitle className="text-lg">{user.displayName}</CardTitle>
                 <CardDescription>{user.email}</CardDescription>

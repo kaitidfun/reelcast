@@ -2,7 +2,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { NavLink } from "./NavLink";
 import { Home as HomeIcon, Video, Library, Link2, Send, Sparkles, Menu, LogOut } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -85,6 +85,9 @@ const RailContent = () => {
               }`}
             >
               <Avatar className="h-9 w-9">
+                {user?.profileImage ? (
+                  <AvatarImage src={user.profileImage} alt={user?.displayName ?? "Profile"} className="object-cover" />
+                ) : null}
                 <AvatarFallback className="bg-secondary text-secondary-foreground text-xs font-bold">
                   {initials}
                 </AvatarFallback>
@@ -175,6 +178,9 @@ const DrawerContent = ({ onNavigate }: { onNavigate: () => void }) => {
           }`}
         >
           <Avatar className="h-7 w-7">
+            {user?.profileImage ? (
+              <AvatarImage src={user.profileImage} alt={user?.displayName ?? "Profile"} className="object-cover" />
+            ) : null}
             <AvatarFallback className="bg-secondary text-secondary-foreground text-xs font-bold">
               {initials}
             </AvatarFallback>

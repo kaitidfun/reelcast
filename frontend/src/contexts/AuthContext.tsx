@@ -7,6 +7,7 @@ export interface MockUser {
   email: string;
   displayName: string;
   avatar: string;
+  profileImage: string | null;
   joinedAt: string;
   is2faEnabled?: boolean;
 }
@@ -46,12 +47,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
       if (res.ok) {
         const data = await res.json();
+        const userId = data.id.toString();
         setUser({
-          id: data.id.toString(),
+          id: userId,
           email: data.email,
           displayName: data.display_name || "Creator",
           avatar: "",
-          joinedAt: new Date().toISOString(),
+          profileImage: data.profile_image
+            ? `${API_URL}/api/upload/profile-image/${userId}?v=${Date.now()}`
+            : null,
+          joinedAt: data.created_at || new Date().toISOString(),
           is2faEnabled: data.is_2fa_enabled ?? false,
         });
       } else {
@@ -106,12 +111,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         // Normal login (no 2FA)
         localStorage.setItem("rf_token", data.access_token);
+        const userId = data.user.id.toString();
         setUser({
-          id: data.user.id.toString(),
+          id: userId,
           email: data.user.email,
           displayName: data.user.display_name || "Creator",
           avatar: "",
-          joinedAt: new Date().toISOString(),
+          profileImage: data.user.profile_image
+            ? `${API_URL}/api/upload/profile-image/${userId}?v=${Date.now()}`
+            : null,
+          joinedAt: data.user.created_at || new Date().toISOString(),
           is2faEnabled: data.user.is_2fa_enabled ?? false,
         });
         return { ok: true };
@@ -138,12 +147,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (res.ok) {
         const data = await res.json();
         localStorage.setItem("rf_token", data.access_token);
+        const userId = data.user.id.toString();
         setUser({
-          id: data.user.id.toString(),
+          id: userId,
           email: data.user.email,
           displayName: data.user.display_name || "Creator",
           avatar: "",
-          joinedAt: new Date().toISOString(),
+          profileImage: data.user.profile_image
+            ? `${API_URL}/api/upload/profile-image/${userId}?v=${Date.now()}`
+            : null,
+          joinedAt: data.user.created_at || new Date().toISOString(),
           is2faEnabled: data.user.is_2fa_enabled ?? false,
         });
         return true;
