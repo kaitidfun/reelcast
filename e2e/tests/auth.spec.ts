@@ -254,7 +254,12 @@ test.describe("Scenario B: Member Login", () => {
     // After login, the AuthContext stores the token in localStorage
     // and the router pushes to "/". The DashboardLayout in (main)
     // group should render, so we wait for the URL to change.
-    await page.waitForURL(/^\/$|\/dashboard|\/create/, { timeout: 15_000 });
+    // NOTE: waitForURL matches the FULL URL (e.g. http://localhost:3000/),
+    // not just the pathname, so we use a regex that matches the root path.
+    await page.waitForURL(/:\d+\/?$/, { timeout: 15_000 });
+
+    // Let the SPA finish hydrating / writing to localStorage
+    await page.waitForLoadState("networkidle");
 
     // Verify the token was persisted in localStorage
     const storedToken = await page.evaluate(() =>
