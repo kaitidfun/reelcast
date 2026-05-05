@@ -5,7 +5,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.core.config import ALLOWED_ORIGINS, SESSION_SECRET_KEY
 from app.database import engine, Base, SessionLocal
 import app.models.models  # Import models so Base knows about them
-from app.routes import auth_routes, twofa_routes, oauth_routes, upload_routes
+from app.routes import auth_routes, twofa_routes, oauth_routes, upload_routes, product_routes, campaign_routes
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
@@ -36,6 +36,8 @@ app.include_router(auth_routes.router)
 app.include_router(twofa_routes.router)
 app.include_router(oauth_routes.router)
 app.include_router(upload_routes.router)
+app.include_router(campaign_routes.router)
+app.include_router(product_routes.router)
 
 
 @app.get("/api/health")

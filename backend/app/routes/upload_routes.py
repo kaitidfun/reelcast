@@ -101,3 +101,29 @@ def serve_profile_image(
             "Cache-Control": "public, max-age=86400",  # Cache for 1 day
         },
     )
+
+
+@router.get("/images/{object_key:path}")
+def serve_generic_image(
+    object_key: str,
+):
+    """
+    Public endpoint that proxies any image from R2 by its key.
+    """
+    if not object_key:
+        raise HTTPException(status_code=400, detail="No object key provided")
+        
+    try:
+        file_obj = get_file(object_key)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    content_type = file_obj.get("ContentType", _guess_content_type(object_key))
+
+    return StreamingResponse(
+        file_obj["Body"],
+        media_type=content_type,
+        headers={
+            "Cache-Control": "public, max-age=86400",  # Cache for 1 day
+        },
+    )

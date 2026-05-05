@@ -17,7 +17,7 @@ import {
   ArrowUpDown,
   Clock,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
@@ -58,7 +58,6 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/hooks/use-toast";
-import { getMockReelsForProduct } from "@/lib/mockReels";
 
 type ProductStatus = "Active" | "Draft";
 type SortKey = "newest" | "oldest" | "updated" | "name";
@@ -125,64 +124,6 @@ const formatDateTime = (iso: string) => {
   }
 };
 
-const initialCampaigns: Campaign[] = [
-  {
-    id: "summer-2026",
-    name: "Summer Sale 2026",
-    description: "Seasonal promotion for summer essentials and beachwear.",
-    reelsCount: 12,
-    banner: "from-orange-500 via-pink-500 to-purple-600",
-    createdAt: daysAgo(30),
-    updatedAt: daysAgo(2),
-    products: [
-      { id: "p1", name: "Summer Dress Collection", keyPoints: "Lightweight fabric, breathable design, perfect for beach days and casual outings.", affiliateLink: "https://shopee.co.th/ref/summer01", status: "Active", thumbnail: "🏖️", reelsGenerated: 5, createdAt: daysAgo(28), updatedAt: daysAgo(3) },
-      { id: "p2", name: "Fashion Lookbook SS26", keyPoints: "Curated Spring/Summer 2026 styles featuring trending colors and silhouettes.", affiliateLink: "https://lazada.co.th/ref/fashion01", status: "Active", thumbnail: "👗", reelsGenerated: 4, createdAt: daysAgo(20), updatedAt: daysAgo(1) },
-      { id: "p3", name: "Beach Tote Bag", keyPoints: "Spacious, water-resistant tote with reinforced straps for everyday summer use.", affiliateLink: "https://shopee.co.th/ref/tote01", status: "Draft", thumbnail: "👜", reelsGenerated: 3, createdAt: daysAgo(15), updatedAt: daysAgo(5) },
-    ],
-  },
-  {
-    id: "accessories",
-    name: "Accessories Launch",
-    description: "Premium accessories collection for modern lifestyles.",
-    reelsCount: 7,
-    banner: "from-violet-500 via-purple-500 to-fuchsia-600",
-    createdAt: daysAgo(45),
-    updatedAt: daysAgo(7),
-    products: [
-      { id: "p4", name: "Minimal Watch — Gold", keyPoints: "Elegant minimalist design with gold-plated stainless steel and sapphire crystal.", affiliateLink: "https://lazada.co.th/ref/watch01", status: "Active", thumbnail: "⌚", reelsGenerated: 3, createdAt: daysAgo(40), updatedAt: daysAgo(7) },
-      { id: "p5", name: "Leather Wallet Slim", keyPoints: "Genuine leather, RFID-blocking, holds up to 8 cards in a slim profile.", affiliateLink: "https://shopee.co.th/ref/wallet01", status: "Active", thumbnail: "👛", reelsGenerated: 2, createdAt: daysAgo(35), updatedAt: daysAgo(10) },
-      { id: "p6", name: "Sunglasses Aviator", keyPoints: "Polarized UV400 lenses with classic aviator frame in matte finish.", affiliateLink: "", status: "Draft", thumbnail: "🕶️", reelsGenerated: 2, createdAt: daysAgo(25), updatedAt: daysAgo(12) },
-    ],
-  },
-  {
-    id: "beauty-week",
-    name: "Beauty Week",
-    description: "Skincare and beauty essentials promo week.",
-    reelsCount: 5,
-    banner: "from-rose-500 via-red-500 to-orange-500",
-    createdAt: daysAgo(14),
-    updatedAt: daysAgo(1),
-    products: [
-      { id: "p7", name: "Skincare Bundle Set", keyPoints: "Complete 5-step routine with cleanser, toner, serum, moisturizer, and SPF.", affiliateLink: "", status: "Draft", thumbnail: "🧴", reelsGenerated: 2, createdAt: daysAgo(12), updatedAt: daysAgo(2) },
-      { id: "p8", name: "Lip Tint Trio", keyPoints: "Long-lasting matte finish in three universally flattering shades.", affiliateLink: "https://shopee.co.th/ref/lip01", status: "Active", thumbnail: "💄", reelsGenerated: 3, createdAt: daysAgo(10), updatedAt: daysAgo(1) },
-    ],
-  },
-  {
-    id: "tech-deals",
-    name: "Tech Deals",
-    description: "Best deals on consumer tech and audio gear.",
-    reelsCount: 9,
-    banner: "from-cyan-500 via-blue-500 to-indigo-600",
-    createdAt: daysAgo(60),
-    updatedAt: daysAgo(4),
-    products: [
-      { id: "p9", name: "Wireless Earbuds Pro", keyPoints: "Active noise cancellation, 30-hour battery life, IPX5 water resistance.", affiliateLink: "https://shopee.co.th/ref/tech01", status: "Active", thumbnail: "🎧", reelsGenerated: 4, createdAt: daysAgo(55), updatedAt: daysAgo(4) },
-      { id: "p10", name: "Portable Charger 20K", keyPoints: "20,000mAh capacity with fast-charge USB-C and dual USB-A outputs.", affiliateLink: "https://lazada.co.th/ref/charger01", status: "Active", thumbnail: "🔋", reelsGenerated: 3, createdAt: daysAgo(50), updatedAt: daysAgo(8) },
-      { id: "p11", name: "Smart Desk Lamp", keyPoints: "Adjustable color temperature, touch dimming, USB charging port built-in.", affiliateLink: "", status: "Draft", thumbnail: "💡", reelsGenerated: 2, createdAt: daysAgo(48), updatedAt: daysAgo(15) },
-    ],
-  },
-];
-
 const sortItems = <T extends { name: string; createdAt: string; updatedAt: string }>(
   items: T[],
   key: SortKey,
@@ -204,7 +145,61 @@ const ContentLibrary = () => {
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchLibrary = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("rf_token");
+      if (!token) return;
+      const headers = { Authorization: `Bearer ${token}` };
+      
+      const [campRes, prodRes] = await Promise.all([
+        fetch("http://localhost:8000/api/campaigns", { headers }),
+        fetch("http://localhost:8000/api/products", { headers })
+      ]);
+      
+      if (campRes.ok && prodRes.ok) {
+        const campData = await campRes.json();
+        const prodData = await prodRes.json();
+        
+        const mappedCampaigns: Campaign[] = campData.campaigns.map((c: any) => ({
+          id: c.campaign_id,
+          name: c.name,
+          description: c.description || "",
+          reelsCount: 0,
+          banner: "from-blue-500 via-indigo-500 to-purple-600",
+          products: prodData.products.filter((p: any) => p.campaign_id === c.campaign_id).map((p: any) => {
+             const primaryImage = p.images?.find((img: any) => img.is_primary)?.image_url || p.images?.[0]?.image_url;
+             return {
+                id: p.product_id,
+                name: p.product_name,
+                keyPoints: p.description || "",
+                affiliateLink: p.affiliate_link || "",
+                status: "Active",
+                thumbnail: primaryImage ? `http://localhost:8000/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : "📦"),
+                reelsGenerated: 0,
+                createdAt: p.created_at || new Date().toISOString(),
+                updatedAt: p.updated_at || new Date().toISOString()
+             };
+          }),
+          createdAt: c.created_at || new Date().toISOString(),
+          updatedAt: c.updated_at || new Date().toISOString()
+        }));
+        
+        setCampaigns(mappedCampaigns);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLibrary();
+  }, [fetchLibrary]);
+
   const openCampaignId = searchParams.get("campaign");
   const setOpenCampaignId = (id: string | null) => {
     if (id) {
@@ -243,6 +238,8 @@ const ContentLibrary = () => {
   const [pCta, setPCta] = useState("Shop Now");
   const [pImage, setPImage] = useState<string>("");
   const [pLogo, setPLogo] = useState<string>("");
+  const [pImageFile, setPImageFile] = useState<File | null>(null);
+  const [pLogoFile, setPLogoFile] = useState<File | null>(null);
 
   const currentCampaign = campaigns.find((c) => c.id === openCampaignId) ?? null;
 
@@ -280,6 +277,8 @@ const ContentLibrary = () => {
     setPCta("Shop Now");
     setPImage("");
     setPLogo("");
+    setPImageFile(null);
+    setPLogoFile(null);
     setEditingProductId(null);
   };
 
@@ -296,62 +295,98 @@ const ContentLibrary = () => {
     setPCta("Shop Now");
     setPImage(product.thumbnail);
     setPLogo("");
+    setPImageFile(null);
+    setPLogoFile(null);
     setIsProductDialogOpen(true);
   };
 
-  const handleSaveProduct = () => {
+  const handleSaveProduct = async () => {
     if (!pName.trim() || !currentCampaign) {
       toast({ title: "Product name is required", variant: "destructive" });
       return;
     }
-    const now = new Date().toISOString();
-    if (editingProductId) {
-      setCampaigns((prev) =>
-        prev.map((c) =>
-          c.id === currentCampaign.id
-            ? {
-                ...c,
-                updatedAt: now,
-                products: c.products.map((p) =>
-                  p.id === editingProductId
-                    ? {
-                        ...p,
-                        name: pName.trim(),
-                        keyPoints: pPoints.trim(),
-                        affiliateLink: pLink.trim(),
-                        thumbnail: pImage || p.thumbnail,
-                        updatedAt: now,
-                      }
-                    : p,
-                ),
+    const token = localStorage.getItem("rf_token");
+    const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+    let productId = editingProductId;
+    
+    try {
+      if (editingProductId) {
+        const res = await fetch(`http://localhost:8000/api/products/${editingProductId}`, {
+          method: "PUT",
+          headers,
+          body: JSON.stringify({
+            product_name: pName.trim(),
+            description: pPoints.trim(),
+            affiliate_link: pLink.trim(),
+            campaign_id: currentCampaign.id
+          })
+        });
+        if (!res.ok) {
+           const errData = await res.json().catch(() => ({}));
+           throw new Error(errData.detail || "Failed to update product");
+        }
+        toast({ title: "Product updated" });
+      } else {
+        const res = await fetch(`http://localhost:8000/api/products`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            campaign_id: currentCampaign.id,
+            product_name: pName.trim(),
+            description: pPoints.trim(),
+            affiliate_link: pLink.trim(),
+            brand_logo_url: null
+          })
+        });
+        if (!res.ok) {
+           const errData = await res.json().catch(() => ({}));
+           throw new Error(errData.detail || "Failed to create product");
+        }
+        const data = await res.json();
+        productId = data.product_id;
+        toast({ title: "Product added" });
+      }
+
+      if (productId && (pImageFile || pLogoFile)) {
+          try {
+              if (pImageFile) {
+                  const formData = new FormData();
+                  formData.append("file", pImageFile);
+                  const imgRes = await fetch(`http://localhost:8000/api/products/${productId}/images?is_primary=true`, {
+                      method: "POST",
+                      headers: { Authorization: `Bearer ${token}` },
+                      body: formData
+                  });
+                  if (!imgRes.ok) throw new Error("Failed to upload image");
               }
-            : c,
-        ),
-      );
-      toast({ title: "Product updated", description: `${pName.trim()} saved.` });
-    } else {
-      const newProduct: Product = {
-        id: `p${Date.now()}`,
-        name: pName.trim(),
-        keyPoints: pPoints.trim(),
-        affiliateLink: pLink.trim(),
-        status: "Draft",
-        thumbnail: pImage || "📦",
-        reelsGenerated: 0,
-        createdAt: now,
-        updatedAt: now,
-      };
-      setCampaigns((prev) =>
-        prev.map((c) =>
-          c.id === currentCampaign.id
-            ? { ...c, updatedAt: now, products: [newProduct, ...c.products] }
-            : c,
-        ),
-      );
-      toast({ title: "Product added", description: `${newProduct.name} added to ${currentCampaign.name}.` });
+              if (pLogoFile) {
+                  const formDataLogo = new FormData();
+                  formDataLogo.append("file", pLogoFile);
+                  const logoRes = await fetch(`http://localhost:8000/api/products/${productId}/upload-logo`, {
+                      method: "POST",
+                      headers: { Authorization: `Bearer ${token}` },
+                      body: formDataLogo
+                  });
+                  if (!logoRes.ok) throw new Error("Failed to upload logo");
+              }
+          } catch (uploadError: any) {
+              // Rollback product creation if this was a new product
+              if (!editingProductId && productId) {
+                  await fetch(`http://localhost:8000/api/products/${productId}`, {
+                      method: "DELETE",
+                      headers: { Authorization: `Bearer ${token}` }
+                  });
+              }
+              throw new Error(`Image upload failed: ${uploadError.message}. Product creation cancelled.`);
+          }
+      }
+
+      await fetchLibrary();
+      resetForm();
+      setIsProductDialogOpen(false);
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Something went wrong", variant: "destructive" });
     }
-    resetForm();
-    setIsProductDialogOpen(false);
   };
 
   const handleCopyLink = async (link: string) => {
@@ -363,16 +398,15 @@ const ContentLibrary = () => {
     }
   };
 
-  const handleDeleteProduct = (productId: string, productName: string) => {
+  const handleDeleteProduct = async (productId: string, productName: string) => {
     if (!currentCampaign) return;
-    setCampaigns((prev) =>
-      prev.map((c) =>
-        c.id === currentCampaign.id
-          ? { ...c, products: c.products.filter((p) => p.id !== productId) }
-          : c,
-      ),
-    );
+    const token = localStorage.getItem("rf_token");
+    await fetch(`http://localhost:8000/api/products/${productId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` }
+    });
     toast({ title: "Product deleted", description: `${productName} removed.`, variant: "destructive" });
+    await fetchLibrary();
   };
 
   const handleDeleteProductFromDialog = () => {
@@ -384,12 +418,15 @@ const ContentLibrary = () => {
     setIsProductDialogOpen(false);
   };
 
-  const handleDeleteCampaign = () => {
+  const handleDeleteCampaign = async () => {
     if (!editingCampaignId) return;
-    const campaign = campaigns.find((c) => c.id === editingCampaignId);
-    if (!campaign) return;
-    setCampaigns((prev) => prev.filter((c) => c.id !== editingCampaignId));
-    toast({ title: "Campaign deleted", description: `${campaign.name} removed.`, variant: "destructive" });
+    const token = localStorage.getItem("rf_token");
+    await fetch(`http://localhost:8000/api/campaigns/${editingCampaignId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    toast({ title: "Campaign deleted", variant: "destructive" });
+    await fetchLibrary();
     resetCampaignForm();
     setIsCampaignDialogOpen(false);
   };
@@ -435,43 +472,36 @@ const ContentLibrary = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleSaveCampaign = () => {
+  const handleSaveCampaign = async () => {
     if (!cName.trim()) {
       toast({ title: "Campaign name is required", variant: "destructive" });
       return;
     }
-    const now = new Date().toISOString();
+    const token = localStorage.getItem("rf_token");
+    const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+
     if (editingCampaignId) {
-      setCampaigns((prev) =>
-        prev.map((c) =>
-          c.id === editingCampaignId
-            ? {
-                ...c,
-                name: cName.trim(),
-                description: cDescription.trim(),
-                banner: cBanner,
-                bannerImage: cBannerImage || undefined,
-                updatedAt: now,
-              }
-            : c,
-        ),
-      );
-      toast({ title: "Campaign updated", description: `${cName.trim()} saved.` });
+      await fetch(`http://localhost:8000/api/campaigns/${editingCampaignId}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          name: cName.trim(),
+          description: cDescription.trim()
+        })
+      });
+      toast({ title: "Campaign updated" });
     } else {
-      const newCampaign: Campaign = {
-        id: `c${Date.now()}`,
-        name: cName.trim(),
-        description: cDescription.trim(),
-        reelsCount: 0,
-        banner: cBanner,
-        bannerImage: cBannerImage || undefined,
-        products: [],
-        createdAt: now,
-        updatedAt: now,
-      };
-      setCampaigns((prev) => [newCampaign, ...prev]);
-      toast({ title: "Campaign created", description: `${newCampaign.name} added.` });
+      await fetch(`http://localhost:8000/api/campaigns`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: cName.trim(),
+          description: cDescription.trim()
+        })
+      });
+      toast({ title: "Campaign created" });
     }
+    await fetchLibrary();
     resetCampaignForm();
     setIsCampaignDialogOpen(false);
   };
@@ -768,7 +798,7 @@ const ContentLibrary = () => {
                               key={idx}
                               className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xl"
                             >
-                              {product.thumbnail}
+                              {product.thumbnail.startsWith("http") ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : product.thumbnail}
                             </div>
                           );
                         }
@@ -972,7 +1002,7 @@ const ContentLibrary = () => {
       ) : productView === "grid" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredProducts.map((product, i) => {
-            const previewReels = getMockReelsForProduct(product.id, product.name, product.reelsGenerated).slice(0, 4);
+            const previewReels: any[] = [];
             return (
             <motion.div
               key={product.id}
@@ -983,7 +1013,7 @@ const ContentLibrary = () => {
               className="rounded-2xl border border-border bg-card overflow-hidden card-shine hover:border-primary/30 hover:shadow-elevated transition-all duration-300 cursor-pointer"
             >
               <div className="aspect-video bg-muted flex items-center justify-center text-5xl relative group/img">
-                {product.thumbnail}
+                {product.thumbnail.startsWith("http") ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : product.thumbnail}
                 <Badge
                   variant="outline"
                   className={
@@ -1103,7 +1133,7 @@ const ContentLibrary = () => {
                 >
                   <TableCell>
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-xl ring-1 ring-border">
-                      {product.thumbnail}
+                      {product.thumbnail.startsWith("http") ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : product.thumbnail}
                     </div>
                   </TableCell>
                   <TableCell className="font-medium text-foreground">{product.name}</TableCell>
@@ -1216,7 +1246,7 @@ const ContentLibrary = () => {
                     )}
                     <p className="text-sm text-foreground">Drag & drop or click to upload</p>
                     <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
-                    <input type="file" accept="image/*" className="hidden" />
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { if(e.target.files?.[0]) { setPImageFile(e.target.files[0]); setPImage(URL.createObjectURL(e.target.files[0])); } }} />
                   </label>
                 </div>
                 <div>
@@ -1225,7 +1255,7 @@ const ContentLibrary = () => {
                     <UploadCloud className="h-6 w-6 text-muted-foreground mb-2" />
                     <p className="text-xs text-foreground">Upload logo</p>
                     <p className="text-[10px] text-muted-foreground mt-1">PNG up to 2MB</p>
-                    <input type="file" accept="image/*" className="hidden" />
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { if(e.target.files?.[0]) { setPLogoFile(e.target.files[0]); setPLogo(URL.createObjectURL(e.target.files[0])); } }} />
                   </label>
                 </div>
               </div>

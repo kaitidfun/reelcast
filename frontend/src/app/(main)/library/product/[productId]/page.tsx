@@ -10,7 +10,7 @@ import {
   LayoutGrid,
   List,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -32,28 +32,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import {
-  getMockReelsForProduct,
-  type ReelPlatform,
-} from "@/lib/mockReels";
-
-// Mirror of the product summary used by the campaign library — kept inline here
-// because the demo uses local mock state. In a real app this would come from a
-// shared store / API.
-const PRODUCT_LOOKUP: Record<string, { name: string; thumbnail: string; reelsGenerated: number; campaignId: string; campaignName: string }> = {
-  p1: { name: "Summer Dress Collection", thumbnail: "🏖️", reelsGenerated: 5, campaignId: "summer-2026", campaignName: "Summer Sale 2026" },
-  p2: { name: "Fashion Lookbook SS26", thumbnail: "👗", reelsGenerated: 4, campaignId: "summer-2026", campaignName: "Summer Sale 2026" },
-  p3: { name: "Beach Tote Bag", thumbnail: "👜", reelsGenerated: 3, campaignId: "summer-2026", campaignName: "Summer Sale 2026" },
-  p4: { name: "Minimal Watch — Gold", thumbnail: "⌚", reelsGenerated: 3, campaignId: "accessories", campaignName: "Accessories Launch" },
-  p5: { name: "Leather Wallet Slim", thumbnail: "👛", reelsGenerated: 2, campaignId: "accessories", campaignName: "Accessories Launch" },
-  p6: { name: "Sunglasses Aviator", thumbnail: "🕶️", reelsGenerated: 2, campaignId: "accessories", campaignName: "Accessories Launch" },
-  p7: { name: "Skincare Bundle Set", thumbnail: "🧴", reelsGenerated: 2, campaignId: "beauty-week", campaignName: "Beauty Week" },
-  p8: { name: "Lip Tint Trio", thumbnail: "💄", reelsGenerated: 3, campaignId: "beauty-week", campaignName: "Beauty Week" },
-  p9: { name: "Wireless Earbuds Pro", thumbnail: "🎧", reelsGenerated: 4, campaignId: "tech-deals", campaignName: "Tech Deals" },
-  p10: { name: "Portable Charger 20K", thumbnail: "🔋", reelsGenerated: 3, campaignId: "tech-deals", campaignName: "Tech Deals" },
-  p11: { name: "Smart Desk Lamp", thumbnail: "💡", reelsGenerated: 2, campaignId: "tech-deals", campaignName: "Tech Deals" },
-};
-
 const formatDate = (iso: string) => {
   try {
     return new Date(iso).toLocaleDateString(undefined, {
@@ -69,17 +47,51 @@ const formatDate = (iso: string) => {
 const ProductReels = () => {
   const { productId = "" } = useParams();
   const router = useRouter();
-  const product = PRODUCT_LOOKUP[Array.isArray(productId) ? productId[0] : productId];
+
+  const [product, setProduct] = useState<any>(null);
+  const [reels, setReels] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchProduct = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("rf_token");
+      if (!token) return;
+      const headers = { Authorization: `Bearer ${token}` };
+      const id = Array.isArray(productId) ? productId[0] : productId;
+      
+      const res = await fetch(`http://localhost:8000/api/products/${id}`, { headers });
+      if (res.ok) {
+        const p = await res.json();
+        const primaryImage = p.images?.find((img: any) => img.is_primary)?.image_url || p.images?.[0]?.image_url;
+        setProduct({
+            id: p.product_id,
+            name: p.product_name,
+            keyPoints: p.description || "",
+            affiliateLink: p.affiliate_link || "",
+            status: "Active",
+            thumbnail: primaryImage ? `http://localhost:8000/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : "📦"),
+            reelsGenerated: 0,
+            campaignId: p.campaign_id,
+            campaignName: "Campaign" // Could fetch campaign if needed
+        });
+        // We'll leave reels empty since reels endpoint isn't fully connected here yet
+        setReels([]);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [productId]);
+
+  useEffect(() => {
+    fetchProduct();
+  }, [fetchProduct]);
 
   const [search, setSearch] = useState("");
-  const [platformFilter, setPlatformFilter] = useState<"all" | ReelPlatform>("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "Published" | "Scheduled" | "Draft">("all");
+  const [platformFilter, setPlatformFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [view, setView] = useState<"grid" | "list">("grid");
-
-  const reels = useMemo(() => {
-    if (!product) return [];
-    return getMockReelsForProduct(Array.isArray(productId) ? productId[0] : productId, product.name, product.reelsGenerated);
-  }, [productId, product]);
 
   const filteredReels = useMemo(() => {
     const q = search.toLowerCase();
@@ -91,6 +103,9 @@ const ProductReels = () => {
     });
   }, [reels, search, platformFilter, statusFilter]);
 
+  if (loading) {
+    return <div className="p-12 text-center text-muted-foreground">Loading...</div>;
+  }
   if (!product) {
     return (
       <div className="space-y-6">
@@ -131,7 +146,7 @@ const ProductReels = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-4">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted text-4xl ring-1 ring-border">
-            {product.thumbnail}
+            {product.thumbnail.startsWith("http") ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : product.thumbnail}
           </div>
           <div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">
