@@ -78,7 +78,28 @@ const Account = () => {
 
   const getToken = () => localStorage.getItem("rf_token") || "";
 
-  const handleSave = () => { updateProfile({ displayName, email }); toast.success("Profile saved successfully"); };
+  const handleSave = async () => {
+    try {
+      const res = await fetch(`${API_URL}/me`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ display_name: displayName }),
+      });
+      if (res.ok) {
+        updateProfile({ displayName });
+        await refreshUser();
+        toast.success("Profile saved successfully");
+      } else {
+        const err = await res.json().catch(() => ({ detail: "Failed to save profile" }));
+        toast.error(err.detail);
+      }
+    } catch {
+      toast.error("Failed to connect to server");
+    }
+  };
   const handleLogout = () => { logout(); router.replace("/login"); };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -355,7 +376,7 @@ const Account = () => {
           <CardHeader><CardTitle className="flex items-center gap-2 text-base"><User className="h-4 w-4 text-primary" /> Profile Information</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2"><Label htmlFor="name">Display Name</Label><Input id="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></div>
-            <div className="space-y-2"><Label htmlFor="acc-email">Email</Label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input id="acc-email" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10" /></div></div>
+            <div className="space-y-2"><Label htmlFor="acc-email">Email</Label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input id="acc-email" value={email} disabled className="pl-10" /></div></div>
             <Button onClick={handleSave} className="gradient-primary text-primary-foreground shadow-glow"><Save className="h-4 w-4" /> Save</Button>
           </CardContent>
         </Card>

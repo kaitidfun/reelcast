@@ -181,12 +181,13 @@ const ContentLibrary = () => {
           bannerImage: c.banner_image_url || undefined,
           products: prodData.products.filter((p: any) => p.campaign_id === c.campaign_id).map((p: any) => {
              const primaryImage = p.images?.find((img: any) => img.is_primary)?.image_url || p.images?.[0]?.image_url;
+             const isActive = Boolean(p.product_name?.trim() && p.description?.trim() && p.affiliate_link?.trim() && p.images?.length > 0);
              return {
                 id: p.product_id,
                 name: p.product_name,
                 keyPoints: p.description || "",
                 affiliateLink: p.affiliate_link || "",
-                status: "Active",
+                status: isActive ? "Active" : "Draft",
                 thumbnail: primaryImage ? `http://localhost:8000/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : null),
                 reelsGenerated: 0,
                 createdAt: p.created_at || new Date().toISOString(),
@@ -247,7 +248,6 @@ const ContentLibrary = () => {
   const [pName, setPName] = useState("");
   const [pPoints, setPPoints] = useState("");
   const [pLink, setPLink] = useState("");
-  const [pCta, setPCta] = useState("Shop Now");
   const [pImages, setPImages] = useState<{url: string, file: File | null}[]>([]);
   const [pLogo, setPLogo] = useState<string>("");
   const [pLogoFile, setPLogoFile] = useState<File | null>(null);
@@ -301,7 +301,6 @@ const ContentLibrary = () => {
     setPName("");
     setPPoints("");
     setPLink("");
-    setPCta("Shop Now");
     setPImages([]);
     setPLogo("");
     setPLogoFile(null);
@@ -318,7 +317,6 @@ const ContentLibrary = () => {
     setPName(product.name);
     setPPoints(product.keyPoints);
     setPLink(product.affiliateLink);
-    setPCta("Shop Now");
     setPImages(product.images?.map(img => ({url: img.url, file: null})) || []);
     setPLogo(product.logo || "");
     setPLogoFile(null);
@@ -782,9 +780,18 @@ const ContentLibrary = () => {
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.25),transparent_60%)]" />
                     {campaign.bannerImage && <div className="absolute inset-0 bg-black/30" />}
                     {!campaign.bannerImage && (
-                      <div className="absolute inset-0 flex items-center justify-center gap-1.5 opacity-90">
+                      <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-95">
                         {campaign.products.slice(0, 4).map((p, idx) => (
-                          <span key={idx} className="text-3xl drop-shadow-lg">{p.thumbnail ? <img src={p.thumbnail} alt={p.name} className="h-full w-full object-cover" /> : <Package className="h-4 w-4 text-muted-foreground/50" />}</span>
+                          <div
+                            key={idx}
+                            className="aspect-square h-14 shrink-0 rounded-md bg-[#1c1c1c] border border-border/50 flex items-center justify-center overflow-hidden shadow-sm"
+                          >
+                            {p.thumbnail ? (
+                              <img src={p.thumbnail} alt={p.name} className="h-full w-full object-contain" />
+                            ) : (
+                              <Package className="h-5 w-5 text-muted-foreground/50" />
+                            )}
+                          </div>
                         ))}
                       </div>
                     )}
@@ -908,15 +915,24 @@ const ContentLibrary = () => {
                       </span>
                     </div>
                   </div>
-                  <div className="hidden md:flex -space-x-2">
+                  <div className="hidden md:flex items-center gap-1.5">
                     {previewProducts.map((p, idx) => (
                       <div
                         key={idx}
-                        className="h-9 w-9 rounded-lg bg-muted ring-2 ring-card flex items-center justify-center text-base"
+                        className="h-9 w-9 shrink-0 rounded-md bg-[#1c1c1c] border border-border/50 flex items-center justify-center overflow-hidden"
                       >
-                        {p.thumbnail ? <img src={p.thumbnail} alt={p.name} className="h-full w-full object-cover" /> : <Package className="h-4 w-4 text-muted-foreground/50" />}
+                        {p.thumbnail ? (
+                          <img src={p.thumbnail} alt={p.name} className="h-full w-full object-contain" />
+                        ) : (
+                          <Package className="h-4 w-4 text-muted-foreground/50" />
+                        )}
                       </div>
                     ))}
+                    {campaign.products.length > 4 && (
+                      <div className="h-9 w-9 shrink-0 rounded-md bg-muted border border-border/50 flex items-center justify-center text-xs font-medium text-muted-foreground">
+                        +{campaign.products.length - 4}
+                      </div>
+                    )}
                   </div>
                   <Button
                     variant="ghost"
@@ -1292,7 +1308,7 @@ const ContentLibrary = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <Label htmlFor="product-name" className="mb-2 block">Product Name</Label>
                   <Input
@@ -1301,19 +1317,6 @@ const ContentLibrary = () => {
                     onChange={(e) => setPName(e.target.value)}
                     placeholder="e.g., Wireless Earbuds Pro"
                   />
-                </div>
-                <div>
-                  <Label className="mb-2 block">Call to Action</Label>
-                  <Select value={pCta} onValueChange={setPCta}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Shop Now">Shop Now</SelectItem>
-                      <SelectItem value="Link in Bio">Link in Bio</SelectItem>
-                      <SelectItem value="Learn More">Learn More</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
 

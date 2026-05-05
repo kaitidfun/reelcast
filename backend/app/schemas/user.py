@@ -14,6 +14,10 @@ class UserCreate(BaseModel):
     display_name: str
 
 
+class UserUpdate(BaseModel):
+    display_name: Optional[str] = None
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -7,6 +7,7 @@ from app.dependencies import get_db, get_current_user
 from app.models.models import User
 from app.schemas.user import (
     UserCreate,
+    UserUpdate,
     UserResponse,
     Token,
     LoginResponse,
@@ -168,6 +169,17 @@ def login(
 def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
+@router.put("/me", response_model=UserResponse)
+def update_user_me(
+    user_update: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if user_update.display_name is not None:
+        current_user.display_name = user_update.display_name
+        db.commit()
+        db.refresh(current_user)
+    return current_user
 
 # ==================== Password Management ====================
 
