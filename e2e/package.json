@@ -1,0 +1,22 @@
+{
+  "name": "reelcast-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "End-to-end tests for ReelCast Registration & Authentication",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:ui": "npx playwright test --ui",
+    "test:headed": "npx playwright test --headed",
+    "test:debug": "npx playwright test --debug",
+    "test:auth": "npx playwright test auth.spec.ts",
+    "report": "npx playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^22.16.5",
+    "@types/pg": "^8.11.14",
+    "dotenv": "^16.5.0",
+    "pg": "^8.16.0",
+    "typescript": "^5.8.3"
+  }
+}
