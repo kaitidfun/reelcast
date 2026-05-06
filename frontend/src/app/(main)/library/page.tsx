@@ -162,16 +162,16 @@ const ContentLibrary = () => {
       const token = localStorage.getItem("rf_token");
       if (!token) return;
       const headers = { Authorization: `Bearer ${token}` };
-      
+
       const [campRes, prodRes] = await Promise.all([
         fetch("http://localhost:8000/api/campaigns", { headers }),
         fetch("http://localhost:8000/api/products", { headers })
       ]);
-      
+
       if (campRes.ok && prodRes.ok) {
         const campData = await campRes.json();
         const prodData = await prodRes.json();
-        
+
         const mappedCampaigns: Campaign[] = campData.campaigns.map((c: any) => ({
           id: c.campaign_id,
           name: c.name,
@@ -180,26 +180,26 @@ const ContentLibrary = () => {
           bannerColor: c.banner_color || "Twilight",
           bannerImage: c.banner_image_url || undefined,
           products: prodData.products.filter((p: any) => p.campaign_id === c.campaign_id).map((p: any) => {
-             const primaryImage = p.images?.find((img: any) => img.is_primary)?.image_url || p.images?.[0]?.image_url;
-             const isActive = Boolean(p.product_name?.trim() && p.description?.trim() && p.affiliate_link?.trim() && p.images?.length > 0);
-             return {
-                id: p.product_id,
-                name: p.product_name,
-                keyPoints: p.description || "",
-                affiliateLink: p.affiliate_link || "",
-                status: isActive ? "Active" : "Draft",
-                thumbnail: primaryImage ? `http://localhost:8000/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : null),
-                reelsGenerated: 0,
-                createdAt: p.created_at || new Date().toISOString(),
-                updatedAt: p.updated_at || new Date().toISOString(),
-                images: p.images?.map((img: any) => ({ url: `http://localhost:8000/api/upload/images/${img.image_url}`, isPrimary: img.is_primary })) || [],
-                logo: p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : undefined
-             };
+            const primaryImage = p.images?.find((img: any) => img.is_primary)?.image_url || p.images?.[0]?.image_url;
+            const isActive = Boolean(p.product_name?.trim() && p.description?.trim() && p.affiliate_link?.trim() && p.images?.length > 0);
+            return {
+              id: p.product_id,
+              name: p.product_name,
+              keyPoints: p.description || "",
+              affiliateLink: p.affiliate_link || "",
+              status: isActive ? "Active" : "Draft",
+              thumbnail: primaryImage ? `http://localhost:8000/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : null),
+              reelsGenerated: 0,
+              createdAt: p.created_at || new Date().toISOString(),
+              updatedAt: p.updated_at || new Date().toISOString(),
+              images: p.images?.map((img: any) => ({ url: `http://localhost:8000/api/upload/images/${img.image_url}`, isPrimary: img.is_primary })) || [],
+              logo: p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : undefined
+            };
           }),
           createdAt: c.created_at || new Date().toISOString(),
           updatedAt: c.updated_at || new Date().toISOString()
         }));
-        
+
         setCampaigns(mappedCampaigns);
       }
     } catch (e) {
@@ -248,7 +248,7 @@ const ContentLibrary = () => {
   const [pName, setPName] = useState("");
   const [pPoints, setPPoints] = useState("");
   const [pLink, setPLink] = useState("");
-  const [pImages, setPImages] = useState<{url: string, file: File | null}[]>([]);
+  const [pImages, setPImages] = useState<{ url: string, file: File | null }[]>([]);
   const [pLogo, setPLogo] = useState<string>("");
   const [pLogoFile, setPLogoFile] = useState<File | null>(null);
 
@@ -284,17 +284,17 @@ const ContentLibrary = () => {
 
   const filteredProducts = currentCampaign
     ? sortItems(
-        currentCampaign.products.filter((p) => {
-          const q = search.toLowerCase();
-          const matchesSearch =
-            !q ||
-            p.name.toLowerCase().includes(q) ||
-            p.keyPoints.toLowerCase().includes(q);
-          const matchesStatus = statusFilter === "all" || p.status === statusFilter;
-          return matchesSearch && matchesStatus;
-        }),
-        productSort,
-      )
+      currentCampaign.products.filter((p) => {
+        const q = search.toLowerCase();
+        const matchesSearch =
+          !q ||
+          p.name.toLowerCase().includes(q) ||
+          p.keyPoints.toLowerCase().includes(q);
+        const matchesStatus = statusFilter === "all" || p.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      }),
+      productSort,
+    )
     : [];
 
   const resetForm = () => {
@@ -317,7 +317,7 @@ const ContentLibrary = () => {
     setPName(product.name);
     setPPoints(product.keyPoints);
     setPLink(product.affiliateLink);
-    setPImages(product.images?.map(img => ({url: img.url, file: null})) || []);
+    setPImages(product.images?.map(img => ({ url: img.url, file: null })) || []);
     setPLogo(product.logo || "");
     setPLogoFile(null);
     setIsProductDialogOpen(true);
@@ -331,7 +331,7 @@ const ContentLibrary = () => {
     const token = localStorage.getItem("rf_token");
     const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
     let productId = editingProductId;
-    
+
     try {
       if (editingProductId) {
         const res = await fetch(`http://localhost:8000/api/products/${editingProductId}`, {
@@ -345,8 +345,8 @@ const ContentLibrary = () => {
           })
         });
         if (!res.ok) {
-           const errData = await res.json().catch(() => ({}));
-           throw new Error(errData.detail || "Failed to update product");
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Failed to update product");
         }
         toast({ title: "Product updated" });
       } else {
@@ -362,8 +362,8 @@ const ContentLibrary = () => {
           })
         });
         if (!res.ok) {
-           const errData = await res.json().catch(() => ({}));
-           throw new Error(errData.detail || "Failed to create product");
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Failed to create product");
         }
         const data = await res.json();
         productId = data.product_id;
@@ -371,41 +371,41 @@ const ContentLibrary = () => {
       }
 
       if (productId && (pImages.some(img => img.file) || pLogoFile)) {
-          try {
-              for (let i = 0; i < pImages.length; i++) {
-                  const img = pImages[i];
-                  if (img.file) {
-                      const formData = new FormData();
-                      formData.append("file", img.file);
-                      const isPrimary = i === 0;
-                      const imgRes = await fetch(`http://localhost:8000/api/products/${productId}/images?is_primary=${isPrimary}`, {
-                          method: "POST",
-                          headers: { Authorization: `Bearer ${token}` },
-                          body: formData
-                      });
-                      if (!imgRes.ok) throw new Error("Failed to upload image");
-                  }
-              }
-              if (pLogoFile) {
-                  const formDataLogo = new FormData();
-                  formDataLogo.append("file", pLogoFile);
-                  const logoRes = await fetch(`http://localhost:8000/api/products/${productId}/upload-logo`, {
-                      method: "POST",
-                      headers: { Authorization: `Bearer ${token}` },
-                      body: formDataLogo
-                  });
-                  if (!logoRes.ok) throw new Error("Failed to upload logo");
-              }
-          } catch (uploadError: any) {
-              // Rollback product creation if this was a new product
-              if (!editingProductId && productId) {
-                  await fetch(`http://localhost:8000/api/products/${productId}`, {
-                      method: "DELETE",
-                      headers: { Authorization: `Bearer ${token}` }
-                  });
-              }
-              throw new Error(`Image upload failed: ${uploadError.message}. Product creation cancelled.`);
+        try {
+          for (let i = 0; i < pImages.length; i++) {
+            const img = pImages[i];
+            if (img.file) {
+              const formData = new FormData();
+              formData.append("file", img.file);
+              const isPrimary = i === 0;
+              const imgRes = await fetch(`http://localhost:8000/api/products/${productId}/images?is_primary=${isPrimary}`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData
+              });
+              if (!imgRes.ok) throw new Error("Failed to upload image");
+            }
           }
+          if (pLogoFile) {
+            const formDataLogo = new FormData();
+            formDataLogo.append("file", pLogoFile);
+            const logoRes = await fetch(`http://localhost:8000/api/products/${productId}/upload-logo`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}` },
+              body: formDataLogo
+            });
+            if (!logoRes.ok) throw new Error("Failed to upload logo");
+          }
+        } catch (uploadError: any) {
+          // Rollback product creation if this was a new product
+          if (!editingProductId && productId) {
+            await fetch(`http://localhost:8000/api/products/${productId}`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${token}` }
+            });
+          }
+          throw new Error(`Image upload failed: ${uploadError.message}. Product creation cancelled.`);
+        }
       }
 
       await fetchLibrary();
@@ -566,9 +566,8 @@ const ContentLibrary = () => {
           <div className="px-6 py-5 space-y-5">
             {/* Banner preview */}
             <div
-              className={`relative h-28 rounded-xl overflow-hidden ${
-                cBannerImage ? "" : `bg-gradient-to-br ${getBannerGradient(cBanner)}`
-              }`}
+              className={`relative h-28 rounded-xl overflow-hidden ${cBannerImage ? "" : `bg-gradient-to-br ${getBannerGradient(cBanner)}`
+                }`}
               style={cBannerImage ? { backgroundImage: `url(${cBannerImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
             >
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.3),transparent_60%)]" />
@@ -626,11 +625,10 @@ const ContentLibrary = () => {
                       setCBannerImage("");
                     }}
                     title={preset.label}
-                    className={`h-10 rounded-lg bg-gradient-to-br ${preset.gradient} transition-all ring-2 ring-offset-2 ring-offset-background ${
-                      cBanner === preset.value && !cBannerImage
-                        ? "ring-primary scale-105"
-                        : "ring-transparent hover:ring-border"
-                    }`}
+                    className={`h-10 rounded-lg bg-gradient-to-br ${preset.gradient} transition-all ring-2 ring-offset-2 ring-offset-background ${cBanner === preset.value && !cBannerImage
+                      ? "ring-primary scale-105"
+                      : "ring-transparent hover:ring-border"
+                      }`}
                   />
                 ))}
               </div>
@@ -697,235 +695,244 @@ const ContentLibrary = () => {
   if (!currentCampaign) {
     return (
       <>
-      <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">
-              Campaigns & Products
-            </h1>
-            <p className="mt-1 text-muted-foreground">
-              Organize products by marketing campaign
-            </p>
+        <div className="space-y-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">
+                Campaigns & Products
+              </h1>
+              <p className="mt-1 text-muted-foreground">
+                Organize products by marketing campaign
+              </p>
+            </div>
+            <Button
+              onClick={openNewCampaignDialog}
+              className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto"
+            >
+              <Plus className="h-4 w-4" />
+              New Campaign
+            </Button>
           </div>
-          <Button
-            onClick={openNewCampaignDialog}
-            className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto"
-          >
-            <Plus className="h-4 w-4" />
-            New Campaign
-          </Button>
-        </div>
 
-        {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={campaignSearch}
-              onChange={(e) => setCampaignSearch(e.target.value)}
-              placeholder="Search campaigns…"
-              className="bg-card pl-10 border-border h-10"
-            />
+          {/* Toolbar */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={campaignSearch}
+                onChange={(e) => setCampaignSearch(e.target.value)}
+                placeholder="Search campaigns…"
+                className="bg-card pl-10 border-border h-10"
+              />
+            </div>
+            <Select value={campaignSort} onValueChange={(v) => setCampaignSort(v as SortKey)}>
+              <SelectTrigger className="w-full sm:w-[200px] bg-card h-10">
+                <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="updated">Recently updated</SelectItem>
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="oldest">Oldest first</SelectItem>
+                <SelectItem value="name">Name (A–Z)</SelectItem>
+              </SelectContent>
+            </Select>
+            <ToggleGroup
+              type="single"
+              value={campaignView}
+              onValueChange={(v) => v && setCampaignView(v as "grid" | "list")}
+              className="bg-card border border-border rounded-lg p-0.5 h-10"
+            >
+              <ToggleGroupItem value="grid" aria-label="Grid view" className="h-9 w-9 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+                <LayoutGrid className="!h-5 !w-5" />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="list" aria-label="List view" className="h-9 w-9 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+                <List className="!h-5 !w-5" />
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
-          <Select value={campaignSort} onValueChange={(v) => setCampaignSort(v as SortKey)}>
-            <SelectTrigger className="w-full sm:w-[200px] bg-card h-10">
-              <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
-              <SelectValue placeholder="Sort" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="updated">Recently updated</SelectItem>
-              <SelectItem value="newest">Newest first</SelectItem>
-              <SelectItem value="oldest">Oldest first</SelectItem>
-              <SelectItem value="name">Name (A–Z)</SelectItem>
-            </SelectContent>
-          </Select>
-          <ToggleGroup
-            type="single"
-            value={campaignView}
-            onValueChange={(v) => v && setCampaignView(v as "grid" | "list")}
-            className="bg-card border border-border rounded-lg p-0.5 h-10"
-          >
-            <ToggleGroupItem value="grid" aria-label="Grid view" className="h-9 w-9 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-              <LayoutGrid className="!h-5 !w-5" />
-            </ToggleGroupItem>
-            <ToggleGroupItem value="list" aria-label="List view" className="h-9 w-9 rounded-md data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-              <List className="!h-5 !w-5" />
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
 
-        {filteredCampaigns.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
-            No campaigns match your search.
-          </div>
-        ) : campaignView === "grid" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredCampaigns.map((campaign, i) => {
-              const previewProducts = campaign.products.slice(0, 4);
-              const overflow = Math.max(0, campaign.products.length - 4);
-              return (
-                <motion.div
-                  key={campaign.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  onClick={() => setOpenCampaignId(campaign.id)}
-                  className="group relative rounded-2xl border border-border bg-card overflow-hidden card-shine cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
-                >
-                  {/* Banner */}
-                  <div
-                    className={`relative h-28 overflow-hidden ${campaign.bannerImage ? "" : `bg-gradient-to-br ${getBannerGradient(campaign.bannerColor)}`}`}
-                    style={campaign.bannerImage ? { backgroundImage: `url(${campaign.bannerImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+          {filteredCampaigns.length === 0 ? (
+            <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
+              No campaigns match your search.
+            </div>
+          ) : campaignView === "grid" ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredCampaigns.map((campaign, i) => {
+                const previewProducts = campaign.products.slice(0, 4);
+                const overflow = Math.max(0, campaign.products.length - 4);
+                return (
+                  <motion.div
+                    key={campaign.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    onClick={() => setOpenCampaignId(campaign.id)}
+                    className="group relative rounded-2xl border border-border bg-card overflow-hidden card-shine cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
                   >
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.25),transparent_60%)]" />
-                    {campaign.bannerImage && <div className="absolute inset-0 bg-black/30" />}
-                  </div>
+                    {/* Banner */}
+                    <div
+                      className={`relative h-28 overflow-hidden ${campaign.bannerImage ? "" : `bg-gradient-to-br ${getBannerGradient(campaign.bannerColor)}`}`}
+                      style={campaign.bannerImage ? { backgroundImage: `url(${campaign.bannerImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+                    >
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.25),transparent_60%)]" />
+                      {campaign.bannerImage && <div className="absolute inset-0 bg-black/30" />}
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        onClick={(e) => openEditCampaignDialog(e, campaign)}
+                        className="absolute top-2 right-2 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Edit campaign"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </div>
 
-                  <div className="p-5">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-display text-lg font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                    <div className="p-5">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-display text-lg font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                          {campaign.name}
+                        </h3>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1" />
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                        {campaign.description}
+                      </p>
+
+                      {/* Mini product thumbnails grid */}
+                      <div className="grid grid-cols-4 gap-1.5 mt-4">
+                        {Array.from({ length: 4 }).map((_, idx) => {
+                          const product = previewProducts[idx];
+                          const showOverflow = idx === 3 && overflow > 0;
+                          if (showOverflow) {
+                            return (
+                              <div
+                                key={idx}
+                                className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xs font-semibold text-muted-foreground"
+                              >
+                                +{overflow + 1}
+                              </div>
+                            );
+                          }
+                          if (product) {
+                            return (
+                              <div
+                                key={idx}
+                                className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xl"
+                              >
+                                {product.thumbnail ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
+                              </div>
+                            );
+                          }
+                          return (
+                            <div
+                              key={idx}
+                              className="h-12 rounded-lg border border-dashed border-border/60"
+                            />
+                          );
+                        })}
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          <Package className="h-3.5 w-3.5" />
+                          {campaign.products.length} Products
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <Video className="h-3.5 w-3.5" />
+                          {campaign.reelsCount} Reels
+                        </span>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-border/50 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground/80">
+                        <span className="flex items-center gap-1" title={`Created ${formatDateTime(campaign.createdAt)}`}>
+                          <Plus className="h-3 w-3" />
+                          {formatDate(campaign.createdAt)}
+                        </span>
+                        <span className="flex items-center gap-1" title={`Updated ${formatDateTime(campaign.updatedAt)}`}>
+                          <Clock className="h-3 w-3" />
+                          {formatDate(campaign.updatedAt)}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredCampaigns.map((campaign, i) => {
+                const previewProducts = campaign.products.slice(0, 4);
+                return (
+                  <motion.div
+                    key={campaign.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.04 }}
+                    onClick={() => setOpenCampaignId(campaign.id)}
+                    className="group flex items-center gap-4 p-4 rounded-2xl border border-border bg-card cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
+                  >
+                    <div
+                      className={`relative h-12 w-16 rounded-lg shrink-0 overflow-hidden ${campaign.bannerImage ? "" : `bg-gradient-to-br ${getBannerGradient(campaign.bannerColor)}`}`}
+                      style={campaign.bannerImage ? { backgroundImage: `url(${campaign.bannerImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+                    >
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.3),transparent_60%)]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-display text-base font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                         {campaign.name}
                       </h3>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1" />
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                      {campaign.description}
-                    </p>
-
-                    {/* Mini product thumbnails grid */}
-                    <div className="grid grid-cols-4 gap-1.5 mt-4">
-                      {Array.from({ length: 4 }).map((_, idx) => {
-                        const product = previewProducts[idx];
-                        const showOverflow = idx === 3 && overflow > 0;
-                        if (showOverflow) {
-                          return (
-                            <div
-                              key={idx}
-                              className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xs font-semibold text-muted-foreground"
-                            >
-                              +{overflow + 1}
-                            </div>
-                          );
-                        }
-                        if (product) {
-                          return (
-                            <div
-                              key={idx}
-                              className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xl"
-                            >
-                              {product.thumbnail ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
-                            </div>
-                          );
-                        }
-                        return (
-                          <div
-                            key={idx}
-                            className="h-12 rounded-lg border border-dashed border-border/60"
-                          />
-                        );
-                      })}
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1.5">
-                        <Package className="h-3.5 w-3.5" />
-                        {campaign.products.length} Products
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <Video className="h-3.5 w-3.5" />
-                        {campaign.reelsCount} Reels
-                      </span>
-                    </div>
-                    <div className="mt-3 pt-3 border-t border-border/50 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground/80">
-                      <span className="flex items-center gap-1" title={`Created ${formatDateTime(campaign.createdAt)}`}>
-                        <Plus className="h-3 w-3" />
-                        {formatDate(campaign.createdAt)}
-                      </span>
-                      <span className="flex items-center gap-1" title={`Updated ${formatDateTime(campaign.updatedAt)}`}>
-                        <Clock className="h-3 w-3" />
-                        {formatDate(campaign.updatedAt)}
-                      </span>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filteredCampaigns.map((campaign, i) => {
-              const previewProducts = campaign.products.slice(0, 4);
-              return (
-                <motion.div
-                  key={campaign.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.04 }}
-                  onClick={() => setOpenCampaignId(campaign.id)}
-                  className="group flex items-center gap-4 p-4 rounded-2xl border border-border bg-card cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
-                >
-                  <div
-                    className={`relative h-12 w-16 rounded-lg shrink-0 overflow-hidden ${campaign.bannerImage ? "" : `bg-gradient-to-br ${getBannerGradient(campaign.bannerColor)}`}`}
-                    style={campaign.bannerImage ? { backgroundImage: `url(${campaign.bannerImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
-                  >
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.3),transparent_60%)]" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-display text-base font-semibold text-foreground truncate group-hover:text-primary transition-colors">
-                      {campaign.name}
-                    </h3>
-                    <p className="text-xs text-muted-foreground truncate">{campaign.description}</p>
-                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1.5">
-                        <Package className="h-3.5 w-3.5" />
-                        {campaign.products.length} Products
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <Video className="h-3.5 w-3.5" />
-                        {campaign.reelsCount} Reels
-                      </span>
-                      <span className="flex items-center gap-1.5" title={`Updated ${formatDateTime(campaign.updatedAt)}`}>
-                        <Clock className="h-3.5 w-3.5" />
-                        Updated {formatDate(campaign.updatedAt)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="hidden md:flex items-center gap-1.5">
-                    {previewProducts.map((p, idx) => (
-                      <div
-                        key={idx}
-                        className="h-9 w-9 shrink-0 rounded-md bg-[#1c1c1c] border border-border/50 flex items-center justify-center overflow-hidden"
-                      >
-                        {p.thumbnail ? (
-                          <img src={p.thumbnail} alt={p.name} className="h-full w-full object-contain" />
-                        ) : (
-                          <Package className="h-4 w-4 text-muted-foreground/50" />
-                        )}
+                      <p className="text-xs text-muted-foreground truncate">{campaign.description}</p>
+                      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          <Package className="h-3.5 w-3.5" />
+                          {campaign.products.length} Products
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <Video className="h-3.5 w-3.5" />
+                          {campaign.reelsCount} Reels
+                        </span>
+                        <span className="flex items-center gap-1.5" title={`Updated ${formatDateTime(campaign.updatedAt)}`}>
+                          <Clock className="h-3.5 w-3.5" />
+                          Updated {formatDate(campaign.updatedAt)}
+                        </span>
                       </div>
-                    ))}
-                    {campaign.products.length > 4 && (
-                      <div className="h-9 w-9 shrink-0 rounded-md bg-muted border border-border/50 flex items-center justify-center text-xs font-medium text-muted-foreground">
-                        +{campaign.products.length - 4}
-                      </div>
-                    )}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => openEditCampaignDialog(e, campaign)}
-                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Edit campaign"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                </motion.div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-      {campaignDialog}
+                    </div>
+                    <div className="hidden md:flex items-center gap-1.5">
+                      {previewProducts.map((p, idx) => (
+                        <div
+                          key={idx}
+                          className="h-9 w-9 shrink-0 rounded-md bg-[#1c1c1c] border border-border/50 flex items-center justify-center overflow-hidden"
+                        >
+                          {p.thumbnail ? (
+                            <img src={p.thumbnail} alt={p.name} className="h-full w-full object-contain" />
+                          ) : (
+                            <Package className="h-4 w-4 text-muted-foreground/50" />
+                          )}
+                        </div>
+                      ))}
+                      {campaign.products.length > 4 && (
+                        <div className="h-9 w-9 shrink-0 rounded-md bg-muted border border-border/50 flex items-center justify-center text-xs font-medium text-muted-foreground">
+                          +{campaign.products.length - 4}
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => openEditCampaignDialog(e, campaign)}
+                      className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Edit campaign"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        {campaignDialog}
       </>
     );
   }
@@ -1028,79 +1035,79 @@ const ContentLibrary = () => {
           {filteredProducts.map((product, i) => {
             const previewReels: any[] = [];
             return (
-            <motion.div
-              key={product.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
-              onClick={() => router.push(`/library/product/${product.id}`)}
-              className="rounded-2xl border border-border bg-card overflow-hidden card-shine hover:border-primary/30 hover:shadow-elevated transition-all duration-300 cursor-pointer"
-            >
-              <div className="aspect-video bg-muted flex items-center justify-center text-5xl relative group/img">
-                {product.thumbnail ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
-                <Badge
-                  variant="outline"
-                  className={
-                    "absolute top-3 right-3 " +
-                    (product.status === "Active"
-                      ? "bg-success/15 text-success border-success/30"
-                      : "bg-warning/15 text-warning border-warning/30")
-                  }
-                >
-                  {product.status}
-                </Badge>
-                <div className="absolute top-3 left-3 flex items-center gap-1 rounded-full bg-background/70 backdrop-blur px-2 py-1 text-xs text-foreground">
-                  <Video className="h-3 w-3" />
-                  {product.reelsGenerated} reels
-                </div>
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  onClick={(e) => { e.stopPropagation(); openEditDialog(product); }}
-                  className="absolute bottom-3 right-3 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background opacity-0 group-hover/img:opacity-100 transition-opacity"
-                  title="Edit product"
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="p-4 space-y-3">
-                <h3 className="font-semibold text-foreground line-clamp-1">{product.name}</h3>
-                <p className="text-xs text-muted-foreground line-clamp-2 min-h-[2rem]">
-                  {product.keyPoints}
-                </p>
-
-                <div className="flex items-center justify-between gap-2 pt-2">
+              <motion.div
+                key={product.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
+                onClick={() => router.push(`/library/product/${product.id}`)}
+                className="rounded-2xl border border-border bg-card overflow-hidden card-shine hover:border-primary/30 hover:shadow-elevated transition-all duration-300 cursor-pointer"
+              >
+                <div className="aspect-video bg-muted flex items-center justify-center text-5xl relative group/img">
+                  {product.thumbnail ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
+                  <Badge
+                    variant="outline"
+                    className={
+                      "absolute top-3 right-3 " +
+                      (product.status === "Active"
+                        ? "bg-success/15 text-success border-success/30"
+                        : "bg-warning/15 text-warning border-warning/30")
+                    }
+                  >
+                    {product.status}
+                  </Badge>
+                  <div className="absolute top-3 left-3 flex items-center gap-1 rounded-full bg-background/70 backdrop-blur px-2 py-1 text-xs text-foreground">
+                    <Video className="h-3 w-3" />
+                    {product.reelsGenerated} reels
+                  </div>
                   <Button
-                    variant="ghost"
+                    variant="secondary"
                     size="icon"
-                    onClick={(e) => { e.stopPropagation(); product.affiliateLink && handleCopyLink(product.affiliateLink); }}
-                    disabled={!product.affiliateLink}
-                    title="Copy link"
-                    className="h-8 w-8 text-primary"
+                    onClick={(e) => { e.stopPropagation(); openEditDialog(product); }}
+                    className="absolute bottom-3 right-3 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background opacity-0 group-hover/img:opacity-100 transition-opacity"
+                    title="Edit product"
                   >
-                    <Link2 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={(e) => { e.stopPropagation(); handleCreateReel(product); }}
-                    className="gradient-primary gap-1.5 text-primary-foreground shadow-glow hover:shadow-glow-lg"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Create Reel
+                    <Edit className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="pt-2 border-t border-border/50 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground/80">
-                  <span className="flex items-center gap-1" title={`Created ${formatDateTime(product.createdAt)}`}>
-                    <Plus className="h-3 w-3" />
-                    {formatDate(product.createdAt)}
-                  </span>
-                  <span className="flex items-center gap-1" title={`Updated ${formatDateTime(product.updatedAt)}`}>
-                    <Clock className="h-3 w-3" />
-                    {formatDate(product.updatedAt)}
-                  </span>
+                <div className="p-4 space-y-3">
+                  <h3 className="font-semibold text-foreground line-clamp-1">{product.name}</h3>
+                  <p className="text-xs text-muted-foreground line-clamp-2 min-h-[2rem]">
+                    {product.keyPoints}
+                  </p>
+
+                  <div className="flex items-center justify-between gap-2 pt-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => { e.stopPropagation(); product.affiliateLink && handleCopyLink(product.affiliateLink); }}
+                      disabled={!product.affiliateLink}
+                      title="Copy link"
+                      className="h-8 w-8 text-primary"
+                    >
+                      <Link2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); handleCreateReel(product); }}
+                      className="gradient-primary gap-1.5 text-primary-foreground shadow-glow hover:shadow-glow-lg"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Create Reel
+                    </Button>
+                  </div>
+                  <div className="pt-2 border-t border-border/50 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground/80">
+                    <span className="flex items-center gap-1" title={`Created ${formatDateTime(product.createdAt)}`}>
+                      <Plus className="h-3 w-3" />
+                      {formatDate(product.createdAt)}
+                    </span>
+                    <span className="flex items-center gap-1" title={`Updated ${formatDateTime(product.updatedAt)}`}>
+                      <Clock className="h-3 w-3" />
+                      {formatDate(product.updatedAt)}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
+              </motion.div>
             );
           })}
         </div>
@@ -1247,8 +1254,8 @@ const ContentLibrary = () => {
                       ))}
                       {pImages.length < 5 && (
                         <label className="relative flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl text-center hover:border-primary/40 hover:bg-muted/30 cursor-pointer transition-all aspect-square bg-card">
-                           <Plus className="h-6 w-6 text-muted-foreground" />
-                           <input type="file" accept="image/*" multiple className="hidden" onChange={handleMultipleImageUpload} />
+                          <Plus className="h-6 w-6 text-muted-foreground" />
+                          <input type="file" accept="image/*" multiple className="hidden" onChange={handleMultipleImageUpload} />
                         </label>
                       )}
                     </div>
@@ -1268,7 +1275,7 @@ const ContentLibrary = () => {
                       <>
                         <img src={pLogo} alt="Logo preview" className="h-full w-full object-contain p-2 absolute inset-0 bg-card" />
                         <div className="absolute inset-0 bg-background/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-                           <p className="text-xs font-medium text-foreground bg-background/80 px-2 py-1 rounded-md">Change Logo</p>
+                          <p className="text-xs font-medium text-foreground bg-background/80 px-2 py-1 rounded-md">Change Logo</p>
                         </div>
                       </>
                     ) : (
@@ -1278,7 +1285,7 @@ const ContentLibrary = () => {
                         <p className="text-[10px] text-muted-foreground mt-1">PNG up to 2MB</p>
                       </>
                     )}
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { if(e.target.files?.[0]) { setPLogoFile(e.target.files[0]); setPLogo(URL.createObjectURL(e.target.files[0])); } }} />
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { setPLogoFile(e.target.files[0]); setPLogo(URL.createObjectURL(e.target.files[0])); } }} />
                   </label>
                 </div>
               </div>
