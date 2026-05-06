@@ -6,7 +6,7 @@ from typing import List
 
 from app.dependencies import get_db, get_current_user
 from app.models.models import User, Product, ProductImage
-from app.schemas.user import (
+from app.schemas.product import (
     ProductCreate,
     ProductUpdate,
     ProductResponse,

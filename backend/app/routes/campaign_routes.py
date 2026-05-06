@@ -5,7 +5,7 @@ from typing import List
 
 from app.dependencies import get_db, get_current_user
 from app.models.models import User, Campaign
-from app.schemas.user import (
+from app.schemas.campaign import (
     CampaignCreate,
     CampaignUpdate,
     CampaignResponse,

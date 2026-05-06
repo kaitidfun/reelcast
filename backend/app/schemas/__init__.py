@@ -1,7 +1,10 @@
 # Schemas package
+# Re-exports all schemas for backward compatibility.
+# Prefer importing from specific modules (e.g. app.schemas.campaign).
+
 from app.schemas.user import (
-    # Auth / User
     UserCreate,
+    UserUpdate,
     UserResponse,
     Token,
     LoginResponse,
@@ -12,33 +15,44 @@ from app.schemas.user import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
     ResetPasswordRequest,
-    # Social Account
+)
+
+from app.schemas.social import (
     SocialAccountCreate,
     SocialAccountResponse,
-    # Campaign
+)
+
+from app.schemas.campaign import (
     CampaignCreate,
     CampaignUpdate,
     CampaignResponse,
     CampaignListResponse,
-    # Product Image
+)
+
+from app.schemas.product import (
     ProductImageCreate,
     ProductImageResponse,
-    # Product
     ProductCreate,
     ProductUpdate,
     ProductResponse,
     ProductListResponse,
-    # Reel
+)
+
+from app.schemas.reel import (
     ReelCreate,
     ReelUpdate,
     ReelResponse,
     ReelListResponse,
-    # Distribution
+)
+
+from app.schemas.distribution import (
     DistributionCreate,
     DistributionUpdate,
     DistributionResponse,
     DistributionListResponse,
-    # Analytics
+)
+
+from app.schemas.analytics import (
     AnalyticsCreate,
     AnalyticsUpdate,
     AnalyticsResponse,

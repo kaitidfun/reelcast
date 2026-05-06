@@ -10,7 +10,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.models import Product, ProductImage
-from app.schemas.user import ProductImageCreate
+from app.schemas.product import ProductImageCreate
 
 
 def create_product(
