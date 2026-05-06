@@ -130,14 +130,14 @@ test.describe("Library & Campaign Management", () => {
     // Wait for campaign to appear
     await expect(page.locator(`h3:has-text("${campaignName}")`)).toBeVisible();
 
-    // The campaign card is a .group div containing the h3 with the campaign name.
-    // The edit button is inside the banner area with title="Edit campaign" and
-    // only visible on hover (opacity-0 group-hover:opacity-100).
-    // We use Playwright's force option to click the button even when hidden.
-    const campaignCard = page.locator(`.group:has(h3:has-text("${campaignName}"))`);
-    await campaignCard.hover();
-    // Use force:true because the button has CSS opacity-0 transition
-    await campaignCard.locator('button[title="Edit campaign"]').click({ force: true });
+    // Switch to list view where the edit button is accessible
+    await page.click('button[aria-label="List view"]');
+    await page.waitForTimeout(300);
+
+    // Hover the campaign row and click edit
+    const campaignRow = page.locator(`.group:has-text("${campaignName}")`);
+    await campaignRow.hover();
+    await campaignRow.locator('button[title="Edit campaign"]').click({ force: true });
 
     // Verify the edit dialog opened
     await expect(page.locator('text=Edit Campaign').first()).toBeVisible();
@@ -172,10 +172,14 @@ test.describe("Library & Campaign Management", () => {
     await createPromise;
     await expect(page.locator(`h3:has-text("${campaignName}")`)).toBeVisible();
 
-    // Open edit dialog via the edit button on the campaign card
-    const campaignCard = page.locator(`.group:has(h3:has-text("${campaignName}"))`);
-    await campaignCard.hover();
-    await campaignCard.locator('button[title="Edit campaign"]').click({ force: true });
+    // Switch to list view where the edit button is accessible
+    await page.click('button[aria-label="List view"]');
+    await page.waitForTimeout(300);
+
+    // Hover the campaign row and click edit
+    const campaignRow = page.locator(`.group:has-text("${campaignName}")`);
+    await campaignRow.hover();
+    await campaignRow.locator('button[title="Edit campaign"]').click({ force: true });
 
     // Change the name
     const updatedName = `Updated Campaign ${Date.now()}`;

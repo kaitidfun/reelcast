@@ -779,31 +779,6 @@ const ContentLibrary = () => {
                   >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.25),transparent_60%)]" />
                     {campaign.bannerImage && <div className="absolute inset-0 bg-black/30" />}
-                    {!campaign.bannerImage && (
-                      <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-95">
-                        {campaign.products.slice(0, 4).map((p, idx) => (
-                          <div
-                            key={idx}
-                            className="aspect-square h-14 shrink-0 rounded-md bg-[#1c1c1c] border border-border/50 flex items-center justify-center overflow-hidden shadow-sm"
-                          >
-                            {p.thumbnail ? (
-                              <img src={p.thumbnail} alt={p.name} className="h-full w-full object-contain" />
-                            ) : (
-                              <Package className="h-5 w-5 text-muted-foreground/50" />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <Button
-                      variant="secondary"
-                      size="icon"
-                      onClick={(e) => openEditCampaignDialog(e, campaign)}
-                      className="absolute top-2 right-2 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Edit campaign"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
                   </div>
 
                   <div className="p-5">
