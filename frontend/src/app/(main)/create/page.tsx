@@ -215,6 +215,40 @@ const CreateReel = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [credits] = useState(120);
+  const [overlayPosition, setOverlayPosition] = useState("bottom-right");
+  const [reelId, setReelId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (generationStatus === "generating" && reelId) {
+      interval = setInterval(async () => {
+        try {
+          const token = localStorage.getItem("rf_token");
+          const res = await fetch(`http://localhost:8000/api/reels/${reelId}/status`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === "Completed") {
+              setGenerationStatus("done");
+              if (data.caption_and_hashtags) {
+                setCaption(data.caption_and_hashtags.caption + "\n\n" + (data.caption_and_hashtags.hashtags?.join(" ") || ""));
+              }
+              toast({ title: "Reel created successfully!", description: "Ready to preview and approve" });
+              clearInterval(interval);
+            } else if (data.status === "Failed") {
+              setGenerationStatus("idle");
+              toast({ title: "Generation Failed", description: data.error_message || "Something went wrong.", variant: "destructive" });
+              clearInterval(interval);
+            }
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [generationStatus, reelId, toast]);
 
   // Product picker
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -298,7 +332,7 @@ const CreateReel = () => {
     setReferencePreview(null);
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!selectedProduct) {
       toast({ title: "Select a product", description: "Pick a product from your library — required to generate a Reel." });
       return;
@@ -308,10 +342,26 @@ const CreateReel = () => {
       return;
     }
     setGenerationStatus("generating");
-    setTimeout(() => {
-      setGenerationStatus("done");
-      toast({ title: "Reel created successfully!", description: "Ready to preview and approve" });
-    }, 3000);
+    
+    try {
+      const token = localStorage.getItem("rf_token");
+      const res = await fetch("http://localhost:8000/api/reels/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          prompt_text: promptText,
+          product_id: selectedProduct.id,
+          platform: selectedPlatforms[0] || "ig",
+          overlay_position: overlayPosition
+        })
+      });
+      if (!res.ok) throw new Error("Failed to start generation");
+      const data = await res.json();
+      setReelId(data.reel_id);
+    } catch (e: any) {
+      setGenerationStatus("idle");
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
   };
 
   const handleRegenerate = () => {
@@ -472,13 +522,17 @@ const CreateReel = () => {
             </div>
 
             {/* Prompt textarea */}
-            <div className="px-5 pt-3 pb-2">
+            <div className="px-5 pt-3 pb-2 relative">
               <Textarea
                 value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
+                onChange={(e) => setPromptText(e.target.value.slice(0, 500))}
+                maxLength={500}
                 placeholder="Describe the Reel you want to create — scene, mood, motion, style, product details…"
                 className="min-h-[160px] w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0"
               />
+              <div className="absolute bottom-2 right-5 text-[10px] text-muted-foreground">
+                {promptText.length}/500
+              </div>
             </div>
 
             {/* Chip toolbar */}
@@ -618,6 +672,19 @@ const CreateReel = () => {
                 </PopoverTrigger>
                 <PopoverContent className="w-72 p-3 space-y-3">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Director controls</p>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-medium text-muted-foreground">Overlay Position</label>
+                    <Select value={overlayPosition} onValueChange={setOverlayPosition}>
+                      <SelectTrigger className="h-9 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="top-left">Top Left</SelectItem>
+                        <SelectItem value="top-right">Top Right</SelectItem>
+                        <SelectItem value="bottom-left">Bottom Left</SelectItem>
+                        <SelectItem value="bottom-right">Bottom Right</SelectItem>
+                        <SelectItem value="center">Center</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-medium text-muted-foreground">Resolution</label>
                     <Select value={resolution} onValueChange={setResolution}>
@@ -961,10 +1028,14 @@ const CreateReel = () => {
                   rows={2}
                   className="bg-muted/40 border-border resize-none text-[11px] leading-relaxed min-h-0"
                 />
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <Button variant="outline" onClick={handleRegenerate} size="sm" className="gap-1.5 h-9 text-xs">
                     <RefreshCw className="h-3.5 w-3.5" />
-                    Regenerate
+                    Regen Video
+                  </Button>
+                  <Button variant="outline" onClick={handleRegenerate} size="sm" className="gap-1.5 h-9 text-xs">
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Regen Caption
                   </Button>
                   <Button onClick={handleApprove} size="sm" className="gradient-primary gap-1.5 text-primary-foreground shadow-glow h-9 text-xs">
                     <Check className="h-3.5 w-3.5" />
