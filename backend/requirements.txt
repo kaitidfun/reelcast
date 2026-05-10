@@ -16,3 +16,7 @@ qrcode[pil]
 email-validator
 psycopg2-binary
 boto3
+redis
+celery
+google-generativeai
+ffmpeg-python
