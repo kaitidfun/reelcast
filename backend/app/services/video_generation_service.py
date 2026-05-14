@@ -51,10 +51,11 @@ async def generate_video(
         No exceptions - returns sample fallback video if all providers fail
 
     Implementation Notes:
-        - fal.ai Wan 2.1 1.3b model: num_frames capped at 480 (~30s @ 16 FPS)
-        - num_frames calculated as: min(duration * 16, 480) to respect model limits
+        - fal.ai LTX Video: text-to-video or image-to-video (when image_url provided)
+          Returns public CDN URL directly — no R2 upload needed
         - Veo 2.0: Long-running operation polled every 10s, 5-minute timeout
-        - All generated videos uploaded to R2 and returned as permanent public URLs
+          Uploads to R2 for permanent storage
+        - All generated videos returned as permanent public URLs
     """
     fal_key = os.getenv("FAL_KEY", "")
     veo_enabled = os.getenv("VEO_ENABLED", "false").lower() == "true"
@@ -116,28 +117,23 @@ async def _generate_with_fal(
     try:
         import fal_client
 
-        # Cap frames at 480 (30s @ 16 FPS) for fal.ai Wan 2.1 1.3b model stability
-        # Model max frames per documentation: 960 @ 30 FPS = 480 @ 16 FPS
-        num_frames = min(duration * 16, 480)
-
         if image_url:
-            logger.info(f"[fal.ai] Image-to-video mode: {resolution}, {duration}s, ref={image_url}")
+            logger.info(f"[fal.ai] LTX Video image-to-video: ref={image_url}")
         else:
-            logger.info(f"[fal.ai] Text-to-video mode: {resolution}, {duration}s ({num_frames} frames)")
+            logger.info(f"[fal.ai] LTX Video text-to-video: {duration}s")
 
         def _run_fal():
             arguments = {
                 "prompt": prompt,
-                "num_frames": num_frames,
-                "frames_per_second": 16,
-                "resolution": resolution,
                 "aspect_ratio": "9:16",
             }
             # Add product image as visual reference when available (image-to-video mode)
             if image_url:
                 arguments["image_url"] = image_url
 
-            result = fal_client.run("fal-ai/wan/v2.1/1.3b", arguments=arguments)
+            # fal-ai/ltx-video: LTX Video (text-to-video, or image-to-video with image_url)
+            # Response: { "video": { "url": "...", "file_size": ... }, "seed": ... }
+            result = fal_client.run("fal-ai/ltx-video", arguments=arguments)
             return result["video"]["url"]
 
         loop = asyncio.get_event_loop()
