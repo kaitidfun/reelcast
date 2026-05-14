@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Sparkles,
@@ -32,6 +32,7 @@ import {
   Music2,
   SlidersHorizontal,
   Image as ImageIcon,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,7 @@ type LibraryProduct = {
   name: string;
   thumbnail: string;
   highlights: string;
+  campaignName: string;
 };
 
 type LibraryCampaign = {
@@ -71,51 +73,7 @@ const getBannerGradient = (color: string) => {
   return preset ? preset.gradient : BANNER_PRESETS[0].gradient;
 };
 
-const productLibrary: LibraryCampaign[] = [
-  {
-    id: "summer-2026",
-    name: "Summer Sale 2026",
-    bannerColor: "Sunrise",
-    emoji: "🏖️",
-    products: [
-      { id: "p1", name: "Summer Dress Collection", thumbnail: "🏖️", highlights: "Lightweight fabric, breezy fit, 5 pastel colors for summer outings" },
-      { id: "p2", name: "Fashion Lookbook SS26", thumbnail: "👗", highlights: "Curated SS26 looks, mix-and-match outfits for every occasion" },
-      { id: "p3", name: "Beach Tote Bag", thumbnail: "👜", highlights: "Roomy interior, water-resistant canvas, perfect beach companion" },
-    ],
-  },
-  {
-    id: "accessories",
-    name: "Accessories Launch",
-    bannerColor: "Twilight",
-    emoji: "⌚",
-    products: [
-      { id: "p4", name: "Minimal Watch — Gold", thumbnail: "⌚", highlights: "Sapphire glass, 18K gold plating, quiet quartz movement" },
-      { id: "p5", name: "Leather Wallet Slim", thumbnail: "👛", highlights: "Full-grain leather, RFID-blocking, fits 8 cards" },
-      { id: "p6", name: "Sunglasses Aviator", thumbnail: "🕶️", highlights: "UV400 protection, polarized, lightweight titanium frame" },
-    ],
-  },
-  {
-    id: "beauty-week",
-    name: "Beauty Week",
-    bannerColor: "Amethyst",
-    emoji: "💄",
-    products: [
-      { id: "p7", name: "Skincare Bundle Set", thumbnail: "🧴", highlights: "Cleanser, serum & moisturizer — clinically tested glow routine" },
-      { id: "p8", name: "Lip Tint Trio", thumbnail: "💄", highlights: "Long-wear formula, 3 viral shades, buildable color" },
-    ],
-  },
-  {
-    id: "tech-deals",
-    name: "Tech Deals",
-    bannerColor: "Pacific",
-    emoji: "🎧",
-    products: [
-      { id: "p9", name: "Wireless Earbuds Pro", thumbnail: "🎧", highlights: "Active noise cancelling, 30h battery, hi-res audio" },
-      { id: "p10", name: "Portable Charger 20K", thumbnail: "🔋", highlights: "20,000mAh, 65W fast charge, charges laptop & phone" },
-      { id: "p11", name: "Smart Desk Lamp", thumbnail: "💡", highlights: "Adaptive brightness, 5 color modes, USB-C charging port" },
-    ],
-  },
-];
+// productLibrary mock removed to use real data from backend
 
 type GenerationStatus = "idle" | "generating" | "done";
 
@@ -187,12 +145,53 @@ const lightingOptions = [
 const CreateReel = () => {
   const { toast } = useToast();
 
+  const [productLibrary, setProductLibrary] = useState<LibraryCampaign[]>([]);
+
+  useEffect(() => {
+    const fetchLibrary = async () => {
+      try {
+        const token = localStorage.getItem("rf_token");
+        if (!token) return;
+        const headers = { Authorization: `Bearer ${token}` };
+
+        const [campRes, prodRes] = await Promise.all([
+          fetch("http://localhost:8000/api/campaigns", { headers }),
+          fetch("http://localhost:8000/api/products", { headers })
+        ]);
+
+        if (campRes.ok && prodRes.ok) {
+          const campData = await campRes.json();
+          const prodData = await prodRes.json();
+
+          const mappedCampaigns: LibraryCampaign[] = campData.campaigns.map((c: any) => ({
+            id: c.campaign_id,
+            name: c.name,
+            bannerColor: c.banner_color || "Twilight",
+            emoji: c.name.charAt(0).toUpperCase() || "📦",
+            products: prodData.products.filter((p: any) => p.campaign_id === c.campaign_id).map((p: any) => ({
+              id: p.product_id,
+              name: p.product_name,
+              thumbnail: p.product_name.charAt(0).toUpperCase() || "📦",
+              highlights: p.description || "",
+              campaignName: c.name,
+            }))
+          }));
+          setProductLibrary(mappedCampaigns);
+        }
+      } catch (e) {
+        console.error("Failed to load library:", e);
+      }
+    };
+    fetchLibrary();
+  }, []);
+
   // Composer state
   const [promptText, setPromptText] = useState("");
   const [enhancing, setEnhancing] = useState(false);
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
   const [referencePreview, setReferencePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   // Settings state
   const [aspectRatio, setAspectRatio] = useState("9:16");
@@ -217,6 +216,21 @@ const CreateReel = () => {
   const [credits] = useState(120);
   const [overlayPosition, setOverlayPosition] = useState("bottom-right");
   const [reelId, setReelId] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+
+  /**
+   * Feature 2: Creator mode toggle (F2-URS02 vs F2-URS04)
+   * - "generate": User inputs prompt → AI generates video (Veo/fal.ai) + Gemini captions
+   * - "upload": User selects video file → validate → upload to R2 → apply overlay + captions
+   * Both modes share: product selection, platform choice, overlay position
+   */
+  const [creatorMode, setCreatorMode] = useState<"generate" | "upload">("generate");
+
+  /** Upload flow state (upload mode only): file selection, progress tracking, status */
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -231,6 +245,9 @@ const CreateReel = () => {
             const data = await res.json();
             if (data.status === "Completed") {
               setGenerationStatus("done");
+              if (data.final_commercial_video_url) {
+                setVideoUrl(data.final_commercial_video_url);
+              }
               if (data.caption_and_hashtags) {
                 setCaption(data.caption_and_hashtags.caption + "\n\n" + (data.caption_and_hashtags.hashtags?.join(" ") || ""));
               }
@@ -249,6 +266,14 @@ const CreateReel = () => {
     }
     return () => clearInterval(interval);
   }, [generationStatus, reelId, toast]);
+
+  // Control actual video playback
+  useEffect(() => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    if (isPlaying) { vid.play().catch(() => {}); }
+    else { vid.pause(); }
+  }, [isPlaying]);
 
   // Product picker
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -352,7 +377,9 @@ const CreateReel = () => {
           prompt_text: promptText,
           product_id: selectedProduct.id,
           platform: selectedPlatforms[0] || "ig",
-          overlay_position: overlayPosition
+          overlay_position: overlayPosition,
+          resolution: resolution,
+          duration: duration,
         })
       });
       if (!res.ok) throw new Error("Failed to start generation");
@@ -364,13 +391,78 @@ const CreateReel = () => {
     }
   };
 
-  const handleRegenerate = () => {
+  const handleRegenerate = async (target: "video" | "caption" | "all") => {
+    if (!reelId) return;
     setGenerationStatus("generating");
-    setTimeout(() => {
-      setGenerationStatus("done");
-      setCaption("🛍️ Must-have alert! Premium quality at an unbeatable price ✅ #BestDeal #Trending #ReelCast");
-      toast({ title: "Regeneration complete!", description: "New version is ready" });
-    }, 2500);
+    try {
+      const token = localStorage.getItem("rf_token");
+      const res = await fetch(`http://localhost:8000/api/reels/${reelId}/regenerate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          target,
+          platform: selectedPlatforms[0] || "ig",
+          overlay_position: overlayPosition
+        })
+      });
+      if (!res.ok) throw new Error("Failed to start regeneration");
+      toast({ title: "Regenerating...", description: `Regenerating ${target} now.` });
+    } catch (e: any) {
+      setGenerationStatus("idle");
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  /**
+   * F2-URS04: Upload member's own video for processing.
+   * Validates file (format/size/duration), uploads to R2, queues caption+overlay generation.
+   * Uses XMLHttpRequest to track upload progress (fetch doesn't support upload.onprogress).
+   */
+  const handleUpload = () => {
+    if (!selectedProduct) {
+      toast({ title: "Select a product", description: "Pick a product before uploading." });
+      return;
+    }
+    if (!uploadFile) {
+      toast({ title: "Select a video file", description: "Choose an MP4, MOV, or AVI file to upload." });
+      return;
+    }
+    setUploadStatus("uploading");
+    setUploadProgress(0);
+
+    const form = new FormData();
+    form.append("file", uploadFile);
+    form.append("product_id", selectedProduct.id);
+    form.append("platform", selectedPlatforms[0] || "ig");
+    form.append("overlay_position", overlayPosition);
+
+    const token = localStorage.getItem("rf_token");
+    // XMLHttpRequest allows real-time upload progress tracking (fetch doesn't)
+    const xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        const data = JSON.parse(xhr.responseText);
+        setReelId(data.reel_id);
+        setUploadStatus("done");
+        setGenerationStatus("generating");
+        toast({ title: "Video uploaded!", description: "Processing overlay and captions…" });
+      } else {
+        setUploadStatus("error");
+        let msg = "Upload failed.";
+        try { msg = JSON.parse(xhr.responseText).detail; } catch {}
+        toast({ title: "Upload failed", description: msg, variant: "destructive" });
+      }
+    };
+    xhr.onerror = () => {
+      setUploadStatus("error");
+      toast({ title: "Network error", description: "Could not reach the server.", variant: "destructive" });
+    };
+    xhr.open("POST", "http://localhost:8000/api/reels/upload-video");
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.send(form);
   };
 
   const handleApprove = () => toast({ title: "Approved & Saved!", description: "Reel saved to your library 🎉" });
@@ -403,6 +495,46 @@ const CreateReel = () => {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         {/* ============ LEFT: Composer (Sora-style monolith) ============ */}
         <div className="lg:col-span-3 space-y-5">
+          {/* Hidden file input (triggered by upload button) */}
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept=".mp4,.mov,.avi,video/mp4,video/quicktime,video/x-msvideo"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              setUploadFile(f);
+              setUploadStatus("idle");
+            }}
+          />
+
+          {/* Feature 2: Creator mode switch (F2-URS02 AI gen vs F2-URS04 upload) */}
+          <div className="flex rounded-xl border border-border bg-muted/30 p-1 gap-1">
+            <button
+              onClick={() => setCreatorMode("generate")}
+              className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
+                creatorMode === "generate"
+                  ? "bg-card text-foreground shadow-sm ring-1 ring-border"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Generate with AI
+            </button>
+            <button
+              onClick={() => setCreatorMode("upload")}
+              className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
+                creatorMode === "upload"
+                  ? "bg-card text-foreground shadow-sm ring-1 ring-border"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Upload Video
+            </button>
+          </div>
+
           {/* PRODUCT — REQUIRED block (separate from prompt) */}
           <div className="rounded-2xl border border-border bg-card shadow-card overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/30">
@@ -430,6 +562,7 @@ const CreateReel = () => {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-foreground truncate">{selectedProduct.name}</p>
                     <p className="text-[11px] text-muted-foreground line-clamp-1">{selectedProduct.highlights}</p>
+                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">📁 {selectedProduct.campaignName}</p>
                   </div>
                   <button
                     type="button"
@@ -461,7 +594,79 @@ const CreateReel = () => {
             </div>
           </div>
 
-          {/* THE MONOLITH (Prompt) */}
+          {/* F2-URS04: Video upload zone (visible when creatorMode === "upload") */}
+          {creatorMode === "upload" && (
+            <div className="rounded-2xl border border-border bg-card shadow-card overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/30">
+                <Upload className="h-3.5 w-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-foreground">Upload Reel</span>
+                <span className="text-[10px] text-muted-foreground ml-1">MP4 · MOV · AVI · max 500 MB · max 60 s</span>
+              </div>
+              <div className="p-4 space-y-3">
+                {uploadStatus !== "uploading" && !uploadFile && (
+                  <button
+                    type="button"
+                    onClick={() => uploadInputRef.current?.click()}
+                    className="flex flex-col items-center gap-3 w-full py-10 rounded-xl border-2 border-dashed border-border hover:border-primary/40 hover:bg-primary/5 transition-all"
+                  >
+                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <Upload className="h-6 w-6 text-primary" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-foreground">Click to select a video</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">MP4, MOV, or AVI · max 500 MB · max 60 s</p>
+                    </div>
+                  </button>
+                )}
+                {uploadFile && uploadStatus !== "uploading" && (
+                  <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3">
+                    <Film className="h-8 w-8 text-primary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{uploadFile.name}</p>
+                      <p className="text-[11px] text-muted-foreground">{(uploadFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setUploadFile(null); setUploadStatus("idle"); }}
+                      className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+                {uploadStatus === "uploading" && (
+                  <div className="space-y-2 px-1">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" />Uploading…</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="border-t border-border bg-background/40 px-3 py-2.5">
+                <Button
+                  onClick={handleUpload}
+                  disabled={!uploadFile || uploadStatus === "uploading"}
+                  className="gradient-primary w-full gap-2 h-9 text-sm text-primary-foreground shadow-glow"
+                >
+                  {uploadStatus === "uploading" ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" />Uploading…</>
+                  ) : (
+                    <><Upload className="h-4 w-4" />Upload &amp; Process</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* F2-URS01, F2-URS02: AI Reel generation (visible when creatorMode === "generate") */}
+          {creatorMode === "generate" &&
           <div className="relative rounded-3xl border border-border bg-card shadow-elevated overflow-hidden group focus-within:border-primary/30 transition-colors">
             {/* subtle glow */}
             <div className="pointer-events-none absolute inset-0 opacity-0 group-focus-within:opacity-100 transition-opacity duration-700"
@@ -753,7 +958,7 @@ const CreateReel = () => {
                 </Button>
               </div>
               <Button
-                onClick={generationStatus === "done" ? handleRegenerate : handleGenerate}
+                onClick={generationStatus === "done" ? () => handleRegenerate("all") : handleGenerate}
                 disabled={generationStatus === "generating"}
                 className="gradient-primary h-9 gap-2 px-4 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
               >
@@ -768,7 +973,9 @@ const CreateReel = () => {
             </div>
           </div>
 
-          {/* Quick templates strip */}
+          }
+          {/* Quick templates strip — AI generate mode only */}
+          {creatorMode === "generate" &&
           <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Quick prompts</p>
             <div className="flex flex-wrap gap-2">
@@ -784,6 +991,7 @@ const CreateReel = () => {
             </div>
           </div>
 
+          }
           {/* Overlays + platforms (compact card) */}
           <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-4">
             <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">Output settings</h2>
@@ -868,9 +1076,21 @@ const CreateReel = () => {
                 <div className="relative aspect-[9/16] w-full overflow-hidden rounded-[28px] border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 ring-1 ring-inset ring-white/5">
                   {generationStatus === "done" ? (
                     <>
-                      <div className="absolute inset-0" style={{
-                        backgroundImage: "radial-gradient(circle at 30% 40%, hsl(var(--primary) / 0.35), transparent 55%), radial-gradient(circle at 70% 75%, hsl(var(--accent) / 0.3), transparent 55%)"
-                      }} />
+                      {/* Real video from Veo / fal.ai */}
+                      {videoUrl ? (
+                        <video
+                          ref={videoRef}
+                          src={videoUrl}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          loop
+                          playsInline
+                          muted
+                        />
+                      ) : (
+                        <div className="absolute inset-0" style={{
+                          backgroundImage: "radial-gradient(circle at 30% 40%, hsl(var(--primary) / 0.35), transparent 55%), radial-gradient(circle at 70% 75%, hsl(var(--accent) / 0.3), transparent 55%)"
+                        }} />
+                      )}
                       {showLogo && (
                         <div className="absolute top-2.5 right-2.5 flex items-center gap-1 rounded-md bg-black/40 backdrop-blur-md border border-white/10 px-1.5 py-0.5 shadow-lg">
                           <div className="h-3.5 w-3.5 rounded-sm gradient-primary flex items-center justify-center">
@@ -1029,11 +1249,11 @@ const CreateReel = () => {
                   className="bg-muted/40 border-border resize-none text-[11px] leading-relaxed min-h-0"
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <Button variant="outline" onClick={handleRegenerate} size="sm" className="gap-1.5 h-9 text-xs">
+                  <Button variant="outline" onClick={() => handleRegenerate("video")} size="sm" className="gap-1.5 h-9 text-xs">
                     <RefreshCw className="h-3.5 w-3.5" />
                     Regen Video
                   </Button>
-                  <Button variant="outline" onClick={handleRegenerate} size="sm" className="gap-1.5 h-9 text-xs">
+                  <Button variant="outline" onClick={() => handleRegenerate("caption")} size="sm" className="gap-1.5 h-9 text-xs">
                     <RefreshCw className="h-3.5 w-3.5" />
                     Regen Caption
                   </Button>

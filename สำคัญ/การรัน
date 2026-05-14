@@ -1,6 +1,107 @@
-frontend
-ิีbun run dev
+════════════════════════════════════════════════════════════════
+  🚀  ReelCastCast — คู่มือการรันโปรเจกต์
+════════════════════════════════════════════════════════════════
 
-backend
-venv\Scripts\activate
-uvicorn app.main:app --reload --port 8000
+⚠️  ก่อนรัน : ต้องเปิด Docker Desktop ไว้ก่อนเสมอ!
+
+────────────────────────────────────────────────────────────────
+  STEP 1 — Redis (Docker)
+────────────────────────────────────────────────────────────────
+  เปิด terminal ที่ root ของโปรเจกต์แล้วรัน:
+
+    docker-compose up -d
+
+  ✔ ตรวจสอบ: เห็น "reelcast_redis  Started" = สำเร็จ
+
+────────────────────────────────────────────────────────────────
+  STEP 2 — Backend (FastAPI / uvicorn)
+────────────────────────────────────────────────────────────────
+  เปิด terminal ใหม่ เข้าไปที่ backend แล้วรัน:
+
+    cd backend
+    venv\Scripts\activate
+    uvicorn app.main:app --reload --port 8000
+
+  ✔ ตรวจสอบ: เปิด http://localhost:8000/docs
+
+────────────────────────────────────────────────────────────────
+  STEP 3 — Celery Worker
+────────────────────────────────────────────────────────────────
+  เปิด terminal ใหม่อีกตัว เข้าไปที่ backend:
+
+    cd backend
+    venv\Scripts\activate
+    venv\Scripts\celery -A app.worker.celery_app worker --loglevel=info --pool=solo
+
+  ✔ ตรวจสอบ: เห็น "celery@... ready." = สำเร็จ
+
+────────────────────────────────────────────────────────────────
+  STEP 4 — Frontend (Next.js / bun)
+────────────────────────────────────────────────────────────────
+  เปิด terminal ใหม่ เข้าไปที่ frontend แล้วรัน:
+
+    cd frontend
+    bun run dev
+
+  ✔ ตรวจสอบ: เปิด http://localhost:3000
+
+════════════════════════════════════════════════════════════════
+  📋  สรุป Port ที่ใช้งาน
+════════════════════════════════════════════════════════════════
+
+  Frontend   →  http://localhost:3000
+  Backend    →  http://localhost:8000
+  Redis      →  localhost:6379
+
+════════════════════════════════════════════════════════════════
+  🔧  คำสั่งเสริม / ตรวจสอบระบบ
+════════════════════════════════════════════════════════════════
+
+  ตรวจสอบว่า port ใดเปิดอยู่บ้าง:
+    netstat -ano | findstr "8000 3000 6379"
+
+  ตรวจสอบ Docker:
+    docker --version
+    docker ps
+
+  ติดตั้ง/อัปเดต dependencies ของ backend:
+    venv\Scripts\pip install -r requirements.txt
+
+  ติดตั้ง google-genai (ถ้ายังไม่มี):
+    venv\Scripts\pip install google-genai --upgrade
+
+════════════════════════════════════════════════════════════════
+  ⚙️  ตรวจสอบ AI (Gemini) ว่าเชื่อมต่อได้จริง
+════════════════════════════════════════════════════════════════
+
+  รันใน backend terminal (ต้อง activate venv ก่อน):
+
+    venv\Scripts\python.exe -c "
+    import asyncio, sys, json
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.path.insert(0, '.')
+    from dotenv import load_dotenv
+    load_dotenv()
+    from app.services.ai_service import generate_captions
+    result = asyncio.run(generate_captions(
+        prompt='Test product',
+        product_info={'name': 'Test', 'description': 'Test item'}
+    ))
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    "
+
+════════════════════════════════════════════════════════════════
+  📌  หมายเหตุสำคัญ
+════════════════════════════════════════════════════════════════
+
+  • Celery บน Windows ต้องใช้ --pool=solo เสมอ
+    (ไม่งั้นจะเกิด PermissionError WinError 5)
+
+  • GOOGLE_AI_API_KEY ต้องเป็น key จาก Project ที่เปิด Billing
+    ไม่ใช่ Free Tier (จะได้ Error 429 RESOURCE_EXHAUSTED)
+
+  • Model ที่ใช้ตอนนี้: gemini-2.5-flash / veo-2.0-generate-001
+
+  • ถ้า Token หมดอายุให้ logout แล้ว login ใหม่บนเว็บ
+
+════════════════════════════════════════════════════════════════

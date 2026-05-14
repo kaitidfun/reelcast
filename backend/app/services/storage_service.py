@@ -299,3 +299,63 @@ def get_file(object_key: str, *, bucket: Optional[str] = None) -> dict:
     except (BotoCoreError, ClientError) as exc:
         logger.error("R2 get failed for '%s': %s", object_key, exc)
         raise RuntimeError(f"Failed to retrieve file from R2: {exc}") from exc
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helper for uploading raw bytes (used by reel_routes.py for video upload)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def upload_raw_bytes_to_r2(
+    data: bytes,
+    *,
+    filename: str = "file.bin",
+    prefix: str = "uploads",
+    user_id: Optional[str] = None,
+    category: Optional[str] = None,
+) -> str:
+    """
+    Upload raw bytes to Cloudflare R2 (used by video/reel upload endpoints).
+
+    Convenience wrapper for uploading file content already in memory,
+    without needing a FastAPI UploadFile object.
+
+    Args:
+        data: Raw file bytes to upload
+        filename: Original filename (used for extension & object key)
+        prefix: Root folder in bucket (e.g. "videos/reels/uploads")
+        user_id: Optional user ID for folder grouping
+        category: Optional category subfolder (e.g. "uploads")
+
+    Returns:
+        Public URL to the uploaded file on R2
+
+    Raises:
+        RuntimeError: If R2 is not configured or upload fails
+    """
+    target_bucket = R2_BUCKET_NAME
+    if not target_bucket:
+        raise RuntimeError("R2_BUCKET_NAME is not configured.")
+
+    content_type = _guess_content_type(filename)
+    object_key = build_object_key(
+        filename, prefix=prefix, user_id=user_id, category=category
+    )
+
+    try:
+        s3 = _get_s3_client()
+        s3.put_object(
+            Bucket=target_bucket,
+            Key=object_key,
+            Body=data,
+            ContentType=content_type,
+        )
+        logger.info("Uploaded %d bytes to R2 key '%s'", len(data), object_key)
+    except (BotoCoreError, ClientError) as exc:
+        logger.error("R2 upload failed for '%s': %s", object_key, exc)
+        raise RuntimeError(f"Failed to upload file to R2: {exc}") from exc
+
+    # Build public URL
+    if R2_PUBLIC_URL:
+        return f"{R2_PUBLIC_URL.rstrip('/')}/{object_key}"
+    else:
+        return f"{R2_ENDPOINT_URL.rstrip('/')}/{target_bucket}/{object_key}"
