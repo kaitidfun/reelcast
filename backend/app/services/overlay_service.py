@@ -18,7 +18,6 @@ Usage:
 import os
 import asyncio
 import tempfile
-import uuid
 import logging
 from typing import Optional
 
@@ -102,7 +101,7 @@ async def overlay_watermark(
     """
     Composite an overlay image onto a video using FFmpeg.
 
-    Overlay image is scaled to max {OVERLAY_MAX_WIDTH}px width to prevent
+    Overlay image is scaled to max 150px width to prevent
     covering video content while maintaining logo visibility.
 
     Args:
@@ -150,8 +149,10 @@ async def overlay_watermark(
             return output_path
 
         except ffmpeg.Error as e:
-            logger.error(f"FFmpeg error during compositing: {e.stderr.decode('utf8')}")
-            raise RuntimeError(f"FFmpeg overlay failed: {str(e)}") from e
+            # e.stderr can be None if FFmpeg failed before producing output
+            stderr_msg = e.stderr.decode('utf8') if e.stderr else str(e)
+            logger.error(f"FFmpeg error during compositing: {stderr_msg}")
+            raise RuntimeError(f"FFmpeg overlay failed: {stderr_msg}") from e
 
     # Run FFmpeg in executor to avoid blocking async event loop
     loop = asyncio.get_event_loop()

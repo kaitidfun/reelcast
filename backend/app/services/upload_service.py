@@ -25,7 +25,7 @@ import os
 import asyncio
 import tempfile
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 
 import ffmpeg
 

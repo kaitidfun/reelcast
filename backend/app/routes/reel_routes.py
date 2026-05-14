@@ -1,3 +1,4 @@
+import os
 import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy.orm import Session
@@ -170,19 +171,16 @@ async def upload_reel_video(
     # Step 1-3: Validate file format, size, and duration (consolidated in upload_service)
     file_data = await file.read()
 
-    # Quick validation (format + size)
+    # Quick validation: format + size only (fail-fast before reading large file)
     errors = validate_video_file(filename, len(file_data))
     if errors:
         raise HTTPException(status_code=400, detail=errors[0])
 
-    # Extended validation (duration check via ffprobe)
-    import os
+    # Extended validation: duration check via ffprobe (runs after format/size pass)
     ext = os.path.splitext(filename)[1].lower()
     duration_sec = await probe_video_duration(file_data, ext)
-    if duration_sec is not None:
-        duration_errors = validate_video_file(filename, len(file_data), duration_sec)
-        if duration_errors:
-            raise HTTPException(status_code=400, detail=duration_errors[-1])
+    if duration_sec is not None and duration_sec > 60:
+        raise HTTPException(status_code=400, detail=f"Video duration {duration_sec:.1f}s exceeds 60s limit")
 
     # Step 4: Upload to Cloudflare R2 (delegated to upload_service)
     try:

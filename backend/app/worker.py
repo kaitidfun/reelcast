@@ -65,7 +65,7 @@ async def _async_process_reel_generation(
     try:
         reel = db.query(Reel).filter(Reel.reel_id == reel_id).first()
         if not reel:
-            print(f"Reel {reel_id} not found.")
+            logger.error(f"Reel {reel_id} not found in database")
             return
 
         update_reel(db, reel=reel, status="Generating")
@@ -109,7 +109,7 @@ async def _async_process_reel_generation(
 
         # 2. Apply FFmpeg overlay (product image / brand logo)
         if target in ["all", "video", "upload"] and overlay_url and final_video_url:
-            print(f"[Worker] Applying overlay from: {overlay_url}")
+            logger.info(f"[Worker] Applying overlay from: {overlay_url}")
             final_video_url = await apply_overlay(
                 video_url=final_video_url,
                 overlay_url=overlay_url,
@@ -131,10 +131,10 @@ async def _async_process_reel_generation(
             final_commercial_video_url=final_video_url,
             status="Completed"
         )
-        print(f"Reel {reel_id} completed successfully.")
+        logger.info(f"Reel {reel_id} completed successfully")
 
     except Exception as e:
-        print(f"Error processing reel {reel_id}: {e}")
+        logger.error(f"Error processing reel {reel_id}: {e}")
         reel = db.query(Reel).filter(Reel.reel_id == reel_id).first()
         if reel:
             update_reel(db, reel=reel, status="Failed", error_message=str(e))

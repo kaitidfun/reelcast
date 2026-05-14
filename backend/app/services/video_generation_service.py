@@ -158,7 +158,6 @@ async def _generate_with_veo(prompt: str) -> str:
     import requests
     import boto3
     from google import genai
-    from google.genai import types
 
     google_ai_key = os.getenv("GOOGLE_AI_API_KEY")
     r2_endpoint = os.getenv("R2_ENDPOINT_URL")
