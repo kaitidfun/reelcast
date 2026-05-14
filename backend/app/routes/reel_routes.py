@@ -1,23 +1,22 @@
-import os
-import asyncio
-import tempfile
-
-import ffmpeg as ff
+import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 from uuid import UUID
 from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.dependencies import get_db, get_current_user
-from app.models.models import User, Reel, Product
+from app.models.models import User, Reel
 from app.services.reel_service import create_reel, get_reel, update_reel
+from app.services.upload_service import (
+    validate_video_file,
+    probe_video_duration,
+    upload_video_to_r2,
+)
 from app.worker import process_reel_generation
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/reels", tags=["Reels"])
-
-_ALLOWED_VIDEO_EXT = {".mp4", ".mov", ".avi"}
-_MAX_VIDEO_BYTES   = 500 * 1024 * 1024  # 500 MB
 
 
 class ReelGenerateRequest(BaseModel):
@@ -166,97 +165,56 @@ async def upload_reel_video(
     Unlike /generate, skips video generation (uses uploaded video as-is),
     but still applies product logo/image overlay and generates captions.
     """
-    # 1. Validate file format (F2-URS04-SRS01)
     filename = file.filename or "video"
+
+    # Step 1-3: Validate file format, size, and duration (consolidated in upload_service)
+    file_data = await file.read()
+
+    # Quick validation (format + size)
+    errors = validate_video_file(filename, len(file_data))
+    if errors:
+        raise HTTPException(status_code=400, detail=errors[0])
+
+    # Extended validation (duration check via ffprobe)
+    import os
     ext = os.path.splitext(filename)[1].lower()
-    if ext not in _ALLOWED_VIDEO_EXT:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported format '{ext}'. Allowed: {', '.join(sorted(_ALLOWED_VIDEO_EXT))}",
-        )
+    duration_sec = await probe_video_duration(file_data, ext)
+    if duration_sec is not None:
+        duration_errors = validate_video_file(filename, len(file_data), duration_sec)
+        if duration_errors:
+            raise HTTPException(status_code=400, detail=duration_errors[-1])
 
-    # 2. Read file + size check (F2-URS04-SRS01: max 500 MB)
-    data = await file.read()
-    if len(data) > _MAX_VIDEO_BYTES:
-        raise HTTPException(status_code=400, detail="File exceeds 500 MB limit.")
-
-    # 3. Duration check via ffprobe (F2-URS04-SRS01: max 60 s)
-    tmp_path = None
+    # Step 4: Upload to Cloudflare R2 (delegated to upload_service)
     try:
-        fd, tmp_path = tempfile.mkstemp(suffix=ext)
-        with os.fdopen(fd, "wb") as fh:
-            fh.write(data)
-
-        loop = asyncio.get_event_loop()
-        probe = await loop.run_in_executor(None, ff.probe, tmp_path)
-        duration_sec = float(probe.get("format", {}).get("duration", 0))
-        if duration_sec > 60:
-            raise HTTPException(status_code=400, detail="Video must be 60 seconds or shorter.")
-    except HTTPException:
-        raise
-    except Exception as exc:
-        print(f"[Upload] ffprobe failed (skipping duration check): {exc}")
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            try:
-                os.remove(tmp_path)
-            except OSError:
-                pass
-
-    # 4. Upload to Cloudflare R2
-    import uuid as _uuid
-    import boto3
-
-    r2_endpoint = os.getenv("R2_ENDPOINT_URL")
-    r2_key_id   = os.getenv("R2_ACCESS_KEY_ID")
-    r2_secret   = os.getenv("R2_SECRET_ACCESS_KEY")
-    r2_bucket   = os.getenv("R2_BUCKET_NAME")
-    r2_public   = os.getenv("R2_PUBLIC_URL", "").rstrip("/")
-
-    if not all([r2_endpoint, r2_key_id, r2_secret, r2_bucket]):
-        raise HTTPException(status_code=503, detail="Storage not configured on this server.")
-
-    object_key = f"videos/reels/uploads/{current_user.user_id}/{_uuid.uuid4().hex}{ext}"
-    content_type_map = {".mp4": "video/mp4", ".mov": "video/quicktime", ".avi": "video/x-msvideo"}
-
-    def _r2_put():
-        s3 = boto3.client(
-            "s3", endpoint_url=r2_endpoint,
-            aws_access_key_id=r2_key_id, aws_secret_access_key=r2_secret,
-            region_name="auto",
+        video_url = await upload_video_to_r2(
+            file_data=file_data,
+            filename=filename,
+            user_id=str(current_user.user_id),
         )
-        s3.put_object(
-            Bucket=r2_bucket, Key=object_key, Body=data,
-            ContentType=content_type_map.get(ext, "video/mp4"),
-        )
+    except RuntimeError as e:
+        logger.error(f"Video upload failed for user {current_user.user_id}: {e}")
+        raise HTTPException(status_code=503, detail="Upload to storage service failed")
 
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _r2_put)
-
-    if r2_public:
-        video_url = f"{r2_public}/{object_key}"
-    else:
-        video_url = f"{r2_endpoint.rstrip('/')}/{r2_bucket}/{object_key}"
-
-    # 5. Create Reel record (F2-URS04-SRS04)
+    # Step 5: Create Reel record with uploaded_video_url (F2-URS04-SRS04)
     parsed_product_id = None
     if product_id:
         try:
             parsed_product_id = UUID(product_id)
         except ValueError:
-            pass
+            logger.warning(f"Invalid product_id format: {product_id}")
 
     reel = create_reel(
         db=db,
         user_id=current_user.user_id,
-        prompt_text="",          # no prompt for user-uploaded video
+        prompt_text="",  # No prompt for user-uploaded video
         product_id=parsed_product_id,
     )
     update_reel(db, reel=reel, uploaded_video_url=video_url)
 
-    # 6. Queue caption generation + overlay (target="upload")
+    # Step 6: Queue caption generation + overlay (target="upload" for worker)
     process_reel_generation.delay(
         str(reel.reel_id), platform, overlay_position, "upload",
     )
 
+    logger.info(f"Video upload completed for reel {reel.reel_id}, user {current_user.user_id}")
     return reel

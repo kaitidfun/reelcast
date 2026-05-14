@@ -1,13 +1,17 @@
 import os
 import asyncio
+import logging
 from celery import Celery
 from sqlalchemy.orm import joinedload
 
 from app.database import SessionLocal
 from app.models.models import Reel, Product
-from app.services.ai_service import generate_video, generate_captions
-from app.services.media_service import apply_overlay
+from app.services.ai_service import generate_captions
+from app.services.video_generation_service import generate_video
+from app.services.overlay_service import apply_overlay
 from app.services.reel_service import update_reel
+
+logger = logging.getLogger(__name__)
 
 celery_app = Celery(
     "worker",
