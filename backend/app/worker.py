@@ -78,13 +78,20 @@ async def _async_process_reel_generation(
         )
         product_info = product.description if product else ""
 
-        # Resolve overlay image URL (brand logo → primary image → first image)
+        # Resolve product image URL for AI reference (F2-URS02-SRS01)
+        # Primary image → first image → None (sent to AI as visual reference)
+        product_image_url: str | None = None
+        if product and product.images:
+            primary = next((img for img in product.images if img.is_primary), None)
+            product_image_url = (primary or product.images[0]).image_url
+
+        # Resolve overlay URL for FFmpeg watermark (F2-URS05-SRS01)
+        # Brand logo first → product image fallback → no overlay
         overlay_url: str | None = None
         if product:
             overlay_url = product.brand_logo_url
-            if not overlay_url and product.images:
-                primary = next((img for img in product.images if img.is_primary), None)
-                overlay_url = (primary or product.images[0]).image_url
+            if not overlay_url and product_image_url:
+                overlay_url = product_image_url
 
         # Build enriched prompt that includes product metadata (F2-URS02-SRS01)
         video_prompt = reel.prompt_text
@@ -96,9 +103,12 @@ async def _async_process_reel_generation(
 
         # 1. Determine video source
         if target in ["all", "video"]:
-            # Generate new AI video
+            # Generate AI video — pass product image as visual reference (F2-URS02-SRS01)
             final_video_url = await generate_video(
-                prompt=video_prompt, resolution=resolution, duration=duration
+                prompt=video_prompt,
+                image_url=product_image_url,  # Reference image for style/product accuracy
+                resolution=resolution,
+                duration=duration,
             )
         elif target == "upload":
             # User-uploaded video — use as-is, then apply overlay + captions

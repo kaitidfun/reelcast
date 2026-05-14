@@ -65,7 +65,7 @@ async def generate_video(
     # ──────────────────────────────────────────────
     if fal_key:
         try:
-            return await _generate_with_fal(prompt, resolution, duration)
+            return await _generate_with_fal(prompt, resolution, duration, image_url)
         except Exception as e:
             logger.warning(f"[fal.ai] Generation failed, trying next provider: {e}")
 
@@ -86,19 +86,29 @@ async def generate_video(
     return "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
 
 
-async def _generate_with_fal(prompt: str, resolution: str, duration: int) -> str:
+async def _generate_with_fal(
+    prompt: str,
+    resolution: str,
+    duration: int,
+    image_url: Optional[str] = None,
+) -> str:
     """
     Generate video using fal.ai Wan 2.1 model.
 
-    fal.ai returns a direct public URL - no upload needed.
+    When image_url is provided, uses image-to-video mode so the AI generates
+    a video that visually matches the product image (F2-URS02-SRS01).
+    Without image_url, falls back to text-to-video mode.
+
+    fal.ai returns a direct public CDN URL — no R2 upload needed.
 
     Args:
-        prompt: Creative brief
+        prompt: Creative brief (enriched with product name + description)
         resolution: Output resolution (480p/720p/1080p)
         duration: Duration in seconds (capped at 30s for model stability)
+        image_url: Optional product image URL as visual reference for generation
 
     Returns:
-        Public URL to generated video
+        Public CDN URL to generated video
 
     Raises:
         Exception if fal.ai API fails or model execution times out
@@ -109,19 +119,25 @@ async def _generate_with_fal(prompt: str, resolution: str, duration: int) -> str
         # Cap frames at 480 (30s @ 16 FPS) for fal.ai Wan 2.1 1.3b model stability
         # Model max frames per documentation: 960 @ 30 FPS = 480 @ 16 FPS
         num_frames = min(duration * 16, 480)
-        logger.info(f"[fal.ai] Generating Wan 2.1: {resolution}, {duration}s ({num_frames} frames)")
+
+        if image_url:
+            logger.info(f"[fal.ai] Image-to-video mode: {resolution}, {duration}s, ref={image_url}")
+        else:
+            logger.info(f"[fal.ai] Text-to-video mode: {resolution}, {duration}s ({num_frames} frames)")
 
         def _run_fal():
-            result = fal_client.run(
-                "fal-ai/wan/v2.1/1.3b",
-                arguments={
-                    "prompt": prompt,
-                    "num_frames": num_frames,
-                    "frames_per_second": 16,
-                    "resolution": resolution,
-                    "aspect_ratio": "9:16",
-                },
-            )
+            arguments = {
+                "prompt": prompt,
+                "num_frames": num_frames,
+                "frames_per_second": 16,
+                "resolution": resolution,
+                "aspect_ratio": "9:16",
+            }
+            # Add product image as visual reference when available (image-to-video mode)
+            if image_url:
+                arguments["image_url"] = image_url
+
+            result = fal_client.run("fal-ai/wan/v2.1/1.3b", arguments=arguments)
             return result["video"]["url"]
 
         loop = asyncio.get_event_loop()
