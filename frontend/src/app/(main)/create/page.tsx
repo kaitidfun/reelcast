@@ -242,7 +242,7 @@ const CreateReel = () => {
   const [duration, setDuration] = useState(5);  // Default 5s — cheapest single Kling clip for testing
   // overlayPosition kept as hidden state (sent to API, defaulted to bottom-right)
   const [overlayPosition] = useState("bottom-right");
-  const [resolution] = useState("720p");  // Fixed 720p default, not exposed in UI
+  const [resolution] = useState("1080p");  // Fixed 1080p — quality requirement
 
   // Output / preview state
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
@@ -269,9 +269,9 @@ const CreateReel = () => {
   // Stores the final elapsed time after generation completes (for "Generated in X:XX" label)
   const [generationTime, setGenerationTime] = useState<number | null>(null);
 
-  // Video mute state — starts muted (required for autoPlay), user can toggle via button.
-  // AI-generated videos (LTX/fal.ai) have no audio track; uploaded videos may have audio.
-  const [videoMuted, setVideoMuted] = useState(true);
+  // Video mute state — starts unmuted so uploaded videos with audio play immediately.
+  // AI-generated videos (LTX/fal.ai) have no audio track so unmuted makes no difference for them.
+  const [videoMuted, setVideoMuted] = useState(false);
 
   /**
    * Feature 2: Creator mode toggle (F2-URS02 vs F2-URS04)
@@ -324,8 +324,8 @@ const CreateReel = () => {
             const data = await res.json();
             if (data.status === "Completed") {
               setGenerationStatus("done");
-              // Freeze the timer at the final value — do NOT reset to 0 so user can see how long it took
-              setGenerationTime(elapsedSeconds);
+              // Calculate final elapsed from start time directly — avoids stale closure on elapsedSeconds
+              setGenerationTime(generationStartTime ? Math.floor((Date.now() - generationStartTime) / 1000) : 0);
               if (data.final_commercial_video_url) {
                 const rawUrl: string = data.final_commercial_video_url;
                 // fal.ai / Veo return full CDN URLs; R2 uploads return object keys.
@@ -345,7 +345,7 @@ const CreateReel = () => {
               clearInterval(interval);
             } else if (data.status === "Failed") {
               setGenerationStatus("idle");
-              setGenerationTime(elapsedSeconds);  // Keep final elapsed on failure too
+              setGenerationTime(generationStartTime ? Math.floor((Date.now() - generationStartTime) / 1000) : 0);
               // Sync failure to global context
               markFailed();
               toast({ title: "Generation Failed", description: data.error_message || "Something went wrong.", variant: "destructive" });
@@ -358,7 +358,7 @@ const CreateReel = () => {
       }, 3000);
     }
     return () => clearInterval(interval);
-  }, [generationStatus, reelId, toast]);
+  }, [generationStatus, reelId, toast, generationStartTime]);
 
   // Control actual video playback (main + fullscreen video stay in sync)
   useEffect(() => {
@@ -367,6 +367,12 @@ const CreateReel = () => {
     const vidFs = videoRefFullscreen.current;
     if (vidFs) { isPlaying ? vidFs.play().catch(() => {}) : vidFs.pause(); }
   }, [isPlaying]);
+
+  // Sync muted state via DOM — React's muted prop doesn't reliably update on live video elements
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.muted = videoMuted;
+    if (videoRefFullscreen.current) videoRefFullscreen.current.muted = videoMuted;
+  }, [videoMuted]);
 
   /** Format seconds as M:SS for seek bar display */
   const formatTime = (s: number) => {
@@ -1357,17 +1363,6 @@ const CreateReel = () => {
                 </div>
               </div>
 
-              {/* Compact 4-dot progress indicator */}
-              {generationStatus !== "idle" && (
-                <div className="mt-3 flex items-center justify-center gap-1.5 px-2">
-                  {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className={`h-1.5 w-6 rounded-full transition-colors ${
-                      generationStatus === "done" ? "bg-success" :
-                      generationStatus === "generating" ? "bg-primary animate-pulse" : "bg-muted"
-                    }`} />
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Generation time badge — shows after completion (how long it took) */}
