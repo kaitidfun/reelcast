@@ -171,11 +171,13 @@ async def _async_process_reel_generation(
             logger.info(f"[Worker] Applying overlay from: {overlay_url}")
             try:
                 # apply_overlay returns an R2 object key on success, raises on failure
+                # Pass with_audio so FFmpeg strips the audio track when user chose "No Audio"
                 overlaid_key = await apply_overlay(
                     video_url=video_for_download,
                     overlay_url=overlay_url,
                     position=overlay_position,
                     reel_id=reel_id,
+                    with_audio=with_audio,
                 )
                 final_video_url = overlaid_key  # R2 key — frontend proxies via /api/upload/videos/{key}
             except Exception as overlay_err:

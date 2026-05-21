@@ -97,6 +97,7 @@ async def overlay_watermark(
     overlay_path: str,
     position: str,
     output_path: str,
+    with_audio: bool = True,
 ) -> str:
     """
     Composite an overlay image onto a video using FFmpeg.
@@ -110,6 +111,8 @@ async def overlay_watermark(
         position: Placement option - 'top-left', 'top-right', 'bottom-left',
                  'bottom-right', or 'center'
         output_path: Local path for output MP4 file
+        with_audio: If True, preserve original audio track. If False, strip
+                   audio entirely (-an) — used when user selects "No Audio".
 
     Returns:
         Path to output MP4 file
@@ -120,7 +123,7 @@ async def overlay_watermark(
     # Resolve position coordinates (or default to bottom-right)
     overlay_x, overlay_y = POSITION_COORDS.get(position, POSITION_COORDS['bottom-right'])
 
-    logger.info(f"Compositing overlay at position '{position}': {overlay_path}")
+    logger.info(f"Compositing overlay at position '{position}': {overlay_path} (audio={'on' if with_audio else 'stripped'})")
 
     def _process():
         try:
@@ -134,15 +137,24 @@ async def overlay_watermark(
             # Composite overlay onto video at specified position
             overlaid = ffmpeg.overlay(input_video, input_overlay, x=overlay_x, y=overlay_y)
 
-            # Output as H.264 MP4 with AAC audio (broad device compatibility)
-            out = ffmpeg.output(
-                overlaid,
-                input_video.audio,  # Preserve original audio if present
-                output_path,
-                vcodec='libx264',
-                acodec='aac',
-                strict='experimental'
-            )
+            if with_audio:
+                # Preserve original audio — pass audio stream alongside composited video
+                out = ffmpeg.output(
+                    overlaid,
+                    input_video.audio,
+                    output_path,
+                    vcodec='libx264',
+                    acodec='aac',
+                    strict='experimental',
+                )
+            else:
+                # Strip audio track entirely — user selected "No Audio"
+                out = ffmpeg.output(
+                    overlaid,
+                    output_path,
+                    vcodec='libx264',
+                    an=None,  # -an flag: disable audio output
+                )
 
             ffmpeg.run(out, overwrite_output=True, quiet=True)
             logger.info(f"FFmpeg compositing complete: {output_path}")
@@ -169,6 +181,7 @@ async def apply_overlay(
     overlay_url: str,
     position: str,
     reel_id: str,
+    with_audio: bool = True,
 ) -> str:
     """
     Full overlay pipeline: Download video & overlay, composite, upload to R2.
@@ -184,6 +197,7 @@ async def apply_overlay(
         position: Logo placement: 'top-left', 'top-right', 'bottom-left',
                  'bottom-right', or 'center'
         reel_id: Reel UUID for organizing output in R2
+        with_audio: If True, preserve audio track; if False, strip audio (-an).
 
     Returns:
         R2 object key of the composited video (e.g. "videos/reels/overlaid/{reel_id}/abc.mp4")
@@ -212,8 +226,8 @@ async def apply_overlay(
         fd, output_tmp = tempfile.mkstemp(suffix=".mp4")
         os.close(fd)
 
-        # Step 3: Run FFmpeg overlay composition
-        await overlay_watermark(video_tmp, overlay_tmp, position, output_tmp)
+        # Step 3: Run FFmpeg overlay composition (strip audio if with_audio=False)
+        await overlay_watermark(video_tmp, overlay_tmp, position, output_tmp, with_audio=with_audio)
 
         # Step 4: Upload composited video to R2 — store only the object key
         # so the frontend can proxy via /api/upload/videos/{key} regardless of
