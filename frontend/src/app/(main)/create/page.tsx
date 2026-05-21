@@ -22,6 +22,7 @@ import {
   Folder,
   X,
   Expand,
+  Download,
   Clock,
   Upload,
   Lightbulb,
@@ -669,6 +670,35 @@ const CreateReel = () => {
       toast({ title: "Select a video file", description: "Choose an MP4, MOV, or AVI file to upload." });
       return;
     }
+
+    // Client-side duration check (complements backend ffprobe which may be unavailable in dev).
+    // Uses the HTML5 video element to read metadata without uploading the file.
+    const videoEl = document.createElement("video");
+    videoEl.preload = "metadata";
+    const objectUrl = URL.createObjectURL(uploadFile);
+    videoEl.src = objectUrl;
+    videoEl.onloadedmetadata = () => {
+      URL.revokeObjectURL(objectUrl);
+      if (videoEl.duration > 60) {
+        toast({
+          title: "Video too long",
+          description: `Duration ${Math.round(videoEl.duration)}s exceeds the 60s limit.`,
+          variant: "destructive",
+        });
+        return;
+      }
+      // Duration OK — proceed with upload
+      doUpload();
+    };
+    videoEl.onerror = () => {
+      // Can't read metadata (uncommon) — let the server validate duration instead
+      URL.revokeObjectURL(objectUrl);
+      doUpload();
+    };
+  };
+
+  /** Executes the actual XHR upload after client-side validation passes. */
+  const doUpload = () => {
     setUploadStatus("uploading");
     setUploadProgress(0);
 
@@ -724,6 +754,25 @@ const CreateReel = () => {
   const handlePublish = () => {
     const names = platformOptions.filter((p) => selectedPlatforms.includes(p.id)).map((p) => p.label);
     toast({ title: "Published!", description: `Reel has been distributed to ${names.join(", ")} 🎉` });
+  };
+
+  /** Download the generated/uploaded video to the user's device. */
+  const handleDownload = async () => {
+    if (!videoUrl) return;
+    try {
+      // Fetch video bytes and create a local blob URL to trigger browser download.
+      // Needed because CDN URLs (fal.ai) don't honour the `download` attribute due to CORS.
+      const res = await fetch(videoUrl);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `reel_${reelId ?? "video"}.mp4`;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      toast({ title: "Download failed", description: "Could not download the video.", variant: "destructive" });
+    }
   };
 
   return (
@@ -1326,7 +1375,7 @@ const CreateReel = () => {
                         </div>
                       </div>
 
-                      {/* Top-left controls: fullscreen + mute/unmute */}
+                      {/* Top-left controls: fullscreen + mute/unmute + download */}
                       <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 z-10">
                         <button
                           onClick={(e) => { e.stopPropagation(); setFullscreenOpen(true); }}
@@ -1352,6 +1401,15 @@ const CreateReel = () => {
                           {videoMuted
                             ? <VolumeX className="h-3.5 w-3.5 text-white/70" />
                             : <Volume2 className="h-3.5 w-3.5 text-white" />}
+                        </button>
+                        {/* Download generated video */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDownload(); }}
+                          className="flex h-7 w-7 items-center justify-center rounded-md bg-black/50 backdrop-blur-md ring-1 ring-white/15 hover:bg-black/70 transition-all"
+                          aria-label="Download video"
+                          title="Download video"
+                        >
+                          <Download className="h-3.5 w-3.5 text-white" />
                         </button>
                       </div>
 
