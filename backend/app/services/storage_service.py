@@ -305,6 +305,111 @@ def get_file(object_key: str, *, bucket: Optional[str] = None) -> dict:
 # Helper for uploading raw bytes (used by reel_routes.py for video upload)
 # ─────────────────────────────────────────────────────────────────────────────
 
+def get_public_url(object_key_or_url: str) -> str:
+    """
+    Resolve an R2 object key or partial path to a full public URL.
+
+    Product images/logos are stored in DB as raw object keys (e.g.
+    "products/users/.../logo.webp") rather than full URLs.  This function
+    converts them so they are accessible by external services (fal.ai, httpx).
+
+    If the value is already a full URL (starts with http/https), it is
+    returned unchanged.
+
+    NOTE: If R2_PUBLIC_URL is not configured, the returned URL will be the
+    S3 API endpoint which requires authentication.  Use get_presigned_url()
+    instead when the URL must be accessible by external services without auth.
+
+    Args:
+        object_key_or_url: R2 object key or an already-resolved URL
+
+    Returns:
+        Full public URL string
+    """
+    if object_key_or_url.startswith("http://") or object_key_or_url.startswith("https://"):
+        return object_key_or_url  # Already a full URL — nothing to do
+
+    # Build URL from config (same logic as upload helpers)
+    if R2_PUBLIC_URL:
+        return f"{R2_PUBLIC_URL.rstrip('/')}/{object_key_or_url}"
+    elif R2_ENDPOINT_URL and R2_BUCKET_NAME:
+        return f"{R2_ENDPOINT_URL.rstrip('/')}/{R2_BUCKET_NAME}/{object_key_or_url}"
+    else:
+        # R2 not configured — return as-is (will fail downstream, but at least
+        # the error message will be descriptive)
+        logger.warning(
+            "Cannot resolve public URL for '%s': R2 not configured",
+            object_key_or_url,
+        )
+        return object_key_or_url
+
+
+def get_presigned_url(object_key_or_url: str, expiry: int = 3600) -> str:
+    """
+    Generate a time-limited presigned GET URL for an R2 object.
+
+    Unlike get_public_url(), this works even when the R2 bucket is NOT public.
+    Boto3 signs the URL with credentials so anyone with the URL can access
+    the object for `expiry` seconds — no bucket-level public access needed.
+
+    Priority:
+        1. If value is already a full URL → return as-is
+        2. If R2_PUBLIC_URL is configured → return permanent public URL (no expiry)
+        3. Otherwise → generate presigned GET URL that expires after `expiry` seconds
+
+    Use this for any URL that must be accessible by external services:
+        - fal.ai image_url parameter (image-to-video mode)
+        - httpx overlay download in overlay_service
+        - Browser display of product images in API responses
+
+    Args:
+        object_key_or_url: R2 object key (e.g. "products/users/.../img.webp")
+                           or an already-resolved URL
+        expiry: Presigned URL validity in seconds (default 3600 = 1 hour).
+                1 hour is enough for any generation pipeline run or page session.
+
+    Returns:
+        Accessible URL — permanent public URL if R2_PUBLIC_URL is set,
+        presigned URL otherwise
+    """
+    # Already a full URL (fal.ai CDN, external, etc.) — nothing to sign
+    if object_key_or_url.startswith("http://") or object_key_or_url.startswith("https://"):
+        return object_key_or_url
+
+    # Data URL (base64 image stored directly in DB) — return as-is, no signing needed
+    if object_key_or_url.startswith("data:"):
+        return object_key_or_url
+
+    # If a public CDN is configured, use it (permanent URL, no signing overhead)
+    if R2_PUBLIC_URL:
+        return f"{R2_PUBLIC_URL.rstrip('/')}/{object_key_or_url}"
+
+    # No public URL — generate a presigned GET URL (accessible without auth)
+    if not R2_BUCKET_NAME:
+        logger.warning(
+            "Cannot generate presigned URL for '%s': R2_BUCKET_NAME not configured",
+            object_key_or_url,
+        )
+        return object_key_or_url
+
+    try:
+        s3 = _get_s3_client()
+        url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": R2_BUCKET_NAME, "Key": object_key_or_url},
+            ExpiresIn=expiry,
+        )
+        logger.debug(
+            "Generated presigned URL for '%s' (expires in %ds)", object_key_or_url, expiry
+        )
+        return url
+    except (BotoCoreError, ClientError) as exc:
+        logger.error(
+            "Failed to generate presigned URL for '%s': %s", object_key_or_url, exc
+        )
+        return object_key_or_url
+
+
 def upload_raw_bytes_to_r2(
     data: bytes,
     *,

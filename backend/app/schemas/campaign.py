@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
@@ -34,6 +34,15 @@ class CampaignResponse(BaseModel):
     banner_image_url: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    @computed_field
+    @property
+    def banner_url(self) -> Optional[str]:
+        """Resolved presigned URL for banner_image_url (R2 key → accessible URL)."""
+        from app.services.storage_service import get_presigned_url
+        if not self.banner_image_url:
+            return None
+        return get_presigned_url(self.banner_image_url)
 
 
 class CampaignListResponse(BaseModel):

@@ -8,7 +8,7 @@ load_dotenv()
 # Security
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours — long enough for a full dev/demo session
 SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "supersecret-session-key")
 
 # Database

@@ -1,7 +1,11 @@
 """
 AI Service
 ==========
-Handles AI-powered caption and hashtag generation via Google Gemini.
+Handles AI-powered generation via Google Gemini:
+  - Caption & hashtag generation (generate_captions)
+  - Prompt generation from template + product context (generate_prompt_from_template)
+  - Prompt enhancement from existing draft (enhance_prompt)
+  - Guided prompt generation from chip selections + product image (generate_guided_prompt)
 
 Note: Video generation moved to video_generation_service.py for separation of concerns.
 """
@@ -10,7 +14,7 @@ import os
 import asyncio
 import json
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from google import genai
 from google.genai import types
 
@@ -21,6 +25,17 @@ logger = logging.getLogger(__name__)
 
 # Configure Gemini with AI Studio Key — reads GOOGLE_AI_API_KEY from .env
 GOOGLE_AI_API_KEY = os.getenv("GOOGLE_AI_API_KEY")
+
+# Template descriptions sent to Gemini to frame the generation goal
+# Each maps to the matching quick-prompt chip label in the frontend
+_TEMPLATE_DESCRIPTIONS = {
+    "product_showcase": "a polished showcase that highlights the product's key features, design details, and unique selling points",
+    "flash_sale":       "an urgent, high-energy flash sale with bold visual emphasis on the discount, countdown urgency, and clear call-to-action",
+    "new_arrival":      "a stylish new-arrival announcement that builds excitement and curiosity around the product launch",
+    "bundle_deal":      "a compelling bundle deal that communicates the value proposition of buying the combined products together",
+    "review_highlight": "a social-proof video featuring top customer reviews and testimonials to build credibility and trust",
+    "tutorial":         "a quick tutorial showing 2–3 practical ways to use or style the product in real-life scenarios",
+}
 
 def _get_client() -> genai.Client:
     if not GOOGLE_AI_API_KEY:
@@ -101,3 +116,298 @@ Rules:
             "caption": f"Check out this amazing product! {prompt[:50]}...",
             "hashtags": ["#trending", "#musthave", "#reelcast", "#shopnow"]
         }
+
+
+async def generate_prompt_from_template(
+    template_type: str,
+    product_name: str,
+    product_description: str,
+    duration: int = 30,
+    product_images: list[tuple[bytes, str]] | None = None,
+) -> str:
+    """
+    Generate a video prompt tailored to a quick-prompt template + product context.
+
+    Called when the user clicks a quick-prompt chip (Product Showcase, Flash Sale, etc.).
+    When product_images is provided the request is multimodal — Gemini sees all
+    product photos and can reference their colours, shapes, and packaging details
+    directly, producing more specific and visually accurate prompts.
+
+    Args:
+        template_type:        One of the keys in _TEMPLATE_DESCRIPTIONS (e.g. "flash_sale")
+        product_name:         Name of the selected product
+        product_description:  Product highlights/description from the library
+        duration:             Requested video length in seconds
+        product_images:  List of (bytes, mime_type) tuples for ALL product images,
+                         sorted primary-first (up to 4). Gemini receives every image
+                         so it can reference multiple angles and views of the product.
+                         Empty list = text-only fallback.
+
+    Returns:
+        Generated prompt string (≤ 500 chars). Falls back to a static template on error.
+    """
+    template_desc = _TEMPLATE_DESCRIPTIONS.get(template_type, "a promotional video")
+    fallback = (
+        f"Create a {duration}-second cinematic Reel for {product_name or 'the product'} — "
+        f"{template_desc}. Use dynamic transitions, premium lighting, and a compelling call-to-action."
+    )
+
+    if not GOOGLE_AI_API_KEY:
+        logger.warning("GOOGLE_AI_API_KEY not set — returning static fallback prompt")
+        return fallback
+
+    system_prompt = (
+        "You are a world-class creative director specialising in short-form social media Reels. "
+        "Write a single, vivid video prompt for a vertical social media Reel.\n\n"
+        "Requirements:\n"
+        "- STRICTLY under 500 characters — hard system limit enforced after generation\n"
+        "- If a product image is provided, reference its actual visual appearance (colour, shape, packaging)\n"
+        "- Describe: visual scene/setting, camera movement, mood/atmosphere, key product moments\n"
+        "- Be specific and production-ready — directors should be able to shoot from this brief\n"
+        "- Do NOT include hashtags, captions, or pricing\n"
+        "- Return ONLY the prompt text — no extra explanation, no quotes"
+    )
+    user_content = (
+        f"Template goal: {template_desc}\n"
+        f"Product name: {product_name or 'unspecified'}\n"
+        f"Product details: {product_description or 'no additional details'}\n"
+        f"Duration: {duration} seconds"
+    )
+
+    try:
+        client = _get_client()
+
+        def _generate():
+            imgs = product_images or []
+            if imgs:
+                # Multimodal: all product images first, then the text prompt
+                # Gemini sees every angle/view of the product for richer visual prompts
+                contents = [
+                    types.Part(
+                        inline_data=types.Blob(data=img_bytes, mime_type=img_mime)
+                    )
+                    for img_bytes, img_mime in imgs
+                ] + [types.Part(text=system_prompt + "\n\n" + user_content)]
+            else:
+                contents = system_prompt + "\n\n" + user_content
+
+            return client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=contents,
+            ).text.strip()
+
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, _generate)
+        result = result[:500]
+        logger.info(
+            f"Template prompt generated ({template_type}, {len(result)} chars, "
+            f"{len(product_images or [])} image(s))"
+        )
+        return result
+
+    except Exception as e:
+        logger.error(f"Error generating template prompt: {e}")
+        return fallback
+
+
+async def enhance_prompt(
+    prompt_text: str,
+    product_name: str = "",
+    product_description: str = "",
+    duration: int = 30,
+    product_images: list[tuple[bytes, str]] | None = None,
+) -> str:
+    """
+    Improve the user's prompt using Gemini to make it more cinematic and production-ready.
+
+    Called when the user clicks the "Enhance" button. Gemini rewrites the draft to
+    include professional creative direction — specific camera movements, lighting style,
+    visual transitions — while preserving the user's original concept.
+    When product_images is provided the request is multimodal so Gemini can
+    reference the product's actual visual appearance in the improved prompt.
+
+    Args:
+        prompt_text:          The user's current draft (may be rough or short)
+        product_name:         Product name for additional context (optional)
+        product_description:  Product highlights for additional context (optional)
+        duration:             Requested video length in seconds
+        product_images:  List of (bytes, mime_type) tuples for ALL product images,
+                         sorted primary-first (up to 4). Gemini sees every image
+                         for richer visual context. Empty list = text-only.
+
+    Returns:
+        Improved prompt string (≤ 500 chars). Returns original prompt on error.
+    """
+    if not GOOGLE_AI_API_KEY:
+        logger.warning("GOOGLE_AI_API_KEY not set — returning locally enhanced prompt")
+        return (
+            f"Create a cinematic {duration}-second vertical Reel: {prompt_text.strip()}. "
+            "Use dynamic camera moves, premium lighting, hero product close-ups, "
+            "vibrant color grading, and a strong call-to-action."
+        )[:500]
+
+    system_prompt = (
+        "You are a world-class creative director specialising in short-form social media Reels. "
+        "Improve the user's prompt into a professional, production-ready video brief.\n\n"
+        "Requirements:\n"
+        "- Keep the user's core concept intact — improve quality, never change the idea\n"
+        "- Add specific camera movements, lighting style, mood, and visual transitions\n"
+        "- If a product image is provided, reference its actual visual appearance\n"
+        "- STRICTLY under 500 characters — hard system limit enforced after generation\n"
+        "- Do NOT include hashtags, captions, or pricing\n"
+        "- Return ONLY the improved prompt — no explanation, no quotes"
+    )
+
+    context = ""
+    if product_name:
+        context += f"\nProduct: {product_name}"
+    if product_description:
+        context += f"\nProduct details: {product_description}"
+
+    user_content = (
+        f"Original prompt: {prompt_text}\n"
+        f"Duration: {duration} seconds"
+        + context
+    )
+
+    try:
+        client = _get_client()
+
+        def _generate():
+            imgs = product_images or []
+            if imgs:
+                contents = [
+                    types.Part(
+                        inline_data=types.Blob(data=img_bytes, mime_type=img_mime)
+                    )
+                    for img_bytes, img_mime in imgs
+                ] + [types.Part(text=system_prompt + "\n\n" + user_content)]
+            else:
+                contents = system_prompt + "\n\n" + user_content
+
+            return client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=contents,
+            ).text.strip()
+
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, _generate)
+        result = result[:500]
+        logger.info(
+            f"Prompt improved: {len(prompt_text)} → {len(result)} chars, "
+            f"{len(product_images or [])} image(s)"
+        )
+        return result
+
+    except Exception as e:
+        logger.error(f"Error improving prompt: {e}")
+        return prompt_text  # Return original if improvement fails
+
+
+async def generate_guided_prompt(
+    mood: Optional[str] = None,
+    target: Optional[str] = None,
+    style: Optional[str] = None,
+    focus: Optional[str] = None,
+    lighting: Optional[str] = None,
+    product_name: str = "",
+    product_description: str = "",
+    product_images: list[tuple[bytes, str]] | None = None,
+    duration: int = 30,
+) -> str:
+    """
+    Generate a production-ready video prompt from Guide Me card selections + product context.
+
+    Sends all selected creative preferences and full product details (including image)
+    to Gemini as a multimodal request.  Gemini sees the actual product photo and can
+    reference its visual appearance in the generated prompt — much richer output than
+    text-only generation.
+
+    Args:
+        mood:                 Selected Mood/Vibe card label (e.g. "Luxury & Premium")
+        target:               Selected Target Audience card label
+        style:                Selected Visual Style card label
+        focus:                Selected Scene Focus card label
+        lighting:             Selected Lighting & Environment card label (e.g. "Golden Hour")
+        product_name:         Product name from the library
+        product_description:  Product description/highlights
+        product_images:  List of (bytes, mime_type) tuples for ALL product images,
+                         sorted primary-first (up to 4 images)
+        duration:             Requested video length in seconds
+
+    Returns:
+        Generated video prompt string (≤ 500 chars, hard-capped)
+
+    Falls back to a locally-assembled prompt if Gemini is unavailable.
+    """
+    # Build the creative-direction selections the user picked
+    selections = []
+    if mood:     selections.append(f"Mood/Vibe: {mood}")
+    if style:    selections.append(f"Visual Style: {style}")
+    if focus:    selections.append(f"Scene Focus: {focus}")
+    if target:   selections.append(f"Target Audience: {target}")
+    if lighting: selections.append(f"Lighting & Environment: {lighting}")
+
+    # Local fallback: build prompt without Gemini
+    def _local_fallback() -> str:
+        parts = ", ".join(s.split(": ", 1)[-1] for s in selections) if selections else "dynamic and engaging"
+        return (
+            f"Create a {duration}-second vertical Reel for {product_name or 'the featured product'}. "
+            f"Style: {parts}. Highlight the product's best features with premium lighting, "
+            "smooth transitions, and a strong call-to-action."
+        )[:500]
+
+    imgs = product_images or []
+
+    if not GOOGLE_AI_API_KEY:
+        logger.warning("GOOGLE_AI_API_KEY not set — returning locally-assembled guided prompt")
+        return _local_fallback()
+
+    system_prompt = (
+        "You are a world-class creative director specialising in short-form social media Reels. "
+        "Generate a single, vivid video prompt based on the provided creative brief and product.\n\n"
+        "Requirements:\n"
+        "- STRICTLY under 500 characters — hard system limit enforced after generation\n"
+        "- Reference the product's actual visual appearance from the image (if provided)\n"
+        "- Describe: visual scene/setting, camera movement, mood, lighting, key product moments\n"
+        "- Be specific and production-ready — a director should be able to shoot from this brief\n"
+        "- Do NOT include hashtags, captions, platform names, or pricing\n"
+        "- Return ONLY the prompt text — no explanation, no quotes"
+    )
+
+    context_parts = [f"Duration: {duration} seconds"]
+    if product_name:        context_parts.append(f"Product name: {product_name}")
+    if product_description: context_parts.append(f"Product details: {product_description}")
+    context_parts.extend(selections)
+    user_content = system_prompt + "\n\n" + "\n".join(context_parts)
+
+    try:
+        client = _get_client()
+
+        def _generate():
+            if imgs:
+                # Multimodal: all product images first, then the creative brief
+                # Gemini sees every angle/view for richer, more visually specific prompts
+                contents = [
+                    types.Part(
+                        inline_data=types.Blob(data=img_bytes, mime_type=img_mime)
+                    )
+                    for img_bytes, img_mime in imgs
+                ] + [types.Part(text=user_content)]
+            else:
+                contents = user_content
+
+            return client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=contents,
+            ).text.strip()
+
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, _generate)
+        result = result[:500]
+        logger.info(f"Guided prompt generated ({len(result)} chars, {len(imgs)} image(s))")
+        return result
+
+    except Exception as e:
+        logger.error(f"Error generating guided prompt: {e}")
+        return _local_fallback()

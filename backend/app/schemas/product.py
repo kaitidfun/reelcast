@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
@@ -55,6 +55,23 @@ class ProductResponse(BaseModel):
     images: List[ProductImageResponse] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    @computed_field
+    @property
+    def primary_image_url(self) -> Optional[str]:
+        """
+        Resolve the primary product image to an accessible URL for the frontend.
+
+        Product images are stored as R2 object keys (relative paths) in the DB.
+        Uses get_presigned_url() so the image is accessible even when the R2 bucket
+        is not set to public — the presigned URL is valid for 1 hour which is
+        sufficient for any page session or generation pipeline run.
+        """
+        from app.services.storage_service import get_presigned_url
+        primary = next((img for img in self.images if img.is_primary), None)
+        if not primary and self.images:
+            primary = self.images[0]
+        return get_presigned_url(primary.image_url) if primary else None
 
 
 class ProductListResponse(BaseModel):

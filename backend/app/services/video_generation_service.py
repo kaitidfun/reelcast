@@ -1,21 +1,26 @@
 """
 Video Generation Service
 ========================
-Orchestrates AI video generation with fallback providers and centralized R2 upload.
+Provides video generation primitives for the worker to orchestrate.
+
+Hybrid Workflow (implemented in worker.py):
+    ≤20s : LTX 2.3 Fast only              (1 API call, direct generation)
+    30s  : LTX 2.3 Fast(20s) → extend(10s)(2 API calls)
+    60s  : LTX 2.3 Fast(20s) → extend × 2 (3 API calls, 20+20+20s)
 
 Providers (priority order):
-    1. fal.ai Wan 2.1      — Fast & cheap (~฿0.5/video), returns public URL
-    2. Google Veo 2.0      — Best quality (~฿63/video), downloads and uploads to R2
-    3. Sample fallback     — Free, no AI, for development/testing
+    1. fal.ai LTX Video 2.3 Fast — primary generation, supports up to 20s per call
+    2. Google Veo 2.0            — best quality, uploads to R2 storage
+    3. Sample fallback           — free, for development/testing
 
-Usage:
-    from app.services.video_generation_service import generate_video
+Models (verified at https://fal.ai/models, May 2026):
+    LTX 2.3 Fast text  : fal-ai/ltx-2.3/text-to-video/fast    (no image ref)
+    LTX 2.3 Fast image : fal-ai/ltx-2.3/image-to-video/fast   (product image anchor)
+    LTX 2.3 extend     : fal-ai/ltx-2.3/extend-video          (continuation, up to 20s)
+    Kling v1 Std       : kept for backward compat (not used in default flow)
 
-    video_url = await generate_video(
-        prompt="A product showcase...",
-        resolution="720p",
-        duration=30
-    )
+Duration enum (LTX 2.3 Fast): 6, 8, 10, 12, 14, 16, 18, 20 seconds
+    — values >10s require 25 FPS + 1080p (our defaults, so no restriction)
 """
 
 import os
@@ -25,126 +30,323 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Model Constants
+# ─────────────────────────────────────────────────────────────────────────────
+
+# LTX 2.3 Fast — PRIMARY generation (text-to-video, no image reference)
+# Duration enum: "6","8","10","12","14","16","18","20" (max 20s per call)
+LTX23_FAST_TEXT_MODEL = "fal-ai/ltx-2.3/text-to-video/fast"
+
+# LTX 2.3 Fast — image-to-video variant (product image anchors first frame)
+# Same duration enum; requires publicly accessible image_url
+LTX23_FAST_IMAGE_MODEL = "fal-ai/ltx-2.3/image-to-video/fast"
+
+# LTX 2.3 extend — cheap continuation step (up to 20s per call)
+# Used for 30s/60s reels by chaining extends after the initial clip
+LTX_FAST_EXTEND_MODEL = "fal-ai/ltx-2.3/extend-video"
+
+# ── Kept for backward compatibility — not used in the default flow ────────────
+LTX23_FAST_MODEL  = LTX23_FAST_TEXT_MODEL   # alias (old single-model constant)
+KLING_TEXT_MODEL  = "fal-ai/kling-video/v1/standard/text-to-video"
+KLING_IMAGE_MODEL = "fal-ai/kling-video/v1/standard/image-to-video"
+LTX_PRO_MODEL     = "fal-ai/ltx-video"
+
+# Valid duration values (seconds) accepted by LTX 2.3 Fast — fixed enum from fal.ai API.
+# Values >10s require 25 FPS + 1080p resolution (our hardcoded defaults below).
+_LTX_VALID_DURATIONS = [6, 8, 10, 12, 14, 16, 18, 20]
+
+
+def _snap_to_ltx_duration(seconds: int) -> int:
+    """Round requested seconds to the nearest LTX 2.3 Fast duration enum value (integer).
+
+    fal.ai expects an integer literal (not a string) for the duration field.
+    e.g. 15 → 16, 7 → 8, 22 → 20
+    """
+    return min(_LTX_VALID_DURATIONS, key=lambda x: abs(x - seconds))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public API — used directly by worker for hybrid orchestration
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def generate_with_ltx23fast(
+    prompt: str,
+    image_url: Optional[str] = None,
+    duration: int = 8,
+) -> str:
+    """
+    Generate a video clip using LTX Video 2.3 Fast (fal.ai) — PRIMARY generation model.
+
+    Selects the correct endpoint based on whether a product image is available:
+        - With image_url  → fal-ai/ltx-2.3/image-to-video/fast (product anchors first frame)
+        - Without image   → fal-ai/ltx-2.3/text-to-video/fast
+
+    Duration is snapped to the nearest value the API accepts:
+        6, 8, 10, 12, 14, 16, 18, 20 seconds (max 20s per call)
+    Values above 10s require 25 FPS + 1080p — both are our hardcoded defaults.
+
+    Args:
+        prompt:    Creative brief enriched with product name + description
+        image_url: Presigned/public product image URL for visual reference (optional)
+        duration:  Requested clip length in seconds (snapped to nearest valid value)
+
+    Returns:
+        Public CDN URL (fal.media) — no R2 upload needed
+
+    Raises:
+        RuntimeError: If fal.ai API call fails
+    """
+    try:
+        import fal_client
+
+        snapped = _snap_to_ltx_duration(duration)
+
+        if image_url:
+            # Image-to-video: product image anchors the visual style (F2-URS02-SRS01)
+            model = LTX23_FAST_IMAGE_MODEL
+            arguments: dict = {
+                "image_url": image_url,
+                "prompt": prompt,
+                "duration": snapped,         # int required by fal.ai (e.g. 8, not "8")
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": 25,                   # int required by fal.ai (24/25/48/50)
+                "generate_audio": False,  # No unwanted AI audio in commercial reels
+            }
+            logger.info(f"[LTX2.3Fast] image-to-video ({snapped}s), ref: {image_url}")
+        else:
+            model = LTX23_FAST_TEXT_MODEL
+            arguments = {
+                "prompt": prompt,
+                "duration": snapped,         # int required by fal.ai
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": 25,                   # int required by fal.ai
+                "generate_audio": False,
+            }
+            logger.info(f"[LTX2.3Fast] text-to-video ({snapped}s)")
+
+        def _run():
+            result = fal_client.run(model, arguments=arguments)
+            return result["video"]["url"]
+
+        loop = asyncio.get_event_loop()
+        url = await loop.run_in_executor(None, _run)
+        logger.info(f"[LTX2.3Fast] Done: {url}")
+        return url
+
+    except Exception as e:
+        logger.error(f"[LTX2.3Fast] Failed: {e}")
+        raise RuntimeError(f"LTX 2.3 Fast generation failed: {e}") from e
+
+
+async def generate_with_kling(
+    prompt: str,
+    image_url: Optional[str] = None,
+    duration: int = 5,
+) -> str:
+    """
+    Generate an initial video clip using Kling v1.0 Standard (fal.ai).
+
+    Kling supports 5s and 10s clips in 9:16 portrait format.
+    When image_url is provided the model runs in image-to-video mode, using
+    the product image as the first frame / visual reference — this gives much
+    better product accuracy than pure text-to-video.
+
+    Args:
+        prompt:    Creative brief enriched with product name + description
+        image_url: Fully-resolved product image URL for visual reference (optional)
+        duration:  Clip length in seconds — snapped to 5 or 10 (Kling's supported values)
+
+    Returns:
+        Public CDN URL (fal.media) — no R2 upload needed
+
+    Raises:
+        RuntimeError: If fal.ai API call fails
+    """
+    try:
+        import fal_client
+
+        # Kling only supports "5" or "10" as string values
+        kling_duration = "5" if duration <= 5 else "10"
+
+        if image_url:
+            # Image-to-video: product image is the visual anchor (F2-URS02-SRS01)
+            model = KLING_IMAGE_MODEL
+            arguments = {
+                "prompt": prompt,
+                "image_url": image_url,
+                "duration": kling_duration,
+                "aspect_ratio": "9:16",  # Forced portrait — social media standard
+            }
+            logger.info(f"[Kling] image-to-video mode ({kling_duration}s), ref: {image_url}")
+        else:
+            # Text-to-video fallback when no product image is available
+            model = KLING_TEXT_MODEL
+            arguments = {
+                "prompt": prompt,
+                "duration": kling_duration,
+                "aspect_ratio": "9:16",
+            }
+            logger.info(f"[Kling] text-to-video mode ({kling_duration}s)")
+
+        def _run():
+            result = fal_client.run(model, arguments=arguments)
+            return result["video"]["url"]
+
+        loop = asyncio.get_event_loop()
+        url = await loop.run_in_executor(None, _run)
+        logger.info(f"[Kling] Done: {url}")
+        return url
+
+    except Exception as e:
+        logger.error(f"[Kling] Failed: {e}")
+        raise RuntimeError(f"Kling generation failed: {e}") from e
+
+
+async def generate_with_ltx_pro(
+    prompt: str,
+    image_url: Optional[str] = None,
+) -> str:
+    """
+    Generate initial video segment using LTX Video Pro (fal-ai/ltx-video).
+    Kept for backward compatibility — Kling is now the primary model.
+
+    Args:
+        prompt:    Creative brief
+        image_url: Product image URL for visual reference (optional)
+
+    Returns:
+        Public CDN URL (fal.media)
+    """
+    try:
+        import fal_client
+
+        arguments = {"prompt": prompt, "aspect_ratio": "9:16"}
+        if image_url:
+            arguments["image_url"] = image_url
+            logger.info(f"[LTX Pro] image-to-video mode, ref: {image_url}")
+        else:
+            logger.info("[LTX Pro] text-to-video mode")
+
+        def _run():
+            result = fal_client.run(LTX_PRO_MODEL, arguments=arguments)
+            return result["video"]["url"]
+
+        loop = asyncio.get_event_loop()
+        url = await loop.run_in_executor(None, _run)
+        logger.info(f"[LTX Pro] Done: {url}")
+        return url
+
+    except Exception as e:
+        logger.error(f"[LTX Pro] Failed: {e}")
+        raise RuntimeError(f"LTX Pro generation failed: {e}") from e
+
+
+async def extend_with_ltx_fast(
+    video_url: str,
+    prompt: str,
+    extend_seconds: float = 10.0,
+) -> str:
+    """
+    Extend an existing video using LTX 2.3 extend (fal-ai/ltx-2.3/extend-video).
+
+    Cheap continuation step to build 30s/60s reels from an initial 20s base clip.
+    Appends `extend_seconds` seconds to the end of the video while maintaining
+    motion continuity from the input clip.
+
+    Args:
+        video_url:       Public CDN URL of the clip to extend (from previous step)
+        prompt:          Continuation creative brief (guides motion direction)
+        extend_seconds:  Duration to add in seconds — max 20 per call (default 10)
+
+    Returns:
+        Public CDN URL of the extended video
+
+    Raises:
+        RuntimeError: If fal.ai extend API call fails
+    """
+    try:
+        import fal_client
+
+        logger.info(f"[LTX Extend] +{extend_seconds}s from: {video_url}")
+
+        def _run():
+            result = fal_client.run(
+                LTX_FAST_EXTEND_MODEL,
+                arguments={
+                    "video_url": video_url,
+                    "prompt": prompt,
+                    "duration": extend_seconds,  # float, max 20s per API docs
+                    "mode": "end",               # append to end of clip
+                },
+            )
+            return result["video"]["url"]
+
+        loop = asyncio.get_event_loop()
+        url = await loop.run_in_executor(None, _run)
+        logger.info(f"[LTX Extend] Done: {url}")
+        return url
+
+    except Exception as e:
+        logger.error(f"[LTX Extend] Failed: {e}")
+        raise RuntimeError(f"LTX Fast extend failed: {e}") from e
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Backward-compatible facade (used when no hybrid logic is needed)
+# ─────────────────────────────────────────────────────────────────────────────
 
 async def generate_video(
     prompt: str,
     image_url: Optional[str] = None,
     resolution: str = "720p",
-    duration: int = 30,
+    duration: int = 10,
 ) -> str:
     """
-    Generate short-form video using AI (priority: fal.ai → Veo → sample fallback).
+    Generate a short video using the best available provider (fal.ai → Veo → sample).
 
-    Attempts providers in sequence until one succeeds. Returns a public URL
-    to the generated video in vertical 9:16 format.
+    NOTE: The worker calls generate_with_kling() + extend_with_ltx_fast() directly
+    for the full hybrid workflow with DB checkpoints and smart retry.
+    This facade is used as a fallback when no FAL_KEY is configured.
 
     Args:
-        prompt: Creative brief (enriched with product metadata by caller)
-        image_url: Optional reference image for style guidance
-        resolution: Output resolution - "480p", "720p", or "1080p" (default "720p" per SRS)
-        duration: Video length in seconds - capped at 30s for optimal quality (max 60s per SRS)
+        prompt:     Creative brief (enriched with product metadata)
+        image_url:  Product image URL for visual reference
+        resolution: Ignored (aspect_ratio controls format)
+        duration:   Clip length in seconds — passed through to Kling (5 or 10)
 
     Returns:
-        Public URL to generated video (playable, vertical 9:16 aspect ratio)
-
-    Raises:
-        No exceptions - returns sample fallback video if all providers fail
-
-    Implementation Notes:
-        - fal.ai LTX Video: text-to-video or image-to-video (when image_url provided)
-          Returns public CDN URL directly — no R2 upload needed
-        - Veo 2.0: Long-running operation polled every 10s, 5-minute timeout
-          Uploads to R2 for permanent storage
-        - All generated videos returned as permanent public URLs
+        Public URL to generated video
     """
     fal_key = os.getenv("FAL_KEY", "")
     veo_enabled = os.getenv("VEO_ENABLED", "false").lower() == "true"
     google_ai_key = os.getenv("GOOGLE_AI_API_KEY", "")
 
-    # ──────────────────────────────────────────────
-    # Option 1: fal.ai Wan 2.1 (cheap & fast)
-    # ──────────────────────────────────────────────
+    # ── Option 1: LTX 2.3 Fast via fal.ai (primary)
     if fal_key:
         try:
-            return await _generate_with_fal(prompt, resolution, duration, image_url)
+            return await generate_with_ltx23fast(prompt, image_url, duration)
         except Exception as e:
-            logger.warning(f"[fal.ai] Generation failed, trying next provider: {e}")
+            logger.warning(f"[LTX2.3Fast] Failed, trying Veo: {e}")
 
-    # ──────────────────────────────────────────────
-    # Option 2: Google Veo 2.0 (best quality, pricey)
-    # ──────────────────────────────────────────────
+    # ── Option 2: Google Veo 2.0 (best quality, expensive)
     if veo_enabled and google_ai_key:
         try:
             return await _generate_with_veo(prompt)
         except Exception as e:
-            logger.warning(f"[Veo] Generation failed, using sample fallback: {e}")
+            logger.warning(f"[Veo] Failed, using sample fallback: {e}")
 
-    # ──────────────────────────────────────────────
-    # Option 3: Sample video fallback (free, no AI)
-    # ──────────────────────────────────────────────
-    logger.info("[Video] No AI provider available - using sample video for development")
+    # ── Option 3: Sample fallback (free, for development/CI)
+    logger.info("[Video] No AI provider available — using sample video")
     await asyncio.sleep(3)
     return "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
 
 
-async def _generate_with_fal(
-    prompt: str,
-    resolution: str,
-    duration: int,
-    image_url: Optional[str] = None,
-) -> str:
-    """
-    Generate video using fal.ai Wan 2.1 model.
-
-    When image_url is provided, uses image-to-video mode so the AI generates
-    a video that visually matches the product image (F2-URS02-SRS01).
-    Without image_url, falls back to text-to-video mode.
-
-    fal.ai returns a direct public CDN URL — no R2 upload needed.
-
-    Args:
-        prompt: Creative brief (enriched with product name + description)
-        resolution: Output resolution (480p/720p/1080p)
-        duration: Duration in seconds (capped at 30s for model stability)
-        image_url: Optional product image URL as visual reference for generation
-
-    Returns:
-        Public CDN URL to generated video
-
-    Raises:
-        Exception if fal.ai API fails or model execution times out
-    """
-    try:
-        import fal_client
-
-        if image_url:
-            logger.info(f"[fal.ai] LTX Video image-to-video: ref={image_url}")
-        else:
-            logger.info(f"[fal.ai] LTX Video text-to-video: {duration}s")
-
-        def _run_fal():
-            arguments = {
-                "prompt": prompt,
-                "aspect_ratio": "9:16",
-            }
-            # Add product image as visual reference when available (image-to-video mode)
-            if image_url:
-                arguments["image_url"] = image_url
-
-            # fal-ai/ltx-video: LTX Video (text-to-video, or image-to-video with image_url)
-            # Response: { "video": { "url": "...", "file_size": ... }, "seed": ... }
-            result = fal_client.run("fal-ai/ltx-video", arguments=arguments)
-            return result["video"]["url"]
-
-        loop = asyncio.get_event_loop()
-        video_url = await loop.run_in_executor(None, _run_fal)
-        logger.info(f"[fal.ai] Video ready: {video_url}")
-        return video_url
-
-    except Exception as e:
-        logger.error(f"[fal.ai] Error: {e}")
-        raise
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Google Veo 2.0 (quality fallback)
+# ─────────────────────────────────────────────────────────────────────────────
 
 async def _generate_with_veo(prompt: str) -> str:
     """
@@ -186,67 +388,51 @@ async def _generate_with_veo(prompt: str) -> str:
         logger.info(f"[Veo] Starting generation: {prompt[:80]}...")
 
         def _generate_and_upload():
-            # Step 1: Submit generation request
             operation = client.models.generate_videos(
                 model="veo-2.0-generate-001",
                 prompt=prompt,
                 config={"number_of_videos": 1},
             )
-            logger.info(f"[Veo] Submitted operation: {operation.name}")
+            logger.info(f"[Veo] Submitted: {operation.name}")
 
-            # Step 2: Poll until completion (max 5 minutes)
             max_wait, waited = 300, 0
             while not operation.done and waited < max_wait:
                 time.sleep(10)
                 waited += 10
                 operation = client.operations.get(operation.name)
-                logger.info(f"[Veo] Generating... ({waited}s elapsed)")
+                logger.info(f"[Veo] Generating... ({waited}s)")
 
             if not operation.done:
-                raise RuntimeError(f"Veo generation timed out after {max_wait}s")
-
+                raise RuntimeError(f"Veo timed out after {max_wait}s")
             if not (operation.response and operation.response.generated_videos):
-                raise RuntimeError("Veo operation returned no videos")
+                raise RuntimeError("Veo returned no videos")
 
-            # Step 3: Download video from Google storage
             veo_uri = operation.response.generated_videos[0].video.uri
             download_url = f"{veo_uri}&key={google_ai_key}" if "?" in veo_uri \
                 else f"{veo_uri}?key={google_ai_key}"
 
-            logger.info(f"[Veo] Downloading from: {download_url}")
             resp = requests.get(download_url, timeout=120)
             resp.raise_for_status()
             video_bytes = resp.content
             logger.info(f"[Veo] Downloaded {len(video_bytes):,} bytes")
 
-            # Step 4: Upload to R2 for permanent storage
             if not all([r2_endpoint, r2_key_id, r2_secret, r2_bucket]):
                 logger.warning("[Veo] R2 not configured, returning Google URI")
                 return veo_uri
 
-            s3 = boto3.client(
-                "s3",
-                endpoint_url=r2_endpoint,
-                aws_access_key_id=r2_key_id,
-                aws_secret_access_key=r2_secret,
-                region_name="auto",
-            )
+            s3 = boto3.client("s3", endpoint_url=r2_endpoint,
+                              aws_access_key_id=r2_key_id,
+                              aws_secret_access_key=r2_secret, region_name="auto")
             object_key = f"videos/reels/veo/{uuid.uuid4().hex}.mp4"
-            s3.put_object(
-                Bucket=r2_bucket,
-                Key=object_key,
-                Body=video_bytes,
-                ContentType="video/mp4"
-            )
+            s3.put_object(Bucket=r2_bucket, Key=object_key,
+                          Body=video_bytes, ContentType="video/mp4")
             logger.info(f"[Veo] Uploaded to R2: {object_key}")
 
-            if r2_public:
-                return f"{r2_public}/{object_key}"
-            return f"{r2_endpoint.rstrip('/')}/{r2_bucket}/{object_key}"
+            return f"{r2_public}/{object_key}" if r2_public \
+                else f"{r2_endpoint.rstrip('/')}/{r2_bucket}/{object_key}"
 
         loop = asyncio.get_event_loop()
-        video_url = await loop.run_in_executor(None, _generate_and_upload)
-        return video_url
+        return await loop.run_in_executor(None, _generate_and_upload)
 
     except Exception as e:
         logger.error(f"[Veo] Error: {e}")

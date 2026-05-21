@@ -112,7 +112,7 @@ def serve_generic_image(
     """
     if not object_key:
         raise HTTPException(status_code=400, detail="No object key provided")
-        
+
     try:
         file_obj = get_file(object_key)
     except RuntimeError as exc:
@@ -125,5 +125,37 @@ def serve_generic_image(
         media_type=content_type,
         headers={
             "Cache-Control": "public, max-age=86400",  # Cache for 1 day
+        },
+    )
+
+
+@router.get("/videos/{object_key:path}")
+def serve_generic_video(
+    object_key: str,
+):
+    """
+    Public endpoint that proxies any video from R2 by its key.
+
+    Used by the frontend to stream R2-stored videos (uploaded reels, overlaid outputs)
+    since the R2 bucket may not have public access enabled.  Pattern mirrors the
+    /images/{key} endpoint so the frontend can use a consistent proxy strategy.
+    """
+    if not object_key:
+        raise HTTPException(status_code=400, detail="No object key provided")
+
+    try:
+        file_obj = get_file(object_key)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    content_type = file_obj.get("ContentType", "video/mp4")
+
+    return StreamingResponse(
+        file_obj["Body"],
+        media_type=content_type,
+        headers={
+            # Allow partial-content requests (required for HTML5 video seeking)
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "public, max-age=3600",
         },
     )
