@@ -296,6 +296,7 @@ const CreateReel = () => {
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const captionTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   /**
    * Guided Prompt state — 4 rows of chips help users who don't know what to write.
@@ -371,34 +372,51 @@ const CreateReel = () => {
     return () => clearInterval(interval);
   }, [generationStatus, reelId, toast, generationStartTime]);
 
-  // Control actual video playback (main + fullscreen video stay in sync)
+  // Control video playback — only ONE video plays at a time.
+  // When fullscreen is open, only videoRefFullscreen plays; main panel is paused.
+  // When fullscreen is closed, only videoRef plays; fullscreen element is paused.
+  // This prevents double audio when both <video> elements share the same src.
   useEffect(() => {
     const vid = videoRef.current;
-    if (vid) {
-      if (isPlaying) {
-        // Try to play unmuted — browser may block autoplay with audio (policy)
-        vid.play().catch(() => {
-          // Autoplay blocked: mute and retry so the video still plays
-          vid.muted = true;
-          setVideoMuted(true);
-          vid.play().catch(() => {});
-        });
-      } else {
-        vid.pause();
-      }
-    }
     const vidFs = videoRefFullscreen.current;
-    if (vidFs) {
-      if (isPlaying) {
-        vidFs.play().catch(() => {
-          vidFs.muted = true;
-          vidFs.play().catch(() => {});
-        });
-      } else {
-        vidFs.pause();
+
+    if (fullscreenOpen) {
+      // Fullscreen mode: fullscreen video plays, main pauses
+      vid?.pause();
+      if (vidFs) {
+        if (isPlaying) vidFs.play().catch(() => { vidFs.muted = true; vidFs.play().catch(() => {}); });
+        else vidFs.pause();
+      }
+    } else {
+      // Normal mode: main video plays, fullscreen pauses
+      vidFs?.pause();
+      if (vid) {
+        if (isPlaying) {
+          vid.play().catch(() => { vid.muted = true; setVideoMuted(true); vid.play().catch(() => {}); });
+        } else {
+          vid.pause();
+        }
       }
     }
-  }, [isPlaying]);
+  }, [isPlaying, fullscreenOpen]);
+
+  // Sync video position when fullscreen opens/closes so playback is seamless
+  useEffect(() => {
+    const main = videoRef.current;
+    const fs = videoRefFullscreen.current;
+    if (fullscreenOpen && main && fs) {
+      // Opening fullscreen: copy current time, pause main, play fullscreen
+      fs.currentTime = main.currentTime;
+      main.pause();
+      if (isPlaying) fs.play().catch(() => { fs.muted = true; fs.play().catch(() => {}); });
+    } else if (!fullscreenOpen && main && fs) {
+      // Closing fullscreen: copy time back, pause fullscreen, resume main
+      main.currentTime = fs.currentTime;
+      fs.pause();
+      if (isPlaying) main.play().catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullscreenOpen]);
 
   // Sync muted state via DOM — React's muted prop doesn't reliably update on live video elements.
   // Include videoUrl in deps so the muted state re-syncs when a new video loads.
@@ -415,6 +433,16 @@ const CreateReel = () => {
       el.style.height = `${el.scrollHeight}px`;
     }
   }, [caption]);
+
+  // Auto-resize prompt textarea whenever promptText changes programmatically
+  // (quick-prompt chips, enhance, guided build — all set promptText via setPromptText)
+  useEffect(() => {
+    const el = promptTextareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    }
+  }, [promptText]);
 
   /** Format seconds as M:SS for seek bar display */
   const formatTime = (s: number) => {
@@ -1167,14 +1195,20 @@ const CreateReel = () => {
               </div>
             )}
 
-            {/* Prompt textarea */}
+            {/* Prompt textarea — auto-resizes with content (no scroll, like caption) */}
             <div className="px-5 pt-3 pb-2 relative">
               <Textarea
+                ref={promptTextareaRef}
                 value={promptText}
-                onChange={(e) => setPromptText(e.target.value.slice(0, 500))}
+                onChange={(e) => {
+                  setPromptText(e.target.value.slice(0, 500));
+                  // Inline resize so it responds immediately as the user types
+                  e.target.style.height = "auto";
+                  e.target.style.height = `${e.target.scrollHeight}px`;
+                }}
                 maxLength={500}
                 placeholder={guidedMode ? "Prompt will be auto-built above, or type your own here…" : "Describe the Reel you want to create — scene, mood, motion, style, product details…"}
-                className="min-h-[144px] w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="min-h-[80px] w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0 overflow-hidden"
               />
               <div className="absolute bottom-2 right-5 text-[10px] text-muted-foreground">
                 {promptText.length}/500
@@ -1312,6 +1346,43 @@ const CreateReel = () => {
                 rows={5}
                 className="bg-muted/40 border-border resize-none text-[11px] leading-relaxed overflow-hidden"
               />
+              {/* Target Platforms — slides in between textarea and action buttons after Approve */}
+              {isApproved && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-2 overflow-hidden">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Target Platforms</p>
+                  <div className="flex gap-2">
+                    {platformOptions.map((p) => {
+                      const isActive = selectedPlatforms.includes(p.id);
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => togglePlatform(p.id)}
+                          className={`relative flex-1 flex flex-col items-center justify-center gap-1.5 rounded-xl border py-3 cursor-pointer transition-all select-none ${
+                            isActive
+                              ? `${p.activeBg} ring-1`
+                              : "border-border/50 hover:border-border hover:bg-muted/20"
+                          }`}
+                        >
+                          <span className={`transition-colors ${isActive ? p.color : "text-muted-foreground/35"}`}>
+                            <PlatformIcon id={p.id} />
+                          </span>
+                          <span className={`text-[10px] font-medium text-center leading-tight transition-colors ${isActive ? "text-foreground" : "text-muted-foreground/50"}`}>
+                            {p.shortLabel}
+                          </span>
+                          {isActive && (
+                            <span className="absolute top-1.5 right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary">
+                              <Check className="h-2 w-2 text-primary-foreground" />
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {selectedPlatforms.length === 0 && (
+                    <p className="text-[11px] text-amber-500/80">⚠ Select at least one platform before publishing</p>
+                  )}
+                </motion.div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={() => handleRegenerate("caption")} size="sm" className="gap-1.5 h-9 text-xs">
                   <RefreshCw className="h-3.5 w-3.5" />
@@ -1333,49 +1404,6 @@ const CreateReel = () => {
                   </Button>
                 )}
               </div>
-            </motion.div>
-          )}
-
-          {/* Target Platforms + Publish — revealed after user clicks Approve */}
-          {isApproved && completedMode !== null && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-3">
-              <div>
-                <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">Target Platforms</h2>
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Select platforms to distribute to — captions will be optimised per platform
-                </p>
-              </div>
-              <div className="flex gap-2">
-                {platformOptions.map((p) => {
-                  const isActive = selectedPlatforms.includes(p.id);
-                  return (
-                    <div
-                      key={p.id}
-                      onClick={() => togglePlatform(p.id)}
-                      className={`relative flex-1 flex flex-col items-center justify-center gap-1.5 rounded-xl border py-3 cursor-pointer transition-all select-none ${
-                        isActive
-                          ? `${p.activeBg} ring-1`
-                          : "border-border/50 hover:border-border hover:bg-muted/20"
-                      }`}
-                    >
-                      <span className={`transition-colors ${isActive ? p.color : "text-muted-foreground/35"}`}>
-                        <PlatformIcon id={p.id} />
-                      </span>
-                      <span className={`text-[10px] font-medium text-center leading-tight transition-colors ${isActive ? "text-foreground" : "text-muted-foreground/50"}`}>
-                        {p.shortLabel}
-                      </span>
-                      {isActive && (
-                        <span className="absolute top-1.5 right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary">
-                          <Check className="h-2 w-2 text-primary-foreground" />
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              {selectedPlatforms.length === 0 && (
-                <p className="text-[11px] text-amber-500/80">⚠ Select at least one platform before publishing</p>
-              )}
             </motion.div>
           )}
         </div>
@@ -1730,7 +1758,9 @@ const CreateReel = () => {
             <DialogDescription>Watch the generated Reel in fullscreen</DialogDescription>
           </DialogHeader>
           <div className="relative aspect-[9/16] w-full overflow-hidden bg-black">
-            {/* Actual video in fullscreen */}
+            {/* Actual video in fullscreen — no autoPlay: playback is controlled by
+                the useEffect that syncs with isPlaying + fullscreenOpen state.
+                autoPlay would cause double audio alongside the main panel video. */}
             {videoUrl ? (
               <video
                 ref={videoRefFullscreen}
@@ -1739,7 +1769,6 @@ const CreateReel = () => {
                 loop
                 playsInline
                 muted={videoMuted}
-                autoPlay
               />
             ) : (
               <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(circle at 30% 40%, hsl(var(--primary) / 0.45), transparent 55%), radial-gradient(circle at 70% 75%, hsl(var(--accent) / 0.4), transparent 55%)" }} />
@@ -1785,6 +1814,32 @@ const CreateReel = () => {
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/20 backdrop-blur-md ring-1 ring-white/25">
                 {isPlaying ? <Pause className="h-7 w-7 text-white" /> : <Play className="h-7 w-7 text-white ml-1" />}
               </div>
+            </div>
+
+            {/* Top-left controls: mute/unmute + download (same as main panel) */}
+            <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const newMuted = !videoMuted;
+                  setVideoMuted(newMuted);
+                  if (videoRefFullscreen.current) videoRefFullscreen.current.muted = newMuted;
+                  if (videoRef.current) videoRef.current.muted = newMuted;
+                }}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 backdrop-blur-md ring-1 ring-white/15 hover:bg-black/70 transition-all"
+                aria-label={videoMuted ? "Unmute" : "Mute"}
+              >
+                {videoMuted
+                  ? <VolumeX className="h-4 w-4 text-white/70" />
+                  : <Volume2 className="h-4 w-4 text-white" />}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDownload(); }}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 backdrop-blur-md ring-1 ring-white/15 hover:bg-black/70 transition-all"
+                aria-label="Download video"
+              >
+                <Download className="h-4 w-4 text-white" />
+              </button>
             </div>
             {/* Seek bar — synced with main video */}
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
