@@ -245,6 +245,7 @@ const CreateReel = () => {
 
   // Output / preview state
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
+  const [isApproved, setIsApproved] = useState(false);  // Publish only unlocks after Approve
   const [caption, setCaption] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
   // Overlay preview toggles — UI-only, does not affect the baked video from backend
@@ -579,6 +580,7 @@ const CreateReel = () => {
       return;
     }
     setGenerationStatus("generating");
+    setIsApproved(false);
     setGenerationStartTime(Date.now());
     setElapsedSeconds(0);
     // Clear previous result so the player doesn't show stale content during generation
@@ -612,6 +614,7 @@ const CreateReel = () => {
   const handleRegenerate = async (target: "video" | "caption" | "all") => {
     if (!reelId) return;
     setGenerationStatus("generating");
+    setIsApproved(false);
     // Reset timer for the new generation run (fixes timer counting from old value)
     setGenerationStartTime(Date.now());
     setElapsedSeconds(0);
@@ -676,6 +679,7 @@ const CreateReel = () => {
         setReelId(data.reel_id);
         setUploadStatus("done");
         setGenerationStatus("generating");
+        setIsApproved(false);
         setGenerationStartTime(Date.now());
         setElapsedSeconds(0);
         setVideoUrl(null);     // Clear any previous video while overlay/captions process
@@ -699,7 +703,10 @@ const CreateReel = () => {
     xhr.send(form);
   };
 
-  const handleApprove = () => toast({ title: "Approved & Saved!", description: "Reel saved to your library 🎉" });
+  const handleApprove = () => {
+    setIsApproved(true);
+    toast({ title: "Approved & Saved!", description: "Reel saved to your library 🎉" });
+  };
 
   const handlePublish = () => {
     const names = platformOptions.filter((p) => selectedPlatforms.includes(p.id)).map((p) => p.label);
@@ -1211,11 +1218,11 @@ const CreateReel = () => {
             )}
           </div>
 
-          {/* Publish */}
-          {generationStatus === "done" && (
+          {/* Publish — only unlocks after Approve */}
+          {generationStatus === "done" && isApproved && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-3">
               <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">Publish</h2>
-              <p className="text-xs text-muted-foreground">Once approved, distribute your Reel across selected platforms</p>
+              <p className="text-xs text-muted-foreground">Distribute your approved Reel across selected platforms</p>
               <Button onClick={handlePublish} className="gradient-primary w-full gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-11">
                 <Send className="h-4 w-4" />
                 Publish to {selectedPlatforms.length} platforms
@@ -1384,7 +1391,7 @@ const CreateReel = () => {
                                style={{ animation: "shimmer 1.8s ease-in-out infinite" }} />
                         </div>
                         <div className="flex items-center justify-between text-[9px] font-mono text-muted-foreground">
-                          <span>Generating AI Reel…</span>
+                          <span>{creatorMode === "upload" ? "Processing video…" : "Generating AI Reel…"}</span>
                           <span className="text-primary tabular-nums">
                             ⏱ {Math.floor(elapsedSeconds / 60).toString().padStart(2, "0")}:{(elapsedSeconds % 60).toString().padStart(2, "0")}
                           </span>
@@ -1422,6 +1429,21 @@ const CreateReel = () => {
                     {Math.floor(generationTime / 60).toString().padStart(2, "0")}:{(generationTime % 60).toString().padStart(2, "0")}
                   </span>
                 </span>
+              </motion.div>
+            )}
+
+            {/* Regen Video — below preview, AI-generate mode only */}
+            {generationStatus === "done" && creatorMode === "generate" && (
+              <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}>
+                <Button
+                  variant="outline"
+                  onClick={() => handleRegenerate("video")}
+                  size="sm"
+                  className="w-full gap-1.5 h-9 text-xs"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Regenerate Video
+                </Button>
               </motion.div>
             )}
 
@@ -1484,18 +1506,14 @@ const CreateReel = () => {
                   rows={5}
                   className="bg-muted/40 border-border resize-none text-[11px] leading-relaxed overflow-hidden"
                 />
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <Button variant="outline" onClick={() => handleRegenerate("video")} size="sm" className="gap-1.5 h-9 text-xs">
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    Regen Video
-                  </Button>
+                <div className="grid grid-cols-2 gap-2">
                   <Button variant="outline" onClick={() => handleRegenerate("caption")} size="sm" className="gap-1.5 h-9 text-xs">
                     <RefreshCw className="h-3.5 w-3.5" />
                     Regen Caption
                   </Button>
-                  <Button onClick={handleApprove} size="sm" className="gradient-primary gap-1.5 text-primary-foreground shadow-glow h-9 text-xs">
+                  <Button onClick={handleApprove} size="sm" className={`gap-1.5 text-xs h-9 ${isApproved ? "bg-success/20 border-success/40 text-success hover:bg-success/30" : "gradient-primary text-primary-foreground shadow-glow"}`}>
                     <Check className="h-3.5 w-3.5" />
-                    Approve
+                    {isApproved ? "Approved ✓" : "Approve"}
                   </Button>
                 </div>
               </motion.div>
