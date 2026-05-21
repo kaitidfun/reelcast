@@ -9,6 +9,7 @@ from app.models.models import Reel, Product
 from app.services.ai_service import generate_captions
 from app.services.video_generation_service import (
     generate_video,
+    generate_product_scene,
     generate_with_ltx23fast,
     extend_with_ltx_fast,
 )
@@ -233,23 +234,32 @@ async def _run_hybrid_generation(
     duration: int,
 ) -> str:
     """
-    Orchestrate LTX 2.3 Fast + extend based on requested duration.
+    Orchestrate the full 2-step product video pipeline + LTX extend chain.
 
-    Hybrid strategy:
-        ≤20s  → LTX 2.3 Fast only               (1 API call, direct generation)
-        30s   → LTX 2.3 Fast(20s) → extend(10s) (2 API calls)
-        60s   → LTX 2.3 Fast(20s) → extend × 2  (3 API calls, 20+20+20s)
+    Pipeline (when product image available):
+        Step 0: Bria background/replace  — place product in generated scene  (1 API call)
+        Step 1: LTX 2.3 Fast I2V        — animate scene image                (1 API call)
+        Step 2+: LTX extend             — chain clips to reach target duration
+
+    Pipeline (no product image — text-to-video fallback):
+        Step 1: LTX 2.3 Fast T2V        — generate from scene description    (1 API call)
+        Step 2+: LTX extend             — chain clips as needed
+
+    Duration strategy:
+        ≤20s  → Step 0 + Step 1 only             (2 API calls with image, 1 without)
+        30s   → Step 0 + Step 1 + extend(10s)    (3 / 2 API calls)
+        60s   → Step 0 + Step 1 + extend × 2     (4 / 3 API calls)
 
     Smart retry via b_roll_url:
-        After each successful API call the intermediate URL is saved to
-        reel.b_roll_url so a retried Celery task can resume from the last
-        completed step instead of restarting from the beginning.
+        After each LTX API call the intermediate URL is saved to reel.b_roll_url
+        so a retried Celery task can resume from the last completed LTX step.
+        Step 0 (Bria) has no checkpoint — it is fast and cheap to re-run.
 
     Args:
         db: Active SQLAlchemy session (for checkpoint saves)
         reel: Reel ORM instance (mutable — we update b_roll_url in-place)
-        prompt: Enriched creative brief with product metadata
-        image_url: Product image URL for fal.ai image-to-video reference (optional)
+        prompt: Gemini-generated scene description (used for Bria + LTX text-to-video)
+        image_url: Product image presigned URL — triggers 2-step pipeline when set
         duration: Requested video length in seconds
 
     Returns:
@@ -262,6 +272,46 @@ async def _run_hybrid_generation(
         logger.info("[Hybrid] No FAL_KEY, delegating to generate_video() facade")
         return await generate_video(prompt=prompt, image_url=image_url, duration=duration)
 
+    # ── Step 0 (optional): Bria — place product in a generated scene ─────────
+    #
+    # 2-Step Pipeline:
+    #   Step 0: Bria background/replace — composites the product into a scene
+    #           described by `prompt`.  Ensures the REAL product appears in the
+    #           correct environment, not an AI-hallucinated substitute.
+    #   Step 1: LTX image-to-video — animates the Bria scene image with a
+    #           standard motion prompt (camera zoom, rotation, depth of field).
+    #
+    # Fallback: if Bria fails or no product image → skip to LTX directly.
+    # No checkpoint for Step 0: Bria is fast (<10s), safe to re-run on retry.
+    effective_image_url: str | None = image_url
+    ltx_prompt: str = prompt      # default: use scene description for LTX text-to-video
+
+    if image_url:
+        try:
+            logger.info("[Hybrid] Step 0 — Bria product scene generation")
+            scene_image_url = await generate_product_scene(
+                product_image_url=image_url,
+                scene_prompt=prompt,
+            )
+            # Bria succeeded: LTX animates the composited scene image.
+            # The scene is already fully described in the image, so we switch to a
+            # generic camera-motion prompt — avoids LTX re-interpreting the scene text.
+            effective_image_url = scene_image_url
+            ltx_prompt = (
+                "The product sits centered in frame. "
+                "Camera gently zooms in, then slowly pulls back. "
+                "Soft ambient light plays across the surface. "
+                "Background maintains shallow depth of field bokeh. "
+                "The product rotates slightly clockwise."
+            )
+            logger.info(f"[Hybrid] Step 0 done, scene image: {scene_image_url}")
+        except Exception as bria_err:
+            # Graceful degradation: pass raw product image directly to LTX.
+            # Video still uses the real product as reference; only scene placement differs.
+            logger.warning(f"[Hybrid] Step 0 Bria failed, falling back to raw product image: {bria_err}")
+            effective_image_url = image_url   # unchanged
+            # ltx_prompt stays as `prompt` (scene description works for LTX I2V fallback)
+
     # ── Smart retry: resume from saved checkpoint if available ───────────────
     # b_roll_url stores the URL from the most recent successful API call.
     # A retried task resumes from the checkpoint instead of re-charging the API.
@@ -272,9 +322,12 @@ async def _run_hybrid_generation(
     # Short reels (≤20s) are done in a single call; longer reels chain LTX extend.
     base_clip_s = min(duration, 20)
     if not intermediate_url:
-        logger.info(f"[Hybrid] Step 1 — LTX 2.3 Fast ({base_clip_s}s, image_ref={bool(image_url)})")
+        logger.info(
+            f"[Hybrid] Step 1 — LTX 2.3 Fast ({base_clip_s}s, "
+            f"mode={'scene-image-to-video' if effective_image_url else 'text-to-video'})"
+        )
         intermediate_url = await generate_with_ltx23fast(
-            prompt=prompt, image_url=image_url, duration=base_clip_s
+            prompt=ltx_prompt, image_url=effective_image_url, duration=base_clip_s
         )
         # Checkpoint: save so a retry skips this API call
         update_reel(db, reel=reel, b_roll_url=intermediate_url)

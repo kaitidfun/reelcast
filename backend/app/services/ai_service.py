@@ -156,66 +156,43 @@ async def generate_prompt_from_template(
         logger.warning("GOOGLE_AI_API_KEY not set — returning static fallback prompt")
         return fallback
 
-    has_image = bool(product_images)
-
-    if has_image:
-        # Image-to-video mode: product photo is the FIRST FRAME.
-        # Gemini must write MOTION instructions only — describing the product's
-        # appearance would conflict with the actual first frame and produce bad output.
-        system_prompt = (
-            "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
-            "A product image will be used as the FIRST FRAME of the video (image-to-video mode). "
-            "Your job: tell the model HOW TO ANIMATE — not what the product looks like.\n\n"
-            "RULES for image-to-video prompts:\n"
-            "- Do NOT describe the product appearance, colour, or shape — it is already in the image\n"
-            "- Describe ONLY camera motion and object motion: rotate, zoom, pan, pull back, tilt\n"
-            "- Describe how LIGHTING changes over time if relevant\n"
-            "- ONE continuous shot — no cuts, no transitions\n"
-            "- Keep language simple and literal\n\n"
-            "BAD: 'A shiny glass bottle on marble with golden light and luxurious feel'\n"
-            "GOOD: 'The product rotates slowly clockwise. Camera gently pulls back. "
-            "Soft warm light from the left. Background softens into a gentle bokeh.'\n\n"
-            "Requirements:\n"
-            "- STRICTLY under 500 characters\n"
-            "- Do NOT include hashtags, captions, pricing, or platform names\n"
-            "- Return ONLY the motion prompt — no explanation, no quotes"
-        )
-        user_content = (
-            f"Goal: {template_desc}\n"
-            f"Product name: {product_name or 'unspecified'}\n"
-            f"Product details: {product_description or 'no additional details'}\n"
-            f"Duration: {duration} seconds\n"
-            f"Remember: the product image IS the first frame. Describe ONLY how it moves."
-        )
-    else:
-        # Text-to-video mode: no reference image — Gemini must describe the full scene
-        # from scratch so LTX has enough visual information to generate the product.
-        system_prompt = (
-            "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
-            "Write a single video generation prompt that these models can render accurately.\n\n"
-            "CRITICAL — AI video models render what they literally 'see', not filmmaking concepts:\n"
-            "- Describe the PHYSICAL SCENE: what objects exist, their material/colour/shape/position\n"
-            "- Describe ONE continuous shot — no scene cuts, no 'transitions', no 'montage'\n"
-            "- Describe the PRIMARY MOTION: what moves, how it moves, how slowly/quickly\n"
-            "- Describe LIGHTING concretely: 'warm sunlight from left', 'soft white studio light'\n"
-            "- Use SIMPLE, LITERAL language — avoid abstract filmmaking terms like 'cinematic'\n"
-            "- Start with the main subject and background, then describe the motion\n\n"
-            "BAD: 'Cinematic product showcase with dynamic transitions and premium lighting'\n"
-            "GOOD: 'A glass perfume bottle sits on white marble. Sunlight catches the glass facets. "
-            "The bottle slowly rotates. Soft white fabric drapes in the background.'\n\n"
-            "Requirements:\n"
-            "- STRICTLY under 500 characters\n"
-            "- Use the product name/details to write a specific scene description\n"
-            "- Do NOT include hashtags, captions, pricing, or platform names\n"
-            "- Return ONLY the prompt text — no explanation, no quotes"
-        )
-        user_content = (
-            f"Goal: {template_desc}\n"
-            f"Product name: {product_name or 'unspecified'}\n"
-            f"Product details: {product_description or 'no additional details'}\n"
-            f"Duration: {duration} seconds\n"
-            f"Remember: describe the literal scene and physical motion — not filmmaking direction."
-        )
+    # Always generate a literal SCENE DESCRIPTION.
+    #
+    # Why: The generated prompt serves two purposes in the 2-step pipeline —
+    #   (1) Passed to Bria background/replace as the scene description
+    #       (tells Bria what environment to build around the product)
+    #   (2) Passed directly to LTX text-to-video when no product image exists
+    #
+    # Scene descriptions work for both paths. LTX step uses a separate fixed
+    # motion prompt when a Bria scene image is available (see worker.py).
+    system_prompt = (
+        "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
+        "Write a single video generation prompt that these models can render accurately.\n\n"
+        "CRITICAL — AI video models render what they literally 'see', not filmmaking concepts:\n"
+        "- Describe the PHYSICAL SCENE: what objects exist, their material/colour/shape/position\n"
+        "- Describe the ENVIRONMENT: surface, background, surrounding props, setting\n"
+        "- Describe ONE continuous shot — no scene cuts, no 'transitions', no 'montage'\n"
+        "- Describe the PRIMARY MOTION: what moves, how it moves, how slowly/quickly\n"
+        "- Describe LIGHTING concretely: 'warm sunlight from the left', 'soft white studio light'\n"
+        "- Use SIMPLE, LITERAL language — avoid abstract filmmaking terms like 'cinematic'\n"
+        "- Start with the main subject and its environment, then describe the motion\n\n"
+        "BAD: 'Cinematic product showcase with dynamic transitions and premium lighting'\n"
+        "GOOD: 'A glass perfume bottle sits on white marble. Sunlight catches the glass facets. "
+        "The bottle slowly rotates. Soft white fabric drapes in the background.'\n\n"
+        "Requirements:\n"
+        "- STRICTLY under 500 characters\n"
+        "- If product image provided, reference its actual colour, shape, and material\n"
+        "- Clearly describe the environment around the product (surface, setting, atmosphere)\n"
+        "- Do NOT include hashtags, captions, pricing, or platform names\n"
+        "- Return ONLY the prompt text — no explanation, no quotes"
+    )
+    user_content = (
+        f"Goal: {template_desc}\n"
+        f"Product name: {product_name or 'unspecified'}\n"
+        f"Product details: {product_description or 'no additional details'}\n"
+        f"Duration: {duration} seconds\n"
+        f"Remember: describe the literal scene (subject + environment + motion) — not filmmaking direction."
+    )
 
     try:
         client = _get_client()
@@ -289,49 +266,29 @@ async def enhance_prompt(
             "vibrant color grading, and a strong call-to-action."
         )[:500]
 
-    has_image = bool(product_images)
-
-    if has_image:
-        # Image-to-video mode: product photo is the first frame.
-        # Preserve the user's intent but rewrite as MOTION instructions only.
-        system_prompt = (
-            "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
-            "A product image will be used as the FIRST FRAME of the video (image-to-video mode). "
-            "Rewrite the user's prompt as MOTION instructions only — not scene descriptions.\n\n"
-            "RULES:\n"
-            "- Do NOT describe the product's appearance, colour, or shape — it is in the image\n"
-            "- Keep the user's creative intent (mood, energy) but express it through motion\n"
-            "- Describe camera motion (zoom, pan, rotate, pull back) and object motion\n"
-            "- ONE continuous shot — no cuts, no transitions\n"
-            "- Keep language simple and literal\n\n"
-            "BAD: 'A luxurious black skincare bottle with warm studio lighting'\n"
-            "GOOD: 'The product rotates slowly. Camera zooms in on the label. "
-            "Warm golden light from the right. Background becomes a soft bokeh.'\n\n"
-            "Requirements:\n"
-            "- STRICTLY under 500 characters\n"
-            "- Do NOT include hashtags, captions, or pricing\n"
-            "- Return ONLY the improved motion prompt — no explanation, no quotes"
-        )
-    else:
-        # Text-to-video mode: no image — rewrite as a full literal scene description.
-        system_prompt = (
-            "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
-            "Rewrite the user's prompt so an AI video model can render it accurately.\n\n"
-            "CRITICAL — AI video models render what they literally 'see':\n"
-            "- Keep the user's core idea, but rewrite it as a LITERAL SCENE DESCRIPTION\n"
-            "- ONE continuous shot — remove any scene cuts, transitions, or 'montage'\n"
-            "- Describe what PHYSICALLY EXISTS: objects, materials, colours, positions\n"
-            "- Describe the PRIMARY MOTION clearly: what moves, how it moves\n"
-            "- Replace abstract terms ('cinematic', 'premium') with concrete details\n"
-            "- Start with the subject and setting, then describe the motion\n\n"
-            "BAD: 'Dynamic product showcase with cinematic transitions and premium lighting'\n"
-            "GOOD: 'A black skincare bottle on a dark wooden surface. Soft warm light from the right. "
-            "The bottle rotates slowly revealing the label. A water droplet runs down the glass.'\n\n"
-            "Requirements:\n"
-            "- STRICTLY under 500 characters\n"
-            "- Do NOT include hashtags, captions, or pricing\n"
-            "- Return ONLY the improved prompt — no explanation, no quotes"
-        )
+    # Always generate a literal SCENE DESCRIPTION.
+    # The prompt serves as (1) Bria scene context when product image exists,
+    # and (2) full scene brief for LTX text-to-video when no image is available.
+    system_prompt = (
+        "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
+        "Rewrite the user's prompt so an AI video model can render it accurately.\n\n"
+        "CRITICAL — AI video models render what they literally 'see':\n"
+        "- Keep the user's core idea, but rewrite it as a LITERAL SCENE DESCRIPTION\n"
+        "- Describe what PHYSICALLY EXISTS: objects, materials, colours, positions\n"
+        "- Describe the ENVIRONMENT: surface, background, props, lighting\n"
+        "- ONE continuous shot — remove any scene cuts, transitions, or 'montage'\n"
+        "- Describe the PRIMARY MOTION clearly: what moves, how it moves\n"
+        "- Replace abstract terms ('cinematic', 'premium') with concrete details\n"
+        "- Start with the subject and its environment, then describe the motion\n\n"
+        "BAD: 'Dynamic product showcase with cinematic transitions and premium lighting'\n"
+        "GOOD: 'A black skincare bottle on a dark wooden surface. Soft warm light from the right. "
+        "The bottle rotates slowly revealing the label. A water droplet runs down the glass.'\n\n"
+        "Requirements:\n"
+        "- STRICTLY under 500 characters\n"
+        "- If product image provided, reference its actual colour, shape, and material\n"
+        "- Do NOT include hashtags, captions, or pricing\n"
+        "- Return ONLY the improved prompt — no explanation, no quotes"
+    )
 
     context = ""
     if product_name:
@@ -343,7 +300,6 @@ async def enhance_prompt(
         f"Original prompt: {prompt_text}\n"
         f"Duration: {duration} seconds"
         + context
-        + (f"\nMode: image-to-video — the product image IS the first frame. Describe ONLY motion." if has_image else "")
     )
 
     try:
@@ -439,58 +395,37 @@ async def generate_guided_prompt(
         logger.warning("GOOGLE_AI_API_KEY not set — returning locally-assembled guided prompt")
         return _local_fallback()
 
-    has_image = bool(imgs)
-
-    if has_image:
-        # Image-to-video mode: product photo is the first frame.
-        # Gemini must write MOTION instructions only — the creative chips (mood, style,
-        # lighting) should be expressed through camera movement and light changes,
-        # NOT through re-describing the product's appearance.
-        system_prompt = (
-            "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
-            "A product image will be used as the FIRST FRAME of the video (image-to-video mode). "
-            "Generate a MOTION prompt based on the creative direction chips below.\n\n"
-            "RULES:\n"
-            "- Do NOT describe the product appearance, colour, or shape — it is in the image\n"
-            "- Translate the mood/style/lighting chips into CAMERA and LIGHT MOTION\n"
-            "  e.g. 'Luxury' → slow rotation, dramatic light shift; 'Energetic' → fast zoom, bright flash\n"
-            "- ONE continuous shot — no cuts, no transitions\n"
-            "- Simple, literal motion language only\n\n"
-            "BAD: 'A gold lipstick on velvet with dramatic spotlight and luxury atmosphere'\n"
-            "GOOD: 'The product rotates slowly. Camera zooms in on the tip. "
-            "Spotlight from above intensifies. Background shifts from dark to deep purple.'\n\n"
-            "Requirements:\n"
-            "- STRICTLY under 500 characters\n"
-            "- Do NOT include hashtags, captions, platform names, or pricing\n"
-            "- Return ONLY the motion prompt — no explanation, no quotes"
-        )
-    else:
-        # Text-to-video mode: no reference image — full literal scene description required.
-        system_prompt = (
-            "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
-            "Generate a video prompt based on the creative brief below that an AI model can render accurately.\n\n"
-            "CRITICAL — AI video models render what they literally 'see':\n"
-            "- Write ONE continuous shot — no cuts, no 'transitions', no 'montage'\n"
-            "- Describe the PHYSICAL SCENE: what objects exist, their material/colour/position\n"
-            "- Describe the PRIMARY MOTION: what moves, how it moves, how fast/slow\n"
-            "- Use CONCRETE LIGHTING descriptions: 'warm golden light from the left'\n"
-            "- Use LITERAL language — replace 'cinematic' with actual scene details\n"
-            "- Use product name/details to write a specific, accurate scene\n\n"
-            "BAD: 'Luxurious product showcase with dramatic lighting and premium feel'\n"
-            "GOOD: 'A gold lipstick tube on a black velvet surface. Soft spotlight from above. "
-            "The cap is removed slowly revealing the deep red bullet. Light reflects off the metallic surface.'\n\n"
-            "Requirements:\n"
-            "- STRICTLY under 500 characters\n"
-            "- Do NOT include hashtags, captions, platform names, or pricing\n"
-            "- Return ONLY the prompt text — no explanation, no quotes"
-        )
+    # Always generate a literal SCENE DESCRIPTION.
+    # Translate the creative chips (mood, style, lighting) into concrete scene details.
+    # The prompt serves as (1) Bria scene context when product image exists, and
+    # (2) full scene brief for LTX text-to-video when no image is available.
+    system_prompt = (
+        "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
+        "Generate a video prompt based on the creative brief below that an AI model can render accurately.\n\n"
+        "CRITICAL — AI video models render what they literally 'see':\n"
+        "- Write ONE continuous shot — no cuts, no 'transitions', no 'montage'\n"
+        "- Describe the PHYSICAL SCENE: what objects exist, their material/colour/position\n"
+        "- Describe the ENVIRONMENT: surface, background, surrounding props, setting\n"
+        "- Describe the PRIMARY MOTION: what moves, how it moves, how fast/slow\n"
+        "- Translate creative chips into CONCRETE details:\n"
+        "  'Luxury' → marble surface, gold accents, warm spotlight\n"
+        "  'Energetic' → bright daylight, vivid colours, fast product movement\n"
+        "  'Minimal' → white surface, single object, clean background\n"
+        "- Use LITERAL language — replace 'cinematic' with actual scene details\n\n"
+        "BAD: 'Luxurious product showcase with dramatic lighting and premium feel'\n"
+        "GOOD: 'A gold lipstick tube on a black velvet surface. Soft spotlight from above. "
+        "The cap is removed slowly revealing the deep red bullet. Light reflects off the metallic surface.'\n\n"
+        "Requirements:\n"
+        "- STRICTLY under 500 characters\n"
+        "- If product image provided, reference its actual colour, shape, and material\n"
+        "- Do NOT include hashtags, captions, platform names, or pricing\n"
+        "- Return ONLY the prompt text — no explanation, no quotes"
+    )
 
     context_parts = [f"Duration: {duration} seconds"]
     if product_name:        context_parts.append(f"Product name: {product_name}")
     if product_description: context_parts.append(f"Product details: {product_description}")
     context_parts.extend(selections)
-    if has_image:
-        context_parts.append("Mode: image-to-video — describe ONLY motion and camera movement.")
     user_content = system_prompt + "\n\n" + "\n".join(context_parts)
 
     try:
