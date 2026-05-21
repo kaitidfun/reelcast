@@ -246,6 +246,11 @@ const CreateReel = () => {
   // Output / preview state
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
   const [isApproved, setIsApproved] = useState(false);  // Publish only unlocks after Approve
+  // completedMode records which tab produced the current result so that
+  // switching tabs doesn't change which controls are shown.
+  // null = no result yet; "generate" / "upload" = what created the current video.
+  const [completedMode, setCompletedMode] = useState<"generate" | "upload" | null>(null);
+  const completedModeRef = useRef<"generate" | "upload">("generate");
   const [caption, setCaption] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
   // Overlay preview toggles — UI-only, does not affect the baked video from backend
@@ -325,6 +330,7 @@ const CreateReel = () => {
             const data = await res.json();
             if (data.status === "Completed") {
               setGenerationStatus("done");
+              setCompletedMode(completedModeRef.current);  // lock UI controls to the mode that produced this result
               // Calculate final elapsed from start time directly — avoids stale closure on elapsedSeconds
               setGenerationTime(generationStartTime ? Math.floor((Date.now() - generationStartTime) / 1000) : 0);
               if (data.final_commercial_video_url) {
@@ -579,6 +585,8 @@ const CreateReel = () => {
       toast({ title: "Describe your Reel", description: "Write a prompt describing the Reel you want." });
       return;
     }
+    completedModeRef.current = "generate";
+    setCompletedMode(null);
     setGenerationStatus("generating");
     setIsApproved(false);
     setGenerationStartTime(Date.now());
@@ -613,6 +621,9 @@ const CreateReel = () => {
 
   const handleRegenerate = async (target: "video" | "caption" | "all") => {
     if (!reelId) return;
+    // Keep completedMode of the current result — regen preserves the same mode
+    completedModeRef.current = completedMode ?? "generate";
+    setCompletedMode(null);
     setGenerationStatus("generating");
     setIsApproved(false);
     // Reset timer for the new generation run (fixes timer counting from old value)
@@ -678,6 +689,8 @@ const CreateReel = () => {
         const data = JSON.parse(xhr.responseText);
         setReelId(data.reel_id);
         setUploadStatus("done");
+        completedModeRef.current = "upload";
+        setCompletedMode(null);
         setGenerationStatus("generating");
         setIsApproved(false);
         setGenerationStartTime(Date.now());
@@ -1218,17 +1231,7 @@ const CreateReel = () => {
             )}
           </div>
 
-          {/* Publish — only unlocks after Approve */}
-          {generationStatus === "done" && isApproved && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-3">
-              <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">Publish</h2>
-              <p className="text-xs text-muted-foreground">Distribute your approved Reel across selected platforms</p>
-              <Button onClick={handlePublish} className="gradient-primary w-full gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 h-11">
-                <Send className="h-4 w-4" />
-                Publish to {selectedPlatforms.length} platforms
-              </Button>
-            </motion.div>
-          )}
+{/* Publish section removed — Approve button becomes Publish directly */}
         </div>
 
         {/* ============ RIGHT: Preview (compact, no-scroll) ============ */}
@@ -1416,7 +1419,7 @@ const CreateReel = () => {
             </div>
 
             {/* Generation time badge — shows after completion (how long it took) */}
-            {generationStatus === "done" && generationTime !== null && (
+            {completedMode !== null && generationTime !== null && (
               <motion.div
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1433,7 +1436,7 @@ const CreateReel = () => {
             )}
 
             {/* Regen Video — below preview, AI-generate mode only */}
-            {generationStatus === "done" && creatorMode === "generate" && (
+            {completedMode === "generate" && (
               <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}>
                 <Button
                   variant="outline"
@@ -1448,7 +1451,7 @@ const CreateReel = () => {
             )}
 
             {/* Overlay preview toggles — UI-only, do not affect the baked video */}
-            {generationStatus === "done" && (
+            {completedMode !== null && (
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-3 shadow-card">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">Preview Overlays</p>
                 <div className="grid grid-cols-2 gap-2">
@@ -1487,8 +1490,8 @@ const CreateReel = () => {
               </motion.div>
             )}
 
-            {/* Caption + Actions (only when done) */}
-            {generationStatus === "done" ? (
+            {/* Caption + Actions (only when result exists) */}
+            {completedMode !== null ? (
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-3 shadow-card space-y-2.5">
                 <div className="flex items-center gap-1.5">
                   <Brain className="h-3 w-3 text-primary" />
@@ -1511,10 +1514,16 @@ const CreateReel = () => {
                     <RefreshCw className="h-3.5 w-3.5" />
                     Regen Caption
                   </Button>
-                  <Button onClick={handleApprove} size="sm" className={`gap-1.5 text-xs h-9 ${isApproved ? "bg-success/20 border-success/40 text-success hover:bg-success/30" : "gradient-primary text-primary-foreground shadow-glow"}`}>
-                    <Check className="h-3.5 w-3.5" />
-                    {isApproved ? "Approved ✓" : "Approve"}
-                  </Button>
+                  {!isApproved ? (
+                    <Button onClick={handleApprove} size="sm" className="gradient-primary text-primary-foreground shadow-glow h-9 text-xs">
+                      Approve
+                    </Button>
+                  ) : (
+                    <Button onClick={handlePublish} size="sm" className="gradient-primary text-primary-foreground shadow-glow h-9 text-xs gap-1.5">
+                      <Send className="h-3.5 w-3.5" />
+                      Publish · {selectedPlatforms.length}
+                    </Button>
+                  )}
                 </div>
               </motion.div>
             ) : null}
