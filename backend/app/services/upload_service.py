@@ -161,15 +161,18 @@ async def upload_video_to_r2(
     from app.services.storage_service import upload_raw_bytes_to_r2
 
     try:
-        public_url = upload_raw_bytes_to_r2(
+        # Return the R2 object key (not the full URL) so the frontend can proxy through
+        # /api/upload/videos/{key}. This works regardless of whether R2 bucket is public.
+        object_key = upload_raw_bytes_to_r2(
             data=file_data,
             filename=filename,
             prefix="videos/reels/uploads",
             user_id=user_id,
             category=None,
+            return_key_only=True,
         )
-        logger.info(f"Video uploaded for user {user_id}: {public_url}")
-        return public_url
+        logger.info(f"Video uploaded for user {user_id}: key={object_key}")
+        return object_key
 
     except Exception as e:
         logger.error(f"R2 upload failed for user {user_id}: {e}")

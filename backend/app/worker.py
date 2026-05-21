@@ -143,13 +143,28 @@ async def _async_process_reel_generation(
 
         # ── Step 2: Apply FFmpeg overlay (brand logo / product image) ───────
         if target in ["all", "video", "upload"] and overlay_url and final_video_url:
+            # R2 object keys (not starting with "http") need a presigned URL so
+            # overlay_service.download_to_temp() can fetch them without auth.
+            # fal.ai CDN URLs (starting with "http") are directly downloadable.
+            video_for_download = final_video_url
+            if final_video_url and not final_video_url.startswith("http"):
+                video_for_download = get_presigned_url(final_video_url)
+                logger.info(f"[Worker] Resolved R2 key to presigned URL for overlay download")
+
             logger.info(f"[Worker] Applying overlay from: {overlay_url}")
-            final_video_url = await apply_overlay(
-                video_url=final_video_url,
-                overlay_url=overlay_url,
-                position=overlay_position,
-                reel_id=reel_id,
-            )
+            try:
+                # apply_overlay returns an R2 object key on success, raises on failure
+                overlaid_key = await apply_overlay(
+                    video_url=video_for_download,
+                    overlay_url=overlay_url,
+                    position=overlay_position,
+                    reel_id=reel_id,
+                )
+                final_video_url = overlaid_key  # R2 key — frontend proxies via /api/upload/videos/{key}
+            except Exception as overlay_err:
+                # Graceful degradation: reel still works without overlay
+                # Keep final_video_url as the original R2 key or fal.ai CDN URL
+                logger.warning(f"[Worker] Overlay failed, keeping original video: {overlay_err}")
 
         # ── Step 3: Generate Captions & Hashtags ─────────────────────────────
         if target in ["all", "caption", "upload"]:

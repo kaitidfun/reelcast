@@ -362,16 +362,38 @@ const CreateReel = () => {
   // Control actual video playback (main + fullscreen video stay in sync)
   useEffect(() => {
     const vid = videoRef.current;
-    if (vid) { isPlaying ? vid.play().catch(() => {}) : vid.pause(); }
+    if (vid) {
+      if (isPlaying) {
+        // Try to play unmuted — browser may block autoplay with audio (policy)
+        vid.play().catch(() => {
+          // Autoplay blocked: mute and retry so the video still plays
+          vid.muted = true;
+          setVideoMuted(true);
+          vid.play().catch(() => {});
+        });
+      } else {
+        vid.pause();
+      }
+    }
     const vidFs = videoRefFullscreen.current;
-    if (vidFs) { isPlaying ? vidFs.play().catch(() => {}) : vidFs.pause(); }
+    if (vidFs) {
+      if (isPlaying) {
+        vidFs.play().catch(() => {
+          vidFs.muted = true;
+          vidFs.play().catch(() => {});
+        });
+      } else {
+        vidFs.pause();
+      }
+    }
   }, [isPlaying]);
 
-  // Sync muted state via DOM — React's muted prop doesn't reliably update on live video elements
+  // Sync muted state via DOM — React's muted prop doesn't reliably update on live video elements.
+  // Include videoUrl in deps so the muted state re-syncs when a new video loads.
   useEffect(() => {
     if (videoRef.current) videoRef.current.muted = videoMuted;
     if (videoRefFullscreen.current) videoRefFullscreen.current.muted = videoMuted;
-  }, [videoMuted]);
+  }, [videoMuted, videoUrl]);
 
   /** Format seconds as M:SS for seek bar display */
   const formatTime = (s: number) => {
@@ -840,20 +862,40 @@ const CreateReel = () => {
                 )}
                 {uploadStatus === "uploading" && (
                   <div className="space-y-2 px-1">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1.5">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        {/* After file hits 100%, server is still accepting + queuing the task */}
-                        {uploadProgress < 100 ? "Uploading…" : "Waiting for server…"}
-                      </span>
-                      <span>{uploadProgress}%</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all duration-300"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
+                    {uploadProgress < 100 ? (
+                      // Real upload progress — XHR reports accurate % during file transfer
+                      <>
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Uploading…
+                          </span>
+                          <span>{uploadProgress}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-primary transition-all duration-300"
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      // File received by server — now validating + uploading to R2 (indeterminate)
+                      <>
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Processing on server…
+                          </span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full w-1/3 rounded-full bg-primary"
+                            style={{ animation: "shimmer 1.8s ease-in-out infinite" }}
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

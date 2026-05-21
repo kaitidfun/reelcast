@@ -72,10 +72,20 @@ def update_reel(
     caption_and_hashtags: Optional[dict] = None,
     uploaded_video_url: Optional[str] = None,
     b_roll_url: Optional[str] = None,
+    clear_b_roll: bool = False,
     final_commercial_video_url: Optional[str] = None,
     status: Optional[str] = None,
     error_message: Optional[str] = None,
 ) -> Reel:
+    """
+    Update mutable fields on a Reel ORM instance and commit to DB.
+
+    Args:
+        clear_b_roll: If True, set b_roll_url to None (clear the hybrid-generation checkpoint).
+            Use this on intentional re-generation so the worker starts fresh (not from a checkpoint).
+            The b_roll_url check in update_reel skips None values to avoid accidental clears,
+            so an explicit flag is needed when you deliberately want to clear it.
+    """
     if prompt_text is not None:
         reel.prompt_text = prompt_text
     if caption_and_hashtags is not None:
@@ -84,6 +94,9 @@ def update_reel(
         reel.uploaded_video_url = uploaded_video_url
     if b_roll_url is not None:
         reel.b_roll_url = b_roll_url
+    elif clear_b_roll:
+        # Explicit clear — needed for intentional regen (not just "no value passed")
+        reel.b_roll_url = None
     if final_commercial_video_url is not None:
         reel.final_commercial_video_url = final_commercial_video_url
     if status is not None:

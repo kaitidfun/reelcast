@@ -173,18 +173,23 @@ async def apply_overlay(
     """
     Full overlay pipeline: Download video & overlay, composite, upload to R2.
 
-    If any step fails, logs the error and returns the original video_url
-    (graceful degradation - reel still works without overlay).
+    Raises on failure — callers should wrap in try/except for graceful degradation.
+    Returning the object key (not the public URL) lets the frontend proxy through
+    /api/upload/videos/{key} so R2 auth is never required from the browser.
 
     Args:
-        video_url: Public URL to input video
+        video_url: Publicly downloadable URL to input video
+                   (pass a presigned URL for R2 keys so httpx can fetch it)
         overlay_url: Public URL to overlay image (logo/product)
         position: Logo placement: 'top-left', 'top-right', 'bottom-left',
                  'bottom-right', or 'center'
         reel_id: Reel UUID for organizing output in R2
 
     Returns:
-        Public URL to composited video, or original video_url if overlay failed
+        R2 object key of the composited video (e.g. "videos/reels/overlaid/{reel_id}/abc.mp4")
+
+    Raises:
+        Exception: If any step (download / FFmpeg / R2 upload) fails
     """
     video_tmp = None
     overlay_tmp = None
@@ -198,49 +203,34 @@ async def apply_overlay(
         logger.info(f"[Overlay] Starting composition for reel {reel_id}")
 
         # Step 1: Download video and overlay in parallel
-        try:
-            video_tmp, overlay_tmp = await asyncio.gather(
-                download_to_temp(video_url, suffix=".mp4"),
-                download_to_temp(overlay_url, suffix=overlay_ext),
-            )
-        except Exception as e:
-            logger.error(f"[Overlay] Download failed: {e}")
-            raise
+        video_tmp, overlay_tmp = await asyncio.gather(
+            download_to_temp(video_url, suffix=".mp4"),
+            download_to_temp(overlay_url, suffix=overlay_ext),
+        )
 
         # Step 2: Create output temp file
         fd, output_tmp = tempfile.mkstemp(suffix=".mp4")
         os.close(fd)
 
         # Step 3: Run FFmpeg overlay composition
-        try:
-            await overlay_watermark(video_tmp, overlay_tmp, position, output_tmp)
-        except Exception as e:
-            logger.error(f"[Overlay] FFmpeg composition failed: {e}")
-            raise
+        await overlay_watermark(video_tmp, overlay_tmp, position, output_tmp)
 
-        # Step 4: Upload composited video to R2 storage
-        try:
-            with open(output_tmp, 'rb') as f:
-                output_bytes = f.read()
+        # Step 4: Upload composited video to R2 — store only the object key
+        # so the frontend can proxy via /api/upload/videos/{key} regardless of
+        # whether the R2 bucket has public access enabled.
+        with open(output_tmp, 'rb') as f:
+            output_bytes = f.read()
 
-            public_url = upload_raw_bytes_to_r2(
-                data=output_bytes,
-                filename=f"reel_{reel_id}.mp4",
-                prefix="videos/reels/overlaid",
-                category=reel_id,
-            )
-            logger.info(f"[Overlay] Successfully uploaded: {public_url}")
-            return public_url
-
-        except Exception as e:
-            logger.error(f"[Overlay] R2 upload failed: {e}")
-            raise
-
-    except Exception as e:
-        # Graceful degradation: return original video if any step fails
-        logger.warning(f"[Overlay] Pipeline failed, returning original video: {e}")
-        return video_url
+        object_key = upload_raw_bytes_to_r2(
+            data=output_bytes,
+            filename=f"reel_{reel_id}.mp4",
+            prefix="videos/reels/overlaid",
+            category=reel_id,
+            return_key_only=True,  # Object key — frontend proxies through backend
+        )
+        logger.info(f"[Overlay] Successfully uploaded: key={object_key}")
+        return object_key
 
     finally:
-        # Always clean up temporary files
+        # Always clean up temporary files (even on error)
         _cleanup_temp_files(video_tmp, overlay_tmp, output_tmp)

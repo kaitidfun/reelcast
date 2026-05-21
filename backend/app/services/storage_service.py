@@ -417,6 +417,7 @@ def upload_raw_bytes_to_r2(
     prefix: str = "uploads",
     user_id: Optional[str] = None,
     category: Optional[str] = None,
+    return_key_only: bool = False,
 ) -> str:
     """
     Upload raw bytes to Cloudflare R2 (used by video/reel upload endpoints).
@@ -430,9 +431,12 @@ def upload_raw_bytes_to_r2(
         prefix: Root folder in bucket (e.g. "videos/reels/uploads")
         user_id: Optional user ID for folder grouping
         category: Optional category subfolder (e.g. "uploads")
+        return_key_only: If True, return the R2 object key instead of the full public URL.
+            Use this when storing references in the DB — the frontend can then proxy through
+            /api/upload/videos/{key} regardless of whether R2 is publicly accessible.
 
     Returns:
-        Public URL to the uploaded file on R2
+        R2 object key (when return_key_only=True) or public URL to the uploaded file
 
     Raises:
         RuntimeError: If R2 is not configured or upload fails
@@ -458,6 +462,10 @@ def upload_raw_bytes_to_r2(
     except (BotoCoreError, ClientError) as exc:
         logger.error("R2 upload failed for '%s': %s", object_key, exc)
         raise RuntimeError(f"Failed to upload file to R2: {exc}") from exc
+
+    # Return only the object key when requested (frontend proxies via /api/upload/videos/{key})
+    if return_key_only:
+        return object_key
 
     # Build public URL
     if R2_PUBLIC_URL:

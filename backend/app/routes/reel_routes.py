@@ -229,6 +229,16 @@ def trigger_regeneration(
         update_reel(db, reel=reel, prompt_text=req.prompt_text)
         logger.info(f"Reel {reel_id} prompt updated before regen: {len(req.prompt_text)} chars")
 
+    # Reset status to "Generating" BEFORE queuing so the frontend polling loop
+    # doesn't immediately see the old "Completed" status and display stale content.
+    # Also clear b_roll_url so video regen starts a fresh clip (not from old checkpoint).
+    if req.target in ["video", "all"]:
+        update_reel(db, reel=reel, status="Generating", clear_b_roll=True)
+    else:
+        # Caption-only — video is unchanged, just reset status for polling
+        update_reel(db, reel=reel, status="Generating")
+    logger.info(f"Reel {reel_id} status reset to Generating for regen target='{req.target}'")
+
     # Send task to Celery
     process_reel_generation.delay(
         str(reel.reel_id), req.platform, req.overlay_position, req.target,
