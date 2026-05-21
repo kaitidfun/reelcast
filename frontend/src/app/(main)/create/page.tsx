@@ -863,8 +863,7 @@ const CreateReel = () => {
                 {uploadStatus === "uploading" && (
                   <div className="space-y-2 px-1">
                     {uploadProgress < 100 ? (
-                      // Real upload progress — XHR reports accurate % during file transfer
-                      <>
+                      <>{/* Real upload progress */}
                         <div className="flex justify-between text-xs text-muted-foreground">
                           <span className="flex items-center gap-1.5">
                             <Loader2 className="h-3 w-3 animate-spin" />
@@ -880,8 +879,7 @@ const CreateReel = () => {
                         </div>
                       </>
                     ) : (
-                      // File received by server — now validating + uploading to R2 (indeterminate)
-                      <>
+                      <>{/* File received — server still processing (ffprobe + R2 upload) */}
                         <div className="flex justify-between text-xs text-muted-foreground">
                           <span className="flex items-center gap-1.5">
                             <Loader2 className="h-3 w-3 animate-spin" />
