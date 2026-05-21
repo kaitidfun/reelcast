@@ -285,6 +285,7 @@ const CreateReel = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const captionTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   /**
    * Guided Prompt state — 4 rows of chips help users who don't know what to write.
@@ -394,6 +395,15 @@ const CreateReel = () => {
     if (videoRef.current) videoRef.current.muted = videoMuted;
     if (videoRefFullscreen.current) videoRefFullscreen.current.muted = videoMuted;
   }, [videoMuted, videoUrl]);
+
+  // Auto-resize caption textarea whenever caption changes (e.g. after AI generation)
+  useEffect(() => {
+    const el = captionTextareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    }
+  }, [caption]);
 
   /** Format seconds as M:SS for seek bar display */
   const formatTime = (s: number) => {
@@ -701,11 +711,7 @@ const CreateReel = () => {
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Create Reel</h1>
-          <p className="mt-1 text-muted-foreground">Describe what you want — AI handles the rest. Powered by Gemini + Veo.</p>
-        </div>
-        <div className="flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs font-mono text-muted-foreground backdrop-blur">
-          <span className="size-1.5 rounded-full bg-success animate-pulse" />
-          Engine online
+          <p className="mt-1 text-muted-foreground">Describe what you want — AI handles the rest.</p>
         </div>
       </div>
 
@@ -1095,7 +1101,7 @@ const CreateReel = () => {
                 onChange={(e) => setPromptText(e.target.value.slice(0, 500))}
                 maxLength={500}
                 placeholder={guidedMode ? "Prompt will be auto-built above, or type your own here…" : "Describe the Reel you want to create — scene, mood, motion, style, product details…"}
-                className="min-h-[120px] w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="min-h-[144px] w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0"
               />
               <div className="absolute bottom-2 right-5 text-[10px] text-muted-foreground">
                 {promptText.length}/500
@@ -1467,10 +1473,16 @@ const CreateReel = () => {
                   <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Caption · Gemini</label>
                 </div>
                 <Textarea
+                  ref={captionTextareaRef}
                   value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
+                  onChange={(e) => {
+                    setCaption(e.target.value);
+                    // Auto-resize on user input: shrink first, then expand to fit
+                    e.target.style.height = "auto";
+                    e.target.style.height = `${e.target.scrollHeight}px`;
+                  }}
                   rows={5}
-                  className="bg-muted/40 border-border resize-none text-[11px] leading-relaxed"
+                  className="bg-muted/40 border-border resize-none text-[11px] leading-relaxed overflow-hidden"
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <Button variant="outline" onClick={() => handleRegenerate("video")} size="sm" className="gap-1.5 h-9 text-xs">
