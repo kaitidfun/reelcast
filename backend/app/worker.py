@@ -94,14 +94,20 @@ async def _async_process_reel_generation(
         else:
             product_info = ""
 
-        # Resolve product image URL for AI reference (F2-URS02-SRS01)
-        # DB stores R2 object keys (relative paths) — convert to full public URL
-        # so fal.ai can download the image for image-to-video mode
+        # Resolve product image URL — used ONLY for the FFmpeg overlay watermark.
+        # We intentionally do NOT pass this as image_url to fal.ai LTX generation.
+        #
+        # WHY text-to-video instead of image-to-video:
+        #   LTX image-to-video treats the product photo as the FIRST FRAME and
+        #   animates it directly — the output looks like the photo is "wiggling".
+        #   text-to-video reads the Gemini-generated prompt (which already describes
+        #   the product's colour, shape, and material in detail) and builds a
+        #   proper creative scene from scratch, which is far more compelling.
         product_image_url: str | None = None
         if product and product.images:
             primary = next((img for img in product.images if img.is_primary), None)
             raw_key = (primary or product.images[0]).image_url
-            # Presigned URL (1h) so fal.ai can download the image without bucket being public
+            # Presigned URL (1h) for overlay download — not for fal.ai generation
             product_image_url = get_presigned_url(raw_key) if raw_key else None
 
         # Resolve overlay URL for FFmpeg watermark (F2-URS05-SRS01)
@@ -116,27 +122,30 @@ async def _async_process_reel_generation(
             elif product_image_url:
                 overlay_url = product_image_url  # Already presigned above
 
-        # Build enriched prompt for LTX Video (F2-URS02-SRS01)
-        # Append product context as a natural sentence — NOT as a [tag] suffix.
-        # LTX Video is a text-to-image model at heart: bracket tags confuse it.
-        # "The product is X" keeps the description readable to the model.
+        # Build the final video prompt for LTX (F2-URS02-SRS01)
+        # The Gemini-generated prompts already describe the product visually in detail.
+        # Only append the product name as a light anchor if it's not already mentioned.
+        # Avoid overloading the prompt — LTX performs best with concise, concrete prompts.
         video_prompt = reel.prompt_text
         if product and product.product_name:
-            product_context = f"The product featured is {product.product_name}"
-            if product.description:
-                # Trim description to avoid prompt overflow (keep under 500 total)
-                short_desc = product.description[:80].rstrip()
-                product_context += f", {short_desc}"
-            video_prompt = f"{reel.prompt_text.rstrip('.')}. {product_context}."
+            name_lower = product.product_name.lower()
+            prompt_lower = reel.prompt_text.lower()
+            if name_lower not in prompt_lower:
+                # Product name not in prompt — append it as context so LTX knows the subject
+                video_prompt = f"{reel.prompt_text.rstrip('.')}. Product: {product.product_name}."
 
         # ── Step 1: Determine video source ──────────────────────────────────
         if target in ["all", "video"]:
-            # Hybrid LTX generation (Pro + optional Fast extend based on duration)
+            # Hybrid LTX generation — always text-to-video (image_url=None).
+            # The Gemini prompt already describes the product's visual appearance
+            # in detail, so LTX creates a fresh creative scene from the description.
+            # Passing image_url would make LTX use the product photo as the first
+            # frame and just "animate" it — that produces stiff, low-quality output.
             final_video_url = await _run_hybrid_generation(
                 db=db,
                 reel=reel,
                 prompt=video_prompt,
-                image_url=product_image_url,
+                image_url=None,   # Always text-to-video — see comment above
                 duration=duration,
             )
         elif target == "upload":
