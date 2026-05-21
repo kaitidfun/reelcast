@@ -62,7 +62,8 @@ async def _async_process_reel_generation(
 
     Workflow:
         1. Load reel + product from DB; enrich prompt with product metadata (F2-URS02-SRS01)
-        2. Generate video via LTX hybrid (≤20s=Pro; 30s=Pro+Extend; 60s=Pro+Extend+Extend)
+        2. Generate video via LTX hybrid (image-to-video when product image available,
+           text-to-video otherwise; ≤20s=single call; 30s=+extend; 60s=+extend×2)
            OR use uploaded video (target="upload")
         3. Apply FFmpeg overlay (product image + brand logo) (F2-URS05-SRS01)
         4. Generate captions + hashtags with Gemini (F2-URS03)
@@ -94,20 +95,20 @@ async def _async_process_reel_generation(
         else:
             product_info = ""
 
-        # Resolve product image URL — used ONLY for the FFmpeg overlay watermark.
-        # We intentionally do NOT pass this as image_url to fal.ai LTX generation.
+        # Resolve product image URL — used for TWO purposes:
+        #   1. Passed to fal.ai LTX as the first frame (image-to-video mode)
+        #      → guarantees the generated video shows the REAL product,
+        #        not an AI-hallucinated version built only from text
+        #   2. Used as fallback overlay watermark when no brand logo is set
         #
-        # WHY text-to-video instead of image-to-video:
-        #   LTX image-to-video treats the product photo as the FIRST FRAME and
-        #   animates it directly — the output looks like the photo is "wiggling".
-        #   text-to-video reads the Gemini-generated prompt (which already describes
-        #   the product's colour, shape, and material in detail) and builds a
-        #   proper creative scene from scratch, which is far more compelling.
+        # The Gemini prompt is written as MOTION instructions (not scene descriptions)
+        # when a product image is available, so LTX animates the product creatively
+        # instead of just "wiggling" the static photo.
         product_image_url: str | None = None
         if product and product.images:
             primary = next((img for img in product.images if img.is_primary), None)
             raw_key = (primary or product.images[0]).image_url
-            # Presigned URL (1h) for overlay download — not for fal.ai generation
+            # Presigned URL (1h) — valid for both fal.ai fetch and httpx overlay download
             product_image_url = get_presigned_url(raw_key) if raw_key else None
 
         # Resolve overlay URL for FFmpeg watermark (F2-URS05-SRS01)
@@ -136,16 +137,24 @@ async def _async_process_reel_generation(
 
         # ── Step 1: Determine video source ──────────────────────────────────
         if target in ["all", "video"]:
-            # Hybrid LTX generation — always text-to-video (image_url=None).
-            # The Gemini prompt already describes the product's visual appearance
-            # in detail, so LTX creates a fresh creative scene from the description.
-            # Passing image_url would make LTX use the product photo as the first
-            # frame and just "animate" it — that produces stiff, low-quality output.
+            # Hybrid LTX generation — image-to-video when product image available,
+            # text-to-video otherwise.
+            #
+            # WHY image-to-video (when product_image_url is set):
+            #   Using the actual product photo as the first frame guarantees LTX
+            #   generates a video of the REAL product (correct colour, shape, material),
+            #   not an AI-hallucinated version based on a text description alone.
+            #   The Gemini prompt is written as MOTION instructions (rotate, zoom, etc.)
+            #   so LTX animates the image creatively rather than just "wiggling" it.
+            #
+            # WHY text-to-video (when no product image):
+            #   No reference frame available — fall back to the full scene description
+            #   Gemini generates from scratch.
             final_video_url = await _run_hybrid_generation(
                 db=db,
                 reel=reel,
                 prompt=video_prompt,
-                image_url=None,   # Always text-to-video — see comment above
+                image_url=product_image_url,  # None → text-to-video; URL → image-to-video
                 duration=duration,
             )
         elif target == "upload":
