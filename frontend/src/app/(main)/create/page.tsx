@@ -86,7 +86,8 @@ const promptTemplates = [
   { label: "🎯 How-To / Tutorial",  type: "tutorial" },
 ];
 
-// 5s and 10s = single Kling clip (cheap/fast for testing); 15/30/60 = Kling+LTX extend hybrid
+// Kling 2.6 supports "5" or "10" per clip (snapped in backend).
+// Longer options (15, 30, 60) snap to 10s — kept in UI as future multi-clip support.
 const durationOptions = [5, 10, 15, 30, 60];
 
 // ─── Guide Me — chip options for each row ────────────────────────────────────
@@ -241,6 +242,8 @@ const CreateReel = () => {
 
   // Settings state
   const [duration, setDuration] = useState(5);  // Default 5s — cheapest single Kling clip for testing
+  // Audio toggle — passed to API; Kling 2.6 may support ambient audio generation
+  const [withAudio, setWithAudio] = useState(false);
   // overlayPosition kept as hidden state (sent to API, defaulted to bottom-right)
   const [overlayPosition] = useState("bottom-right");
 
@@ -607,6 +610,7 @@ const CreateReel = () => {
           platform: selectedPlatforms[0] || "ig",
           overlay_position: overlayPosition,
           duration: duration,
+          with_audio: withAudio,
         })
       });
       if (!res.ok) throw new Error("Failed to start generation");
@@ -776,7 +780,7 @@ const CreateReel = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-4">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Create Reel</h1>
@@ -784,8 +788,8 @@ const CreateReel = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        {/* ============ LEFT: Composer (Sora-style monolith) ============ */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 lg:items-start gap-6">
+        {/* ============ LEFT: Composer ============ */}
         <div className="lg:col-span-3 space-y-5">
           {/* Hidden file input (triggered by upload button) */}
           <input
@@ -1177,7 +1181,7 @@ const CreateReel = () => {
               </div>
             </div>
 
-            {/* Chip toolbar — duration only (9:16 is fixed, no need to show) */}
+            {/* Chip toolbar — duration + audio toggle (9:16 is fixed) */}
             <div className="px-4 pb-3 flex flex-wrap items-center gap-1.5">
               <Popover>
                 <PopoverTrigger asChild>
@@ -1200,6 +1204,21 @@ const CreateReel = () => {
                   ))}
                 </PopoverContent>
               </Popover>
+
+              {/* Audio toggle — controls whether Kling generates ambient audio */}
+              <button
+                type="button"
+                onClick={() => setWithAudio((v) => !v)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                  withAudio
+                    ? "border-primary/40 bg-primary/10 text-primary"
+                    : "border-border bg-muted/40 text-muted-foreground hover:text-foreground hover:border-primary/30"
+                }`}
+                title={withAudio ? "Click to disable audio" : "Click to enable ambient audio"}
+              >
+                {withAudio ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+                {withAudio ? "With Audio" : "No Audio"}
+              </button>
             </div>
 
             {/* Action bar (footer of monolith) */}
@@ -1235,61 +1254,138 @@ const CreateReel = () => {
           </div>
 
           }
-          {/* Target Platforms — icon + slide toggle per platform */}
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-3">
-            <div>
-              <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">Target Platforms</h2>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                Select platforms to distribute to — captions will be optimised per platform
-              </p>
-            </div>
-            {/* Single-row block selector — checkmark badge when active, plain when inactive */}
-            <div className="flex gap-2">
-              {platformOptions.map((p) => {
-                const isActive = selectedPlatforms.includes(p.id);
-                return (
-                  <div
-                    key={p.id}
-                    onClick={() => togglePlatform(p.id)}
-                    className={`relative flex-1 flex flex-col items-center justify-center gap-1.5 rounded-xl border py-3 cursor-pointer transition-all select-none ${
-                      isActive
-                        ? `${p.activeBg} ring-1`
-                        : "border-border/50 hover:border-border hover:bg-muted/20"
-                    }`}
-                  >
-                    {/* Platform icon — coloured when active, dimmed when off */}
-                    <span className={`transition-colors ${isActive ? p.color : "text-muted-foreground/35"}`}>
-                      <PlatformIcon id={p.id} />
-                    </span>
-                    {/* Short platform name */}
-                    <span className={`text-[10px] font-medium text-center leading-tight transition-colors ${isActive ? "text-foreground" : "text-muted-foreground/50"}`}>
-                      {p.shortLabel}
-                    </span>
-                    {/* Checkmark badge — top-right corner when active */}
-                    {isActive && (
-                      <span className="absolute top-1.5 right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary">
-                        <Check className="h-2 w-2 text-primary-foreground" />
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            {selectedPlatforms.length === 0 && (
-              <p className="text-[11px] text-amber-500/80">⚠ Select at least one platform before publishing</p>
-            )}
-          </div>
+          {/* Preview Overlays — shown after completion (moved from right panel) */}
+          {completedMode !== null && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-3 shadow-card">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">Preview Overlays</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowLogo((v) => !v)}
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition-all ${
+                    showLogo
+                      ? "border-primary/40 bg-primary/10 text-primary ring-1 ring-primary/20"
+                      : "border-border bg-muted/20 text-muted-foreground hover:border-border/80"
+                  }`}
+                >
+                  <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Brand Logo</span>
+                  <span className={`ml-auto text-[9px] font-bold uppercase ${showLogo ? "text-primary" : "text-muted-foreground/60"}`}>
+                    {showLogo ? "ON" : "OFF"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowProduct((v) => !v)}
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition-all ${
+                    showProduct
+                      ? "border-primary/40 bg-primary/10 text-primary ring-1 ring-primary/20"
+                      : "border-border bg-muted/20 text-muted-foreground hover:border-border/80"
+                  }`}
+                >
+                  <ShoppingBag className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Product</span>
+                  <span className={`ml-auto text-[9px] font-bold uppercase ${showProduct ? "text-primary" : "text-muted-foreground/60"}`}>
+                    {showProduct ? "ON" : "OFF"}
+                  </span>
+                </button>
+              </div>
+              <p className="mt-2 text-[9px] text-muted-foreground/60 text-center">Preview only — overlays are baked into the exported video</p>
+            </motion.div>
+          )}
 
-{/* Publish section removed — Approve button becomes Publish directly */}
+          {/* Caption + Approve — shown after completion (moved from right panel) */}
+          {completedMode !== null && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-3 shadow-card space-y-2.5">
+              <div className="flex items-center gap-1.5">
+                <Brain className="h-3 w-3 text-primary" />
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Caption · Gemini</label>
+              </div>
+              <Textarea
+                ref={captionTextareaRef}
+                value={caption}
+                onChange={(e) => {
+                  setCaption(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = `${e.target.scrollHeight}px`;
+                }}
+                rows={5}
+                className="bg-muted/40 border-border resize-none text-[11px] leading-relaxed overflow-hidden"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" onClick={() => handleRegenerate("caption")} size="sm" className="gap-1.5 h-9 text-xs">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Regen Caption
+                </Button>
+                {!isApproved ? (
+                  <Button onClick={handleApprove} size="sm" className="gradient-primary text-primary-foreground shadow-glow h-9 text-xs">
+                    Approve
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handlePublish}
+                    disabled={selectedPlatforms.length === 0}
+                    size="sm"
+                    className="gradient-primary text-primary-foreground shadow-glow h-9 text-xs gap-1.5"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    Publish · {selectedPlatforms.length}
+                  </Button>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Target Platforms + Publish — revealed after user clicks Approve */}
+          {isApproved && completedMode !== null && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-card space-y-3">
+              <div>
+                <h2 className="font-display font-semibold text-sm uppercase tracking-wider text-muted-foreground">Target Platforms</h2>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Select platforms to distribute to — captions will be optimised per platform
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {platformOptions.map((p) => {
+                  const isActive = selectedPlatforms.includes(p.id);
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => togglePlatform(p.id)}
+                      className={`relative flex-1 flex flex-col items-center justify-center gap-1.5 rounded-xl border py-3 cursor-pointer transition-all select-none ${
+                        isActive
+                          ? `${p.activeBg} ring-1`
+                          : "border-border/50 hover:border-border hover:bg-muted/20"
+                      }`}
+                    >
+                      <span className={`transition-colors ${isActive ? p.color : "text-muted-foreground/35"}`}>
+                        <PlatformIcon id={p.id} />
+                      </span>
+                      <span className={`text-[10px] font-medium text-center leading-tight transition-colors ${isActive ? "text-foreground" : "text-muted-foreground/50"}`}>
+                        {p.shortLabel}
+                      </span>
+                      {isActive && (
+                        <span className="absolute top-1.5 right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary">
+                          <Check className="h-2 w-2 text-primary-foreground" />
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {selectedPlatforms.length === 0 && (
+                <p className="text-[11px] text-amber-500/80">⚠ Select at least one platform before publishing</p>
+              )}
+            </motion.div>
+          )}
         </div>
 
-        {/* ============ RIGHT: Preview (compact, no-scroll) ============ */}
-        <div className="lg:col-span-2">
-          <div className="lg:sticky lg:top-4 space-y-3">
-            {/* Device-style Preview Card */}
-            <div className="relative rounded-3xl border border-border bg-gradient-to-b from-card to-card/60 p-3 shadow-elevated overflow-hidden">
+        {/* ============ RIGHT: Video Preview (full height, sticky) ============ */}
+        <div className="lg:col-span-2 lg:sticky lg:top-4 lg:h-[calc(100vh-4rem)] flex flex-col gap-3">
+          {/* Device-style Preview Card — fills remaining vertical space */}
+          <div className="relative flex-1 flex flex-col rounded-3xl border border-border bg-gradient-to-b from-card to-card/60 p-3 shadow-elevated overflow-hidden">
               {/* top status bar */}
-              <div className="flex items-center justify-between px-1 pb-2">
+              <div className="flex items-center justify-between px-1 pb-2 shrink-0">
                 <div className="flex items-center gap-1.5">
                   <span className={`h-1.5 w-1.5 rounded-full ${
                     generationStatus === "done" ? "bg-success" :
@@ -1308,9 +1404,9 @@ const CreateReel = () => {
                 </div>
               </div>
 
-              {/* Phone frame */}
-              <div className="relative mx-auto w-full max-w-[260px]">
-                <div className="relative aspect-[9/16] w-full overflow-hidden rounded-[28px] border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 ring-1 ring-inset ring-white/5">
+              {/* Phone frame — fills remaining height, maintaining 9:16 aspect ratio */}
+              <div className="flex-1 flex items-center justify-center min-h-0">
+                <div className="relative h-full aspect-[9/16] max-h-full overflow-hidden rounded-[28px] border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 ring-1 ring-inset ring-white/5">
                   {generationStatus === "done" ? (
                     <>
                       {/* Real video from Veo / fal.ai */}
@@ -1476,116 +1572,37 @@ const CreateReel = () => {
 
             </div>
 
-            {/* Generation time badge — shows after completion (how long it took) */}
-            {completedMode !== null && generationTime !== null && (
-              <motion.div
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground"
-              >
-                <Check className="h-3 w-3 text-success" />
-                <span>
-                  Generated in{" "}
-                  <span className="font-mono text-foreground tabular-nums">
-                    {Math.floor(generationTime / 60).toString().padStart(2, "0")}:{(generationTime % 60).toString().padStart(2, "0")}
-                  </span>
+          {/* Generation time badge — shows after completion */}
+          {completedMode !== null && generationTime !== null && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground shrink-0"
+            >
+              <Check className="h-3 w-3 text-success" />
+              <span>
+                Generated in{" "}
+                <span className="font-mono text-foreground tabular-nums">
+                  {Math.floor(generationTime / 60).toString().padStart(2, "0")}:{(generationTime % 60).toString().padStart(2, "0")}
                 </span>
-              </motion.div>
-            )}
+              </span>
+            </motion.div>
+          )}
 
-            {/* Regen Video — below preview, AI-generate mode only */}
-            {completedMode === "generate" && (
-              <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}>
-                <Button
-                  variant="outline"
-                  onClick={() => handleRegenerate("video")}
-                  size="sm"
-                  className="w-full gap-1.5 h-9 text-xs"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Regenerate Video
-                </Button>
-              </motion.div>
-            )}
-
-            {/* Overlay preview toggles — UI-only, do not affect the baked video */}
-            {completedMode !== null && (
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-3 shadow-card">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">Preview Overlays</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowLogo((v) => !v)}
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition-all ${
-                      showLogo
-                        ? "border-primary/40 bg-primary/10 text-primary ring-1 ring-primary/20"
-                        : "border-border bg-muted/20 text-muted-foreground hover:border-border/80"
-                    }`}
-                  >
-                    <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">Brand Logo</span>
-                    <span className={`ml-auto text-[9px] font-bold uppercase ${showLogo ? "text-primary" : "text-muted-foreground/60"}`}>
-                      {showLogo ? "ON" : "OFF"}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowProduct((v) => !v)}
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition-all ${
-                      showProduct
-                        ? "border-primary/40 bg-primary/10 text-primary ring-1 ring-primary/20"
-                        : "border-border bg-muted/20 text-muted-foreground hover:border-border/80"
-                    }`}
-                  >
-                    <ShoppingBag className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">Product</span>
-                    <span className={`ml-auto text-[9px] font-bold uppercase ${showProduct ? "text-primary" : "text-muted-foreground/60"}`}>
-                      {showProduct ? "ON" : "OFF"}
-                    </span>
-                  </button>
-                </div>
-                <p className="mt-2 text-[9px] text-muted-foreground/60 text-center">Preview only — overlays are baked into the exported video</p>
-              </motion.div>
-            )}
-
-            {/* Caption + Actions (only when result exists) */}
-            {completedMode !== null ? (
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-3 shadow-card space-y-2.5">
-                <div className="flex items-center gap-1.5">
-                  <Brain className="h-3 w-3 text-primary" />
-                  <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Caption · Gemini</label>
-                </div>
-                <Textarea
-                  ref={captionTextareaRef}
-                  value={caption}
-                  onChange={(e) => {
-                    setCaption(e.target.value);
-                    // Auto-resize on user input: shrink first, then expand to fit
-                    e.target.style.height = "auto";
-                    e.target.style.height = `${e.target.scrollHeight}px`;
-                  }}
-                  rows={5}
-                  className="bg-muted/40 border-border resize-none text-[11px] leading-relaxed overflow-hidden"
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" onClick={() => handleRegenerate("caption")} size="sm" className="gap-1.5 h-9 text-xs">
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    Regen Caption
-                  </Button>
-                  {!isApproved ? (
-                    <Button onClick={handleApprove} size="sm" className="gradient-primary text-primary-foreground shadow-glow h-9 text-xs">
-                      Approve
-                    </Button>
-                  ) : (
-                    <Button onClick={handlePublish} size="sm" className="gradient-primary text-primary-foreground shadow-glow h-9 text-xs gap-1.5">
-                      <Send className="h-3.5 w-3.5" />
-                      Publish · {selectedPlatforms.length}
-                    </Button>
-                  )}
-                </div>
-              </motion.div>
-            ) : null}
-          </div>
+          {/* Regen Video — below preview, AI-generate mode only */}
+          {completedMode === "generate" && (
+            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="shrink-0">
+              <Button
+                variant="outline"
+                onClick={() => handleRegenerate("video")}
+                size="sm"
+                className="w-full gap-1.5 h-9 text-xs"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Regenerate Video
+              </Button>
+            </motion.div>
+          )}
         </div>
       </div>
 

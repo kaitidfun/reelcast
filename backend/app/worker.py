@@ -9,9 +9,7 @@ from app.models.models import Reel, Product
 from app.services.ai_service import generate_captions
 from app.services.video_generation_service import (
     generate_video,
-    generate_product_scene,
-    generate_with_ltx23fast,
-    extend_with_ltx_fast,
+    generate_with_kling26,
 )
 from app.services.overlay_service import apply_overlay
 from app.services.reel_service import update_reel
@@ -33,45 +31,43 @@ celery_app.conf.task_routes = {
 @celery_app.task(name="app.worker.process_reel_generation")
 def process_reel_generation(
     reel_id: str, platform: str, overlay_position: str,
-    target: str = "all", duration: int = 30,
+    target: str = "all", duration: int = 10, with_audio: bool = False,
 ):
     """
     Celery background task: orchestrate reel generation pipeline.
 
-    Handles AI video generation (LTX hybrid), FFmpeg overlay, and caption generation.
+    Handles AI video generation (Kling 2.6), FFmpeg overlay, and caption generation.
     Supports partial regeneration (e.g., video only, caption only).
 
     Args:
         reel_id: UUID of reel being processed
         platform: Target social platform (ig/fb/tt/yt) for caption optimization
         overlay_position: Logo/product placement (top-left/right, bottom-left/right, center)
-        target: Generation scope — "all" (full pipeline) | "video" (LTX only) |
+        target: Generation scope — "all" (full pipeline) | "video" (Kling only) |
                 "caption" (Gemini only) | "upload" (uploaded video → overlay → captions)
-        duration: Video length in seconds (max 60 per SRS requirement)
+        duration: Video length in seconds — snapped to 5 or 10 for Kling 2.6
+        with_audio: Whether to request ambient audio generation from Kling
     """
     asyncio.run(_async_process_reel_generation(
-        reel_id, platform, overlay_position, target, duration
+        reel_id, platform, overlay_position, target, duration, with_audio
     ))
 
 
 async def _async_process_reel_generation(
     reel_id: str, platform: str, overlay_position: str,
-    target: str = "all", duration: int = 30,
+    target: str = "all", duration: int = 10, with_audio: bool = False,
 ):
     """
     Async implementation: AI generation + overlay + caption pipeline.
 
     Workflow:
         1. Load reel + product from DB; enrich prompt with product metadata (F2-URS02-SRS01)
-        2. Generate video via LTX hybrid (image-to-video when product image available,
-           text-to-video otherwise; ≤20s=single call; 30s=+extend; 60s=+extend×2)
+        2. Generate video via Kling 2.6 (image-to-video when product image available,
+           text-to-video otherwise; single clip, no extend needed)
            OR use uploaded video (target="upload")
         3. Apply FFmpeg overlay (product image + brand logo) (F2-URS05-SRS01)
         4. Generate captions + hashtags with Gemini (F2-URS03)
         5. Persist all outputs to DB and mark reel Complete
-
-    Smart Retry: intermediate URL stored in reel.b_roll_url after each Pro/extend step
-    so a re-queued task skips completed steps without re-charging the API.
     """
     db = SessionLocal()
     try:
@@ -102,9 +98,9 @@ async def _async_process_reel_generation(
         #        not an AI-hallucinated version built only from text
         #   2. Used as fallback overlay watermark when no brand logo is set
         #
-        # The Gemini prompt is written as MOTION instructions (not scene descriptions)
-        # when a product image is available, so LTX animates the product creatively
-        # instead of just "wiggling" the static photo.
+        # The Gemini prompt includes both scene description and camera/motion cues —
+        # Kling 2.6 uses the image as the visual anchor and the prompt to guide
+        # the animation direction (rotate, zoom, environment atmosphere).
         product_image_url: str | None = None
         if product and product.images:
             primary = next((img for img in product.images if img.is_primary), None)
@@ -138,25 +134,22 @@ async def _async_process_reel_generation(
 
         # ── Step 1: Determine video source ──────────────────────────────────
         if target in ["all", "video"]:
-            # Hybrid LTX generation — image-to-video when product image available,
+            # Kling 2.6 generation — image-to-video when product image available,
             # text-to-video otherwise.
             #
-            # WHY image-to-video (when product_image_url is set):
-            #   Using the actual product photo as the first frame guarantees LTX
-            #   generates a video of the REAL product (correct colour, shape, material),
-            #   not an AI-hallucinated version based on a text description alone.
-            #   The Gemini prompt is written as MOTION instructions (rotate, zoom, etc.)
-            #   so LTX animates the image creatively rather than just "wiggling" it.
+            # WHY Kling image-to-video (when product_image_url is set):
+            #   Kling 2.6 genuinely ANIMATES the product photo — it adds natural
+            #   movement (rotation, camera drift, lighting effects) rather than just
+            #   "wiggling" a pasted 2D image like LTX did.  The result looks like
+            #   a real product shoot, not a slideshow.
             #
             # WHY text-to-video (when no product image):
-            #   No reference frame available — fall back to the full scene description
-            #   Gemini generates from scratch.
-            final_video_url = await _run_hybrid_generation(
-                db=db,
-                reel=reel,
+            #   No reference frame available — fall back to scene description.
+            final_video_url = await _run_kling_generation(
                 prompt=video_prompt,
                 image_url=product_image_url,  # None → text-to-video; URL → image-to-video
                 duration=duration,
+                with_audio=with_audio,
             )
         elif target == "upload":
             # User-uploaded video — apply overlay + captions, skip AI generation
@@ -223,144 +216,60 @@ async def _async_process_reel_generation(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Hybrid LTX Orchestration
+# Kling 2.6 Generation
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _run_hybrid_generation(
-    db: Session,
-    reel: Reel,
+async def _run_kling_generation(
     prompt: str,
     image_url: str | None,
     duration: int,
+    with_audio: bool = False,
 ) -> str:
     """
-    Orchestrate the full 2-step product video pipeline + LTX extend chain.
+    Generate a product reel using Kling Video 2.6 Standard.
 
-    Pipeline (when product image available):
-        Step 0: Bria background/replace  — place product in generated scene  (1 API call)
-        Step 1: LTX 2.3 Fast I2V        — animate scene image                (1 API call)
-        Step 2+: LTX extend             — chain clips to reach target duration
+    Unlike the previous LTX hybrid pipeline, this is a single API call —
+    no Bria pre-processing, no extend chain.  Kling 2.6 handles both the
+    scene composition and animation natively from the product image and prompt.
 
-    Pipeline (no product image — text-to-video fallback):
-        Step 1: LTX 2.3 Fast T2V        — generate from scene description    (1 API call)
-        Step 2+: LTX extend             — chain clips as needed
+    Pipeline:
+        With image_url  → Kling 2.6 image-to-video (1 API call)
+                          Product photo is the visual anchor; Kling animates it
+                          with natural motion (rotation, camera drift, lighting).
+        Without image   → Kling 2.6 text-to-video (1 API call)
+                          Fully generated from scene description.
 
-    Duration strategy:
-        ≤20s  → Step 0 + Step 1 only             (2 API calls with image, 1 without)
-        30s   → Step 0 + Step 1 + extend(10s)    (3 / 2 API calls)
-        60s   → Step 0 + Step 1 + extend × 2     (4 / 3 API calls)
-
-    Smart retry via b_roll_url:
-        After each LTX API call the intermediate URL is saved to reel.b_roll_url
-        so a retried Celery task can resume from the last completed LTX step.
-        Step 0 (Bria) has no checkpoint — it is fast and cheap to re-run.
+    Duration:
+        Snapped to "5" or "10" (Kling's supported values).  The frontend
+        duration selector [5, 10, 15, 30, 60] maps:
+            5  → "5"
+            ≥10 → "10"
 
     Args:
-        db: Active SQLAlchemy session (for checkpoint saves)
-        reel: Reel ORM instance (mutable — we update b_roll_url in-place)
-        prompt: Gemini-generated scene description (used for Bria + LTX text-to-video)
-        image_url: Product image presigned URL — triggers 2-step pipeline when set
-        duration: Requested video length in seconds
+        prompt:     Gemini-generated scene description with camera + motion cues
+        image_url:  Presigned product image URL (None → text-to-video fallback)
+        duration:   Requested seconds — snapped to Kling's "5"/"10" values
+        with_audio: Request ambient audio from Kling (not yet widely supported)
 
     Returns:
-        Public CDN URL of the final (fully extended) video
+        Public CDN URL (fal.media) of the generated video
     """
     fal_key = os.getenv("FAL_KEY", "")
 
-    # ── Fallback: no fal.ai key → use simple facade (Veo or sample) ─────────
+    # ── Fallback: no fal.ai key → use simple facade (Veo or sample) ──────────
     if not fal_key:
-        logger.info("[Hybrid] No FAL_KEY, delegating to generate_video() facade")
+        logger.info("[Kling] No FAL_KEY, delegating to generate_video() facade")
         return await generate_video(prompt=prompt, image_url=image_url, duration=duration)
 
-    # ── Step 0 (optional): Bria — place product in a generated scene ─────────
-    #
-    # 2-Step Pipeline:
-    #   Step 0: Bria background/replace — composites the product into a scene
-    #           described by `prompt`.  Ensures the REAL product appears in the
-    #           correct environment, not an AI-hallucinated substitute.
-    #   Step 1: LTX image-to-video — animates the Bria scene image with a
-    #           standard motion prompt (camera zoom, rotation, depth of field).
-    #
-    # Fallback: if Bria fails or no product image → skip to LTX directly.
-    # No checkpoint for Step 0: Bria is fast (<10s), safe to re-run on retry.
-    effective_image_url: str | None = image_url
-    ltx_prompt: str = prompt      # default: use scene description for LTX text-to-video
-
-    if image_url:
-        try:
-            logger.info("[Hybrid] Step 0 — Bria product scene generation")
-            scene_image_url = await generate_product_scene(
-                product_image_url=image_url,
-                scene_prompt=prompt,
-            )
-            # Bria succeeded: LTX animates the composited scene image.
-            # The scene is already fully described in the image, so we switch to a
-            # generic camera-motion prompt — avoids LTX re-interpreting the scene text.
-            effective_image_url = scene_image_url
-            ltx_prompt = (
-                "The product sits centered in frame. "
-                "Camera gently zooms in, then slowly pulls back. "
-                "Soft ambient light plays across the surface. "
-                "Background maintains shallow depth of field bokeh. "
-                "The product rotates slightly clockwise."
-            )
-            logger.info(f"[Hybrid] Step 0 done, scene image: {scene_image_url}")
-        except Exception as bria_err:
-            # Graceful degradation: pass raw product image directly to LTX.
-            # Video still uses the real product as reference; only scene placement differs.
-            logger.warning(f"[Hybrid] Step 0 Bria failed, falling back to raw product image: {bria_err}")
-            effective_image_url = image_url   # unchanged
-            # ltx_prompt stays as `prompt` (scene description works for LTX I2V fallback)
-
-    # ── Smart retry: resume from saved checkpoint if available ───────────────
-    # b_roll_url stores the URL from the most recent successful API call.
-    # A retried task resumes from the checkpoint instead of re-charging the API.
-    intermediate_url: str | None = reel.b_roll_url
-
-    # ── Step 1: LTX 2.3 Fast initial clip (up to 20s natively) ─────────────
-    # LTX 2.3 Fast supports up to 20s per call via duration enum.
-    # Short reels (≤20s) are done in a single call; longer reels chain LTX extend.
-    base_clip_s = min(duration, 20)
-    if not intermediate_url:
-        logger.info(
-            f"[Hybrid] Step 1 — LTX 2.3 Fast ({base_clip_s}s, "
-            f"mode={'scene-image-to-video' if effective_image_url else 'text-to-video'})"
-        )
-        intermediate_url = await generate_with_ltx23fast(
-            prompt=ltx_prompt, image_url=effective_image_url, duration=base_clip_s
-        )
-        # Checkpoint: save so a retry skips this API call
-        update_reel(db, reel=reel, b_roll_url=intermediate_url)
-        logger.info(f"[Hybrid] Step 1 done, checkpoint saved: {intermediate_url}")
-    else:
-        logger.info(f"[Hybrid] Step 1 skipped (checkpoint exists): {intermediate_url}")
-
-    # Short reels (≤20s) — LTX 2.3 Fast clip is the final product
-    if duration <= 20:
-        return intermediate_url
-
-    # ── Steps 2+: LTX 2.3 extend until target duration is reached ───────────
-    # Each extend call adds up to 20s (we use 10s to stay well within the limit).
-    # Strategy:
-    #   30s → 1 extend of 10s  (20s base + 10s  = 30s,  2 API calls)
-    #   60s → 2 extends of 20s (20s base + 20+20 = 60s,  3 API calls)
-    _extend_plan: dict[int, list[float]] = {
-        30: [10.0],
-        60: [20.0, 20.0],
-    }
-    extend_durations = _extend_plan.get(duration, [10.0] * max(1, (duration - 20) // 10))
-
-    current_url = intermediate_url
-    for step, ext_s in enumerate(extend_durations, start=1):
-        total_steps = len(extend_durations)
-        logger.info(f"[Hybrid] Step {step + 1} — LTX extend +{ext_s}s ({step}/{total_steps})")
-        current_url = await extend_with_ltx_fast(
-            video_url=current_url, prompt=prompt, extend_seconds=ext_s
-        )
-        # Save checkpoint after each extend (except the last — that goes to final_commercial_video_url)
-        if step < total_steps:
-            update_reel(db, reel=reel, b_roll_url=current_url)
-            logger.info(f"[Hybrid] Checkpoint updated after extend {step}: {current_url}")
-
-    logger.info(f"[Hybrid] {duration}s reel complete: {current_url}")
-    return current_url
+    logger.info(
+        f"[Kling] Generating {'image-to-video' if image_url else 'text-to-video'} "
+        f"({duration}s requested, audio={with_audio})"
+    )
+    video_url = await generate_with_kling26(
+        prompt=prompt,
+        image_url=image_url,
+        duration=duration,
+        with_audio=with_audio,
+    )
+    logger.info(f"[Kling] Done: {video_url}")
+    return video_url

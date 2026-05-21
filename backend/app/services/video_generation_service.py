@@ -3,24 +3,24 @@ Video Generation Service
 ========================
 Provides video generation primitives for the worker to orchestrate.
 
-Hybrid Workflow (implemented in worker.py):
-    ≤20s : LTX 2.3 Fast only              (1 API call, direct generation)
-    30s  : LTX 2.3 Fast(20s) → extend(10s)(2 API calls)
-    60s  : LTX 2.3 Fast(20s) → extend × 2 (3 API calls, 20+20+20s)
+Primary Pipeline (Kling 2.6):
+    Single Kling 2.6 Standard clip (5s or 10s) — image-to-video when product
+    image is available, text-to-video otherwise.  No extend step needed —
+    Kling produces higher-quality, more natural product animation than LTX.
 
 Providers (priority order):
-    1. fal.ai LTX Video 2.3 Fast — primary generation, supports up to 20s per call
-    2. Google Veo 2.0            — best quality, uploads to R2 storage
-    3. Sample fallback           — free, for development/testing
+    1. fal.ai Kling Video 2.6 Standard — primary (cinematic product animation)
+    2. Google Veo 2.0                  — best quality, uploads to R2 storage
+    3. Sample fallback                 — free, for development/testing
 
 Models (verified at https://fal.ai/models, May 2026):
-    LTX 2.3 Fast text  : fal-ai/ltx-2.3/text-to-video/fast    (no image ref)
-    LTX 2.3 Fast image : fal-ai/ltx-2.3/image-to-video/fast   (product image anchor)
-    LTX 2.3 extend     : fal-ai/ltx-2.3/extend-video          (continuation, up to 20s)
-    Kling v1 Std       : kept for backward compat (not used in default flow)
+    Kling 2.6 Std text  : fal-ai/kling-video/v2.6/standard/text-to-video
+    Kling 2.6 Std image : fal-ai/kling-video/v2.6/standard/image-to-video
+    LTX 2.3 Fast        : kept for backward compat (not used in default flow)
+    Kling v1            : kept for backward compat
 
-Duration enum (LTX 2.3 Fast): 6, 8, 10, 12, 14, 16, 18, 20 seconds
-    — values >10s require 25 FPS + 1080p (our defaults, so no restriction)
+Duration support (Kling 2.6): "5" or "10" seconds (string values required)
+    — values above 5s use "10"; values ≤5s use "5"
 """
 
 import os
@@ -52,6 +52,12 @@ LTX23_FAST_IMAGE_MODEL = "fal-ai/ltx-2.3/image-to-video/fast"
 # Used for 30s/60s reels by chaining extends after the initial clip
 LTX_FAST_EXTEND_MODEL = "fal-ai/ltx-2.3/extend-video"
 
+# ── PRIMARY: Kling 2.6 Pro ───────────────────────────────────────────────────
+# Best-in-class cinematic product animation; supports 5s or 10s per clip.
+# image-to-video animates the actual product photo naturally (no "pasted" look).
+KLING26_TEXT_MODEL  = "fal-ai/kling-video/v2.6/pro/text-to-video"
+KLING26_IMAGE_MODEL = "fal-ai/kling-video/v2.6/pro/image-to-video"
+
 # ── Kept for backward compatibility — not used in the default flow ────────────
 LTX23_FAST_MODEL  = LTX23_FAST_TEXT_MODEL   # alias (old single-model constant)
 KLING_TEXT_MODEL  = "fal-ai/kling-video/v1/standard/text-to-video"
@@ -59,17 +65,22 @@ KLING_IMAGE_MODEL = "fal-ai/kling-video/v1/standard/image-to-video"
 LTX_PRO_MODEL     = "fal-ai/ltx-video"
 
 # Valid duration values (seconds) accepted by LTX 2.3 Fast — fixed enum from fal.ai API.
-# Values >10s require 25 FPS + 1080p resolution (our hardcoded defaults below).
 _LTX_VALID_DURATIONS = [6, 8, 10, 12, 14, 16, 18, 20]
 
 
 def _snap_to_ltx_duration(seconds: int) -> int:
-    """Round requested seconds to the nearest LTX 2.3 Fast duration enum value (integer).
-
-    fal.ai expects an integer literal (not a string) for the duration field.
-    e.g. 15 → 16, 7 → 8, 22 → 20
-    """
+    """Round requested seconds to the nearest LTX 2.3 Fast duration enum value (integer)."""
     return min(_LTX_VALID_DURATIONS, key=lambda x: abs(x - seconds))
+
+
+def _snap_to_kling_duration(seconds: int) -> str:
+    """Snap duration to Kling's supported values: '5' or '10' (string required by fal.ai).
+
+    Kling 2.6 Standard supports exactly two clip lengths.
+    Durations ≤5s → '5'; anything above → '10' (the maximum per call).
+    For longer target durations (30s, 60s) the worker chains multiple Kling calls.
+    """
+    return "5" if seconds <= 5 else "10"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -130,6 +141,81 @@ async def generate_product_scene(
     except Exception as e:
         logger.error(f"[Bria] Scene generation failed: {e}")
         raise RuntimeError(f"Bria product scene generation failed: {e}") from e
+
+
+async def generate_with_kling26(
+    prompt: str,
+    image_url: Optional[str] = None,
+    duration: int = 5,
+    with_audio: bool = False,
+) -> str:
+    """
+    Generate a video clip using Kling Video 2.6 Standard (fal.ai) — PRIMARY model.
+
+    Kling 2.6 produces cinematic, natural product animation — the image-to-video mode
+    genuinely animates the product (rotation, camera moves, environmental effects) rather
+    than simply "wiggling" a pasted photo.  Ideal for product showcase reels.
+
+    Mode selection:
+        With image_url  → fal-ai/kling-video/v2.6/standard/image-to-video
+                         (product image anchors the visual; Kling animates it naturally)
+        Without image   → fal-ai/kling-video/v2.6/standard/text-to-video
+                         (fully AI-generated from scene description)
+
+    Args:
+        prompt:     Gemini-generated scene description — camera motion, environment,
+                    lighting, and product detail prompts all work well with Kling.
+        image_url:  Presigned/public product image URL (optional) — enables
+                    image-to-video mode for real product accuracy.
+        duration:   Requested clip length in seconds — snapped to "5" or "10".
+        with_audio: Whether to request Kling's ambient audio generation (experimental).
+
+    Returns:
+        Public CDN URL (fal.media) — no R2 upload needed
+
+    Raises:
+        RuntimeError: If fal.ai API call fails
+    """
+    try:
+        import fal_client
+
+        kling_duration = _snap_to_kling_duration(duration)
+
+        if image_url:
+            # Image-to-video: product image is the visual anchor (F2-URS02-SRS01).
+            # Kling treats this as the first frame AND style reference, producing
+            # natural animation of the real product rather than an AI-generated substitute.
+            model = KLING26_IMAGE_MODEL
+            arguments: dict = {
+                "prompt": prompt,
+                "image_url": image_url,
+                "duration": kling_duration,     # "5" or "10" (string required)
+                "aspect_ratio": "9:16",          # Portrait format for social media
+            }
+            logger.info(f"[Kling2.6] image-to-video ({kling_duration}s), ref: {image_url[:80]}")
+        else:
+            # Text-to-video fallback — no product image available
+            model = KLING26_TEXT_MODEL
+            arguments = {
+                "prompt": prompt,
+                "duration": kling_duration,
+                "aspect_ratio": "9:16",
+            }
+            logger.info(f"[Kling2.6] text-to-video ({kling_duration}s)")
+
+        def _run():
+            result = fal_client.run(model, arguments=arguments)
+            # fal.ai Kling response: {"video": {"url": "https://fal.media/...mp4"}}
+            return result["video"]["url"]
+
+        loop = asyncio.get_event_loop()
+        url = await loop.run_in_executor(None, _run)
+        logger.info(f"[Kling2.6] Done: {url}")
+        return url
+
+    except Exception as e:
+        logger.error(f"[Kling2.6] Failed: {e}")
+        raise RuntimeError(f"Kling 2.6 generation failed: {e}") from e
 
 
 async def generate_with_ltx23fast(
@@ -394,12 +480,12 @@ async def generate_video(
     veo_enabled = os.getenv("VEO_ENABLED", "false").lower() == "true"
     google_ai_key = os.getenv("GOOGLE_AI_API_KEY", "")
 
-    # ── Option 1: LTX 2.3 Fast via fal.ai (primary)
+    # ── Option 1: Kling 2.6 via fal.ai (primary)
     if fal_key:
         try:
-            return await generate_with_ltx23fast(prompt, image_url, duration)
+            return await generate_with_kling26(prompt, image_url, duration)
         except Exception as e:
-            logger.warning(f"[LTX2.3Fast] Failed, trying Veo: {e}")
+            logger.warning(f"[Kling2.6] Failed, trying Veo: {e}")
 
     # ── Option 2: Google Veo 2.0 (best quality, expensive)
     if veo_enabled and google_ai_key:

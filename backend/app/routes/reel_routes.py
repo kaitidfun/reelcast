@@ -114,7 +114,8 @@ class ReelGenerateRequest(BaseModel):
     product_id: UUID
     platform: Optional[str] = "ig"
     overlay_position: Optional[str] = "bottom-right"
-    duration: Optional[int] = 30
+    duration: Optional[int] = 10
+    with_audio: Optional[bool] = False
 
 class ReelRegenerateRequest(BaseModel):
     target: str = Field(..., description="'video' or 'caption'")
@@ -174,6 +175,7 @@ def trigger_generation(
     process_reel_generation.delay(
         str(reel.reel_id), req.platform, req.overlay_position,
         duration=req.duration,
+        with_audio=req.with_audio,
     )
 
     return reel

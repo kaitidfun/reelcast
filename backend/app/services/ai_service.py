@@ -156,33 +156,35 @@ async def generate_prompt_from_template(
         logger.warning("GOOGLE_AI_API_KEY not set — returning static fallback prompt")
         return fallback
 
-    # Always generate a literal SCENE DESCRIPTION.
+    # Generate a SCENE + MOTION DESCRIPTION optimised for Kling Video 2.6.
     #
-    # Why: The generated prompt serves two purposes in the 2-step pipeline —
-    #   (1) Passed to Bria background/replace as the scene description
-    #       (tells Bria what environment to build around the product)
-    #   (2) Passed directly to LTX text-to-video when no product image exists
+    # Kling 2.6 image-to-video uses this as both a scene reference (what the
+    # environment looks like) and a motion guide (how the camera and subject move).
+    # When no product image is provided, Kling generates purely from this text.
     #
-    # Scene descriptions work for both paths. LTX step uses a separate fixed
-    # motion prompt when a Bria scene image is available (see worker.py).
+    # Key Kling 2.6 prompt principles:
+    #   - Explicit camera movement ("camera slowly zooms in", "smooth dolly right")
+    #   - Clear subject motion ("product rotates 360 degrees", "bottle tilts gently")
+    #   - Concrete environment ("black marble surface", "outdoor with bokeh trees")
+    #   - Lighting direction ("warm backlight creates rim glow on the product")
     system_prompt = (
-        "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
-        "Write a single video generation prompt that these models can render accurately.\n\n"
-        "CRITICAL — AI video models render what they literally 'see', not filmmaking concepts:\n"
-        "- Describe the PHYSICAL SCENE: what objects exist, their material/colour/shape/position\n"
-        "- Describe the ENVIRONMENT: surface, background, surrounding props, setting\n"
-        "- Describe ONE continuous shot — no scene cuts, no 'transitions', no 'montage'\n"
-        "- Describe the PRIMARY MOTION: what moves, how it moves, how slowly/quickly\n"
-        "- Describe LIGHTING concretely: 'warm sunlight from the left', 'soft white studio light'\n"
-        "- Use SIMPLE, LITERAL language — avoid abstract filmmaking terms like 'cinematic'\n"
-        "- Start with the main subject and its environment, then describe the motion\n\n"
+        "You are an expert prompt engineer for Kling Video 2.6, a cinematic AI video model. "
+        "Write a single video generation prompt that Kling can render as a smooth, natural product video.\n\n"
+        "CRITICAL — Kling renders literal scene + motion descriptions:\n"
+        "- Describe the PHYSICAL SCENE: product material, colour, shape, surface it rests on\n"
+        "- Describe the ENVIRONMENT: background, props, setting, atmosphere\n"
+        "- Describe CAMERA MOVEMENT explicitly: 'camera slowly pushes in', 'gentle orbit around the product'\n"
+        "- Describe SUBJECT MOTION: 'product rotates clockwise', 'liquid ripples inside the bottle'\n"
+        "- Describe LIGHTING concretely: 'warm side-light', 'soft studio rim light from above'\n"
+        "- ONE continuous shot — no cuts, no 'transitions', no 'montage'\n\n"
         "BAD: 'Cinematic product showcase with dynamic transitions and premium lighting'\n"
-        "GOOD: 'A glass perfume bottle sits on white marble. Sunlight catches the glass facets. "
-        "The bottle slowly rotates. Soft white fabric drapes in the background.'\n\n"
+        "GOOD: 'A glass perfume bottle rests on white marble. Soft warm light from the right. "
+        "Camera slowly zooms in. The bottle rotates gently, sunlight catching the glass facets. "
+        "Blurred greenery in the background.'\n\n"
         "Requirements:\n"
         "- STRICTLY under 500 characters\n"
         "- If product image provided, reference its actual colour, shape, and material\n"
-        "- Clearly describe the environment around the product (surface, setting, atmosphere)\n"
+        "- Always include at least one camera movement and one subject motion\n"
         "- Do NOT include hashtags, captions, pricing, or platform names\n"
         "- Return ONLY the prompt text — no explanation, no quotes"
     )
@@ -266,26 +268,26 @@ async def enhance_prompt(
             "vibrant color grading, and a strong call-to-action."
         )[:500]
 
-    # Always generate a literal SCENE DESCRIPTION.
-    # The prompt serves as (1) Bria scene context when product image exists,
-    # and (2) full scene brief for LTX text-to-video when no image is available.
+    # Enhance prompt for Kling Video 2.6 — preserve the user's concept but add
+    # the explicit camera movement and subject motion that Kling responds best to.
     system_prompt = (
-        "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
-        "Rewrite the user's prompt so an AI video model can render it accurately.\n\n"
-        "CRITICAL — AI video models render what they literally 'see':\n"
-        "- Keep the user's core idea, but rewrite it as a LITERAL SCENE DESCRIPTION\n"
+        "You are an expert prompt engineer for Kling Video 2.6, a cinematic AI video model. "
+        "Rewrite the user's prompt so Kling can render a smooth, natural product video.\n\n"
+        "CRITICAL — Keep the user's concept but rewrite as a Kling-ready scene:\n"
+        "- Keep the user's core IDEA — just describe it more concretely\n"
         "- Describe what PHYSICALLY EXISTS: objects, materials, colours, positions\n"
-        "- Describe the ENVIRONMENT: surface, background, props, lighting\n"
-        "- ONE continuous shot — remove any scene cuts, transitions, or 'montage'\n"
-        "- Describe the PRIMARY MOTION clearly: what moves, how it moves\n"
-        "- Replace abstract terms ('cinematic', 'premium') with concrete details\n"
-        "- Start with the subject and its environment, then describe the motion\n\n"
+        "- Add CAMERA MOVEMENT: 'camera slowly zooms in', 'smooth orbit around the product'\n"
+        "- Add SUBJECT MOTION: 'product rotates gently', 'light shimmers across the surface'\n"
+        "- Describe the ENVIRONMENT concretely: surface, background, lighting direction\n"
+        "- ONE continuous shot — no cuts, transitions, or montage\n"
+        "- Replace vague words ('cinematic', 'premium', 'dynamic') with literal scene details\n\n"
         "BAD: 'Dynamic product showcase with cinematic transitions and premium lighting'\n"
-        "GOOD: 'A black skincare bottle on a dark wooden surface. Soft warm light from the right. "
-        "The bottle rotates slowly revealing the label. A water droplet runs down the glass.'\n\n"
+        "GOOD: 'A black skincare bottle on dark wood. Warm side light. Camera slowly pushes in. "
+        "The bottle rotates revealing the label. A water droplet rolls down the glass surface.'\n\n"
         "Requirements:\n"
         "- STRICTLY under 500 characters\n"
         "- If product image provided, reference its actual colour, shape, and material\n"
+        "- Always include camera movement + subject motion\n"
         "- Do NOT include hashtags, captions, or pricing\n"
         "- Return ONLY the improved prompt — no explanation, no quotes"
     )
@@ -395,29 +397,31 @@ async def generate_guided_prompt(
         logger.warning("GOOGLE_AI_API_KEY not set — returning locally-assembled guided prompt")
         return _local_fallback()
 
-    # Always generate a literal SCENE DESCRIPTION.
-    # Translate the creative chips (mood, style, lighting) into concrete scene details.
-    # The prompt serves as (1) Bria scene context when product image exists, and
-    # (2) full scene brief for LTX text-to-video when no image is available.
+    # Generate a Kling 2.6 optimised scene + motion prompt from the creative chips.
+    # Translate abstract card selections into concrete scene and motion descriptions
+    # that Kling Video 2.6 renders naturally and cinematically.
     system_prompt = (
-        "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
-        "Generate a video prompt based on the creative brief below that an AI model can render accurately.\n\n"
-        "CRITICAL — AI video models render what they literally 'see':\n"
-        "- Write ONE continuous shot — no cuts, no 'transitions', no 'montage'\n"
-        "- Describe the PHYSICAL SCENE: what objects exist, their material/colour/position\n"
-        "- Describe the ENVIRONMENT: surface, background, surrounding props, setting\n"
-        "- Describe the PRIMARY MOTION: what moves, how it moves, how fast/slow\n"
-        "- Translate creative chips into CONCRETE details:\n"
-        "  'Luxury' → marble surface, gold accents, warm spotlight\n"
-        "  'Energetic' → bright daylight, vivid colours, fast product movement\n"
-        "  'Minimal' → white surface, single object, clean background\n"
-        "- Use LITERAL language — replace 'cinematic' with actual scene details\n\n"
+        "You are an expert prompt engineer for Kling Video 2.6, a cinematic AI video model. "
+        "Translate the creative brief below into a video prompt Kling can render accurately.\n\n"
+        "CRITICAL — Translate creative chips into CONCRETE Kling-ready scene descriptions:\n"
+        "- ONE continuous shot — no cuts, transitions, or montage\n"
+        "- Describe the PHYSICAL SCENE: product material, colour, shape, surface it sits on\n"
+        "- Describe the ENVIRONMENT: background, props, atmosphere matching the mood\n"
+        "- Add CAMERA MOVEMENT: 'camera slowly zooms in', 'smooth orbit', 'gentle dolly'\n"
+        "- Add SUBJECT MOTION: 'product rotates', 'liquid swirls', 'packaging opens'\n"
+        "- Translate abstract chips into concrete visual details:\n"
+        "  'Luxury & Premium' → black marble surface, gold accents, single warm spotlight\n"
+        "  'Fun & Energetic' → bright colourful background, fast product spin, vivid pops\n"
+        "  'Eco & Natural' → wooden surface, green leaves, soft daylight streaming through\n"
+        "  'Dark & Mysterious' → deep black background, single side light, slow reveal\n"
+        "  'Cute & Warm' → pastel surface, soft bokeh, gentle floating motion\n\n"
         "BAD: 'Luxurious product showcase with dramatic lighting and premium feel'\n"
-        "GOOD: 'A gold lipstick tube on a black velvet surface. Soft spotlight from above. "
-        "The cap is removed slowly revealing the deep red bullet. Light reflects off the metallic surface.'\n\n"
+        "GOOD: 'A gold lipstick on black velvet. Soft spotlight from above. Camera slowly "
+        "pushes in. The cap slides off revealing the red bullet. Light glints off the surface.'\n\n"
         "Requirements:\n"
         "- STRICTLY under 500 characters\n"
         "- If product image provided, reference its actual colour, shape, and material\n"
+        "- Always include camera movement + subject motion\n"
         "- Do NOT include hashtags, captions, platform names, or pricing\n"
         "- Return ONLY the prompt text — no explanation, no quotes"
     )
