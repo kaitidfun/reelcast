@@ -6,19 +6,108 @@ from uuid import UUID
 from typing import Optional
 from pydantic import BaseModel, Field
 
+from sqlalchemy.orm import joinedload
 from app.dependencies import get_db, get_current_user
-from app.models.models import User, Reel
+from app.models.models import User, Reel, Product
 from app.services.reel_service import create_reel, get_reel, update_reel
 from app.services.upload_service import (
     validate_video_file,
     probe_video_duration,
     upload_video_to_r2,
 )
+from app.services.ai_service import generate_prompt_from_template, enhance_prompt, generate_guided_prompt
 from app.worker import process_reel_generation
 
 logger = logging.getLogger(__name__)
+
+
+def _load_product_context(product_id: Optional[UUID], user_id, db: Session):
+    """
+    Shared helper: load full product context for multimodal Gemini prompt calls.
+
+    Fetches ALL product images from R2 (not just the primary) so Gemini can see
+    every angle and view of the product, producing more accurate and visually
+    specific prompts.  Images are sorted primary-first and capped at 4 to keep
+    the Gemini request size reasonable.
+
+    Returns:
+        (product_name, product_description, images)
+        where images = list of (bytes, mime_type) tuples, empty list if none available.
+
+    Callers fall back gracefully to text-only Gemini when images is empty.
+    """
+    product_name = ""
+    product_description = ""
+    images: list[tuple[bytes, str]] = []
+
+    if not product_id:
+        return product_name, product_description, images
+
+    product = (
+        db.query(Product)
+        .options(joinedload(Product.images))
+        .filter(Product.product_id == product_id, Product.user_id == user_id)
+        .first()
+    )
+    if not product:
+        return product_name, product_description, images
+
+    product_name = product.product_name or ""
+    product_description = product.description or ""
+
+    if not product.images:
+        return product_name, product_description, images
+
+    # Sort: primary image first, then the rest; cap at 4 to keep request size reasonable
+    sorted_imgs = sorted(product.images, key=lambda img: (0 if img.is_primary else 1))[:4]
+
+    from app.services.storage_service import get_file
+    for img in sorted_imgs:
+        raw_key = img.image_url
+        if not raw_key:
+            continue
+        # Only R2 object keys need boto3 fetch; skip data: URIs and https:// URLs
+        if raw_key.startswith("data:") or raw_key.startswith("http"):
+            continue
+        try:
+            file_obj = get_file(raw_key)
+            img_bytes = file_obj["Body"].read()
+            img_mime = file_obj.get("ContentType", "image/jpeg")
+            images.append((img_bytes, img_mime))
+            logger.info(f"Product image loaded: {raw_key} ({len(img_bytes)} bytes)")
+        except Exception as exc:
+            logger.warning(f"Could not load product image '{raw_key}': {exc}")
+
+    logger.info(
+        f"Product context loaded for '{product_name}': "
+        f"{len(images)}/{len(sorted_imgs)} images fetched"
+    )
+    return product_name, product_description, images
 router = APIRouter(prefix="/api/reels", tags=["Reels"])
 
+
+class PromptFromTemplateRequest(BaseModel):
+    template_type: str = Field(..., description="product_showcase | flash_sale | new_arrival | bundle_deal | review_highlight | tutorial")
+    product_id: Optional[UUID] = None
+    duration: Optional[int] = 30
+
+class EnhancePromptRequest(BaseModel):
+    prompt_text: str = Field(..., max_length=500)
+    product_id: Optional[UUID] = None
+    duration: Optional[int] = 30
+
+class GuidedPromptRequest(BaseModel):
+    """Request body for Guide Me → Auto-Build Prompt (multimodal Gemini generation)."""
+    mood:       Optional[str] = None   # Mood/Vibe card label selected by user
+    target:     Optional[str] = None   # Target Audience card label
+    style:      Optional[str] = None   # Visual Style card label
+    focus:      Optional[str] = None   # Scene Focus card label
+    lighting:   Optional[str] = None   # Lighting & Environment card label
+    product_id: Optional[UUID] = None  # Selected product for context + image
+    duration:   Optional[int] = 30
+
+class PromptResponse(BaseModel):
+    prompt: str
 
 class ReelGenerateRequest(BaseModel):
     prompt_text: str = Field(..., max_length=500, description="Max 500 characters")
@@ -34,6 +123,9 @@ class ReelRegenerateRequest(BaseModel):
     overlay_position: Optional[str] = "bottom-right"
     resolution: Optional[str] = "720p"
     duration: Optional[int] = 30
+    # Optional new prompt — user may have edited the prompt before re-generating.
+    # If provided, overwrites the reel's stored prompt_text before queuing the worker.
+    prompt_text: Optional[str] = Field(None, max_length=500)
 
 class ReelResponse(BaseModel):
     reel_id: UUID
@@ -42,7 +134,6 @@ class ReelResponse(BaseModel):
     error_message: Optional[str] = None
     final_commercial_video_url: Optional[str] = None
     caption_and_hashtags: Optional[dict] = None
-
     class Config:
         from_attributes = True
 
@@ -133,7 +224,13 @@ def trigger_regeneration(
     reel = get_reel(db=db, reel_id=reel_id, user_id=current_user.user_id)
     if not reel:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reel not found")
-    
+
+    # If user edited the prompt before re-generating, persist the updated text.
+    # Worker reads reel.prompt_text from DB, so we must save it before queuing.
+    if req.prompt_text and req.target in ["video", "all"]:
+        update_reel(db, reel=reel, prompt_text=req.prompt_text)
+        logger.info(f"Reel {reel_id} prompt updated before regen: {len(req.prompt_text)} chars")
+
     # Send task to Celery
     process_reel_generation.delay(
         str(reel.reel_id), req.platform, req.overlay_position, req.target,
@@ -216,3 +313,121 @@ async def upload_reel_video(
 
     logger.info(f"Video upload completed for reel {reel.reel_id}, user {current_user.user_id}")
     return reel
+
+
+@router.post("/generate-prompt", response_model=PromptResponse)
+async def generate_prompt_endpoint(
+    req: PromptFromTemplateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Generate a contextual video prompt from a quick-prompt template + product info.
+
+    Called when the user clicks a quick-prompt chip (Product Showcase, Flash Sale, etc.)
+    in the Create Reel prompt composer. Uses Gemini to produce a production-ready brief
+    that references the actual selected product name and description.
+
+    Request body:
+        - template_type: One of product_showcase | flash_sale | new_arrival |
+                         bundle_deal | review_highlight | tutorial
+        - product_id: Selected product UUID (optional — falls back to generic prompt)
+        - duration: Desired video length in seconds
+
+    Returns:
+        { prompt: str } — ready to fill into the prompt textarea
+    """
+    product_name, product_description, product_images = _load_product_context(
+        req.product_id, current_user.user_id, db
+    )
+
+    prompt = await generate_prompt_from_template(
+        template_type=req.template_type,
+        product_name=product_name,
+        product_description=product_description,
+        duration=req.duration or 30,
+        product_images=product_images,
+    )
+    return {"prompt": prompt}
+
+
+@router.post("/enhance-prompt", response_model=PromptResponse)
+async def enhance_prompt_endpoint(
+    req: EnhancePromptRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Improve an existing prompt using Gemini to make it more cinematic and specific.
+
+    Called when the user clicks the "Enhance" button after typing a rough prompt idea.
+    Gemini rewrites the draft to include professional creative direction (camera movements,
+    lighting, transitions) while preserving the user's original concept.
+    Sends all available product images for multimodal visual context.
+
+    Request body:
+        - prompt_text: The user's current draft (max 500 chars)
+        - product_id: Selected product UUID for additional context (optional)
+        - duration: Video length for pacing guidance (optional)
+
+    Returns:
+        { prompt: str } — the improved version, ready to replace the textarea content
+    """
+    if not req.prompt_text.strip():
+        raise HTTPException(status_code=400, detail="prompt_text cannot be empty")
+
+    product_name, product_description, product_images = _load_product_context(
+        req.product_id, current_user.user_id, db
+    )
+
+    enhanced = await enhance_prompt(
+        prompt_text=req.prompt_text,
+        product_name=product_name,
+        product_description=product_description,
+        duration=req.duration or 30,
+        product_images=product_images,
+    )
+    return {"prompt": enhanced}
+
+
+@router.post("/generate-guided-prompt", response_model=PromptResponse)
+async def generate_guided_prompt_endpoint(
+    req: GuidedPromptRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Guide Me → Auto-Build Prompt: generate a production-ready video prompt from
+    creative chip selections + full product context using Gemini (multimodal).
+
+    Sends all chip selections, product name, description, and ALL product images
+    (up to 4, sorted primary-first) so Gemini can reference the product's actual
+    visual appearance from multiple angles.
+
+    Request body:
+        - mood:       Selected Mood/Vibe chip label (e.g. "💎 Luxury & Premium")
+        - target:     Selected Target Audience chip label
+        - style:      Selected Visual Style chip label
+        - focus:      Selected Scene Focus chip label
+        - product_id: UUID of the selected product (optional)
+        - duration:   Requested video length in seconds
+
+    Returns:
+        { prompt: str } — ready to fill into the prompt textarea
+    """
+    product_name, product_description, product_images = _load_product_context(
+        req.product_id, current_user.user_id, db
+    )
+
+    prompt = await generate_guided_prompt(
+        mood=req.mood,
+        target=req.target,
+        style=req.style,
+        focus=req.focus,
+        lighting=req.lighting,
+        product_name=product_name,
+        product_description=product_description,
+        product_images=product_images,
+        duration=req.duration or 30,
+    )
+    return {"prompt": prompt}
