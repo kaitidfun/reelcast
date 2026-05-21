@@ -400,20 +400,32 @@ const CreateReel = () => {
     }
   }, [isPlaying, fullscreenOpen]);
 
-  // Sync video position when fullscreen opens/closes so playback is seamless
+  // Sync video position when fullscreen opens/closes so playback is seamless.
+  // Use requestAnimationFrame to wait one render cycle for the Dialog <video>
+  // element to be mounted before accessing videoRefFullscreen.current.
   useEffect(() => {
-    const main = videoRef.current;
-    const fs = videoRefFullscreen.current;
-    if (fullscreenOpen && main && fs) {
-      // Opening fullscreen: copy current time, pause main, play fullscreen
-      fs.currentTime = main.currentTime;
-      main.pause();
-      if (isPlaying) fs.play().catch(() => { fs.muted = true; fs.play().catch(() => {}); });
-    } else if (!fullscreenOpen && main && fs) {
-      // Closing fullscreen: copy time back, pause fullscreen, resume main
-      main.currentTime = fs.currentTime;
-      fs.pause();
-      if (isPlaying) main.play().catch(() => {});
+    if (fullscreenOpen) {
+      // Opening: wait one frame for the Dialog to render, then sync + play
+      const rafId = requestAnimationFrame(() => {
+        const main = videoRef.current;
+        const fs = videoRefFullscreen.current;
+        if (main && fs) {
+          fs.currentTime = main.currentTime;
+          fs.muted = videoMuted;
+          main.pause();
+          if (isPlaying) fs.play().catch(() => { fs.muted = true; fs.play().catch(() => {}); });
+        }
+      });
+      return () => cancelAnimationFrame(rafId);
+    } else {
+      // Closing: copy time back to main, pause fullscreen
+      const main = videoRef.current;
+      const fs = videoRefFullscreen.current;
+      if (main && fs) {
+        main.currentTime = fs.currentTime;
+        fs.pause();
+        if (isPlaying) main.play().catch(() => {});
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullscreenOpen]);
@@ -1758,9 +1770,9 @@ const CreateReel = () => {
             <DialogDescription>Watch the generated Reel in fullscreen</DialogDescription>
           </DialogHeader>
           <div className="relative aspect-[9/16] w-full overflow-hidden bg-black">
-            {/* Actual video in fullscreen — no autoPlay: playback is controlled by
-                the useEffect that syncs with isPlaying + fullscreenOpen state.
-                autoPlay would cause double audio alongside the main panel video. */}
+            {/* Actual video in fullscreen — no autoPlay (controlled by useEffect).
+                onTimeUpdate keeps the seek bar in sync while fullscreen is active
+                (main videoRef is paused, so only this element fires timeupdate). */}
             {videoUrl ? (
               <video
                 ref={videoRefFullscreen}
@@ -1769,6 +1781,7 @@ const CreateReel = () => {
                 loop
                 playsInline
                 muted={videoMuted}
+                onTimeUpdate={() => setVideoCurrentTime(videoRefFullscreen.current?.currentTime ?? 0)}
               />
             ) : (
               <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(circle at 30% 40%, hsl(var(--primary) / 0.45), transparent 55%), radial-gradient(circle at 70% 75%, hsl(var(--accent) / 0.4), transparent 55%)" }} />

@@ -1,4 +1,5 @@
 import os
+import math
 import asyncio
 import logging
 from celery import Celery
@@ -10,8 +11,9 @@ from app.services.ai_service import generate_captions
 from app.services.video_generation_service import (
     generate_video,
     generate_with_kling26,
+    generate_extended_kling26,
 )
-from app.services.overlay_service import apply_overlay
+from app.services.overlay_service import apply_overlay, strip_audio_from_video
 from app.services.reel_service import update_reel
 from app.services.storage_service import get_presigned_url
 
@@ -62,10 +64,13 @@ async def _async_process_reel_generation(
 
     Workflow:
         1. Load reel + product from DB; enrich prompt with product metadata (F2-URS02-SRS01)
-        2. Generate video via Kling 2.6 (image-to-video when product image available,
-           text-to-video otherwise; single clip, no extend needed)
+        2. Generate video via Kling 2.6 Pro:
+             ≤ 10s → single clip
+             > 10s → multi-clip extend chain (clips chained via last-frame extraction)
            OR use uploaded video (target="upload")
         3. Apply FFmpeg overlay (product image + brand logo) (F2-URS05-SRS01)
+           If with_audio=False: FFmpeg strips audio during overlay pass.
+           If no overlay was applied: separate FFmpeg audio strip pass.
         4. Generate captions + hashtags with Gemini (F2-URS03)
         5. Persist all outputs to DB and mark reel Complete
     """
@@ -120,10 +125,10 @@ async def _async_process_reel_generation(
             elif product_image_url:
                 overlay_url = product_image_url  # Already presigned above
 
-        # Build the final video prompt for LTX (F2-URS02-SRS01)
-        # The Gemini-generated prompts already describe the product visually in detail.
-        # Only append the product name as a light anchor if it's not already mentioned.
-        # Avoid overloading the prompt — LTX performs best with concise, concrete prompts.
+        # Build the final video prompt for Kling 2.6 Pro (F2-URS02-SRS01).
+        # Gemini-generated prompts already describe the scene visually in detail.
+        # Only append the product name as a light anchor if not already present.
+        # Avoid overloading — Kling responds best to concise, concrete descriptions.
         video_prompt = reel.prompt_text
         if product and product.product_name:
             name_lower = product.product_name.lower()
@@ -150,6 +155,7 @@ async def _async_process_reel_generation(
                 image_url=product_image_url,  # None → text-to-video; URL → image-to-video
                 duration=duration,
                 with_audio=with_audio,
+                reel_id=reel_id,
             )
         elif target == "upload":
             # User-uploaded video — apply overlay + captions, skip AI generation
@@ -159,6 +165,7 @@ async def _async_process_reel_generation(
             final_video_url = reel.final_commercial_video_url
 
         # ── Step 2: Apply FFmpeg overlay (brand logo / product image) ───────
+        overlay_applied = False  # Track whether FFmpeg ran — needed for audio strip fallback
         if target in ["all", "video", "upload"] and overlay_url and final_video_url:
             # R2 object keys (not starting with "http") need a presigned URL so
             # overlay_service.download_to_temp() can fetch them without auth.
@@ -170,8 +177,8 @@ async def _async_process_reel_generation(
 
             logger.info(f"[Worker] Applying overlay from: {overlay_url}")
             try:
-                # apply_overlay returns an R2 object key on success, raises on failure
-                # Pass with_audio so FFmpeg strips the audio track when user chose "No Audio"
+                # apply_overlay returns an R2 object key on success, raises on failure.
+                # When with_audio=False, FFmpeg uses -an to strip the audio track.
                 overlaid_key = await apply_overlay(
                     video_url=video_for_download,
                     overlay_url=overlay_url,
@@ -180,10 +187,26 @@ async def _async_process_reel_generation(
                     with_audio=with_audio,
                 )
                 final_video_url = overlaid_key  # R2 key — frontend proxies via /api/upload/videos/{key}
+                overlay_applied = True
             except Exception as overlay_err:
                 # Graceful degradation: reel still works without overlay
                 # Keep final_video_url as the original R2 key or fal.ai CDN URL
                 logger.warning(f"[Worker] Overlay failed, keeping original video: {overlay_err}")
+
+        # ── Step 2b: Audio strip fallback (no overlay ran, but user wants no audio)
+        # When there's no product logo / image the overlay step is skipped entirely,
+        # leaving any audio from Kling in the final video.  Run a dedicated FFmpeg
+        # pass (vcodec copy + -an) to strip it without re-encoding.
+        if not with_audio and not overlay_applied and final_video_url:
+            video_for_strip = final_video_url
+            if not final_video_url.startswith("http"):
+                video_for_strip = get_presigned_url(final_video_url)
+            try:
+                stripped_key = await strip_audio_from_video(video_for_strip, reel_id)
+                final_video_url = stripped_key
+                logger.info(f"[Worker] Audio stripped (no overlay path)")
+            except Exception as strip_err:
+                logger.warning(f"[Worker] Audio strip failed, keeping original: {strip_err}")
 
         # ── Step 3: Generate Captions & Hashtags ─────────────────────────────
         if target in ["all", "caption", "upload"]:
@@ -226,35 +249,31 @@ async def _run_kling_generation(
     image_url: str | None,
     duration: int,
     with_audio: bool = False,
+    reel_id: str = "unknown",
 ) -> str:
     """
-    Generate a product reel using Kling Video 2.6 Standard.
+    Generate a product reel using Kling Video 2.6 Pro.
 
-    Unlike the previous LTX hybrid pipeline, this is a single API call —
-    no Bria pre-processing, no extend chain.  Kling 2.6 handles both the
-    scene composition and animation natively from the product image and prompt.
+    Routes to single-clip or multi-clip extend chain based on duration:
+        ≤ 10s  → generate_with_kling26()          (single API call, fastest)
+        > 10s  → generate_extended_kling26()       (chained clips via last-frame)
 
-    Pipeline:
-        With image_url  → Kling 2.6 image-to-video (1 API call)
-                          Product photo is the visual anchor; Kling animates it
-                          with natural motion (rotation, camera drift, lighting).
-        Without image   → Kling 2.6 text-to-video (1 API call)
-                          Fully generated from scene description.
-
-    Duration:
-        Snapped to "5" or "10" (Kling's supported values).  The frontend
-        duration selector [5, 10, 15, 30, 60] maps:
-            5  → "5"
-            ≥10 → "10"
+    Extend chain pipeline (example 30s):
+        Clip 1 (10s): product image → Kling 2.6 Pro
+        Clip 2 (10s): last_frame(clip1) → Kling 2.6 Pro
+        Clip 3 (10s): last_frame(clip2) → Kling 2.6 Pro
+        → FFmpeg concat → R2 upload → object key returned
 
     Args:
         prompt:     Gemini-generated scene description with camera + motion cues
         image_url:  Presigned product image URL (None → text-to-video fallback)
-        duration:   Requested seconds — snapped to Kling's "5"/"10" values
-        with_audio: Request ambient audio from Kling (not yet widely supported)
+        duration:   Requested seconds (5, 10, 15, 30, 60)
+        with_audio: Passed through for downstream FFmpeg audio control
+        reel_id:    Reel UUID — used for R2 key naming in multi-clip concat
 
     Returns:
-        Public CDN URL (fal.media) of the generated video
+        fal.media CDN URL  (single clip ≤ 10s)
+        OR R2 object key   (multi-clip extend, proxied by /api/upload/videos/{key})
     """
     fal_key = os.getenv("FAL_KEY", "")
 
@@ -263,15 +282,31 @@ async def _run_kling_generation(
         logger.info("[Kling] No FAL_KEY, delegating to generate_video() facade")
         return await generate_video(prompt=prompt, image_url=image_url, duration=duration)
 
-    logger.info(
-        f"[Kling] Generating {'image-to-video' if image_url else 'text-to-video'} "
-        f"({duration}s requested, audio={with_audio})"
-    )
-    video_url = await generate_with_kling26(
-        prompt=prompt,
-        image_url=image_url,
-        duration=duration,
-        with_audio=with_audio,
-    )
+    mode = "image-to-video" if image_url else "text-to-video"
+
+    if duration <= 10:
+        # ── Single clip (fastest path) ────────────────────────────────────────
+        logger.info(f"[Kling] Single clip {mode} ({duration}s, audio={with_audio})")
+        video_url = await generate_with_kling26(
+            prompt=prompt,
+            image_url=image_url,
+            duration=duration,
+            with_audio=with_audio,
+        )
+    else:
+        # ── Multi-clip extend chain ────────────────────────────────────────────
+        num_clips = math.ceil(duration / 10)
+        logger.info(
+            f"[Kling] Extended {mode}: {duration}s = {num_clips} clips "
+            f"(audio={with_audio})"
+        )
+        video_url = await generate_extended_kling26(
+            prompt=prompt,
+            image_url=image_url,
+            total_duration=duration,
+            with_audio=with_audio,
+            reel_id=reel_id,
+        )
+
     logger.info(f"[Kling] Done: {video_url}")
     return video_url

@@ -1,32 +1,42 @@
 """
 Video Generation Service
 ========================
-Provides video generation primitives for the worker to orchestrate.
+Handles AI video generation via Kling Video 2.6 Pro (fal.ai).
 
-Primary Pipeline (Kling 2.6):
-    Single Kling 2.6 Standard clip (5s or 10s) — image-to-video when product
-    image is available, text-to-video otherwise.  No extend step needed —
-    Kling produces higher-quality, more natural product animation than LTX.
+Primary Pipeline:
+    For duration ≤ 10s : single Kling 2.6 Pro call (fastest path)
+    For duration > 10s : multi-clip extend chain — each clip starts from the
+                         last frame of the previous one for visual continuity,
+                         then all clips are concatenated with FFmpeg.
 
 Providers (priority order):
-    1. fal.ai Kling Video 2.6 Standard — primary (cinematic product animation)
-    2. Google Veo 2.0                  — best quality, uploads to R2 storage
-    3. Sample fallback                 — free, for development/testing
+    1. fal.ai Kling Video 2.6 Pro  — primary (cinematic product animation)
+    2. Google Veo 2.0              — quality fallback (slow, expensive)
+    3. Sample video                — free fallback for dev/CI
 
-Models (verified at https://fal.ai/models, May 2026):
-    Kling 2.6 Std text  : fal-ai/kling-video/v2.6/standard/text-to-video
-    Kling 2.6 Std image : fal-ai/kling-video/v2.6/standard/image-to-video
-    LTX 2.3 Fast        : kept for backward compat (not used in default flow)
-    Kling v1            : kept for backward compat
+Kling 2.6 Pro notes:
+    - Duration per call: "5" or "10" (string, fal.ai API requirement)
+    - image-to-video: product photo anchors the first frame; Kling animates
+      it naturally (rotation, camera drift, lighting effects)
+    - text-to-video: scene description only (fallback when no product image)
+    - For 15 / 30 / 60s: chained clips where clip N starts from the last
+      frame of clip N-1 (extracted with FFmpeg, uploaded to fal.ai)
 
-Duration support (Kling 2.6): "5" or "10" seconds (string values required)
-    — values above 5s use "10"; values ≤5s use "5"
+Note on Bria / LTX:
+    Bria (background-replace) and LTX 2.3 were used in the OLD pipeline and
+    have been REMOVED.  Kling 2.6 Pro handles image-to-video natively —
+    no separate scene-compositing step is needed.
 """
 
 import os
+import math
 import asyncio
+import tempfile
 import logging
 from typing import Optional
+
+import ffmpeg
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -34,114 +44,197 @@ logger = logging.getLogger(__name__)
 # Model Constants
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Bria Background Replace — Step 1 of 2-step product video pipeline.
-# Places the product (raw photo) into a generated scene described by the prompt.
-# Input:  product image URL + scene description
-# Output: scene image URL (product composited into the described environment)
-BRIA_BG_REPLACE_MODEL = "fal-ai/bria/background/replace"
-
-# LTX 2.3 Fast — PRIMARY generation (text-to-video, no image reference)
-# Duration enum: "6","8","10","12","14","16","18","20" (max 20s per call)
-LTX23_FAST_TEXT_MODEL = "fal-ai/ltx-2.3/text-to-video/fast"
-
-# LTX 2.3 Fast — image-to-video variant (product image anchors first frame)
-# Same duration enum; requires publicly accessible image_url
-LTX23_FAST_IMAGE_MODEL = "fal-ai/ltx-2.3/image-to-video/fast"
-
-# LTX 2.3 extend — cheap continuation step (up to 20s per call)
-# Used for 30s/60s reels by chaining extends after the initial clip
-LTX_FAST_EXTEND_MODEL = "fal-ai/ltx-2.3/extend-video"
-
-# ── PRIMARY: Kling 2.6 Pro ───────────────────────────────────────────────────
-# Best-in-class cinematic product animation; supports 5s or 10s per clip.
-# image-to-video animates the actual product photo naturally (no "pasted" look).
+# Kling 2.6 Pro — two modes selected based on whether a product image is available
 KLING26_TEXT_MODEL  = "fal-ai/kling-video/v2.6/pro/text-to-video"
 KLING26_IMAGE_MODEL = "fal-ai/kling-video/v2.6/pro/image-to-video"
 
-# ── Kept for backward compatibility — not used in the default flow ────────────
-LTX23_FAST_MODEL  = LTX23_FAST_TEXT_MODEL   # alias (old single-model constant)
-KLING_TEXT_MODEL  = "fal-ai/kling-video/v1/standard/text-to-video"
-KLING_IMAGE_MODEL = "fal-ai/kling-video/v1/standard/image-to-video"
-LTX_PRO_MODEL     = "fal-ai/ltx-video"
 
-# Valid duration values (seconds) accepted by LTX 2.3 Fast — fixed enum from fal.ai API.
-_LTX_VALID_DURATIONS = [6, 8, 10, 12, 14, 16, 18, 20]
-
-
-def _snap_to_ltx_duration(seconds: int) -> int:
-    """Round requested seconds to the nearest LTX 2.3 Fast duration enum value (integer)."""
-    return min(_LTX_VALID_DURATIONS, key=lambda x: abs(x - seconds))
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Duration helper
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _snap_to_kling_duration(seconds: int) -> str:
     """Snap duration to Kling's supported values: '5' or '10' (string required by fal.ai).
 
-    Kling 2.6 Standard supports exactly two clip lengths.
-    Durations ≤5s → '5'; anything above → '10' (the maximum per call).
-    For longer target durations (30s, 60s) the worker chains multiple Kling calls.
+    Kling 2.6 Pro accepts exactly two clip lengths per API call.
+    For longer target durations (15s, 30s, 60s) the caller should use
+    generate_extended_kling26() which chains multiple 10s clips.
     """
     return "5" if seconds <= 5 else "10"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Public API — used directly by worker for hybrid orchestration
+# Internal helpers for extend chain
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def generate_product_scene(
-    product_image_url: str,
-    scene_prompt: str,
-) -> str:
+def _cleanup_temp(*paths: Optional[str]) -> None:
+    """Safely remove temporary files — logs errors, never raises."""
+    for p in paths:
+        if p:
+            try:
+                if os.path.exists(p):
+                    os.remove(p)
+            except OSError as e:
+                logger.warning(f"[Temp] Could not remove {p}: {e}")
+
+
+async def _extract_last_frame(video_url: str) -> str:
     """
-    Step 1 of 2-step pipeline: composite product into a generated scene image.
-
-    Uses Bria Background Replace (fal-ai/bria/background/replace) to place the
-    product into an environment described by scene_prompt.  The product's
-    appearance (colour, shape, texture) is preserved from the original photo;
-    only the background/context is generated by Bria.
-
-    The resulting scene image is then passed to LTX image-to-video (Step 2) as
-    the first frame, so LTX animates the correct product in the correct scene —
-    not a hallucinated version based on text alone.
+    Download a video clip, extract its last frame with FFmpeg, and upload
+    the frame to fal.ai storage so it can be used as the first-frame anchor
+    for the next Kling clip in the extend chain.
 
     Args:
-        product_image_url: Presigned/public URL of the raw product photo
-        scene_prompt:      Scene description (from Gemini) — describes the
-                           environment to generate around the product
-                           (e.g. "wooden desk, warm afternoon sunlight, cozy cafe")
+        video_url: Publicly accessible URL (fal.ai CDN or presigned R2)
 
     Returns:
-        Public CDN URL of the composited scene image
+        fal.ai storage URL of the extracted JPEG frame
 
     Raises:
-        RuntimeError: If Bria API call fails (caller should fall back to raw product image)
+        RuntimeError: If download, FFmpeg extraction, or fal upload fails
     """
+    import fal_client
+
+    video_tmp: Optional[str] = None
+    frame_tmp: Optional[str] = None
+
     try:
-        import fal_client
+        # ── 1. Download video ────────────────────────────────────────────────
+        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+            resp = await client.get(video_url)
+            resp.raise_for_status()
 
-        logger.info(f"[Bria] Generating product scene: {scene_prompt[:80]}...")
+        fd, video_tmp = tempfile.mkstemp(suffix=".mp4")
+        with os.fdopen(fd, "wb") as f:
+            f.write(resp.content)
+        logger.info(f"[Extend] Downloaded video ({len(resp.content):,} bytes) → {video_tmp}")
 
-        def _run():
-            result = fal_client.run(
-                BRIA_BG_REPLACE_MODEL,
-                arguments={
-                    "image_url": product_image_url,
-                    "prompt": scene_prompt,
-                    "num_results": 1,
-                    "fast": True,          # lower latency, sufficient quality
-                },
-            )
-            # fal.ai response: {"images": [{"url": "...", "content_type": "image/png"}]}
-            return result["images"][0]["url"]
+        # ── 2. Probe duration to compute seek position ───────────────────────
+        def _probe():
+            return ffmpeg.probe(video_tmp)
 
         loop = asyncio.get_event_loop()
-        url = await loop.run_in_executor(None, _run)
-        logger.info(f"[Bria] Scene image ready: {url}")
-        return url
+        probe_data = await loop.run_in_executor(None, _probe)
+        vid_duration = float(probe_data["format"].get("duration", 0))
+        seek_time = max(0.0, vid_duration - 0.05)  # 50 ms before end = last frame
+
+        # ── 3. Extract frame with FFmpeg ─────────────────────────────────────
+        fd, frame_tmp = tempfile.mkstemp(suffix=".jpg")
+        os.close(fd)
+
+        def _extract():
+            (
+                ffmpeg
+                .input(video_tmp, ss=seek_time)
+                .output(frame_tmp, vframes=1, **{"f": "image2", "vcodec": "mjpeg"})
+                .run(quiet=True, overwrite_output=True)
+            )
+
+        await loop.run_in_executor(None, _extract)
+        logger.info(f"[Extend] Last frame at t={seek_time:.3f}s → {frame_tmp}")
+
+        # ── 4. Upload frame to fal.ai (returns a public CDN URL) ─────────────
+        def _upload():
+            return fal_client.upload_file(frame_tmp)
+
+        frame_url: str = await loop.run_in_executor(None, _upload)
+        logger.info(f"[Extend] Frame uploaded: {frame_url}")
+        return frame_url
 
     except Exception as e:
-        logger.error(f"[Bria] Scene generation failed: {e}")
-        raise RuntimeError(f"Bria product scene generation failed: {e}") from e
+        logger.error(f"[Extend] Frame extraction failed: {e}")
+        raise RuntimeError(f"Could not extract last frame: {e}") from e
+    finally:
+        _cleanup_temp(video_tmp, frame_tmp)
 
+
+async def _concat_clips(clip_urls: list[str], reel_id: str) -> str:
+    """
+    Download all clip URLs, concatenate with FFmpeg stream copy (no re-encode),
+    and upload the result to R2.
+
+    Using 'stream copy' means the codec is not touched — fast and lossless.
+    All clips must have the same codec / resolution (guaranteed since they all
+    come from the same Kling 2.6 Pro configuration).
+
+    Args:
+        clip_urls: Ordered list of clip URLs (fal.ai CDN)
+        reel_id:   Reel UUID — used for the R2 object key
+
+    Returns:
+        R2 object key of the concatenated video
+        (proxied by the backend via /api/upload/videos/{key})
+
+    Raises:
+        RuntimeError: If any download, FFmpeg concat, or R2 upload fails
+    """
+    from app.services.storage_service import upload_raw_bytes_to_r2
+
+    clip_paths: list[str] = []
+    list_path: Optional[str] = None
+    output_path: Optional[str] = None
+
+    try:
+        # ── 1. Download all clips in parallel ────────────────────────────────
+        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+            responses = await asyncio.gather(*[client.get(u) for u in clip_urls])
+
+        for i, resp in enumerate(responses):
+            resp.raise_for_status()
+            fd, path = tempfile.mkstemp(suffix=f"_clip{i}.mp4")
+            with os.fdopen(fd, "wb") as f:
+                f.write(resp.content)
+            clip_paths.append(path)
+
+        logger.info(f"[Concat] Downloaded {len(clip_paths)} clips")
+
+        # ── 2. Write FFmpeg concat list file ─────────────────────────────────
+        fd, list_path = tempfile.mkstemp(suffix="_concat.txt")
+        with os.fdopen(fd, "w") as f:
+            for p in clip_paths:
+                safe = p.replace("'", "'\\''")  # escape single quotes in path
+                f.write(f"file '{safe}'\n")
+
+        # ── 3. Concatenate with FFmpeg (stream copy — no re-encode) ──────────
+        fd, output_path = tempfile.mkstemp(suffix="_extended.mp4")
+        os.close(fd)
+
+        def _concat():
+            (
+                ffmpeg
+                .input(list_path, format="concat", safe=0)
+                .output(output_path, c="copy")
+                .run(quiet=True, overwrite_output=True)
+            )
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _concat)
+        logger.info(f"[Concat] Concatenation complete: {output_path}")
+
+        # ── 4. Upload to R2 ──────────────────────────────────────────────────
+        with open(output_path, "rb") as f:
+            data = f.read()
+
+        key = upload_raw_bytes_to_r2(
+            data=data,
+            filename=f"reel_{reel_id}_extended.mp4",
+            prefix="videos/reels/extended",
+            category=reel_id,
+            return_key_only=True,
+        )
+        logger.info(f"[Concat] Uploaded to R2: key={key}")
+        return key  # R2 object key — frontend proxies via /api/upload/videos/{key}
+
+    except Exception as e:
+        logger.error(f"[Concat] Failed: {e}")
+        raise RuntimeError(f"Video concatenation failed: {e}") from e
+    finally:
+        _cleanup_temp(*clip_paths, list_path, output_path)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public API
+# ─────────────────────────────────────────────────────────────────────────────
 
 async def generate_with_kling26(
     prompt: str,
@@ -150,28 +243,29 @@ async def generate_with_kling26(
     with_audio: bool = False,
 ) -> str:
     """
-    Generate a video clip using Kling Video 2.6 Standard (fal.ai) — PRIMARY model.
+    Generate a SINGLE video clip using Kling Video 2.6 Pro (fal.ai).
 
-    Kling 2.6 produces cinematic, natural product animation — the image-to-video mode
-    genuinely animates the product (rotation, camera moves, environmental effects) rather
-    than simply "wiggling" a pasted photo.  Ideal for product showcase reels.
+    Duration is capped at 10s per call.
+    For longer videos use generate_extended_kling26() which chains clips.
 
     Mode selection:
-        With image_url  → fal-ai/kling-video/v2.6/standard/image-to-video
-                         (product image anchors the visual; Kling animates it naturally)
-        Without image   → fal-ai/kling-video/v2.6/standard/text-to-video
-                         (fully AI-generated from scene description)
+        With image_url  → fal-ai/kling-video/v2.6/pro/image-to-video
+            Product photo anchors the first frame; Kling animates it naturally
+            (rotation, camera drift, lighting effects).  The prompt guides the
+            motion direction and environment atmosphere.
+        Without image   → fal-ai/kling-video/v2.6/pro/text-to-video
+            Scene described entirely from the text prompt.
 
     Args:
-        prompt:     Gemini-generated scene description — camera motion, environment,
-                    lighting, and product detail prompts all work well with Kling.
-        image_url:  Presigned/public product image URL (optional) — enables
-                    image-to-video mode for real product accuracy.
-        duration:   Requested clip length in seconds — snapped to "5" or "10".
-        with_audio: Whether to request Kling's ambient audio generation (experimental).
+        prompt:     Scene description with camera movement + subject motion cues
+                    (produced by Gemini — see ai_service.py system prompts)
+        image_url:  Presigned/public product image URL (None → text-to-video)
+        duration:   Requested clip length in seconds — snapped to "5" or "10"
+        with_audio: Not sent to Kling API; audio control is handled in the
+                    FFmpeg overlay step (overlay_service.py with_audio flag)
 
     Returns:
-        Public CDN URL (fal.media) — no R2 upload needed
+        Public CDN URL (fal.media) of the generated clip
 
     Raises:
         RuntimeError: If fal.ai API call fails
@@ -182,26 +276,22 @@ async def generate_with_kling26(
         kling_duration = _snap_to_kling_duration(duration)
 
         if image_url:
-            # Image-to-video: product image is the visual anchor (F2-URS02-SRS01).
-            # Kling treats this as the first frame AND style reference, producing
-            # natural animation of the real product rather than an AI-generated substitute.
             model = KLING26_IMAGE_MODEL
             arguments: dict = {
                 "prompt": prompt,
                 "image_url": image_url,
-                "duration": kling_duration,     # "5" or "10" (string required)
-                "aspect_ratio": "9:16",          # Portrait format for social media
+                "duration": kling_duration,   # "5" or "10" — string required by fal.ai
+                "aspect_ratio": "9:16",        # Portrait format for social media
             }
-            logger.info(f"[Kling2.6] image-to-video ({kling_duration}s), ref: {image_url[:80]}")
+            logger.info(f"[Kling2.6Pro] image-to-video ({kling_duration}s): {image_url[:80]}")
         else:
-            # Text-to-video fallback — no product image available
             model = KLING26_TEXT_MODEL
             arguments = {
                 "prompt": prompt,
                 "duration": kling_duration,
                 "aspect_ratio": "9:16",
             }
-            logger.info(f"[Kling2.6] text-to-video ({kling_duration}s)")
+            logger.info(f"[Kling2.6Pro] text-to-video ({kling_duration}s)")
 
         def _run():
             result = fal_client.run(model, arguments=arguments)
@@ -210,248 +300,94 @@ async def generate_with_kling26(
 
         loop = asyncio.get_event_loop()
         url = await loop.run_in_executor(None, _run)
-        logger.info(f"[Kling2.6] Done: {url}")
+        logger.info(f"[Kling2.6Pro] Done: {url}")
         return url
 
     except Exception as e:
-        logger.error(f"[Kling2.6] Failed: {e}")
-        raise RuntimeError(f"Kling 2.6 generation failed: {e}") from e
+        logger.error(f"[Kling2.6Pro] Failed: {e}")
+        raise RuntimeError(f"Kling 2.6 Pro generation failed: {e}") from e
 
 
-async def generate_with_ltx23fast(
+async def generate_extended_kling26(
     prompt: str,
-    image_url: Optional[str] = None,
-    duration: int = 8,
+    image_url: Optional[str],
+    total_duration: int,
+    with_audio: bool = False,
+    reel_id: str = "unknown",
 ) -> str:
     """
-    Generate a video clip using LTX Video 2.3 Fast (fal.ai) — PRIMARY generation model.
+    Generate a long-form video (> 10s) by chaining multiple Kling 2.6 Pro clips.
 
-    Selects the correct endpoint based on whether a product image is available:
-        - With image_url  → fal-ai/ltx-2.3/image-to-video/fast (product anchors first frame)
-        - Without image   → fal-ai/ltx-2.3/text-to-video/fast
+    Each clip after the first starts from the LAST FRAME of the previous one —
+    extracted with FFmpeg and uploaded to fal.ai storage — so the camera angle
+    and scene flow seamlessly between clips.
 
-    Duration is snapped to the nearest value the API accepts:
-        6, 8, 10, 12, 14, 16, 18, 20 seconds (max 20s per call)
-    Values above 10s require 25 FPS + 1080p — both are our hardcoded defaults.
+    Example for 30s:
+        Clip 1 (10s): product_image → Kling 2.6 Pro
+        Clip 2 (10s): last_frame(clip1) → Kling 2.6 Pro
+        Clip 3 (10s): last_frame(clip2) → Kling 2.6 Pro
+        ↓ FFmpeg concat → 30s video → R2 upload → object key returned
 
     Args:
-        prompt:    Creative brief enriched with product name + description
-        image_url: Presigned/public product image URL for visual reference (optional)
-        duration:  Requested clip length in seconds (snapped to nearest valid value)
+        prompt:         Same scene description used for all clips
+        image_url:      Initial product image for clip 1 (None → text-to-video)
+        total_duration: Target duration in seconds (15 / 30 / 60)
+        with_audio:     Passed to downstream audio control (not sent to Kling API)
+        reel_id:        Reel UUID used for R2 key naming of the concatenated output
 
     Returns:
-        Public CDN URL (fal.media) — no R2 upload needed
+        - Single fal.ai CDN URL if total_duration ≤ 10 (or only 1 clip generated)
+        - R2 object key if multiple clips were concatenated
+          (proxied by /api/upload/videos/{key})
 
     Raises:
-        RuntimeError: If fal.ai API call fails
+        RuntimeError: If any clip generation or concatenation fails
     """
-    try:
-        import fal_client
+    clip_duration = 10  # max seconds per Kling call
+    num_clips = math.ceil(total_duration / clip_duration)
+    logger.info(
+        f"[Kling-Extend] {total_duration}s target → {num_clips} clips × {clip_duration}s"
+    )
 
-        snapped = _snap_to_ltx_duration(duration)
+    clip_urls: list[str] = []
+    current_image_url = image_url  # Clip 1 uses product image; subsequent = last frame
 
-        # Negative prompt reduces common LTX artifacts: blur, distortion, low-quality motion
-        negative_prompt = (
-            "blurry, low quality, distorted, pixelated, artifacts, ugly, "
-            "deformed, disfigured, low resolution, out of focus, noisy"
+    for i in range(num_clips):
+        remaining = total_duration - i * clip_duration
+        this_duration = min(clip_duration, remaining)
+
+        logger.info(f"[Kling-Extend] Generating clip {i+1}/{num_clips} ({this_duration}s)")
+        clip_url = await generate_with_kling26(
+            prompt=prompt,
+            image_url=current_image_url,
+            duration=this_duration,
+            with_audio=with_audio,
         )
+        clip_urls.append(clip_url)
 
-        if image_url:
-            # Image-to-video: product image anchors the visual style (F2-URS02-SRS01)
-            model = LTX23_FAST_IMAGE_MODEL
-            arguments: dict = {
-                "image_url": image_url,
-                "prompt": prompt,
-                "negative_prompt": negative_prompt,
-                "duration": snapped,         # int required by fal.ai (e.g. 8, not "8")
-                "resolution": "1080p",
-                "aspect_ratio": "9:16",
-                "fps": 25,                   # int required by fal.ai (24/25/48/50)
-                "generate_audio": True,      # AI-generated ambient audio matching video content
-            }
-            logger.info(f"[LTX2.3Fast] image-to-video ({snapped}s), ref: {image_url}")
-        else:
-            model = LTX23_FAST_TEXT_MODEL
-            arguments = {
-                "prompt": prompt,
-                "negative_prompt": negative_prompt,
-                "duration": snapped,         # int required by fal.ai
-                "resolution": "1080p",
-                "aspect_ratio": "9:16",
-                "fps": 25,                   # int required by fal.ai
-                "generate_audio": True,      # AI-generated ambient audio matching video content
-            }
-            logger.info(f"[LTX2.3Fast] text-to-video ({snapped}s)")
+        # Extract last frame to anchor the next clip (skip for the final clip)
+        if i < num_clips - 1:
+            try:
+                current_image_url = await _extract_last_frame(clip_url)
+            except RuntimeError as exc:
+                # Frame extraction failed — reuse the same image for continuity
+                # (less seamless but still functional)
+                logger.warning(
+                    f"[Kling-Extend] Frame extraction failed for clip {i+1}, "
+                    f"reusing previous image: {exc}"
+                )
 
-        def _run():
-            result = fal_client.run(model, arguments=arguments)
-            return result["video"]["url"]
+    # Single clip → return CDN URL directly (no concat overhead)
+    if len(clip_urls) == 1:
+        logger.info("[Kling-Extend] Single clip — skipping concat step")
+        return clip_urls[0]
 
-        loop = asyncio.get_event_loop()
-        url = await loop.run_in_executor(None, _run)
-        logger.info(f"[LTX2.3Fast] Done: {url}")
-        return url
-
-    except Exception as e:
-        logger.error(f"[LTX2.3Fast] Failed: {e}")
-        raise RuntimeError(f"LTX 2.3 Fast generation failed: {e}") from e
-
-
-async def generate_with_kling(
-    prompt: str,
-    image_url: Optional[str] = None,
-    duration: int = 5,
-) -> str:
-    """
-    Generate an initial video clip using Kling v1.0 Standard (fal.ai).
-
-    Kling supports 5s and 10s clips in 9:16 portrait format.
-    When image_url is provided the model runs in image-to-video mode, using
-    the product image as the first frame / visual reference — this gives much
-    better product accuracy than pure text-to-video.
-
-    Args:
-        prompt:    Creative brief enriched with product name + description
-        image_url: Fully-resolved product image URL for visual reference (optional)
-        duration:  Clip length in seconds — snapped to 5 or 10 (Kling's supported values)
-
-    Returns:
-        Public CDN URL (fal.media) — no R2 upload needed
-
-    Raises:
-        RuntimeError: If fal.ai API call fails
-    """
-    try:
-        import fal_client
-
-        # Kling only supports "5" or "10" as string values
-        kling_duration = "5" if duration <= 5 else "10"
-
-        if image_url:
-            # Image-to-video: product image is the visual anchor (F2-URS02-SRS01)
-            model = KLING_IMAGE_MODEL
-            arguments = {
-                "prompt": prompt,
-                "image_url": image_url,
-                "duration": kling_duration,
-                "aspect_ratio": "9:16",  # Forced portrait — social media standard
-            }
-            logger.info(f"[Kling] image-to-video mode ({kling_duration}s), ref: {image_url}")
-        else:
-            # Text-to-video fallback when no product image is available
-            model = KLING_TEXT_MODEL
-            arguments = {
-                "prompt": prompt,
-                "duration": kling_duration,
-                "aspect_ratio": "9:16",
-            }
-            logger.info(f"[Kling] text-to-video mode ({kling_duration}s)")
-
-        def _run():
-            result = fal_client.run(model, arguments=arguments)
-            return result["video"]["url"]
-
-        loop = asyncio.get_event_loop()
-        url = await loop.run_in_executor(None, _run)
-        logger.info(f"[Kling] Done: {url}")
-        return url
-
-    except Exception as e:
-        logger.error(f"[Kling] Failed: {e}")
-        raise RuntimeError(f"Kling generation failed: {e}") from e
-
-
-async def generate_with_ltx_pro(
-    prompt: str,
-    image_url: Optional[str] = None,
-) -> str:
-    """
-    Generate initial video segment using LTX Video Pro (fal-ai/ltx-video).
-    Kept for backward compatibility — Kling is now the primary model.
-
-    Args:
-        prompt:    Creative brief
-        image_url: Product image URL for visual reference (optional)
-
-    Returns:
-        Public CDN URL (fal.media)
-    """
-    try:
-        import fal_client
-
-        arguments = {"prompt": prompt, "aspect_ratio": "9:16"}
-        if image_url:
-            arguments["image_url"] = image_url
-            logger.info(f"[LTX Pro] image-to-video mode, ref: {image_url}")
-        else:
-            logger.info("[LTX Pro] text-to-video mode")
-
-        def _run():
-            result = fal_client.run(LTX_PRO_MODEL, arguments=arguments)
-            return result["video"]["url"]
-
-        loop = asyncio.get_event_loop()
-        url = await loop.run_in_executor(None, _run)
-        logger.info(f"[LTX Pro] Done: {url}")
-        return url
-
-    except Exception as e:
-        logger.error(f"[LTX Pro] Failed: {e}")
-        raise RuntimeError(f"LTX Pro generation failed: {e}") from e
-
-
-async def extend_with_ltx_fast(
-    video_url: str,
-    prompt: str,
-    extend_seconds: float = 10.0,
-) -> str:
-    """
-    Extend an existing video using LTX 2.3 extend (fal-ai/ltx-2.3/extend-video).
-
-    Cheap continuation step to build 30s/60s reels from an initial 20s base clip.
-    Appends `extend_seconds` seconds to the end of the video while maintaining
-    motion continuity from the input clip.
-
-    Args:
-        video_url:       Public CDN URL of the clip to extend (from previous step)
-        prompt:          Continuation creative brief (guides motion direction)
-        extend_seconds:  Duration to add in seconds — max 20 per call (default 10)
-
-    Returns:
-        Public CDN URL of the extended video
-
-    Raises:
-        RuntimeError: If fal.ai extend API call fails
-    """
-    try:
-        import fal_client
-
-        logger.info(f"[LTX Extend] +{extend_seconds}s from: {video_url}")
-
-        def _run():
-            result = fal_client.run(
-                LTX_FAST_EXTEND_MODEL,
-                arguments={
-                    "video_url": video_url,
-                    "prompt": prompt,
-                    "duration": extend_seconds,  # float, max 20s per API docs
-                    "mode": "end",               # append to end of clip
-                },
-            )
-            return result["video"]["url"]
-
-        loop = asyncio.get_event_loop()
-        url = await loop.run_in_executor(None, _run)
-        logger.info(f"[LTX Extend] Done: {url}")
-        return url
-
-    except Exception as e:
-        logger.error(f"[LTX Extend] Failed: {e}")
-        raise RuntimeError(f"LTX Fast extend failed: {e}") from e
+    # Multiple clips → FFmpeg concat → R2 upload → object key
+    return await _concat_clips(clip_urls, reel_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Backward-compatible facade (used when no hybrid logic is needed)
+# Backward-compatible facade
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def generate_video(
@@ -461,67 +397,66 @@ async def generate_video(
     duration: int = 10,
 ) -> str:
     """
-    Generate a short video using the best available provider (fal.ai → Veo → sample).
+    Generate a video using the best available provider (Kling → Veo → sample).
 
-    NOTE: The worker calls generate_with_kling() + extend_with_ltx_fast() directly
-    for the full hybrid workflow with DB checkpoints and smart retry.
-    This facade is used as a fallback when no FAL_KEY is configured.
+    Used by the worker as a fallback when FAL_KEY is not configured.
+    For the primary worker flow see _run_kling_generation() in worker.py.
 
     Args:
         prompt:     Creative brief (enriched with product metadata)
         image_url:  Product image URL for visual reference
         resolution: Ignored (aspect_ratio controls format)
-        duration:   Clip length in seconds — passed through to Kling (5 or 10)
+        duration:   Clip length in seconds — passed to Kling (5 or 10)
 
     Returns:
-        Public URL to generated video
+        Public URL to the generated video
     """
     fal_key = os.getenv("FAL_KEY", "")
     veo_enabled = os.getenv("VEO_ENABLED", "false").lower() == "true"
     google_ai_key = os.getenv("GOOGLE_AI_API_KEY", "")
 
-    # ── Option 1: Kling 2.6 via fal.ai (primary)
+    # ── Option 1: Kling 2.6 Pro via fal.ai (primary)
     if fal_key:
         try:
             return await generate_with_kling26(prompt, image_url, duration)
         except Exception as e:
-            logger.warning(f"[Kling2.6] Failed, trying Veo: {e}")
+            logger.warning(f"[Kling2.6Pro] Failed, trying Veo: {e}")
 
-    # ── Option 2: Google Veo 2.0 (best quality, expensive)
+    # ── Option 2: Google Veo 2.0 (best quality, expensive / slow)
     if veo_enabled and google_ai_key:
         try:
             return await _generate_with_veo(prompt)
         except Exception as e:
             logger.warning(f"[Veo] Failed, using sample fallback: {e}")
 
-    # ── Option 3: Sample fallback (free, for development/CI)
+    # ── Option 3: Sample video (free, development / CI only)
     logger.info("[Video] No AI provider available — using sample video")
     await asyncio.sleep(3)
     return "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Google Veo 2.0 (quality fallback)
+# Veo 2.0 (quality fallback — not the primary path)
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def _generate_with_veo(prompt: str) -> str:
     """
-    Generate video using Google Veo 2.0 model (best quality but expensive/slow).
+    Generate video using Google Veo 2.0 (best quality but slow / expensive).
 
     Steps:
         1. Submit generation request (returns operation ID)
-        2. Poll operation status every 10s (max 5 min timeout)
-        3. Download generated video from Google storage
-        4. Upload to R2 for permanent public URL
+        2. Poll every 10s (max 5 min timeout)
+        3. Download video from Google storage
+        4. Upload to R2 for a permanent URL
 
     Args:
         prompt: Creative brief
 
     Returns:
-        Public URL to generated video stored in R2
+        Public URL to the generated video (R2 or Google URI fallback)
 
     Raises:
-        RuntimeError if operation times out, download fails, or R2 upload fails
+        RuntimeError: If operation times out, download fails, or R2 upload fails
     """
     import time
     import uuid
@@ -530,11 +465,11 @@ async def _generate_with_veo(prompt: str) -> str:
     from google import genai
 
     google_ai_key = os.getenv("GOOGLE_AI_API_KEY")
-    r2_endpoint = os.getenv("R2_ENDPOINT_URL")
-    r2_key_id = os.getenv("R2_ACCESS_KEY_ID")
-    r2_secret = os.getenv("R2_SECRET_ACCESS_KEY")
-    r2_bucket = os.getenv("R2_BUCKET_NAME")
-    r2_public = os.getenv("R2_PUBLIC_URL", "").rstrip("/")
+    r2_endpoint   = os.getenv("R2_ENDPOINT_URL")
+    r2_key_id     = os.getenv("R2_ACCESS_KEY_ID")
+    r2_secret     = os.getenv("R2_SECRET_ACCESS_KEY")
+    r2_bucket     = os.getenv("R2_BUCKET_NAME")
+    r2_public     = os.getenv("R2_PUBLIC_URL", "").rstrip("/")
 
     if not google_ai_key:
         raise RuntimeError("GOOGLE_AI_API_KEY not configured")
@@ -556,7 +491,7 @@ async def _generate_with_veo(prompt: str) -> str:
                 time.sleep(10)
                 waited += 10
                 operation = client.operations.get(operation.name)
-                logger.info(f"[Veo] Generating... ({waited}s)")
+                logger.info(f"[Veo] Generating… ({waited}s)")
 
             if not operation.done:
                 raise RuntimeError(f"Veo timed out after {max_wait}s")
@@ -564,8 +499,11 @@ async def _generate_with_veo(prompt: str) -> str:
                 raise RuntimeError("Veo returned no videos")
 
             veo_uri = operation.response.generated_videos[0].video.uri
-            download_url = f"{veo_uri}&key={google_ai_key}" if "?" in veo_uri \
+            download_url = (
+                f"{veo_uri}&key={google_ai_key}"
+                if "?" in veo_uri
                 else f"{veo_uri}?key={google_ai_key}"
+            )
 
             resp = requests.get(download_url, timeout=120)
             resp.raise_for_status()
@@ -573,19 +511,27 @@ async def _generate_with_veo(prompt: str) -> str:
             logger.info(f"[Veo] Downloaded {len(video_bytes):,} bytes")
 
             if not all([r2_endpoint, r2_key_id, r2_secret, r2_bucket]):
-                logger.warning("[Veo] R2 not configured, returning Google URI")
+                logger.warning("[Veo] R2 not configured — returning Google URI")
                 return veo_uri
 
-            s3 = boto3.client("s3", endpoint_url=r2_endpoint,
-                              aws_access_key_id=r2_key_id,
-                              aws_secret_access_key=r2_secret, region_name="auto")
+            s3 = boto3.client(
+                "s3",
+                endpoint_url=r2_endpoint,
+                aws_access_key_id=r2_key_id,
+                aws_secret_access_key=r2_secret,
+                region_name="auto",
+            )
             object_key = f"videos/reels/veo/{uuid.uuid4().hex}.mp4"
-            s3.put_object(Bucket=r2_bucket, Key=object_key,
-                          Body=video_bytes, ContentType="video/mp4")
+            s3.put_object(
+                Bucket=r2_bucket, Key=object_key,
+                Body=video_bytes, ContentType="video/mp4",
+            )
             logger.info(f"[Veo] Uploaded to R2: {object_key}")
-
-            return f"{r2_public}/{object_key}" if r2_public \
+            return (
+                f"{r2_public}/{object_key}"
+                if r2_public
                 else f"{r2_endpoint.rstrip('/')}/{r2_bucket}/{object_key}"
+            )
 
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _generate_and_upload)
