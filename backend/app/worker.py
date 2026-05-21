@@ -116,13 +116,18 @@ async def _async_process_reel_generation(
             elif product_image_url:
                 overlay_url = product_image_url  # Already presigned above
 
-        # Build enriched prompt with product metadata for better AI relevance (F2-URS02-SRS01)
+        # Build enriched prompt for LTX Video (F2-URS02-SRS01)
+        # Append product context as a natural sentence — NOT as a [tag] suffix.
+        # LTX Video is a text-to-image model at heart: bracket tags confuse it.
+        # "The product is X" keeps the description readable to the model.
         video_prompt = reel.prompt_text
-        if product:
-            product_meta = f"Product: {product.product_name}"
+        if product and product.product_name:
+            product_context = f"The product featured is {product.product_name}"
             if product.description:
-                product_meta += f" — {product.description}"
-            video_prompt = f"{reel.prompt_text}. [{product_meta}]"
+                # Trim description to avoid prompt overflow (keep under 500 total)
+                short_desc = product.description[:80].rstrip()
+                product_context += f", {short_desc}"
+            video_prompt = f"{reel.prompt_text.rstrip('.')}. {product_context}."
 
         # ── Step 1: Determine video source ──────────────────────────────────
         if target in ["all", "video"]:

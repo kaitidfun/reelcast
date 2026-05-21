@@ -102,28 +102,36 @@ async def generate_with_ltx23fast(
 
         snapped = _snap_to_ltx_duration(duration)
 
+        # Negative prompt reduces common LTX artifacts: blur, distortion, low-quality motion
+        negative_prompt = (
+            "blurry, low quality, distorted, pixelated, artifacts, ugly, "
+            "deformed, disfigured, low resolution, out of focus, noisy"
+        )
+
         if image_url:
             # Image-to-video: product image anchors the visual style (F2-URS02-SRS01)
             model = LTX23_FAST_IMAGE_MODEL
             arguments: dict = {
                 "image_url": image_url,
                 "prompt": prompt,
+                "negative_prompt": negative_prompt,
                 "duration": snapped,         # int required by fal.ai (e.g. 8, not "8")
                 "resolution": "1080p",
                 "aspect_ratio": "9:16",
                 "fps": 25,                   # int required by fal.ai (24/25/48/50)
-                "generate_audio": False,  # No unwanted AI audio in commercial reels
+                "generate_audio": True,      # AI-generated ambient audio matching video content
             }
             logger.info(f"[LTX2.3Fast] image-to-video ({snapped}s), ref: {image_url}")
         else:
             model = LTX23_FAST_TEXT_MODEL
             arguments = {
                 "prompt": prompt,
+                "negative_prompt": negative_prompt,
                 "duration": snapped,         # int required by fal.ai
                 "resolution": "1080p",
                 "aspect_ratio": "9:16",
                 "fps": 25,                   # int required by fal.ai
-                "generate_audio": False,
+                "generate_audio": True,      # AI-generated ambient audio matching video content
             }
             logger.info(f"[LTX2.3Fast] text-to-video ({snapped}s)")
 

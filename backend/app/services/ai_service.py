@@ -157,21 +157,29 @@ async def generate_prompt_from_template(
         return fallback
 
     system_prompt = (
-        "You are a world-class creative director specialising in short-form social media Reels. "
-        "Write a single, vivid video prompt for a vertical social media Reel.\n\n"
+        "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
+        "Write a single video generation prompt that these models can render accurately.\n\n"
+        "CRITICAL — AI video models render what they literally 'see', not filmmaking concepts:\n"
+        "- Describe the PHYSICAL SCENE: what objects exist, their material/color/shape/position\n"
+        "- Describe ONE continuous shot — no scene cuts, no 'transitions', no 'montage'\n"
+        "- Describe the PRIMARY MOTION: what moves, how it moves, how slowly/quickly\n"
+        "- Describe LIGHTING concretely: 'warm sunlight from left', 'soft white studio light'\n"
+        "- Use SIMPLE, LITERAL language — avoid abstract filmmaking terms like 'cinematic'\n"
+        "- Start with the main subject and background, then describe the motion\n\n"
+        "BAD example (too abstract): 'Cinematic product showcase with dynamic transitions and premium lighting'\n"
+        "GOOD example (literal scene): 'A glass perfume bottle sits on white marble. Sunlight catches the glass facets. The bottle slowly rotates. Soft white fabric drapes in the background.'\n\n"
         "Requirements:\n"
-        "- STRICTLY under 500 characters — hard system limit enforced after generation\n"
-        "- If a product image is provided, reference its actual visual appearance (colour, shape, packaging)\n"
-        "- Describe: visual scene/setting, camera movement, mood/atmosphere, key product moments\n"
-        "- Be specific and production-ready — directors should be able to shoot from this brief\n"
-        "- Do NOT include hashtags, captions, or pricing\n"
-        "- Return ONLY the prompt text — no extra explanation, no quotes"
+        "- STRICTLY under 500 characters\n"
+        "- If a product image is provided, reference its actual colour, shape, and material\n"
+        "- Do NOT include hashtags, captions, pricing, or platform names\n"
+        "- Return ONLY the prompt text — no explanation, no quotes"
     )
     user_content = (
-        f"Template goal: {template_desc}\n"
+        f"Goal: {template_desc}\n"
         f"Product name: {product_name or 'unspecified'}\n"
         f"Product details: {product_description or 'no additional details'}\n"
-        f"Duration: {duration} seconds"
+        f"Duration: {duration} seconds\n"
+        f"Remember: describe the literal scene and physical motion — not filmmaking direction."
     )
 
     try:
@@ -247,13 +255,20 @@ async def enhance_prompt(
         )[:500]
 
     system_prompt = (
-        "You are a world-class creative director specialising in short-form social media Reels. "
-        "Improve the user's prompt into a professional, production-ready video brief.\n\n"
+        "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
+        "Rewrite the user's prompt so an AI video model can render it accurately.\n\n"
+        "CRITICAL — AI video models render what they literally 'see':\n"
+        "- Keep the user's core idea, but rewrite it as a LITERAL SCENE DESCRIPTION\n"
+        "- ONE continuous shot — remove any scene cuts, transitions, or 'montage'\n"
+        "- Describe what PHYSICALLY EXISTS: objects, materials, colours, positions\n"
+        "- Describe the PRIMARY MOTION clearly: what moves, how it moves\n"
+        "- Replace abstract terms ('cinematic', 'premium') with concrete details ('white marble surface', 'warm golden light from the right')\n"
+        "- Start with the subject and setting, then describe the motion\n\n"
+        "BAD (abstract): 'Dynamic product showcase with cinematic transitions and premium lighting'\n"
+        "GOOD (literal): 'A black skincare bottle on a dark wooden surface. Soft warm light from the right. The bottle rotates slowly revealing the label. A water droplet runs down the glass.'\n\n"
         "Requirements:\n"
-        "- Keep the user's core concept intact — improve quality, never change the idea\n"
-        "- Add specific camera movements, lighting style, mood, and visual transitions\n"
+        "- STRICTLY under 500 characters\n"
         "- If a product image is provided, reference its actual visual appearance\n"
-        "- STRICTLY under 500 characters — hard system limit enforced after generation\n"
         "- Do NOT include hashtags, captions, or pricing\n"
         "- Return ONLY the improved prompt — no explanation, no quotes"
     )
@@ -364,13 +379,19 @@ async def generate_guided_prompt(
         return _local_fallback()
 
     system_prompt = (
-        "You are a world-class creative director specialising in short-form social media Reels. "
-        "Generate a single, vivid video prompt based on the provided creative brief and product.\n\n"
+        "You are an expert prompt engineer for AI video generation models (LTX Video, Wan, Kling). "
+        "Generate a video prompt based on the creative brief below that an AI model can render accurately.\n\n"
+        "CRITICAL — AI video models render what they literally 'see':\n"
+        "- Write ONE continuous shot — no cuts, no 'transitions', no 'montage'\n"
+        "- Describe the PHYSICAL SCENE: what objects exist, their material/colour/position\n"
+        "- Describe the PRIMARY MOTION: what moves, how it moves, how fast/slow\n"
+        "- Use CONCRETE LIGHTING descriptions: 'warm golden light from the left', 'bright white studio light'\n"
+        "- Use LITERAL language — replace 'cinematic' with actual scene details\n"
+        "- If product image provided, describe the product's real colour, shape, and material\n\n"
+        "BAD: 'Luxurious product showcase with dramatic lighting and premium feel'\n"
+        "GOOD: 'A gold lipstick tube on a black velvet surface. Soft spotlight from above. The cap is removed slowly revealing the deep red bullet. Light reflects off the metallic surface.'\n\n"
         "Requirements:\n"
-        "- STRICTLY under 500 characters — hard system limit enforced after generation\n"
-        "- Reference the product's actual visual appearance from the image (if provided)\n"
-        "- Describe: visual scene/setting, camera movement, mood, lighting, key product moments\n"
-        "- Be specific and production-ready — a director should be able to shoot from this brief\n"
+        "- STRICTLY under 500 characters\n"
         "- Do NOT include hashtags, captions, platform names, or pricing\n"
         "- Return ONLY the prompt text — no explanation, no quotes"
     )
