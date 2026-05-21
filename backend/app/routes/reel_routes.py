@@ -114,14 +114,12 @@ class ReelGenerateRequest(BaseModel):
     product_id: UUID
     platform: Optional[str] = "ig"
     overlay_position: Optional[str] = "bottom-right"
-    resolution: Optional[str] = "720p"
     duration: Optional[int] = 30
 
 class ReelRegenerateRequest(BaseModel):
     target: str = Field(..., description="'video' or 'caption'")
     platform: Optional[str] = "ig"
     overlay_position: Optional[str] = "bottom-right"
-    resolution: Optional[str] = "720p"
     duration: Optional[int] = 30
     # Optional new prompt — user may have edited the prompt before re-generating.
     # If provided, overwrites the reel's stored prompt_text before queuing the worker.
@@ -175,7 +173,7 @@ def trigger_generation(
     # Send task to Celery
     process_reel_generation.delay(
         str(reel.reel_id), req.platform, req.overlay_position,
-        resolution=req.resolution, duration=req.duration,
+        duration=req.duration,
     )
 
     return reel
@@ -234,7 +232,7 @@ def trigger_regeneration(
     # Send task to Celery
     process_reel_generation.delay(
         str(reel.reel_id), req.platform, req.overlay_position, req.target,
-        resolution=req.resolution, duration=req.duration,
+        duration=req.duration,
     )
 
     return reel

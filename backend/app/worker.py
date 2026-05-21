@@ -32,7 +32,7 @@ celery_app.conf.task_routes = {
 @celery_app.task(name="app.worker.process_reel_generation")
 def process_reel_generation(
     reel_id: str, platform: str, overlay_position: str,
-    target: str = "all", resolution: str = "720p", duration: int = 30,
+    target: str = "all", duration: int = 30,
 ):
     """
     Celery background task: orchestrate reel generation pipeline.
@@ -46,17 +46,16 @@ def process_reel_generation(
         overlay_position: Logo/product placement (top-left/right, bottom-left/right, center)
         target: Generation scope — "all" (full pipeline) | "video" (LTX only) |
                 "caption" (Gemini only) | "upload" (uploaded video → overlay → captions)
-        resolution: Video quality (720p default per SRS min requirement)
         duration: Video length in seconds (max 60 per SRS requirement)
     """
     asyncio.run(_async_process_reel_generation(
-        reel_id, platform, overlay_position, target, resolution, duration
+        reel_id, platform, overlay_position, target, duration
     ))
 
 
 async def _async_process_reel_generation(
     reel_id: str, platform: str, overlay_position: str,
-    target: str = "all", resolution: str = "720p", duration: int = 30,
+    target: str = "all", duration: int = 30,
 ):
     """
     Async implementation: AI generation + overlay + caption pipeline.

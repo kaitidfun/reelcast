@@ -242,7 +242,6 @@ const CreateReel = () => {
   const [duration, setDuration] = useState(5);  // Default 5s — cheapest single Kling clip for testing
   // overlayPosition kept as hidden state (sent to API, defaulted to bottom-right)
   const [overlayPosition] = useState("bottom-right");
-  const [resolution] = useState("1080p");  // Fixed 1080p — quality requirement
 
   // Output / preview state
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
@@ -564,7 +563,6 @@ const CreateReel = () => {
           product_id: selectedProduct.id,
           platform: selectedPlatforms[0] || "ig",
           overlay_position: overlayPosition,
-          resolution: resolution,
           duration: duration,
         })
       });
@@ -597,9 +595,8 @@ const CreateReel = () => {
           target,
           platform: selectedPlatforms[0] || "ig",
           overlay_position: overlayPosition,
-          // Send current UI values — not backend defaults (fixes wrong duration on regen)
+          // Send current duration — not backend default (fixes wrong duration on regen)
           duration,
-          resolution,
           // Send current prompt — user may have edited it before clicking Re-generate
           prompt_text: target !== "caption" ? promptText : undefined,
         })
@@ -1200,7 +1197,7 @@ const CreateReel = () => {
                 <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground">
                   <span>9:16</span>
                   <span className="h-2.5 w-px bg-border" />
-                  <span>{resolution}</span>
+                  <span>1080p</span>
                   <span className="h-2.5 w-px bg-border" />
                   <span>{duration}s</span>
                 </div>
