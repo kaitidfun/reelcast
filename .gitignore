@@ -29,6 +29,9 @@ build/Release
 out/
 .nuxt
 
+# Next.js auto-generated (changes every dev/build switch — not meaningful to track)
+frontend/next-env.d.ts
+
 # dotenv environment variable files
 .env
 .env.local
