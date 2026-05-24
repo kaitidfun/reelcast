@@ -688,6 +688,8 @@ const CreateReel = () => {
           overlay_position: overlayPosition,
           // Send current duration — not backend default (fixes wrong duration on regen)
           duration,
+          // Mirror the current audio choice so FFmpeg strips correctly on regen
+          with_audio: withAudio,
           // Send current prompt — user may have edited it before clicking Re-generate
           prompt_text: target !== "caption" ? promptText : undefined,
         })

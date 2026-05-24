@@ -122,6 +122,7 @@ class ReelRegenerateRequest(BaseModel):
     platform: Optional[str] = "ig"
     overlay_position: Optional[str] = "bottom-right"
     duration: Optional[int] = 30
+    with_audio: Optional[bool] = False  # Must mirror the original generation's audio choice
     # Optional new prompt — user may have edited the prompt before re-generating.
     # If provided, overwrites the reel's stored prompt_text before queuing the worker.
     prompt_text: Optional[str] = Field(None, max_length=500)
@@ -241,10 +242,11 @@ def trigger_regeneration(
         update_reel(db, reel=reel, status="Generating")
     logger.info(f"Reel {reel_id} status reset to Generating for regen target='{req.target}'")
 
-    # Send task to Celery
+    # Send task to Celery — pass with_audio so FFmpeg strips correctly on regen too
     process_reel_generation.delay(
         str(reel.reel_id), req.platform, req.overlay_position, req.target,
         duration=req.duration,
+        with_audio=req.with_audio,
     )
 
     return reel
