@@ -128,29 +128,25 @@ async def _extract_last_frame(video_url: str) -> str:
             f.write(resp.content)
         logger.info(f"[Extend] Downloaded video ({len(resp.content):,} bytes) → {video_tmp}")
 
-        # ── 2. Probe duration to compute seek position ───────────────────────
-        def _probe():
-            return ffmpeg.probe(video_tmp)
-
-        loop = asyncio.get_event_loop()
-        probe_data = await loop.run_in_executor(None, _probe)
-        vid_duration = float(probe_data["format"].get("duration", 0))
-        seek_time = max(0.0, vid_duration - 0.05)  # 50 ms before end = last frame
-
-        # ── 3. Extract frame with FFmpeg ─────────────────────────────────────
+        # ── 2. Extract last frame with FFmpeg ────────────────────────────────
+        # Use -sseof (seek from End Of File) = no ffprobe needed.
+        # -sseof -0.05 = seek to 50ms before the end of the video.
+        # imageio-ffmpeg provides a bundled ffmpeg binary — no system install.
         fd, frame_tmp = tempfile.mkstemp(suffix=".jpg")
         os.close(fd)
 
         def _extract():
+            import imageio_ffmpeg as _iio_ffmpeg
             (
                 ffmpeg
-                .input(video_tmp, ss=seek_time)
+                .input(video_tmp, sseof=-0.05)   # 50ms before end = last frame
                 .output(frame_tmp, vframes=1, **{"f": "image2", "vcodec": "mjpeg"})
-                .run(quiet=True, overwrite_output=True)
+                .run(quiet=True, overwrite_output=True, cmd=_iio_ffmpeg.get_ffmpeg_exe())
             )
 
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _extract)
-        logger.info(f"[Extend] Last frame at t={seek_time:.3f}s → {frame_tmp}")
+        logger.info(f"[Extend] Last frame extracted → {frame_tmp}")
 
         # ── 4. Upload frame to fal.ai (returns a public CDN URL) ─────────────
         def _upload():
@@ -220,13 +216,14 @@ async def _concat_clips(clip_urls: list[str], reel_id: str) -> str:
 
         def _concat():
             (
+                import imageio_ffmpeg as _iio_ffmpeg
                 ffmpeg
                 .input(list_path, format="concat", safe=0)
                 .output(output_path, c="copy")
-                .run(quiet=True, overwrite_output=True)
+                .run(quiet=True, overwrite_output=True, cmd=_iio_ffmpeg.get_ffmpeg_exe())
             )
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _concat)
         logger.info(f"[Concat] Concatenation complete: {output_path}")
 

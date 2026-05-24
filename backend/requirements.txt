@@ -20,4 +20,6 @@ redis
 celery
 google-genai
 fal-client
+ffmpeg-python
+imageio-ffmpeg
 

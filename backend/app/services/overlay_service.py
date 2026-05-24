@@ -16,7 +16,6 @@ Usage:
 """
 
 import os
-import shutil
 import asyncio
 import tempfile
 import logging
@@ -24,22 +23,20 @@ from typing import Optional
 
 import ffmpeg
 import httpx
+import imageio_ffmpeg
 
 from app.services.storage_service import upload_raw_bytes_to_r2
 
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# FFmpeg availability check (runs once at import time for fast fail)
+# FFmpeg binary path (from imageio-ffmpeg bundle — no system install required)
 # ─────────────────────────────────────────────────────────────────────────────
-_FFMPEG_AVAILABLE: bool = shutil.which("ffmpeg") is not None
-if not _FFMPEG_AVAILABLE:
-    logger.warning(
-        "[Overlay] ffmpeg executable not found in PATH. "
-        "Overlay and audio-strip operations will be skipped. "
-        "Install FFmpeg from https://www.gyan.dev/ffmpeg/builds/ (Windows) "
-        "or https://ffmpeg.org/download.html, add to PATH, then restart Celery."
-    )
+# imageio-ffmpeg ships a static ffmpeg binary as a Python package dependency.
+# This means overlay/audio-strip work on any OS without the developer needing
+# to install ffmpeg separately or configure PATH.
+_FFMPEG_EXE: str = imageio_ffmpeg.get_ffmpeg_exe()
+logger.debug(f"[Overlay] Using ffmpeg binary: {_FFMPEG_EXE}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
@@ -131,14 +128,8 @@ async def overlay_watermark(
         Path to output MP4 file
 
     Raises:
-        RuntimeError: If FFmpeg is not installed or compositing fails
+        RuntimeError: If FFmpeg compositing fails
     """
-    if not _FFMPEG_AVAILABLE:
-        raise RuntimeError(
-            "ffmpeg not found in PATH — install FFmpeg and restart Celery worker. "
-            "Windows builds: https://www.gyan.dev/ffmpeg/builds/"
-        )
-
     # Resolve position coordinates (or default to bottom-right)
     overlay_x, overlay_y = POSITION_COORDS.get(position, POSITION_COORDS['bottom-right'])
 
@@ -183,7 +174,7 @@ async def overlay_watermark(
                     vcodec='libx264',
                 )
 
-            ffmpeg.run(out, overwrite_output=True, quiet=True)
+            ffmpeg.run(out, overwrite_output=True, quiet=True, cmd=_FFMPEG_EXE)
             logger.info(f"FFmpeg compositing complete: {output_path}")
             return output_path
 
@@ -193,7 +184,7 @@ async def overlay_watermark(
             raise RuntimeError(f"FFmpeg overlay failed: {stderr_msg}") from e
 
     # Run FFmpeg in executor to avoid blocking async event loop
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _process)
     return output_path
 
@@ -222,14 +213,8 @@ async def strip_audio_from_video(video_url: str, reel_id: str) -> str:
         (proxied by the backend via /api/upload/videos/{key})
 
     Raises:
-        RuntimeError: If FFmpeg is not installed, or download/upload fails
+        RuntimeError: If FFmpeg fails or download/upload fails
     """
-    if not _FFMPEG_AVAILABLE:
-        raise RuntimeError(
-            "ffmpeg not found in PATH — install FFmpeg and restart Celery worker. "
-            "Windows builds: https://www.gyan.dev/ffmpeg/builds/"
-        )
-
     video_tmp = None
     output_tmp = None
 
@@ -246,9 +231,9 @@ async def strip_audio_from_video(video_url: str, reel_id: str) -> str:
                 vcodec="copy",  # copy video stream (no re-encode — fast)
                 an=None,        # -an: remove audio track entirely
             )
-            ffmpeg.run(out, overwrite_output=True, quiet=True)
+            ffmpeg.run(out, overwrite_output=True, quiet=True, cmd=_FFMPEG_EXE)
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _process)
         logger.info(f"[StripAudio] Audio stripped for reel {reel_id}")
 
