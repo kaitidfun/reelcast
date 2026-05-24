@@ -127,33 +127,41 @@ async def overlay_watermark(
 
     def _process():
         try:
-            input_video = ffmpeg.input(video_path)
+            input_file  = ffmpeg.input(video_path)
             input_overlay = ffmpeg.input(overlay_path)
 
+            # ── Explicit stream splitting ─────────────────────────────────────
+            # Always use input_file.video (not the full input object) for the
+            # overlay filter chain.  This prevents the audio stream from ever
+            # entering the filter graph — a more reliable approach than relying
+            # on the -an flag to remove it at the output stage.
+            video_stream = input_file.video
+
             # Scale overlay to max width while preserving aspect ratio
-            # Scale to max {OVERLAY_MAX_WIDTH}px width, height auto-calculated (-1)
             input_overlay = ffmpeg.filter(input_overlay, 'scale', OVERLAY_MAX_WIDTH, -1)
 
-            # Composite overlay onto video at specified position
-            overlaid = ffmpeg.overlay(input_video, input_overlay, x=overlay_x, y=overlay_y)
+            # Composite: video_stream has NO audio reference → overlaid is video-only
+            overlaid = ffmpeg.overlay(video_stream, input_overlay, x=overlay_x, y=overlay_y)
 
             if with_audio:
-                # Preserve original audio — pass audio stream alongside composited video
+                # Re-attach audio from original input for the WITH-AUDIO path.
+                # Audio is only added back explicitly here — never leaks into
+                # the no-audio path.
                 out = ffmpeg.output(
                     overlaid,
-                    input_video.audio,
+                    input_file.audio,
                     output_path,
                     vcodec='libx264',
                     acodec='aac',
                     strict='experimental',
                 )
             else:
-                # Strip audio track entirely — user selected "No Audio"
+                # overlaid is already a video-only stream (no audio reference).
+                # Output contains no audio track — no need for -an flag.
                 out = ffmpeg.output(
                     overlaid,
                     output_path,
                     vcodec='libx264',
-                    an=None,  # -an flag: disable audio output
                 )
 
             ffmpeg.run(out, overwrite_output=True, quiet=True)
@@ -161,7 +169,6 @@ async def overlay_watermark(
             return output_path
 
         except ffmpeg.Error as e:
-            # e.stderr can be None if FFmpeg failed before producing output
             stderr_msg = e.stderr.decode('utf8') if e.stderr else str(e)
             logger.error(f"FFmpeg error during compositing: {stderr_msg}")
             raise RuntimeError(f"FFmpeg overlay failed: {stderr_msg}") from e
