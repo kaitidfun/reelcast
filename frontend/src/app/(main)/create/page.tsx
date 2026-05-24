@@ -753,6 +753,9 @@ const CreateReel = () => {
     form.append("product_id", selectedProduct.id);
     form.append("platform", selectedPlatforms[0] || "ig");
     form.append("overlay_position", overlayPosition);
+    // with_audio: true = keep original audio from uploaded video (default)
+    //             false = strip audio (user toggled "Strip Audio" in UI)
+    form.append("with_audio", String(withAudio));
 
     const token = localStorage.getItem("rf_token");
     // XMLHttpRequest allows real-time upload progress tracking (fetch doesn't)
@@ -1035,11 +1038,13 @@ const CreateReel = () => {
                 </button>
                 <Button
                   onClick={handleUpload}
-                  disabled={!uploadFile || uploadStatus === "uploading"}
+                  disabled={!uploadFile || uploadStatus === "uploading" || uploadStatus === "done"}
                   className="gradient-primary w-full gap-2 h-9 text-sm text-primary-foreground shadow-glow"
                 >
                   {uploadStatus === "uploading" ? (
                     <><Loader2 className="h-4 w-4 animate-spin" />Uploading…</>
+                  ) : uploadStatus === "done" ? (
+                    <><Check className="h-4 w-4" />Uploaded — select a new file to re-upload</>
                   ) : (
                     <><Upload className="h-4 w-4" />Upload &amp; Process</>
                   )}
