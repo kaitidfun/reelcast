@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import SessionLocal
 from app.models.models import Reel, Product
-from app.services.ai_service import generate_captions
+from app.services.ai_service import generate_captions, score_prompt_fidelity
 from app.services.video_generation_service import (
     generate_video,
     generate_with_kling26,
@@ -294,21 +294,29 @@ async def _run_kling_generation(
         logger.info("[Kling] No FAL_KEY, delegating to generate_video() facade")
         return await generate_video(prompt=prompt, image_url=image_url, duration=duration)
 
-    # ── Step A: Flux first frame via IP-Adapter ───────────────────────────────
-    # Uses ALL product images as IP-Adapter references so Flux sees every angle.
-    # The generated scene image becomes Kling's first frame for animation.
-    # Falls back to raw primary product image if Flux fails for any reason.
+    # ── Step A: Auto-score fidelity → set Flux IP-Adapter weight ─────────────
+    # Gemini reads the prompt and scores 1–5 (surreal→realistic).
+    # Weight maps: score 1 → 0.30 (creative freedom) … score 5 → 0.80 (faithful)
+    # Runs concurrently with other work — if it fails, default 0.60 is used.
     flux_inputs = product_image_urls or ([image_url] if image_url else [])
     kling_image_url = image_url  # Default fallback = primary product image
+
     if flux_inputs:
+        ip_weight = await score_prompt_fidelity(prompt)
+
+        # ── Step B: Flux first frame via IP-Adapter ───────────────────────────
+        # Uses ALL product images as IP-Adapter references so Flux sees every angle.
+        # ip_weight determined above — high for realistic prompts, low for creative.
+        # Falls back to raw primary product image if Flux fails.
         try:
             kling_image_url = await generate_first_frame_with_flux(
                 prompt=prompt,
                 product_image_urls=flux_inputs,
+                ip_weight=ip_weight,
             )
             logger.info(
                 f"[Worker] Flux first frame ready "
-                f"({len(flux_inputs)} reference(s)) → passing to Kling"
+                f"({len(flux_inputs)} reference(s), weight={ip_weight}) → passing to Kling"
             )
         except Exception as flux_err:
             # Graceful degradation: Flux failed → Kling uses raw product image

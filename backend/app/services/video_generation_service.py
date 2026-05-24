@@ -255,6 +255,7 @@ async def _concat_clips(clip_urls: list[str], reel_id: str) -> str:
 async def generate_first_frame_with_flux(
     prompt: str,
     product_image_urls: list[str],
+    ip_weight: float = FLUX_IP_TOTAL_WEIGHT,
 ) -> str:
     """
     Generate a creative first frame using Flux General + IP-Adapter.
@@ -279,6 +280,9 @@ async def generate_first_frame_with_flux(
                              the IP-Adapter reference handles that.
         product_image_urls:  All product image URLs (presigned R2 or public CDN).
                              At least 1 required.
+        ip_weight:           Total IP-Adapter influence (0.30–0.80).
+                             Auto-scored by score_prompt_fidelity() in worker —
+                             low = surreal/creative, high = product-realistic.
 
     Returns:
         fal.media CDN URL of the Flux-generated first frame image.
@@ -294,11 +298,12 @@ async def generate_first_frame_with_flux(
         import fal_client
 
         # Distribute total weight equally across all product images
-        per_image_weight = round(FLUX_IP_TOTAL_WEIGHT / len(product_image_urls), 3)
+        per_image_weight = round(ip_weight / len(product_image_urls), 3)
 
         logger.info(
             f"[Flux] Generating first frame via IP-Adapter "
-            f"({len(product_image_urls)} image(s), weight={per_image_weight} each): "
+            f"({len(product_image_urls)} image(s), "
+            f"total_weight={ip_weight}, per_image={per_image_weight}): "
             f"{prompt[:60]}..."
         )
 
@@ -312,8 +317,10 @@ async def generate_first_frame_with_flux(
                     "guidance_scale": 3.5,
                     "num_images": 1,
                     "enable_safety_checker": True,
-                    # IP-Adapter: one entry per product image
-                    # Each entry injects that image's visual identity into the generation
+                    # IP-Adapter: one entry per product image.
+                    # NOTE: fal-ai/flux-general parameter name confirmed as "ip_adapters"
+                    # (array). If this call fails with parameter error, check fal.ai docs
+                    # at https://fal.ai/models/fal-ai/flux-general for current schema.
                     "ip_adapters": [
                         {
                             "ip_adapter_image_url": url,
@@ -323,10 +330,21 @@ async def generate_first_frame_with_flux(
                     ],
                 },
             )
-            # flux-general response: {"images": [{"url": "...", ...}]}
-            return result["images"][0]["url"]
+            # flux-general response: {"images": [{"url": "...", "width": int, "height": int}]}
+            # Defensive access — raises RuntimeError with clear message if structure unexpected
+            images = result.get("images") or []
+            if not images:
+                raise RuntimeError(
+                    f"Flux returned no images. Full response: {result}"
+                )
+            url = images[0].get("url")
+            if not url:
+                raise RuntimeError(
+                    f"Flux image missing 'url' field. Entry: {images[0]}"
+                )
+            return url
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         url = await loop.run_in_executor(None, _run)
         logger.info(f"[Flux] First frame ready: {url}")
         return url
