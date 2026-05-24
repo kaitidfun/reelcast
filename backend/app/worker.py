@@ -98,17 +98,29 @@ async def _async_process_reel_generation(
         else:
             product_info = ""
 
-        # Resolve product image URL — used for TWO purposes:
-        #   1. First frame for Kling 2.6 image-to-video (after Flux enrichment)
-        #      → Flux generates a creative scene from the product photo,
-        #        then Kling animates that scene naturally
-        #   2. Fallback overlay watermark when no brand logo is set
-        product_image_url: str | None = None
+        # Resolve product image URLs:
+        #   product_image_url  (primary only) — used for overlay watermark fallback
+        #   product_image_urls (ALL images)   — passed to Flux IP-Adapter so Flux
+        #       sees every angle/view of the product for a richer first frame
+        product_image_url: str | None = None   # Primary — overlay fallback
+        product_image_urls: list[str] = []      # All images — Flux IP-Adapter reference
+
         if product and product.images:
             primary = next((img for img in product.images if img.is_primary), None)
-            raw_key = (primary or product.images[0]).image_url
-            # Presigned URL (1h) — valid for both fal.ai fetch and httpx overlay download
-            product_image_url = get_presigned_url(raw_key) if raw_key else None
+            primary_img = primary or product.images[0]
+            raw_primary_key = primary_img.image_url
+            # Presigned URL (1h) — valid for fal.ai fetch and httpx overlay download
+            product_image_url = get_presigned_url(raw_primary_key) if raw_primary_key else None
+
+            # Collect ALL product image URLs for Flux multi-reference (IP-Adapter)
+            for img in product.images:
+                if img.image_url:
+                    product_image_urls.append(get_presigned_url(img.image_url))
+
+            logger.info(
+                f"[Worker] Product images resolved: {len(product_image_urls)} total "
+                f"(primary: {bool(product_image_url)})"
+            )
 
         # Resolve overlay URL for FFmpeg watermark (F2-URS05-SRS01)
         # Brand logo preferred; fall back to product image if no logo configured
@@ -136,17 +148,15 @@ async def _async_process_reel_generation(
 
         # ── Step 1: Determine video source ──────────────────────────────────
         if target in ["all", "video"]:
-            # Pipeline: Flux Dev (first frame) → Kling 2.6 Pro (animation)
+            # Pipeline: Flux General+IP-Adapter (first frame) → Kling 2.6 Pro (animation)
             #
-            # When product image available:
-            #   1. Flux Dev img2img → generates a creative scene around the product
-            #      (better than animating a plain product-on-white-background photo)
-            #   2. That Flux image becomes Kling's first frame → Kling animates the scene
-            #
-            # When no product image → Kling text-to-video directly
+            # product_image_urls → Flux sees all product angles → generates scene
+            # Flux output → Kling animates the scene → final video
+            # Fallback: no images → Kling text-to-video directly
             final_video_url = await _run_kling_generation(
                 prompt=video_prompt,
-                image_url=product_image_url,  # None → text-to-video; URL → image-to-video
+                image_url=product_image_url,        # Primary — Kling fallback if Flux fails
+                product_image_urls=product_image_urls,  # All — Flux IP-Adapter reference
                 duration=duration,
                 with_audio=with_audio,
                 reel_id=reel_id,
@@ -244,31 +254,34 @@ async def _run_kling_generation(
     duration: int,
     with_audio: bool = False,
     reel_id: str = "unknown",
+    product_image_urls: list[str] | None = None,
 ) -> str:
     """
-    Generate a product reel using Kling Video 2.6 Pro.
+    Generate a product reel using Flux General + IP-Adapter → Kling 2.6 Pro.
 
     Full pipeline:
-        1. Flux Dev img2img  → creative first frame from product photo + prompt
-        2. Kling 2.6 Pro     → animate the first frame into a video
-        (Flux step skipped if no product image → Kling text-to-video directly)
+        1. Flux General + IP-Adapter (all product images as references)
+           → creative first frame: product identity injected into a new scene
+        2. Kling 2.6 Pro image-to-video → animate the Flux first frame
+
+    Flux skipped when:
+        - No product images available → Kling text-to-video directly
+        - FAL_KEY not set             → generate_video() facade (Veo / sample)
+        - Flux API fails              → graceful degradation to raw product image
 
     Duration routing:
         ≤ 10s → generate_with_kling26()         (single API call)
         > 10s → generate_extended_kling26()      (chained clips via last-frame)
 
-    Extend chain (example 30s):
-        Clip 1 (10s): Flux first frame → Kling 2.6 Pro
-        Clip 2 (10s): last_frame(clip1) → Kling 2.6 Pro
-        Clip 3 (10s): last_frame(clip2) → Kling 2.6 Pro
-        → FFmpeg concat → R2 upload → object key returned
-
     Args:
-        prompt:     Gemini-generated scene description with camera + motion cues
-        image_url:  Presigned product image URL (None → skip Flux → text-to-video)
-        duration:   Requested seconds (5, 10, 15, 30, 60)
-        with_audio: Passed through for downstream FFmpeg audio control
-        reel_id:    Reel UUID — used for R2 key naming in multi-clip concat
+        prompt:               Scene description (from Gemini) — scene/action/atmosphere,
+                              NOT product appearance (Flux handles that from the images)
+        image_url:            Primary product image URL — used as Kling fallback if Flux fails
+        duration:             Requested seconds (5, 10, 15, 30, 60)
+        with_audio:           Passed through for downstream FFmpeg audio control
+        reel_id:              Reel UUID for R2 key naming in multi-clip concat
+        product_image_urls:   ALL product image URLs for Flux IP-Adapter references
+                              (multiple angles → better product fidelity in generated scene)
 
     Returns:
         fal.media CDN URL  (single clip ≤ 10s)
@@ -281,18 +294,22 @@ async def _run_kling_generation(
         logger.info("[Kling] No FAL_KEY, delegating to generate_video() facade")
         return await generate_video(prompt=prompt, image_url=image_url, duration=duration)
 
-    # ── Step A: Flux first frame (only when product image is available) ───────
-    # Flux turns the plain product photo into a proper scene/environment,
-    # then we hand that generated scene to Kling as its first frame.
-    # If Flux fails for any reason, fall back to the original product image.
-    kling_image_url = image_url  # Default: use product image directly
-    if image_url:
+    # ── Step A: Flux first frame via IP-Adapter ───────────────────────────────
+    # Uses ALL product images as IP-Adapter references so Flux sees every angle.
+    # The generated scene image becomes Kling's first frame for animation.
+    # Falls back to raw primary product image if Flux fails for any reason.
+    flux_inputs = product_image_urls or ([image_url] if image_url else [])
+    kling_image_url = image_url  # Default fallback = primary product image
+    if flux_inputs:
         try:
             kling_image_url = await generate_first_frame_with_flux(
                 prompt=prompt,
-                product_image_url=image_url,
+                product_image_urls=flux_inputs,
             )
-            logger.info(f"[Worker] Flux first frame ready → passing to Kling")
+            logger.info(
+                f"[Worker] Flux first frame ready "
+                f"({len(flux_inputs)} reference(s)) → passing to Kling"
+            )
         except Exception as flux_err:
             # Graceful degradation: Flux failed → Kling uses raw product image
             logger.warning(

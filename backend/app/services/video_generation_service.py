@@ -51,15 +51,18 @@ logger = logging.getLogger(__name__)
 KLING26_TEXT_MODEL  = "fal-ai/kling-video/v2.6/pro/text-to-video"
 KLING26_IMAGE_MODEL = "fal-ai/kling-video/v2.6/pro/image-to-video"
 
-# Flux Dev — img2img mode: generates creative product scene from photo reference
-# Used as the first-frame generator before Kling animation
-FLUX_DEV_MODEL = "fal-ai/flux/dev"
+# Flux General + IP-Adapter — reference-based image generation.
+# Unlike img2img (pixel transformation), IP-Adapter extracts the product's
+# "visual identity" (shape, colour, texture) and injects it into a freshly
+# generated scene described by the text prompt.
+# Supports MULTIPLE reference images — each product photo is a separate
+# IP-Adapter entry, so Flux sees every angle/view of the product.
+FLUX_GENERAL_MODEL = "fal-ai/flux-general"
 
-# How much creative freedom Flux has when generating the first frame.
-# 0.0 = output almost identical to product photo (safe, no scene)
-# 1.0 = output fully from text prompt (creative but may lose product shape)
-# 0.80 = recommended: product shape/color preserved, scene generated around it
-FLUX_STRENGTH = 0.80
+# Total IP-Adapter influence weight distributed equally across all product images.
+# 0.75 = strong product identity reference while still following the scene prompt.
+# Lowered automatically when more images are used to avoid over-constraining.
+FLUX_IP_TOTAL_WEIGHT = 0.75
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -251,57 +254,76 @@ async def _concat_clips(clip_urls: list[str], reel_id: str) -> str:
 
 async def generate_first_frame_with_flux(
     prompt: str,
-    product_image_url: str,
-    strength: float = FLUX_STRENGTH,
+    product_image_urls: list[str],
 ) -> str:
     """
-    Generate a creative first frame for Kling by running Flux Dev img2img.
+    Generate a creative first frame using Flux General + IP-Adapter.
 
-    Instead of passing the raw product photo directly to Kling (which often
-    means animating a product-on-white-background shot), Flux first creates
-    a proper scene/environment around the product.  The result is then passed
-    to Kling as its starting frame for cinematic animation.
+    IP-Adapter extracts the product's visual identity (shape, colour, texture)
+    from ALL provided product photos and injects that identity into a new scene
+    described by the text prompt — without pixel-transforming any single image.
 
-    How it works:
-        product_image_url → Flux Dev img2img → scene with product in environment
-        (e.g. coffee mug on wooden table, morning light, steam rising)
+    Why multiple images:
+        Sending all product photos (front, back, side, detail) lets Flux see
+        the full product from every angle, producing a more accurate and
+        recognisable result than using only one reference photo.
+
+    Weight distribution:
+        Total IP-Adapter weight is fixed at FLUX_IP_TOTAL_WEIGHT (0.75) and
+        divided equally across all images so no single angle dominates.
+        e.g. 3 images → 0.25 each; 1 image → 0.75.
 
     Args:
-        prompt:             Scene description (same prompt sent to Kling)
-        product_image_url:  Presigned/public URL of the product photo (reference)
-        strength:           0.0 = faithful to product photo (minimal scene creation)
-                            1.0 = fully creative (risky product fidelity)
-                            0.80 = recommended balance (default)
+        prompt:              Scene description — focus on environment, action,
+                             people, atmosphere. Do NOT describe product appearance;
+                             the IP-Adapter reference handles that.
+        product_image_urls:  All product image URLs (presigned R2 or public CDN).
+                             At least 1 required.
 
     Returns:
-        fal.media CDN URL of the Flux-generated first frame (JPEG/PNG)
+        fal.media CDN URL of the Flux-generated first frame image.
 
     Raises:
-        RuntimeError: If fal.ai call fails
+        ValueError:   If product_image_urls is empty.
+        RuntimeError: If fal.ai API call fails.
     """
+    if not product_image_urls:
+        raise ValueError("At least one product image URL is required for Flux generation")
+
     try:
         import fal_client
 
+        # Distribute total weight equally across all product images
+        per_image_weight = round(FLUX_IP_TOTAL_WEIGHT / len(product_image_urls), 3)
+
         logger.info(
-            f"[Flux] Generating first frame "
-            f"(strength={strength}): {prompt[:60]}..."
+            f"[Flux] Generating first frame via IP-Adapter "
+            f"({len(product_image_urls)} image(s), weight={per_image_weight} each): "
+            f"{prompt[:60]}..."
         )
 
         def _run():
             result = fal_client.run(
-                FLUX_DEV_MODEL,
+                FLUX_GENERAL_MODEL,
                 arguments={
                     "prompt": prompt,
-                    "image_url": product_image_url,
-                    "strength": strength,
-                    "image_size": "portrait_9_16",   # Match Kling 9:16 output
-                    "num_inference_steps": 28,        # Flux Dev default
-                    "guidance_scale": 3.5,            # Flux Dev default
+                    "image_size": "portrait_9_16",  # 9:16 — matches Kling output aspect ratio
+                    "num_inference_steps": 28,
+                    "guidance_scale": 3.5,
                     "num_images": 1,
                     "enable_safety_checker": True,
+                    # IP-Adapter: one entry per product image
+                    # Each entry injects that image's visual identity into the generation
+                    "ip_adapters": [
+                        {
+                            "ip_adapter_image_url": url,
+                            "weight": per_image_weight,
+                        }
+                        for url in product_image_urls
+                    ],
                 },
             )
-            # Flux response: {"images": [{"url": "...", "width": ..., "height": ...}]}
+            # flux-general response: {"images": [{"url": "...", ...}]}
             return result["images"][0]["url"]
 
         loop = asyncio.get_event_loop()
