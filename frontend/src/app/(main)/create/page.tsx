@@ -850,7 +850,7 @@ const CreateReel = () => {
           {/* Feature 2: Creator mode switch (F2-URS02 AI gen vs F2-URS04 upload) */}
           <div className="flex rounded-xl border border-border bg-muted/30 p-1 gap-1">
             <button
-              onClick={() => setCreatorMode("generate")}
+              onClick={() => { setCreatorMode("generate"); setWithAudio(false); }}
               className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
                 creatorMode === "generate"
                   ? "bg-card text-foreground shadow-sm ring-1 ring-border"
@@ -861,7 +861,7 @@ const CreateReel = () => {
               Generate with AI
             </button>
             <button
-              onClick={() => setCreatorMode("upload")}
+              onClick={() => { setCreatorMode("upload"); setWithAudio(true); }}
               className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
                 creatorMode === "upload"
                   ? "bg-card text-foreground shadow-sm ring-1 ring-border"
@@ -1018,7 +1018,21 @@ const CreateReel = () => {
                   </div>
                 )}
               </div>
-              <div className="border-t border-border bg-background/40 px-3 py-2.5">
+              <div className="border-t border-border bg-background/40 px-3 py-2.5 space-y-2">
+                {/* Audio toggle for uploaded videos — default: keep original audio */}
+                <button
+                  type="button"
+                  onClick={() => setWithAudio((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                    withAudio
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border bg-muted/40 text-muted-foreground hover:text-foreground hover:border-primary/30"
+                  }`}
+                  title={withAudio ? "Original audio will be preserved" : "Audio will be stripped from video"}
+                >
+                  {withAudio ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+                  {withAudio ? "Keep Audio" : "Strip Audio"}
+                </button>
                 <Button
                   onClick={handleUpload}
                   disabled={!uploadFile || uploadStatus === "uploading"}
@@ -1253,7 +1267,7 @@ const CreateReel = () => {
                 </PopoverContent>
               </Popover>
 
-              {/* Audio toggle — controls whether Kling generates ambient audio */}
+              {/* Audio toggle — controls whether Kling 2.6 generates ambient audio for AI reels */}
               <button
                 type="button"
                 onClick={() => setWithAudio((v) => !v)}
@@ -1262,7 +1276,7 @@ const CreateReel = () => {
                     ? "border-primary/40 bg-primary/10 text-primary"
                     : "border-border bg-muted/40 text-muted-foreground hover:text-foreground hover:border-primary/30"
                 }`}
-                title={withAudio ? "Click to disable audio" : "Click to enable ambient audio"}
+                title={withAudio ? "Kling will generate ambient audio" : "Video will be silent (no AI-generated audio)"}
               >
                 {withAudio ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
                 {withAudio ? "With Audio" : "No Audio"}
