@@ -12,6 +12,7 @@ from app.services.video_generation_service import (
     generate_video,
     generate_with_kling26,
     generate_extended_kling26,
+    generate_first_frame_with_flux,
 )
 from app.services.overlay_service import apply_overlay, strip_audio_from_video
 from app.services.reel_service import update_reel
@@ -98,14 +99,10 @@ async def _async_process_reel_generation(
             product_info = ""
 
         # Resolve product image URL — used for TWO purposes:
-        #   1. Passed to fal.ai LTX as the first frame (image-to-video mode)
-        #      → guarantees the generated video shows the REAL product,
-        #        not an AI-hallucinated version built only from text
-        #   2. Used as fallback overlay watermark when no brand logo is set
-        #
-        # The Gemini prompt includes both scene description and camera/motion cues —
-        # Kling 2.6 uses the image as the visual anchor and the prompt to guide
-        # the animation direction (rotate, zoom, environment atmosphere).
+        #   1. First frame for Kling 2.6 image-to-video (after Flux enrichment)
+        #      → Flux generates a creative scene from the product photo,
+        #        then Kling animates that scene naturally
+        #   2. Fallback overlay watermark when no brand logo is set
         product_image_url: str | None = None
         if product and product.images:
             primary = next((img for img in product.images if img.is_primary), None)
@@ -134,22 +131,19 @@ async def _async_process_reel_generation(
             name_lower = product.product_name.lower()
             prompt_lower = reel.prompt_text.lower()
             if name_lower not in prompt_lower:
-                # Product name not in prompt — append it as context so LTX knows the subject
+                # Append product name so both Flux and Kling know the subject (F2-URS02-SRS01)
                 video_prompt = f"{reel.prompt_text.rstrip('.')}. Product: {product.product_name}."
 
         # ── Step 1: Determine video source ──────────────────────────────────
         if target in ["all", "video"]:
-            # Kling 2.6 generation — image-to-video when product image available,
-            # text-to-video otherwise.
+            # Pipeline: Flux Dev (first frame) → Kling 2.6 Pro (animation)
             #
-            # WHY Kling image-to-video (when product_image_url is set):
-            #   Kling 2.6 genuinely ANIMATES the product photo — it adds natural
-            #   movement (rotation, camera drift, lighting effects) rather than just
-            #   "wiggling" a pasted 2D image like LTX did.  The result looks like
-            #   a real product shoot, not a slideshow.
+            # When product image available:
+            #   1. Flux Dev img2img → generates a creative scene around the product
+            #      (better than animating a plain product-on-white-background photo)
+            #   2. That Flux image becomes Kling's first frame → Kling animates the scene
             #
-            # WHY text-to-video (when no product image):
-            #   No reference frame available — fall back to scene description.
+            # When no product image → Kling text-to-video directly
             final_video_url = await _run_kling_generation(
                 prompt=video_prompt,
                 image_url=product_image_url,  # None → text-to-video; URL → image-to-video
@@ -254,19 +248,24 @@ async def _run_kling_generation(
     """
     Generate a product reel using Kling Video 2.6 Pro.
 
-    Routes to single-clip or multi-clip extend chain based on duration:
-        ≤ 10s  → generate_with_kling26()          (single API call, fastest)
-        > 10s  → generate_extended_kling26()       (chained clips via last-frame)
+    Full pipeline:
+        1. Flux Dev img2img  → creative first frame from product photo + prompt
+        2. Kling 2.6 Pro     → animate the first frame into a video
+        (Flux step skipped if no product image → Kling text-to-video directly)
 
-    Extend chain pipeline (example 30s):
-        Clip 1 (10s): product image → Kling 2.6 Pro
+    Duration routing:
+        ≤ 10s → generate_with_kling26()         (single API call)
+        > 10s → generate_extended_kling26()      (chained clips via last-frame)
+
+    Extend chain (example 30s):
+        Clip 1 (10s): Flux first frame → Kling 2.6 Pro
         Clip 2 (10s): last_frame(clip1) → Kling 2.6 Pro
         Clip 3 (10s): last_frame(clip2) → Kling 2.6 Pro
         → FFmpeg concat → R2 upload → object key returned
 
     Args:
         prompt:     Gemini-generated scene description with camera + motion cues
-        image_url:  Presigned product image URL (None → text-to-video fallback)
+        image_url:  Presigned product image URL (None → skip Flux → text-to-video)
         duration:   Requested seconds (5, 10, 15, 30, 60)
         with_audio: Passed through for downstream FFmpeg audio control
         reel_id:    Reel UUID — used for R2 key naming in multi-clip concat
@@ -282,19 +281,37 @@ async def _run_kling_generation(
         logger.info("[Kling] No FAL_KEY, delegating to generate_video() facade")
         return await generate_video(prompt=prompt, image_url=image_url, duration=duration)
 
-    mode = "image-to-video" if image_url else "text-to-video"
+    # ── Step A: Flux first frame (only when product image is available) ───────
+    # Flux turns the plain product photo into a proper scene/environment,
+    # then we hand that generated scene to Kling as its first frame.
+    # If Flux fails for any reason, fall back to the original product image.
+    kling_image_url = image_url  # Default: use product image directly
+    if image_url:
+        try:
+            kling_image_url = await generate_first_frame_with_flux(
+                prompt=prompt,
+                product_image_url=image_url,
+            )
+            logger.info(f"[Worker] Flux first frame ready → passing to Kling")
+        except Exception as flux_err:
+            # Graceful degradation: Flux failed → Kling uses raw product image
+            logger.warning(
+                f"[Worker] Flux first frame failed, falling back to product image: {flux_err}"
+            )
+            kling_image_url = image_url
 
+    mode = "image-to-video" if kling_image_url else "text-to-video"
+
+    # ── Step B: Kling 2.6 Pro animation ──────────────────────────────────────
     if duration <= 10:
-        # ── Single clip (fastest path) ────────────────────────────────────────
         logger.info(f"[Kling] Single clip {mode} ({duration}s, audio={with_audio})")
         video_url = await generate_with_kling26(
             prompt=prompt,
-            image_url=image_url,
+            image_url=kling_image_url,
             duration=duration,
             with_audio=with_audio,
         )
     else:
-        # ── Multi-clip extend chain ────────────────────────────────────────────
         num_clips = math.ceil(duration / 10)
         logger.info(
             f"[Kling] Extended {mode}: {duration}s = {num_clips} clips "
@@ -302,7 +319,7 @@ async def _run_kling_generation(
         )
         video_url = await generate_extended_kling26(
             prompt=prompt,
-            image_url=image_url,
+            image_url=kling_image_url,
             total_duration=duration,
             with_audio=with_audio,
             reel_id=reel_id,

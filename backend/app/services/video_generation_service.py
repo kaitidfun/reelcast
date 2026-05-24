@@ -3,29 +3,32 @@ Video Generation Service
 ========================
 Handles AI video generation via Kling Video 2.6 Pro (fal.ai).
 
-Primary Pipeline:
-    For duration ≤ 10s : single Kling 2.6 Pro call (fastest path)
-    For duration > 10s : multi-clip extend chain — each clip starts from the
-                         last frame of the previous one for visual continuity,
-                         then all clips are concatenated with FFmpeg.
+Primary Pipeline (when product image is available):
+    1. Flux Dev img2img → creative first frame from product photo + prompt
+    2. Kling 2.6 Pro image-to-video → animate the Flux first frame
+
+    WHY two-step:
+    - Raw product photos (plain white background) produce boring animations
+    - Flux creates a proper scene/environment around the product first
+    - Kling then animates that scene → cinematic product reel
+
+    WHY Flux img2img (not text-only):
+    - img2img preserves product appearance better than generating from text
+    - strength=0.75 → 75% creative from prompt, 25% faithful to product photo
+    - Product silhouette/shape/color mostly preserved while scene is generated
+
+Fallback Pipeline (when no product image):
+    Kling 2.6 Pro text-to-video → scene from prompt only
+
+Duration handling:
+    ≤ 10s → single Kling call
+    > 10s → chained clips (last frame of clip N = first frame of clip N+1)
+             then FFmpeg concat → R2 upload
 
 Providers (priority order):
-    1. fal.ai Kling Video 2.6 Pro  — primary (cinematic product animation)
-    2. Google Veo 2.0              — quality fallback (slow, expensive)
-    3. Sample video                — free fallback for dev/CI
-
-Kling 2.6 Pro notes:
-    - Duration per call: "5" or "10" (string, fal.ai API requirement)
-    - image-to-video: product photo anchors the first frame; Kling animates
-      it naturally (rotation, camera drift, lighting effects)
-    - text-to-video: scene description only (fallback when no product image)
-    - For 15 / 30 / 60s: chained clips where clip N starts from the last
-      frame of clip N-1 (extracted with FFmpeg, uploaded to fal.ai)
-
-Note on Bria / LTX:
-    Bria (background-replace) and LTX 2.3 were used in the OLD pipeline and
-    have been REMOVED.  Kling 2.6 Pro handles image-to-video natively —
-    no separate scene-compositing step is needed.
+    1. fal.ai Flux Dev + Kling 2.6 Pro  — primary
+    2. Google Veo 2.0                   — quality fallback (slow, expensive)
+    3. Sample video                     — free fallback for dev/CI
 """
 
 import os
@@ -47,6 +50,16 @@ logger = logging.getLogger(__name__)
 # Kling 2.6 Pro — two modes selected based on whether a product image is available
 KLING26_TEXT_MODEL  = "fal-ai/kling-video/v2.6/pro/text-to-video"
 KLING26_IMAGE_MODEL = "fal-ai/kling-video/v2.6/pro/image-to-video"
+
+# Flux Dev — img2img mode: generates creative product scene from photo reference
+# Used as the first-frame generator before Kling animation
+FLUX_DEV_MODEL = "fal-ai/flux/dev"
+
+# How much creative freedom Flux has when generating the first frame.
+# 0.0 = output almost identical to product photo (safe, no scene)
+# 1.0 = output fully from text prompt (creative but may lose product shape)
+# 0.80 = recommended: product shape/color preserved, scene generated around it
+FLUX_STRENGTH = 0.80
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -230,6 +243,75 @@ async def _concat_clips(clip_urls: list[str], reel_id: str) -> str:
         raise RuntimeError(f"Video concatenation failed: {e}") from e
     finally:
         _cleanup_temp(*clip_paths, list_path, output_path)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Flux Dev — First Frame Generator
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def generate_first_frame_with_flux(
+    prompt: str,
+    product_image_url: str,
+    strength: float = FLUX_STRENGTH,
+) -> str:
+    """
+    Generate a creative first frame for Kling by running Flux Dev img2img.
+
+    Instead of passing the raw product photo directly to Kling (which often
+    means animating a product-on-white-background shot), Flux first creates
+    a proper scene/environment around the product.  The result is then passed
+    to Kling as its starting frame for cinematic animation.
+
+    How it works:
+        product_image_url → Flux Dev img2img → scene with product in environment
+        (e.g. coffee mug on wooden table, morning light, steam rising)
+
+    Args:
+        prompt:             Scene description (same prompt sent to Kling)
+        product_image_url:  Presigned/public URL of the product photo (reference)
+        strength:           0.0 = faithful to product photo (minimal scene creation)
+                            1.0 = fully creative (risky product fidelity)
+                            0.80 = recommended balance (default)
+
+    Returns:
+        fal.media CDN URL of the Flux-generated first frame (JPEG/PNG)
+
+    Raises:
+        RuntimeError: If fal.ai call fails
+    """
+    try:
+        import fal_client
+
+        logger.info(
+            f"[Flux] Generating first frame "
+            f"(strength={strength}): {prompt[:60]}..."
+        )
+
+        def _run():
+            result = fal_client.run(
+                FLUX_DEV_MODEL,
+                arguments={
+                    "prompt": prompt,
+                    "image_url": product_image_url,
+                    "strength": strength,
+                    "image_size": "portrait_9_16",   # Match Kling 9:16 output
+                    "num_inference_steps": 28,        # Flux Dev default
+                    "guidance_scale": 3.5,            # Flux Dev default
+                    "num_images": 1,
+                    "enable_safety_checker": True,
+                },
+            )
+            # Flux response: {"images": [{"url": "...", "width": ..., "height": ...}]}
+            return result["images"][0]["url"]
+
+        loop = asyncio.get_event_loop()
+        url = await loop.run_in_executor(None, _run)
+        logger.info(f"[Flux] First frame ready: {url}")
+        return url
+
+    except Exception as e:
+        logger.error(f"[Flux] First frame generation failed: {e}")
+        raise RuntimeError(f"Flux first frame generation failed: {e}") from e
 
 
 # ─────────────────────────────────────────────────────────────────────────────
