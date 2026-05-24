@@ -96,7 +96,7 @@ Rules:
 
         def _generate():
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 contents=full_prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
@@ -222,7 +222,7 @@ async def generate_prompt_from_template(
                 contents = system_prompt + "\n\n" + user_content
 
             return client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 contents=contents,
             ).text.strip()
 
@@ -332,7 +332,7 @@ async def enhance_prompt(
                 contents = system_prompt + "\n\n" + user_content
 
             return client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 contents=contents,
             ).text.strip()
 
@@ -464,7 +464,7 @@ async def generate_guided_prompt(
                 contents = user_content
 
             return client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 contents=contents,
             ).text.strip()
 
@@ -529,7 +529,7 @@ async def score_prompt_fidelity(prompt: str) -> float:
 
         def _score():
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 contents=system_prompt + f"\n\nPrompt to evaluate:\n{prompt}",
             )
             raw = response.text.strip()
