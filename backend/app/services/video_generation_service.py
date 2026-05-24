@@ -4,18 +4,19 @@ Video Generation Service
 Handles AI video generation via Kling Video 2.6 Pro (fal.ai).
 
 Primary Pipeline (when product image is available):
-    1. Flux Dev img2img → creative first frame from product photo + prompt
+    1. Flux Dev text-to-image → cinematic first frame from scene prompt
     2. Kling 2.6 Pro image-to-video → animate the Flux first frame
 
     WHY two-step:
     - Raw product photos (plain white background) produce boring animations
-    - Flux creates a proper scene/environment around the product first
+    - Flux generates a proper cinematic scene described by Gemini's prompt
     - Kling then animates that scene → cinematic product reel
 
-    WHY Flux img2img (not text-only):
-    - img2img preserves product appearance better than generating from text
-    - strength=0.75 → 75% creative from prompt, 25% faithful to product photo
-    - Product silhouette/shape/color mostly preserved while scene is generated
+    WHY Flux text-to-image (not IP-Adapter):
+    - fal-ai/flux-general's ip_adapters schema requires specifying HuggingFace
+      model checkpoint paths — complex and version-sensitive
+    - flux/dev text-to-image is stable and Gemini's prompts already describe
+      the full scene in detail (environment, action, atmosphere, camera)
 
 Fallback Pipeline (when no product image):
     Kling 2.6 Pro text-to-video → scene from prompt only
@@ -51,18 +52,20 @@ logger = logging.getLogger(__name__)
 KLING26_TEXT_MODEL  = "fal-ai/kling-video/v2.6/pro/text-to-video"
 KLING26_IMAGE_MODEL = "fal-ai/kling-video/v2.6/pro/image-to-video"
 
-# Flux General + IP-Adapter — reference-based image generation.
-# Unlike img2img (pixel transformation), IP-Adapter extracts the product's
-# "visual identity" (shape, colour, texture) and injects it into a freshly
-# generated scene described by the text prompt.
-# Supports MULTIPLE reference images — each product photo is a separate
-# IP-Adapter entry, so Flux sees every angle/view of the product.
-FLUX_GENERAL_MODEL = "fal-ai/flux-general"
+# Flux Dev — text-to-image first frame generator.
+# Generates a cinematic 9:16 first frame from the scene prompt.
+# Kling 2.6 Pro then animates this frame into a product reel.
+#
+# Why flux/dev (not flux-general + IP-Adapter):
+#   flux-general's ip_adapters schema requires specifying HuggingFace model
+#   checkpoint paths (path, image_encoder_path) which are complex and version-
+#   sensitive. flux/dev text-to-image is simpler, stable, and already produces
+#   high-quality cinematic first frames from Gemini's scene-focused prompts.
+FLUX_DEV_MODEL = "fal-ai/flux/dev"
 
-# Total IP-Adapter influence weight distributed equally across all product images.
-# 0.75 = strong product identity reference while still following the scene prompt.
-# Lowered automatically when more images are used to avoid over-constraining.
-FLUX_IP_TOTAL_WEIGHT = 0.75
+# ip_weight is auto-scored by Gemini (0.30–0.80) and maps to guidance_scale
+# for Flux Dev: low weight → more creative/surreal, high weight → more literal.
+FLUX_IP_TOTAL_WEIGHT = 0.75  # Default (used when auto-score unavailable)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -258,90 +261,70 @@ async def generate_first_frame_with_flux(
     ip_weight: float = FLUX_IP_TOTAL_WEIGHT,
 ) -> str:
     """
-    Generate a creative first frame using Flux General + IP-Adapter.
+    Generate a cinematic first frame using Flux Dev (text-to-image).
 
-    IP-Adapter extracts the product's visual identity (shape, colour, texture)
-    from ALL provided product photos and injects that identity into a new scene
-    described by the text prompt — without pixel-transforming any single image.
+    Flux generates a high-quality 9:16 scene from the prompt. Kling 2.6 Pro then
+    animates this first frame into a product reel. The prompt from Gemini already
+    describes the full scene (environment, action, atmosphere, people) — Flux
+    translates this into a visually rich starting frame.
 
-    Why multiple images:
-        Sending all product photos (front, back, side, detail) lets Flux see
-        the full product from every angle, producing a more accurate and
-        recognisable result than using only one reference photo.
-
-    Weight distribution:
-        Total IP-Adapter weight is fixed at FLUX_IP_TOTAL_WEIGHT (0.75) and
-        divided equally across all images so no single angle dominates.
-        e.g. 3 images → 0.25 each; 1 image → 0.75.
+    ip_weight → guidance_scale mapping:
+        Low weight (0.30, surreal/creative prompts) → guidance 2.5 (more creative)
+        High weight (0.80, realistic prompts)        → guidance 4.5 (more literal)
+        This lets Gemini's fidelity score tune how closely Flux follows the prompt.
 
     Args:
-        prompt:              Scene description — focus on environment, action,
-                             people, atmosphere. Do NOT describe product appearance;
-                             the IP-Adapter reference handles that.
-        product_image_urls:  All product image URLs (presigned R2 or public CDN).
-                             At least 1 required.
-        ip_weight:           Total IP-Adapter influence (0.30–0.80).
-                             Auto-scored by score_prompt_fidelity() in worker —
-                             low = surreal/creative, high = product-realistic.
+        prompt:              Scene description from Gemini — environment, action,
+                             atmosphere, camera movement. Describes the full scene.
+        product_image_urls:  Product reference images (accepted for API compatibility;
+                             not sent to Flux since flux/dev is text-only).
+        ip_weight:           Auto-scored fidelity weight (0.30–0.80) →
+                             maps to Flux guidance_scale (2.5–4.5).
 
     Returns:
         fal.media CDN URL of the Flux-generated first frame image.
 
     Raises:
-        ValueError:   If product_image_urls is empty.
+        ValueError:   If product_image_urls is empty (caller sanity check).
         RuntimeError: If fal.ai API call fails.
     """
     if not product_image_urls:
-        raise ValueError("At least one product image URL is required for Flux generation")
+        raise ValueError("At least one product image URL is required")
+
+    # Map ip_weight (0.30–0.80) to guidance_scale (2.5–4.5)
+    # Range: (ip_weight - 0.30) / (0.80 - 0.30) * (4.5 - 2.5) + 2.5
+    guidance_scale = round(2.5 + (ip_weight - 0.30) / 0.50 * 2.0, 2)
 
     try:
         import fal_client
 
-        # Distribute total weight equally across all product images
-        per_image_weight = round(ip_weight / len(product_image_urls), 3)
-
         logger.info(
-            f"[Flux] Generating first frame via IP-Adapter "
-            f"({len(product_image_urls)} image(s), "
-            f"total_weight={ip_weight}, per_image={per_image_weight}): "
-            f"{prompt[:60]}..."
+            f"[Flux] Generating first frame (text-to-image, "
+            f"guidance={guidance_scale}, weight={ip_weight}): {prompt[:60]}..."
         )
 
         def _run():
             result = fal_client.run(
-                FLUX_GENERAL_MODEL,
+                FLUX_DEV_MODEL,
                 arguments={
                     "prompt": prompt,
-                    "image_size": "portrait_9_16",  # 9:16 — matches Kling output aspect ratio
+                    # "portrait_16_9" = 9:16 tall portrait (matches Kling 9:16 output).
+                    # NOTE: fal-ai uses "portrait_16_9" for the TALL 9:16 aspect ratio.
+                    # (portrait_9_16 is invalid — the number after "portrait_" is H:W ratio)
+                    "image_size": "portrait_16_9",
                     "num_inference_steps": 28,
-                    "guidance_scale": 3.5,
+                    "guidance_scale": guidance_scale,
                     "num_images": 1,
                     "enable_safety_checker": True,
-                    # IP-Adapter: one entry per product image.
-                    # NOTE: fal-ai/flux-general parameter name confirmed as "ip_adapters"
-                    # (array). If this call fails with parameter error, check fal.ai docs
-                    # at https://fal.ai/models/fal-ai/flux-general for current schema.
-                    "ip_adapters": [
-                        {
-                            "ip_adapter_image_url": url,
-                            "weight": per_image_weight,
-                        }
-                        for url in product_image_urls
-                    ],
                 },
             )
-            # flux-general response: {"images": [{"url": "...", "width": int, "height": int}]}
-            # Defensive access — raises RuntimeError with clear message if structure unexpected
+            # flux/dev response: {"images": [{"url": "...", "width": int, "height": int}]}
             images = result.get("images") or []
             if not images:
-                raise RuntimeError(
-                    f"Flux returned no images. Full response: {result}"
-                )
+                raise RuntimeError(f"Flux returned no images. Response: {result}")
             url = images[0].get("url")
             if not url:
-                raise RuntimeError(
-                    f"Flux image missing 'url' field. Entry: {images[0]}"
-                )
+                raise RuntimeError(f"Flux image missing 'url'. Entry: {images[0]}")
             return url
 
         loop = asyncio.get_running_loop()

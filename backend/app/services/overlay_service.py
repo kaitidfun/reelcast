@@ -16,6 +16,7 @@ Usage:
 """
 
 import os
+import shutil
 import asyncio
 import tempfile
 import logging
@@ -27,6 +28,18 @@ import httpx
 from app.services.storage_service import upload_raw_bytes_to_r2
 
 logger = logging.getLogger(__name__)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FFmpeg availability check (runs once at import time for fast fail)
+# ─────────────────────────────────────────────────────────────────────────────
+_FFMPEG_AVAILABLE: bool = shutil.which("ffmpeg") is not None
+if not _FFMPEG_AVAILABLE:
+    logger.warning(
+        "[Overlay] ffmpeg executable not found in PATH. "
+        "Overlay and audio-strip operations will be skipped. "
+        "Install FFmpeg from https://www.gyan.dev/ffmpeg/builds/ (Windows) "
+        "or https://ffmpeg.org/download.html, add to PATH, then restart Celery."
+    )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
@@ -118,8 +131,14 @@ async def overlay_watermark(
         Path to output MP4 file
 
     Raises:
-        ffmpeg.Error: If FFmpeg compositing fails
+        RuntimeError: If FFmpeg is not installed or compositing fails
     """
+    if not _FFMPEG_AVAILABLE:
+        raise RuntimeError(
+            "ffmpeg not found in PATH — install FFmpeg and restart Celery worker. "
+            "Windows builds: https://www.gyan.dev/ffmpeg/builds/"
+        )
+
     # Resolve position coordinates (or default to bottom-right)
     overlay_x, overlay_y = POSITION_COORDS.get(position, POSITION_COORDS['bottom-right'])
 
@@ -203,8 +222,14 @@ async def strip_audio_from_video(video_url: str, reel_id: str) -> str:
         (proxied by the backend via /api/upload/videos/{key})
 
     Raises:
-        Exception: If download, FFmpeg, or R2 upload fails
+        RuntimeError: If FFmpeg is not installed, or download/upload fails
     """
+    if not _FFMPEG_AVAILABLE:
+        raise RuntimeError(
+            "ffmpeg not found in PATH — install FFmpeg and restart Celery worker. "
+            "Windows builds: https://www.gyan.dev/ffmpeg/builds/"
+        )
+
     video_tmp = None
     output_tmp = None
 
