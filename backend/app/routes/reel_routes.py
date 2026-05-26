@@ -98,12 +98,13 @@ class EnhancePromptRequest(BaseModel):
 
 class GuidedPromptRequest(BaseModel):
     """Request body for Guide Me → Auto-Build Prompt (multimodal Gemini generation)."""
-    mood:       Optional[str] = None   # Mood/Vibe card label selected by user
-    target:     Optional[str] = None   # Target Audience card label
-    style:      Optional[str] = None   # Visual Style card label
-    focus:      Optional[str] = None   # Scene Focus card label
-    lighting:   Optional[str] = None   # Lighting & Environment card label
-    product_id: Optional[UUID] = None  # Selected product for context + image
+    mood:          Optional[str] = None   # Mood/Vibe card label selected by user
+    target:        Optional[str] = None   # Target Audience card label
+    style:         Optional[str] = None   # Visual Style card label
+    focus:         Optional[str] = None   # Scene Focus card label
+    lighting:      Optional[str] = None   # Lighting & Environment card label
+    camera_motion: Optional[str] = None   # Camera Motion chip — maps to LTX camera instruction
+    product_id:    Optional[UUID] = None  # Selected product for context + image
     duration:   Optional[int] = 30
 
 class PromptResponse(BaseModel):
@@ -441,6 +442,7 @@ async def generate_guided_prompt_endpoint(
         style=req.style,
         focus=req.focus,
         lighting=req.lighting,
+        camera_motion=req.camera_motion,
         product_name=product_name,
         product_description=product_description,
         product_images=product_images,
