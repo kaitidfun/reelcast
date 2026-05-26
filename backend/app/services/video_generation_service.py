@@ -268,7 +268,7 @@ async def generate_first_frame_with_flux(
     """
     Generate a cinematic first frame using Flux Dev (text-to-image).
 
-    Flux generates a high-quality 9:16 scene from the prompt. Kling 2.6 Pro then
+    Flux generates a high-quality 9:16 scene from the prompt. LTX Video 2.3 then
     animates this first frame into a product reel. The prompt from Gemini already
     describes the full scene (environment, action, atmosphere, people) — Flux
     translates this into a visually rich starting frame.
@@ -313,7 +313,7 @@ async def generate_first_frame_with_flux(
                 FLUX_DEV_MODEL,
                 arguments={
                     "prompt": prompt,
-                    # "portrait_16_9" = 9:16 tall portrait (matches Kling 9:16 output).
+                    # "portrait_16_9" = 9:16 tall portrait (matches LTX 768×432 output).
                     # NOTE: fal-ai uses "portrait_16_9" for the TALL 9:16 aspect ratio.
                     # (portrait_9_16 is invalid — the number after "portrait_" is H:W ratio)
                     "image_size": "portrait_16_9",
@@ -403,7 +403,7 @@ async def generate_with_ltx(
             # fal.ai LTX response: {"video": {"url": "https://fal.media/...mp4"}}
             return result["video"]["url"]
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         url = await loop.run_in_executor(None, _run)
         logger.info(f"[LTX] Done: {url}")
         return url

@@ -65,7 +65,7 @@ async def _async_process_reel_generation(
 
     Workflow:
         1. Load reel + product from DB; enrich prompt with product metadata (F2-URS02-SRS01)
-        2. Generate video via Kling 2.6 Pro:
+        2. Generate video via Flux Dev + LTX Video 2.3:
              ≤ 10s → single clip
              > 10s → multi-clip extend chain (clips chained via last-frame extraction)
            OR use uploaded video (target="upload")
@@ -100,8 +100,8 @@ async def _async_process_reel_generation(
 
         # Resolve product image URLs:
         #   product_image_url  (primary only) — used for overlay watermark fallback
-        #   product_image_urls (ALL images)   — passed to Flux IP-Adapter so Flux
-        #       sees every angle/view of the product for a richer first frame
+        #   product_image_urls (ALL images)   — passed to Flux Dev so it
+        #       has every angle/view available when scoring fidelity for first frame
         product_image_url: str | None = None   # Primary — overlay fallback
         product_image_urls: list[str] = []      # All images — Flux IP-Adapter reference
 
@@ -134,25 +134,26 @@ async def _async_process_reel_generation(
             elif product_image_url:
                 overlay_url = product_image_url  # Already presigned above
 
-        # Build the final video prompt for Kling 2.6 Pro (F2-URS02-SRS01).
+        # Build the final video prompt for LTX Video 2.3 (F2-URS02-SRS01).
         # Gemini-generated prompts already describe the scene visually in detail.
         # Only append the product name as a light anchor if not already present.
-        # Avoid overloading — Kling responds best to concise, concrete descriptions.
+        # Avoid overloading — LTX works best with short, concise prompts (200–350 chars).
         video_prompt = reel.prompt_text
         if product and product.product_name:
             name_lower = product.product_name.lower()
             prompt_lower = reel.prompt_text.lower()
             if name_lower not in prompt_lower:
-                # Append product name so both Flux and Kling know the subject (F2-URS02-SRS01)
+                # Append product name so both Flux and LTX know the subject (F2-URS02-SRS01)
                 video_prompt = f"{reel.prompt_text.rstrip('.')}. Product: {product.product_name}."
 
         # ── Step 1: Determine video source ──────────────────────────────────
         if target in ["all", "video"]:
-            # Pipeline: Flux General+IP-Adapter (first frame) → Kling 2.6 Pro (animation)
+            # Pipeline: Flux Dev (first frame) → LTX Video 2.3 (animation)
             #
-            # product_image_urls → Flux sees all product angles → generates scene
-            # Flux output → Kling animates the scene → final video
-            # Fallback: no images → Kling text-to-video directly
+            # product_image_urls → fidelity scoring → Flux guidance_scale
+            # Flux generates cinematic 9:16 first frame from prompt
+            # LTX animates that frame → final video
+            # Fallback: no product images → LTX text-to-video directly
             final_video_url = await _run_ltx_generation(
                 prompt=video_prompt,
                 image_url=product_image_url,           # Primary — LTX fallback if Flux fails
@@ -245,7 +246,7 @@ async def _async_process_reel_generation(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Kling 2.6 Generation
+# LTX Video 2.3 Generation (Flux Dev first frame → LTX animation)
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def _run_ltx_generation(
@@ -281,7 +282,7 @@ async def _run_ltx_generation(
     Args:
         prompt:               LTX-optimised scene description (200–350 chars,
                               motion-first, explicit camera instruction at end)
-        image_url:            Primary product image URL — Kling fallback if Flux fails
+        image_url:            Primary product image URL — LTX fallback if Flux fails
         duration:             Requested seconds (5, 10, 15, 30, 60)
         with_audio:           Passed through for downstream FFmpeg audio control
         reel_id:              Reel UUID for R2 key naming in multi-clip concat
