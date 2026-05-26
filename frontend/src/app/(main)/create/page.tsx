@@ -103,7 +103,7 @@ const MOOD_OPTIONS: GuideOption[] = [
   { label: "Luxury & Premium",  description: "Sophisticated and refined. Deep gold tones conveying exclusivity and high value." },
   { label: "Cute & Warm",       description: "Soft, gentle, and heartwarming. Pastel tones with a cozy, friendly feel." },
   { label: "Dark & Mysterious", description: "Moody shadows and dramatic atmosphere. Intrigue that keeps viewers watching." },
-  { label: "Storytelling",      description: "Emotional narrative arc. Draws viewers in with a beginning, conflict, and resolution." },
+  { label: "Dreamy / Soft",     description: "Soft bokeh, pastel tones, and a gentle floating atmosphere. Ethereal and calming." },
   { label: "Eco & Natural",     description: "Earth tones and calm energy. Communicates sustainability and natural goodness." },
 ];
 
@@ -122,7 +122,7 @@ const STYLE_OPTIONS: GuideOption[] = [
   { label: "Cinematic",       description: "Sweeping camera movements and professional lighting. Feels like a movie trailer." },
   { label: "UGC / Authentic", description: "Handheld, real-person footage. Genuine and relatable — like a friend's recommendation." },
   { label: "Minimal & Clean", description: "Simple compositions, clean lines, and restrained design. Lets the product speak." },
-  { label: "Trendy / Viral",  description: "Jump cuts, text overlays, trending audio. Optimised for algorithm-friendly virality." },
+  { label: "Close-up / Macro", description: "Extreme close-ups on textures, details, and fine craftsmanship. Makes materials look irresistible." },
   { label: "Vintage / Retro", description: "Film grain, warm tones, and nostalgic aesthetics. Evokes warmth and authenticity." },
   { label: "Dark / Moody",    description: "Low-key lighting, rich shadows, and editorial composition. Mysterious and luxurious." },
 ];
@@ -145,6 +145,16 @@ const LIGHTING_OPTIONS: GuideOption[] = [
   { label: "Natural Outdoor",      description: "Bright daylight outdoors. Fresh, clean, and organic — the world as a natural studio." },
   { label: "Dark Dramatic",        description: "Minimal light, deep shadows, single key-light. Creates intensity and mystery." },
   { label: "Backlit / Silhouette", description: "Light source placed behind the subject. Creates glowing outlines and artistic silhouettes." },
+];
+
+/** Row 6: Camera Motion — 6 items → 2 rows × 3 */
+const CAMERA_OPTIONS: GuideOption[] = [
+  { label: "Slow Zoom In",       description: "Camera gradually pushes toward the subject. Builds tension and draws the viewer in." },
+  { label: "Orbit / Rotate",     description: "Camera circles around the subject. Shows every angle of the product elegantly." },
+  { label: "Dolly Right",        description: "Camera slides sideways to reveal the scene. Clean, editorial movement." },
+  { label: "Pull Back / Reveal", description: "Camera pulls back to reveal the full environment. Great for dramatic scene reveals." },
+  { label: "Handheld Drift",     description: "Gentle organic handheld movement. Natural and authentic, like a documentary style." },
+  { label: "Static Close-up",    description: "Camera holds still on a tight frame. Lets textures and details take center stage." },
 ];
 
 // ─── Platform icons (inline SVG — lucide-react has no brand icons) ────────────
@@ -299,7 +309,7 @@ const CreateReel = () => {
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   /**
-   * Guided Prompt state — 4 rows of chips help users who don't know what to write.
+   * Guided Prompt state — rows of chips help users who don't know what to write.
    * Any combination of selections builds an enriched AI prompt automatically.
    */
   const [guidedMode, setGuidedMode] = useState(false);
@@ -308,6 +318,7 @@ const CreateReel = () => {
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
   const [selectedFocus, setSelectedFocus] = useState<string | null>(null);
   const [selectedLighting, setSelectedLighting] = useState<string | null>(null);
+  const [selectedCameraMotion, setSelectedCameraMotion] = useState<string | null>(null);
   /** Hovered Guide Me option — drives the floating cursor tooltip */
   const [hoveredOption, setHoveredOption] = useState<{ label: string; description: string } | null>(null);
   /** Cursor position for the floating tooltip, updated on every mousemove over a chip */
@@ -579,7 +590,7 @@ const CreateReel = () => {
       toast({ title: "Select a product first", description: "Auto-Build uses your product details to personalise the prompt." });
       return;
     }
-    const hasAnySelection = selectedMood || selectedTarget || selectedStyle || selectedFocus || selectedLighting;
+    const hasAnySelection = selectedMood || selectedTarget || selectedStyle || selectedFocus || selectedLighting || selectedCameraMotion;
     if (!hasAnySelection) {
       toast({ title: "Pick at least one option", description: "Select any card from the rows below to build a prompt." });
       return;
@@ -595,12 +606,13 @@ const CreateReel = () => {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          mood:       selectedMood     ?? undefined,
-          target:     selectedTarget   ?? undefined,
-          style:      selectedStyle    ?? undefined,
-          focus:      selectedFocus    ?? undefined,
-          lighting:   selectedLighting ?? undefined,
-          product_id: selectedProduct?.id ?? undefined,
+          mood:          selectedMood         ?? undefined,
+          target:        selectedTarget       ?? undefined,
+          style:         selectedStyle        ?? undefined,
+          focus:         selectedFocus        ?? undefined,
+          lighting:      selectedLighting     ?? undefined,
+          camera_motion: selectedCameraMotion ?? undefined,
+          product_id:    selectedProduct?.id  ?? undefined,
           duration,
         }),
       });
@@ -1117,8 +1129,8 @@ const CreateReel = () => {
                 {/* Header: title + clear-all */}
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-primary/80">Guide Me — pick any combination, AI builds your prompt</p>
-                  {(selectedMood || selectedTarget || selectedStyle || selectedFocus || selectedLighting) && (
-                    <button type="button" onClick={() => { setSelectedMood(null); setSelectedTarget(null); setSelectedStyle(null); setSelectedFocus(null); setSelectedLighting(null); }}
+                  {(selectedMood || selectedTarget || selectedStyle || selectedFocus || selectedLighting || selectedCameraMotion) && (
+                    <button type="button" onClick={() => { setSelectedMood(null); setSelectedTarget(null); setSelectedStyle(null); setSelectedFocus(null); setSelectedLighting(null); setSelectedCameraMotion(null); }}
                       className="text-[9px] text-muted-foreground hover:text-foreground transition-colors">Clear all</button>
                   )}
                 </div>
@@ -1211,16 +1223,33 @@ const CreateReel = () => {
                   </div>
                 </div>
 
+                {/* Row 6: Camera Motion — tells LTX exactly how to move the camera */}
+                <div className="space-y-1.5">
+                  <p className="text-sm font-semibold text-foreground">Camera Motion</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CAMERA_OPTIONS.map((opt) => (
+                      <button key={opt.label} type="button"
+                        onClick={() => setSelectedCameraMotion(selectedCameraMotion === opt.label ? null : opt.label)}
+                        onMouseEnter={(e) => { setHoveredOption({ label: opt.label, description: opt.description }); setTooltipPos({ x: e.clientX, y: e.clientY }); }}
+                        onMouseMove={(e) => setTooltipPos({ x: e.clientX, y: e.clientY })}
+                        onMouseLeave={() => setHoveredOption(null)}
+                        className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition-all ${selectedCameraMotion === opt.label ? "bg-primary text-primary-foreground shadow-sm ring-2 ring-primary/30" : "border border-border bg-muted/40 text-muted-foreground hover:border-primary/30 hover:text-foreground"}`}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Build button — calls Gemini API with chip selections + product images */}
                 <button type="button" onClick={handleBuildGuidedPrompt}
-                  disabled={guidedLoading || !selectedProduct || (!selectedMood && !selectedTarget && !selectedStyle && !selectedFocus && !selectedLighting)}
+                  disabled={guidedLoading || !selectedProduct || (!selectedMood && !selectedTarget && !selectedStyle && !selectedFocus && !selectedLighting && !selectedCameraMotion)}
                   className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-sm disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5">
                   {guidedLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                   {guidedLoading ? "Building with AI…" : "Auto-Build Prompt"}
                   {!guidedLoading && !selectedProduct && (
                     <span className="opacity-60 ml-1">(select product first)</span>
                   )}
-                  {!guidedLoading && selectedProduct && !selectedMood && !selectedTarget && !selectedStyle && !selectedFocus && !selectedLighting && (
+                  {!guidedLoading && selectedProduct && !selectedMood && !selectedTarget && !selectedStyle && !selectedFocus && !selectedLighting && !selectedCameraMotion && (
                     <span className="opacity-60 ml-1">(pick options above)</span>
                   )}
                 </button>

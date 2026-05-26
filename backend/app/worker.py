@@ -10,8 +10,8 @@ from app.models.models import Reel, Product
 from app.services.ai_service import generate_captions, score_prompt_fidelity
 from app.services.video_generation_service import (
     generate_video,
-    generate_with_kling26,
-    generate_extended_kling26,
+    generate_with_ltx,
+    generate_extended_ltx,
     generate_first_frame_with_flux,
 )
 from app.services.overlay_service import apply_overlay, strip_audio_from_video
@@ -153,10 +153,10 @@ async def _async_process_reel_generation(
             # product_image_urls → Flux sees all product angles → generates scene
             # Flux output → Kling animates the scene → final video
             # Fallback: no images → Kling text-to-video directly
-            final_video_url = await _run_kling_generation(
+            final_video_url = await _run_ltx_generation(
                 prompt=video_prompt,
-                image_url=product_image_url,        # Primary — Kling fallback if Flux fails
-                product_image_urls=product_image_urls,  # All — Flux IP-Adapter reference
+                image_url=product_image_url,           # Primary — LTX fallback if Flux fails
+                product_image_urls=product_image_urls, # All — Flux first-frame reference
                 duration=duration,
                 with_audio=with_audio,
                 reel_id=reel_id,
@@ -248,7 +248,7 @@ async def _async_process_reel_generation(
 # Kling 2.6 Generation
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _run_kling_generation(
+async def _run_ltx_generation(
     prompt: str,
     image_url: str | None,
     duration: int,
@@ -257,31 +257,35 @@ async def _run_kling_generation(
     product_image_urls: list[str] | None = None,
 ) -> str:
     """
-    Generate a product reel using Flux General + IP-Adapter → Kling 2.6 Pro.
+    Generate a product reel using Flux Dev (first frame) → LTX Video 2.3 (animation).
 
     Full pipeline:
-        1. Flux General + IP-Adapter (all product images as references)
-           → creative first frame: product identity injected into a new scene
-        2. Kling 2.6 Pro image-to-video → animate the Flux first frame
+        1. Gemini scores prompt fidelity (1–5) → Flux guidance_scale (2.5–4.5)
+        2. Flux Dev text-to-image → cinematic 9:16 first frame
+        3. LTX Video 2.3 image-to-video → animate the Flux first frame (~30s fast)
 
     Flux skipped when:
-        - No product images available → Kling text-to-video directly
+        - No product images available → LTX text-to-video directly
         - FAL_KEY not set             → generate_video() facade (Veo / sample)
         - Flux API fails              → graceful degradation to raw product image
 
     Duration routing:
-        ≤ 10s → generate_with_kling26()         (single API call)
-        > 10s → generate_extended_kling26()      (chained clips via last-frame)
+        ≤ 10s → generate_with_ltx()        (single API call)
+        > 10s → generate_extended_ltx()    (chained clips via last-frame extraction)
+
+    Prompt guidance for >10s extend chains:
+        Use cyclic/ambient motion (gentle rotation, soft drift) — directional
+        motions (zoom in, dolly) become incoherent after the first clip because
+        each clip starts from a new position.
 
     Args:
-        prompt:               Scene description (from Gemini) — scene/action/atmosphere,
-                              NOT product appearance (Flux handles that from the images)
-        image_url:            Primary product image URL — used as Kling fallback if Flux fails
+        prompt:               LTX-optimised scene description (200–350 chars,
+                              motion-first, explicit camera instruction at end)
+        image_url:            Primary product image URL — Kling fallback if Flux fails
         duration:             Requested seconds (5, 10, 15, 30, 60)
         with_audio:           Passed through for downstream FFmpeg audio control
         reel_id:              Reel UUID for R2 key naming in multi-clip concat
-        product_image_urls:   ALL product image URLs for Flux IP-Adapter references
-                              (multiple angles → better product fidelity in generated scene)
+        product_image_urls:   ALL product image URLs → Flux sees every product angle
 
     Returns:
         fal.media CDN URL  (single clip ≤ 10s)
@@ -291,64 +295,61 @@ async def _run_kling_generation(
 
     # ── Fallback: no fal.ai key → use simple facade (Veo or sample) ──────────
     if not fal_key:
-        logger.info("[Kling] No FAL_KEY, delegating to generate_video() facade")
+        logger.info("[LTX] No FAL_KEY, delegating to generate_video() facade")
         return await generate_video(prompt=prompt, image_url=image_url, duration=duration)
 
-    # ── Step A: Auto-score fidelity → set Flux IP-Adapter weight ─────────────
+    # ── Step 1: Auto-score fidelity → set Flux guidance_scale ────────────────
     # Gemini reads the prompt and scores 1–5 (surreal→realistic).
-    # Weight maps: score 1 → 0.30 (creative freedom) … score 5 → 0.80 (faithful)
-    # Runs concurrently with other work — if it fails, default 0.60 is used.
+    # Score maps to Flux guidance_scale: 1 → 2.5 (creative), 5 → 4.5 (faithful)
+    # Runs concurrently with other work — if it fails, default weight 0.60 is used.
     flux_inputs = product_image_urls or ([image_url] if image_url else [])
-    kling_image_url = image_url  # Default fallback = primary product image
+    ltx_image_url = image_url  # Default fallback = primary product image
 
     if flux_inputs:
         ip_weight = await score_prompt_fidelity(prompt)
 
-        # ── Step B: Flux first frame via IP-Adapter ───────────────────────────
-        # Uses ALL product images as IP-Adapter references so Flux sees every angle.
-        # ip_weight determined above — high for realistic prompts, low for creative.
+        # ── Step 2: Flux Dev first frame ──────────────────────────────────────
+        # ip_weight from Step 1 → guidance_scale for Flux (0.30→2.5, 0.80→4.5)
         # Falls back to raw primary product image if Flux fails.
         try:
-            kling_image_url = await generate_first_frame_with_flux(
+            ltx_image_url = await generate_first_frame_with_flux(
                 prompt=prompt,
                 product_image_urls=flux_inputs,
                 ip_weight=ip_weight,
             )
             logger.info(
                 f"[Worker] Flux first frame ready "
-                f"({len(flux_inputs)} reference(s), weight={ip_weight}) → passing to Kling"
+                f"({len(flux_inputs)} reference(s), weight={ip_weight}) → passing to LTX"
             )
         except Exception as flux_err:
-            # Graceful degradation: Flux failed → Kling uses raw product image
+            # Graceful degradation: Flux failed → LTX uses raw product image
             logger.warning(
                 f"[Worker] Flux first frame failed, falling back to product image: {flux_err}"
             )
-            kling_image_url = image_url
+            ltx_image_url = image_url
 
-    mode = "image-to-video" if kling_image_url else "text-to-video"
+    mode = "image-to-video" if ltx_image_url else "text-to-video"
 
-    # ── Step B: Kling 2.6 Pro animation ──────────────────────────────────────
+    # ── Step 3: LTX Video 2.3 animation ──────────────────────────────────────
     if duration <= 10:
-        logger.info(f"[Kling] Single clip {mode} ({duration}s, audio={with_audio})")
-        video_url = await generate_with_kling26(
+        logger.info(f"[LTX] Single clip {mode} ({duration}s, audio={with_audio})")
+        video_url = await generate_with_ltx(
             prompt=prompt,
-            image_url=kling_image_url,
+            image_url=ltx_image_url,
             duration=duration,
-            with_audio=with_audio,
         )
     else:
         num_clips = math.ceil(duration / 10)
         logger.info(
-            f"[Kling] Extended {mode}: {duration}s = {num_clips} clips "
+            f"[LTX] Extended {mode}: {duration}s = {num_clips} clips "
             f"(audio={with_audio})"
         )
-        video_url = await generate_extended_kling26(
+        video_url = await generate_extended_ltx(
             prompt=prompt,
-            image_url=kling_image_url,
+            image_url=ltx_image_url,
             total_duration=duration,
-            with_audio=with_audio,
             reel_id=reel_id,
         )
 
-    logger.info(f"[Kling] Done: {video_url}")
+    logger.info(f"[LTX] Done: {video_url}")
     return video_url
