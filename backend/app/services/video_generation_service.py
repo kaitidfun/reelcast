@@ -1,226 +1,544 @@
 """
 Video Generation Service
 ========================
-Handles AI video generation via LTX Video 2.3 (fal.ai) — fast, high-quality
-short-form vertical video for social media reels.
+Handles AI video generation via Kling Video 2.6 Pro (fal.ai).
 
-Primary Pipeline:
-    LTX Video 2.3 (fal-ai/ltx-video)
-    - image-to-video: product image directly → animated product reel
-    - text-to-video:  prompt only (when no product image available)
+Primary Pipeline (when product image is available):
+    1. Flux Dev text-to-image → cinematic first frame from scene prompt
+    2. Kling 2.6 Pro image-to-video → animate the Flux first frame
 
-    WHY LTX Video 2.3 fast:
-    - ~30s generation (vs ~3–5 min for Kling 2.6 Pro)
-    - Native 9:16 portrait output with direct product image conditioning
-    - 8-step fast inference mode: quality/speed balance for social media
-    - No Flux intermediate step needed — product image fed directly to LTX
+    WHY two-step:
+    - Raw product photos (plain white background) produce boring animations
+    - Flux generates a proper cinematic scene described by Gemini's prompt
+    - Kling then animates that scene → cinematic product reel
+
+    WHY Flux text-to-image (not IP-Adapter):
+    - fal-ai/flux-general's ip_adapters schema requires specifying HuggingFace
+      model checkpoint paths — complex and version-sensitive
+    - flux/dev text-to-image is stable and Gemini's prompts already describe
+      the full scene in detail (environment, action, atmosphere, camera)
+
+Fallback Pipeline (when no product image):
+    Kling 2.6 Pro text-to-video → scene from prompt only
+
+Duration handling:
+    ≤ 10s → single Kling call
+    > 10s → chained clips (last frame of clip N = first frame of clip N+1)
+             then FFmpeg concat → R2 upload
 
 Providers (priority order):
-    1. LTX Video 2.3 via fal.ai   — primary (~30s, fast)
-    2. Google Veo 2.0             — quality fallback (slow, expensive)
-    3. Sample video               — free fallback for dev / CI
+    1. fal.ai Flux Dev + Kling 2.6 Pro  — primary
+    2. Google Veo 2.0                   — quality fallback (slow, expensive)
+    3. Sample video                     — free fallback for dev/CI
 """
 
 import os
+import math
 import asyncio
+import tempfile
 import logging
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+import ffmpeg
+import httpx
 
+logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Model Constants
 # ─────────────────────────────────────────────────────────────────────────────
 
-LTX_MODEL = "fal-ai/ltx-video"
+# Kling 2.6 Pro — two modes selected based on whether a product image is available
+KLING26_TEXT_MODEL  = "fal-ai/kling-video/v2.6/pro/text-to-video"
+KLING26_IMAGE_MODEL = "fal-ai/kling-video/v2.6/pro/image-to-video"
 
-# 9:16 portrait dimensions for LTX Video (must be multiples of 32)
-# 432 × 768 = 0.5625 = 9/16 portrait aspect ratio ✓
-LTX_WIDTH  = 432
-LTX_HEIGHT = 768
+# Flux Dev — text-to-image first frame generator.
+# Generates a cinematic 9:16 first frame from the scene prompt.
+# Kling 2.6 Pro then animates this frame into a product reel.
+#
+# Why flux/dev (not flux-general + IP-Adapter):
+#   flux-general's ip_adapters schema requires specifying HuggingFace model
+#   checkpoint paths (path, image_encoder_path) which are complex and version-
+#   sensitive. flux/dev text-to-image is simpler, stable, and already produces
+#   high-quality cinematic first frames from Gemini's scene-focused prompts.
+FLUX_DEV_MODEL = "fal-ai/flux/dev"
 
-# Fast inference: 8 steps takes ~30s and produces social-media-ready quality.
-# Full quality: 40+ steps for ~3 min with marginal improvement for short-form.
-LTX_INFERENCE_STEPS = 8
-
-# LTX Video 2.3 frame limit: (num_frames - 1) must be divisible by 8.
-# Cap at 257 frames (~10.3s at 25fps) for model stability.
-LTX_MAX_FRAMES = 257
-
-# Standard quality issues to suppress in LTX Video output
-LTX_NEGATIVE_PROMPT = (
-    "low quality, worst quality, deformed, distorted, disfigured, "
-    "motion smear, motion artifacts, fused fingers, bad anatomy, weird hands, "
-    "ugly, blurry, overexposed, watermark"
-)
+# ip_weight is auto-scored by Gemini (0.30–0.80) and maps to guidance_scale
+# for Flux Dev: low weight → more creative/surreal, high weight → more literal.
+FLUX_IP_TOTAL_WEIGHT = 0.75  # Default (used when auto-score unavailable)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Duration → Frame Count Conversion
+# Duration helper
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _duration_to_ltx_frames(seconds: int) -> int:
+def _snap_to_kling_duration(seconds: int) -> str:
+    """Snap duration to Kling's supported values: '5' or '10' (string required by fal.ai).
+
+    Kling 2.6 Pro accepts exactly two clip lengths per API call.
+    For longer target durations (15s, 30s, 60s) the caller should use
+    generate_extended_kling26() which chains multiple 10s clips.
     """
-    Map requested duration (seconds) to the nearest valid LTX num_frames.
+    return "5" if seconds <= 5 else "10"
 
-    LTX Video requires (num_frames - 1) % 8 == 0.
-    Preset mapping (25 fps):
-        ≤ 5s  → 97 frames  (~4s)   fast-mode sweet spot
-        ≤ 7s  → 129 frames (~5s)
-        ≤ 10s → 193 frames (~8s)
-        > 10s → 257 frames (~10s)  model maximum for stable output
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Internal helpers for extend chain
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _cleanup_temp(*paths: Optional[str]) -> None:
+    """Safely remove temporary files — logs errors, never raises."""
+    for p in paths:
+        if p:
+            try:
+                if os.path.exists(p):
+                    os.remove(p)
+            except OSError as e:
+                logger.warning(f"[Temp] Could not remove {p}: {e}")
+
+
+async def _extract_last_frame(video_url: str) -> str:
+    """
+    Download a video clip, extract its last frame with FFmpeg, and upload
+    the frame to fal.ai storage so it can be used as the first-frame anchor
+    for the next Kling clip in the extend chain.
 
     Args:
-        seconds: Target clip length requested by the user
+        video_url: Publicly accessible URL (fal.ai CDN or presigned R2)
 
     Returns:
-        num_frames value to pass to the LTX Video API
-    """
-    if seconds <= 5:  return 97    # ~4s — LTX fast mode sweet spot
-    if seconds <= 7:  return 129   # ~5s
-    if seconds <= 10: return 193   # ~8s
-    return 257                     # ~10s — LTX stability ceiling
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# LTX Video 2.3 — Primary Generator
-# ─────────────────────────────────────────────────────────────────────────────
-
-async def generate_with_ltx(
-    prompt: str,
-    image_url: Optional[str] = None,
-    duration: int = 5,
-) -> str:
-    """
-    Generate a video clip using LTX Video 2.3 fast (fal-ai/ltx-video).
-
-    Mode selection:
-        With image_url  → image-to-video: LTX animates FROM the product photo,
-                          preserving product identity while adding camera motion.
-        Without image   → text-to-video: full scene generated from prompt alone.
-
-    Optimal LTX prompt format (short + motion-first):
-        Lead with subject + action, then camera, then environment.
-        Keep under 350 chars — LTX responds better to concise, direct prompts.
-        Camera instruction is CRITICAL: always include one explicit camera cue.
-        Example:
-            "A woman holds the product up to sunlight in a park.
-             Camera slowly zooms in. Warm golden backlight."
-
-    Args:
-        prompt:    Scene description optimised for LTX Video (motion-first format,
-                   200–350 chars ideal). Generated by Gemini in ai_service.py.
-        image_url: Public/presigned product image URL to anchor the first frame.
-                   Pass None to use text-to-video mode.
-        duration:  Requested clip length in seconds — converted to num_frames.
-
-    Returns:
-        Public CDN URL (fal.media) of the generated video clip.
+        fal.ai storage URL of the extracted JPEG frame
 
     Raises:
-        RuntimeError: If fal.ai API call fails or response lacks a video URL.
+        RuntimeError: If download, FFmpeg extraction, or fal upload fails
     """
+    import fal_client
+
+    video_tmp: Optional[str] = None
+    frame_tmp: Optional[str] = None
+
+    try:
+        # ── 1. Download video ────────────────────────────────────────────────
+        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+            resp = await client.get(video_url)
+            resp.raise_for_status()
+
+        fd, video_tmp = tempfile.mkstemp(suffix=".mp4")
+        with os.fdopen(fd, "wb") as f:
+            f.write(resp.content)
+        logger.info(f"[Extend] Downloaded video ({len(resp.content):,} bytes) → {video_tmp}")
+
+        # ── 2. Extract last frame with FFmpeg ────────────────────────────────
+        # Use -sseof (seek from End Of File) = no ffprobe needed.
+        # -sseof -0.05 = seek to 50ms before the end of the video.
+        # imageio-ffmpeg provides a bundled ffmpeg binary — no system install.
+        fd, frame_tmp = tempfile.mkstemp(suffix=".jpg")
+        os.close(fd)
+
+        def _extract():
+            import imageio_ffmpeg as _iio_ffmpeg
+            (
+                ffmpeg
+                .input(video_tmp, sseof=-0.05)   # 50ms before end = last frame
+                .output(frame_tmp, vframes=1, **{"f": "image2", "vcodec": "mjpeg"})
+                .run(quiet=True, overwrite_output=True, cmd=_iio_ffmpeg.get_ffmpeg_exe())
+            )
+
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _extract)
+        logger.info(f"[Extend] Last frame extracted → {frame_tmp}")
+
+        # ── 4. Upload frame to fal.ai (returns a public CDN URL) ─────────────
+        def _upload():
+            return fal_client.upload_file(frame_tmp)
+
+        frame_url: str = await loop.run_in_executor(None, _upload)
+        logger.info(f"[Extend] Frame uploaded: {frame_url}")
+        return frame_url
+
+    except Exception as e:
+        logger.error(f"[Extend] Frame extraction failed: {e}")
+        raise RuntimeError(f"Could not extract last frame: {e}") from e
+    finally:
+        _cleanup_temp(video_tmp, frame_tmp)
+
+
+async def _concat_clips(clip_urls: list[str], reel_id: str) -> str:
+    """
+    Download all clip URLs, concatenate with FFmpeg stream copy (no re-encode),
+    and upload the result to R2.
+
+    Using 'stream copy' means the codec is not touched — fast and lossless.
+    All clips must have the same codec / resolution (guaranteed since they all
+    come from the same Kling 2.6 Pro configuration).
+
+    Args:
+        clip_urls: Ordered list of clip URLs (fal.ai CDN)
+        reel_id:   Reel UUID — used for the R2 object key
+
+    Returns:
+        R2 object key of the concatenated video
+        (proxied by the backend via /api/upload/videos/{key})
+
+    Raises:
+        RuntimeError: If any download, FFmpeg concat, or R2 upload fails
+    """
+    from app.services.storage_service import upload_raw_bytes_to_r2
+
+    clip_paths: list[str] = []
+    list_path: Optional[str] = None
+    output_path: Optional[str] = None
+
+    try:
+        # ── 1. Download all clips in parallel ────────────────────────────────
+        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+            responses = await asyncio.gather(*[client.get(u) for u in clip_urls])
+
+        for i, resp in enumerate(responses):
+            resp.raise_for_status()
+            fd, path = tempfile.mkstemp(suffix=f"_clip{i}.mp4")
+            with os.fdopen(fd, "wb") as f:
+                f.write(resp.content)
+            clip_paths.append(path)
+
+        logger.info(f"[Concat] Downloaded {len(clip_paths)} clips")
+
+        # ── 2. Write FFmpeg concat list file ─────────────────────────────────
+        fd, list_path = tempfile.mkstemp(suffix="_concat.txt")
+        with os.fdopen(fd, "w") as f:
+            for p in clip_paths:
+                safe = p.replace("'", "'\\''")  # escape single quotes in path
+                f.write(f"file '{safe}'\n")
+
+        # ── 3. Concatenate with FFmpeg (stream copy — no re-encode) ──────────
+        fd, output_path = tempfile.mkstemp(suffix="_extended.mp4")
+        os.close(fd)
+
+        def _concat():
+            (
+                import imageio_ffmpeg as _iio_ffmpeg
+                ffmpeg
+                .input(list_path, format="concat", safe=0)
+                .output(output_path, c="copy")
+                .run(quiet=True, overwrite_output=True, cmd=_iio_ffmpeg.get_ffmpeg_exe())
+            )
+
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _concat)
+        logger.info(f"[Concat] Concatenation complete: {output_path}")
+
+        # ── 4. Upload to R2 ──────────────────────────────────────────────────
+        with open(output_path, "rb") as f:
+            data = f.read()
+
+        key = upload_raw_bytes_to_r2(
+            data=data,
+            filename=f"reel_{reel_id}_extended.mp4",
+            prefix="videos/reels/extended",
+            category=reel_id,
+            return_key_only=True,
+        )
+        logger.info(f"[Concat] Uploaded to R2: key={key}")
+        return key  # R2 object key — frontend proxies via /api/upload/videos/{key}
+
+    except Exception as e:
+        logger.error(f"[Concat] Failed: {e}")
+        raise RuntimeError(f"Video concatenation failed: {e}") from e
+    finally:
+        _cleanup_temp(*clip_paths, list_path, output_path)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Flux Dev — First Frame Generator
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def generate_first_frame_with_flux(
+    prompt: str,
+    product_image_urls: list[str],
+    ip_weight: float = FLUX_IP_TOTAL_WEIGHT,
+) -> str:
+    """
+    Generate a cinematic first frame using Flux Dev (text-to-image).
+
+    Flux generates a high-quality 9:16 scene from the prompt. Kling 2.6 Pro then
+    animates this first frame into a product reel. The prompt from Gemini already
+    describes the full scene (environment, action, atmosphere, people) — Flux
+    translates this into a visually rich starting frame.
+
+    ip_weight → guidance_scale mapping:
+        Low weight (0.30, surreal/creative prompts) → guidance 2.5 (more creative)
+        High weight (0.80, realistic prompts)        → guidance 4.5 (more literal)
+        This lets Gemini's fidelity score tune how closely Flux follows the prompt.
+
+    Args:
+        prompt:              Scene description from Gemini — environment, action,
+                             atmosphere, camera movement. Describes the full scene.
+        product_image_urls:  Product reference images (accepted for API compatibility;
+                             not sent to Flux since flux/dev is text-only).
+        ip_weight:           Auto-scored fidelity weight (0.30–0.80) →
+                             maps to Flux guidance_scale (2.5–4.5).
+
+    Returns:
+        fal.media CDN URL of the Flux-generated first frame image.
+
+    Raises:
+        ValueError:   If product_image_urls is empty (caller sanity check).
+        RuntimeError: If fal.ai API call fails.
+    """
+    if not product_image_urls:
+        raise ValueError("At least one product image URL is required")
+
+    # Map ip_weight (0.30–0.80) to guidance_scale (2.5–4.5)
+    # Range: (ip_weight - 0.30) / (0.80 - 0.30) * (4.5 - 2.5) + 2.5
+    guidance_scale = round(2.5 + (ip_weight - 0.30) / 0.50 * 2.0, 2)
+
     try:
         import fal_client
 
-        num_frames = _duration_to_ltx_frames(duration)
-        mode = "image-to-video" if image_url else "text-to-video"
-
-        arguments: dict = {
-            "prompt":               prompt,
-            "negative_prompt":      LTX_NEGATIVE_PROMPT,
-            "height":               LTX_HEIGHT,
-            "width":                LTX_WIDTH,
-            "num_frames":           num_frames,
-            # 8 steps = fast mode: ~30s generation, solid social-media quality
-            "num_inference_steps":  LTX_INFERENCE_STEPS,
-            "guidance_scale":       3.5,
-        }
-
-        if image_url:
-            # Product image anchors the first frame so LTX preserves product
-            # identity while animating the described camera movement and scene.
-            arguments["image_url"] = image_url
-
         logger.info(
-            f"[LTX] {mode} | frames={num_frames} (~{num_frames // 25}s) | "
-            f"steps={LTX_INFERENCE_STEPS} | prompt={prompt[:70]}..."
+            f"[Flux] Generating first frame (text-to-image, "
+            f"guidance={guidance_scale}, weight={ip_weight}): {prompt[:60]}..."
         )
 
         def _run():
-            result = fal_client.run(LTX_MODEL, arguments=arguments)
-            # LTX Video response: {"video": {"url": "https://fal.media/...mp4"}}
-            video = result.get("video") or {}
-            url = video.get("url")
+            result = fal_client.run(
+                FLUX_DEV_MODEL,
+                arguments={
+                    "prompt": prompt,
+                    # "portrait_16_9" = 9:16 tall portrait (matches Kling 9:16 output).
+                    # NOTE: fal-ai uses "portrait_16_9" for the TALL 9:16 aspect ratio.
+                    # (portrait_9_16 is invalid — the number after "portrait_" is H:W ratio)
+                    "image_size": "portrait_16_9",
+                    "num_inference_steps": 28,
+                    "guidance_scale": guidance_scale,
+                    "num_images": 1,
+                    "enable_safety_checker": True,
+                },
+            )
+            # flux/dev response: {"images": [{"url": "...", "width": int, "height": int}]}
+            images = result.get("images") or []
+            if not images:
+                raise RuntimeError(f"Flux returned no images. Response: {result}")
+            url = images[0].get("url")
             if not url:
-                raise RuntimeError(f"LTX returned no video URL. Response: {result}")
+                raise RuntimeError(f"Flux image missing 'url'. Entry: {images[0]}")
             return url
 
         loop = asyncio.get_running_loop()
         url = await loop.run_in_executor(None, _run)
-        logger.info(f"[LTX] Done: {url}")
+        logger.info(f"[Flux] First frame ready: {url}")
         return url
 
     except Exception as e:
-        logger.error(f"[LTX] Generation failed: {e}")
-        raise RuntimeError(f"LTX Video generation failed: {e}") from e
+        logger.error(f"[Flux] First frame generation failed: {e}")
+        raise RuntimeError(f"Flux first frame generation failed: {e}") from e
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Public facade — entry point used by worker.py
+# Public API
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def generate_with_kling26(
+    prompt: str,
+    image_url: Optional[str] = None,
+    duration: int = 5,
+    with_audio: bool = False,
+) -> str:
+    """
+    Generate a SINGLE video clip using Kling Video 2.6 Pro (fal.ai).
+
+    Duration is capped at 10s per call.
+    For longer videos use generate_extended_kling26() which chains clips.
+
+    Mode selection:
+        With image_url  → fal-ai/kling-video/v2.6/pro/image-to-video
+            Product photo anchors the first frame; Kling animates it naturally
+            (rotation, camera drift, lighting effects).  The prompt guides the
+            motion direction and environment atmosphere.
+        Without image   → fal-ai/kling-video/v2.6/pro/text-to-video
+            Scene described entirely from the text prompt.
+
+    Args:
+        prompt:     Scene description with camera movement + subject motion cues
+                    (produced by Gemini — see ai_service.py system prompts)
+        image_url:  Presigned/public product image URL (None → text-to-video)
+        duration:   Requested clip length in seconds — snapped to "5" or "10"
+        with_audio: Not sent to Kling API; audio control is handled in the
+                    FFmpeg overlay step (overlay_service.py with_audio flag)
+
+    Returns:
+        Public CDN URL (fal.media) of the generated clip
+
+    Raises:
+        RuntimeError: If fal.ai API call fails
+    """
+    try:
+        import fal_client
+
+        kling_duration = _snap_to_kling_duration(duration)
+
+        if image_url:
+            model = KLING26_IMAGE_MODEL
+            arguments: dict = {
+                "prompt": prompt,
+                "image_url": image_url,
+                "duration": kling_duration,   # "5" or "10" — string required by fal.ai
+                "aspect_ratio": "9:16",        # Portrait format for social media
+            }
+            logger.info(f"[Kling2.6Pro] image-to-video ({kling_duration}s): {image_url[:80]}")
+        else:
+            model = KLING26_TEXT_MODEL
+            arguments = {
+                "prompt": prompt,
+                "duration": kling_duration,
+                "aspect_ratio": "9:16",
+            }
+            logger.info(f"[Kling2.6Pro] text-to-video ({kling_duration}s)")
+
+        def _run():
+            result = fal_client.run(model, arguments=arguments)
+            # fal.ai Kling response: {"video": {"url": "https://fal.media/...mp4"}}
+            return result["video"]["url"]
+
+        loop = asyncio.get_event_loop()
+        url = await loop.run_in_executor(None, _run)
+        logger.info(f"[Kling2.6Pro] Done: {url}")
+        return url
+
+    except Exception as e:
+        logger.error(f"[Kling2.6Pro] Failed: {e}")
+        raise RuntimeError(f"Kling 2.6 Pro generation failed: {e}") from e
+
+
+async def generate_extended_kling26(
+    prompt: str,
+    image_url: Optional[str],
+    total_duration: int,
+    with_audio: bool = False,
+    reel_id: str = "unknown",
+) -> str:
+    """
+    Generate a long-form video (> 10s) by chaining multiple Kling 2.6 Pro clips.
+
+    Each clip after the first starts from the LAST FRAME of the previous one —
+    extracted with FFmpeg and uploaded to fal.ai storage — so the camera angle
+    and scene flow seamlessly between clips.
+
+    Example for 30s:
+        Clip 1 (10s): product_image → Kling 2.6 Pro
+        Clip 2 (10s): last_frame(clip1) → Kling 2.6 Pro
+        Clip 3 (10s): last_frame(clip2) → Kling 2.6 Pro
+        ↓ FFmpeg concat → 30s video → R2 upload → object key returned
+
+    Args:
+        prompt:         Same scene description used for all clips
+        image_url:      Initial product image for clip 1 (None → text-to-video)
+        total_duration: Target duration in seconds (15 / 30 / 60)
+        with_audio:     Passed to downstream audio control (not sent to Kling API)
+        reel_id:        Reel UUID used for R2 key naming of the concatenated output
+
+    Returns:
+        - Single fal.ai CDN URL if total_duration ≤ 10 (or only 1 clip generated)
+        - R2 object key if multiple clips were concatenated
+          (proxied by /api/upload/videos/{key})
+
+    Raises:
+        RuntimeError: If any clip generation or concatenation fails
+    """
+    clip_duration = 10  # max seconds per Kling call
+    num_clips = math.ceil(total_duration / clip_duration)
+    logger.info(
+        f"[Kling-Extend] {total_duration}s target → {num_clips} clips × {clip_duration}s"
+    )
+
+    clip_urls: list[str] = []
+    current_image_url = image_url  # Clip 1 uses product image; subsequent = last frame
+
+    for i in range(num_clips):
+        remaining = total_duration - i * clip_duration
+        this_duration = min(clip_duration, remaining)
+
+        logger.info(f"[Kling-Extend] Generating clip {i+1}/{num_clips} ({this_duration}s)")
+        clip_url = await generate_with_kling26(
+            prompt=prompt,
+            image_url=current_image_url,
+            duration=this_duration,
+            with_audio=with_audio,
+        )
+        clip_urls.append(clip_url)
+
+        # Extract last frame to anchor the next clip (skip for the final clip)
+        if i < num_clips - 1:
+            try:
+                current_image_url = await _extract_last_frame(clip_url)
+            except RuntimeError as exc:
+                # Frame extraction failed — reuse the same image for continuity
+                # (less seamless but still functional)
+                logger.warning(
+                    f"[Kling-Extend] Frame extraction failed for clip {i+1}, "
+                    f"reusing previous image: {exc}"
+                )
+
+    # Single clip → return CDN URL directly (no concat overhead)
+    if len(clip_urls) == 1:
+        logger.info("[Kling-Extend] Single clip — skipping concat step")
+        return clip_urls[0]
+
+    # Multiple clips → FFmpeg concat → R2 upload → object key
+    return await _concat_clips(clip_urls, reel_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Backward-compatible facade
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def generate_video(
     prompt: str,
     image_url: Optional[str] = None,
-    resolution: str = "720p",   # kept for API compatibility; LTX uses height/width internally
-    duration: int = 5,
+    resolution: str = "720p",
+    duration: int = 10,
 ) -> str:
     """
-    Generate a video using the best available provider (LTX → Veo → sample).
+    Generate a video using the best available provider (Kling → Veo → sample).
 
-    Provider priority:
-        1. LTX Video 2.3 via fal.ai   (primary: fast, ~30s per clip)
-        2. Google Veo 2.0             (quality fallback: slow, expensive)
-        3. Sample video               (dev / CI only: no AI required)
+    Used by the worker as a fallback when FAL_KEY is not configured.
+    For the primary worker flow see _run_kling_generation() in worker.py.
 
     Args:
-        prompt:     Creative brief enriched with product metadata (from worker.py).
-                    Should follow LTX prompt format: short, motion-first, 200–350 chars.
-        image_url:  Product image URL — enables image-to-video mode in LTX.
-        resolution: Ignored by LTX (format set by height/width). Kept for API compat.
-        duration:   Clip length in seconds — passed to LTX frame calculation.
+        prompt:     Creative brief (enriched with product metadata)
+        image_url:  Product image URL for visual reference
+        resolution: Ignored (aspect_ratio controls format)
+        duration:   Clip length in seconds — passed to Kling (5 or 10)
 
     Returns:
-        Public CDN URL (fal.media) or R2 object key of the generated video.
+        Public URL to the generated video
     """
-    fal_key       = os.getenv("FAL_KEY", "")
-    veo_enabled   = os.getenv("VEO_ENABLED", "false").lower() == "true"
+    fal_key = os.getenv("FAL_KEY", "")
+    veo_enabled = os.getenv("VEO_ENABLED", "false").lower() == "true"
     google_ai_key = os.getenv("GOOGLE_AI_API_KEY", "")
 
-    # ── Option 1: LTX Video 2.3 via fal.ai (primary — fast, ~30s)
+    # ── Option 1: Kling 2.6 Pro via fal.ai (primary)
     if fal_key:
         try:
-            return await generate_with_ltx(prompt, image_url, duration)
+            return await generate_with_kling26(prompt, image_url, duration)
         except Exception as e:
-            logger.warning(f"[LTX] Primary generation failed, trying Veo: {e}")
+            logger.warning(f"[Kling2.6Pro] Failed, trying Veo: {e}")
 
-    # ── Option 2: Google Veo 2.0 (best quality, slow / expensive)
+    # ── Option 2: Google Veo 2.0 (best quality, expensive / slow)
     if veo_enabled and google_ai_key:
         try:
             return await _generate_with_veo(prompt)
         except Exception as e:
-            logger.warning(f"[Veo] Fallback failed, using sample video: {e}")
+            logger.warning(f"[Veo] Failed, using sample fallback: {e}")
 
     # ── Option 3: Sample video (free, development / CI only)
-    logger.info("[Video] No AI provider available — using sample video placeholder")
+    logger.info("[Video] No AI provider available — using sample video")
     await asyncio.sleep(3)
     return "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Veo 2.0 — quality fallback (not the primary path)
+# Veo 2.0 (quality fallback — not the primary path)
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def _generate_with_veo(prompt: str) -> str:
@@ -317,7 +635,7 @@ async def _generate_with_veo(prompt: str) -> str:
                 else f"{r2_endpoint.rstrip('/')}/{r2_bucket}/{object_key}"
             )
 
-        loop = asyncio.get_running_loop()
+        loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _generate_and_upload)
 
     except Exception as e:

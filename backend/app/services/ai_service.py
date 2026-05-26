@@ -18,7 +18,7 @@ from typing import Dict, Any, Optional
 from google import genai
 from google.genai import types
 
-# Re-export generate_video so worker.py can import from ai_service for backward compat
+# For backward compatibility, re-export video generation from new service
 from app.services.video_generation_service import generate_video  # noqa: F401
 
 logger = logging.getLogger(__name__)
@@ -156,43 +156,45 @@ async def generate_prompt_from_template(
         logger.warning("GOOGLE_AI_API_KEY not set — returning static fallback prompt")
         return fallback
 
-    # Generate a concise SCENE + MOTION prompt optimised for LTX Video 2.3.
+    # Generate a SCENE + MOTION DESCRIPTION optimised for Kling Video 2.6.
     #
-    # LTX Video 2.3 fast mode:
-    #   - Takes product photo directly via image_url — no Flux intermediate needed
-    #   - Responds best to short, motion-first prompts (200–350 chars ideal)
-    #   - Camera instruction is CRITICAL: always include one explicit camera cue
-    #   - Format: "Subject. Action. Camera. Lighting." — lead with action, not environment
+    # Kling 2.6 image-to-video uses this as both a scene reference (what the
+    # environment looks like) and a motion guide (how the camera and subject move).
+    # When no product image is provided, Kling generates purely from this text.
+    #
+    # Key Kling 2.6 prompt principles:
+    #   - Explicit camera movement ("camera slowly zooms in", "smooth dolly right")
+    #   - Clear subject motion ("product rotates 360 degrees", "bottle tilts gently")
+    #   - Concrete environment ("black marble surface", "outdoor with bokeh trees")
+    #   - Lighting direction ("warm backlight creates rim glow on the product")
     system_prompt = (
-        "You are an expert prompt engineer for LTX Video 2.3 — a fast AI video model "
-        "that animates a product photo into a cinematic vertical reel.\n\n"
-        "The product photo is passed directly to LTX as a visual anchor. "
-        "Your prompt guides MOTION and SCENE — not what the product looks like.\n\n"
-        "YOUR JOB: Write a short, motion-first scene prompt.\n\n"
+        "You are an expert prompt engineer for a two-stage AI video pipeline:\n"
+        "  Stage 1 — Flux General (image-to-image): generates a creative FIRST FRAME "
+        "from the product photos + your scene prompt.\n"
+        "  Stage 2 — Kling Video 2.6 Pro (image-to-video): animates that first frame "
+        "into a smooth, cinematic product video.\n\n"
+        "YOUR JOB: Write the scene prompt that drives BOTH stages.\n\n"
         "CRITICAL RULES:\n"
         "- DO NOT describe the product's appearance (colour, shape, material, logo).\n"
-        "  LTX already sees the product photo — describing appearance wastes characters.\n"
-        "- DO describe: WHO is in the scene, WHAT they are doing, WHERE it happens\n"
-        "- CAMERA IS MANDATORY: always include one camera cue "
-        "('camera slowly zooms in', 'dolly forward', 'smooth orbit', 'tilt reveal')\n"
-        "- MOTION IS MANDATORY: describe subject movement "
-        "('woman lifts the product', 'steam rises', 'crowd moves')\n"
+        "  The product PHOTOS are already provided to Flux as reference — it knows what "
+        "the product looks like. Repeating appearance wastes your 500 characters.\n"
+        "- DO describe: SCENE, ENVIRONMENT, PEOPLE/SUBJECTS, ACTION, ATMOSPHERE, LIGHTING\n"
+        "- DO describe CAMERA MOVEMENT: 'camera slowly pushes in', 'smooth orbit', 'dolly right'\n"
+        "- DO describe MOTION: 'woman raises the product', 'steam rises', 'liquid swirls'\n"
         "- ONE continuous shot — no cuts, transitions, or montage\n\n"
-        "FORMAT (follow this structure):\n"
-        "  [Subject + action]. [Camera movement]. [Lighting/environment].\n\n"
         "GOOD examples:\n"
-        "  'A woman walks through a sunlit market holding the product. "
-        "Camera slowly follows her. Warm afternoon light, crowd blurred.'\n"
-        "  'Close-up: hand places the product on dark marble, steam curls upward. "
-        "Camera pulls back slowly. Golden backlight.'\n\n"
-        "BAD: 'A red leather handbag with gold zippers on white surface.' "
-        "← never describe product appearance\n\n"
+        "  'A woman in a white linen top walks through a sunlit farmers market, holding the product "
+        "and glancing back at the camera. Crowd blurred in background. Camera follows her slowly.'\n"
+        "  'Close-up on a hand placing the product on dark marble. Steam rises gently. Warm golden "
+        "backlight. Camera slowly pulls back revealing a luxury bathroom setting.'\n\n"
+        "BAD: 'A red leather handbag with gold zippers on a white surface' "
+        "← never describe the product appearance\n\n"
         "Requirements:\n"
-        "- 200–350 characters RECOMMENDED (500 maximum)\n"
-        "- Always include one camera movement + one subject motion\n"
-        "- Natural people interaction if it fits the goal\n"
-        "- No hashtags, captions, pricing, or platform names\n"
-        "- Return ONLY the prompt — no explanation, no quotes"
+        "- STRICTLY under 500 characters\n"
+        "- Always include camera movement + subject motion\n"
+        "- Describe people naturally interacting with the product if it fits the goal\n"
+        "- Do NOT include hashtags, captions, pricing, or platform names\n"
+        "- Return ONLY the prompt text — no explanation, no quotes"
     )
     user_content = (
         f"Goal: {template_desc}\n"
@@ -274,32 +276,31 @@ async def enhance_prompt(
             "vibrant color grading, and a strong call-to-action."
         )[:500]
 
-    # Enhance the user's prompt for LTX Video 2.3 fast mode.
-    # The product photo is passed directly to LTX — the prompt drives MOTION and SCENE.
-    # LTX responds best to short, concrete, motion-first prompts (200–350 chars ideal).
+    # Enhance the user's prompt for the two-stage pipeline:
+    # Flux General (IP-Adapter first frame) → Kling 2.6 Pro (animation).
+    # The product's appearance comes from the reference photos — the prompt
+    # should focus on scene, action, people, atmosphere, and camera movement.
     system_prompt = (
-        "You are an expert prompt engineer for LTX Video 2.3 — a fast AI video model "
-        "that animates a product photo into a cinematic vertical reel.\n\n"
-        "The product photo is already passed to LTX as a visual anchor. "
-        "Your job is to rewrite the user's prompt to drive MOTION and SCENE.\n\n"
+        "You are an expert prompt engineer for a two-stage AI video pipeline:\n"
+        "  Stage 1 — Flux General (IP-Adapter): generates a first frame from product "
+        "photos + your scene prompt.\n"
+        "  Stage 2 — Kling Video 2.6 Pro: animates the first frame cinematically.\n\n"
+        "YOUR JOB: Rewrite the user's prompt while keeping their core idea.\n\n"
         "CRITICAL RULES:\n"
         "- DO NOT describe the product's appearance (colour, material, shape, logo).\n"
-        "  LTX sees the product photo directly — appearance description wastes characters.\n"
-        "- DO describe: WHO is in the scene, WHAT action is happening, WHERE it is\n"
-        "- CAMERA IS MANDATORY: add one explicit camera cue "
-        "('camera slowly zooms in', 'dolly forward', 'smooth orbit')\n"
-        "- MOTION IS MANDATORY: add subject movement "
-        "('person lifts the product', 'steam rises', 'crowd blurs')\n"
-        "- Replace vague words ('cinematic', 'premium', 'dynamic') with CONCRETE details\n"
-        "- ONE continuous shot — no cuts, transitions, or montage\n\n"
-        "FORMAT: [Subject + action]. [Camera movement]. [Lighting/environment].\n\n"
-        "GOOD: 'A woman in a café raises the product toward the camera and smiles. "
-        "Camera slowly pushes in. Warm morning light, background bokeh.'\n"
-        "BAD: 'A sleek black bottle with minimalist design.' ← never describe product\n\n"
+        "  Product photos are already provided as reference — Flux knows what it looks like.\n"
+        "- DO describe: SCENE, ENVIRONMENT, PEOPLE/SUBJECTS, ACTION, ATMOSPHERE, LIGHTING\n"
+        "- ADD CAMERA MOVEMENT: 'camera slowly zooms in', 'smooth orbit', 'dolly right'\n"
+        "- ADD MOTION: 'person lifts the product', 'steam rises', 'crowd moves behind'\n"
+        "- ONE continuous shot — no cuts, transitions, or montage\n"
+        "- Replace vague adjectives ('cinematic', 'premium', 'dynamic') with concrete details\n\n"
+        "GOOD: 'A woman in a café lifts the product toward the camera, smiling softly. "
+        "Warm morning light. Background bokeh. Camera slowly pushes in.'\n"
+        "BAD: 'A sleek black bottle with minimalist design and premium feel.' ← never this\n\n"
         "Requirements:\n"
-        "- 200–350 characters RECOMMENDED (500 maximum)\n"
+        "- STRICTLY under 500 characters\n"
         "- Always include camera movement + motion\n"
-        "- No hashtags, captions, or pricing\n"
+        "- Do NOT include hashtags, captions, or pricing\n"
         "- Return ONLY the improved prompt — no explanation, no quotes"
     )
 
@@ -355,46 +356,43 @@ async def generate_guided_prompt(
     style: Optional[str] = None,
     focus: Optional[str] = None,
     lighting: Optional[str] = None,
-    camera_motion: Optional[str] = None,
     product_name: str = "",
     product_description: str = "",
     product_images: list[tuple[bytes, str]] | None = None,
     duration: int = 30,
 ) -> str:
     """
-    Generate a production-ready LTX Video 2.3 prompt from Guide Me card selections.
+    Generate a production-ready video prompt from Guide Me card selections + product context.
 
-    Sends all selected creative chips and full product details (including image) to
-    Gemini as a multimodal request.  Gemini sees the actual product photo and uses
-    the selected options to assemble a concise, motion-first LTX prompt.
+    Sends all selected creative preferences and full product details (including image)
+    to Gemini as a multimodal request.  Gemini sees the actual product photo and can
+    reference its visual appearance in the generated prompt — much richer output than
+    text-only generation.
 
     Args:
-        mood:                 Selected Mood/Vibe chip (e.g. "Luxury & Premium")
-        target:               Selected Target Audience chip
-        style:                Selected Visual Style chip
-        focus:                Selected Scene Focus chip
-        lighting:             Selected Lighting & Environment chip (e.g. "Golden Hour")
-        camera_motion:        Selected Camera Motion chip (e.g. "Slow Zoom In")
-                              Directly maps to an LTX camera instruction in the prompt.
+        mood:                 Selected Mood/Vibe card label (e.g. "Luxury & Premium")
+        target:               Selected Target Audience card label
+        style:                Selected Visual Style card label
+        focus:                Selected Scene Focus card label
+        lighting:             Selected Lighting & Environment card label (e.g. "Golden Hour")
         product_name:         Product name from the library
         product_description:  Product description/highlights
-        product_images:       List of (bytes, mime_type) tuples for ALL product images,
-                              sorted primary-first (up to 4). Gemini sees every angle
-                              for richer, more visually specific prompts.
+        product_images:  List of (bytes, mime_type) tuples for ALL product images,
+                         sorted primary-first (up to 4 images)
         duration:             Requested video length in seconds
 
     Returns:
-        Generated video prompt string (≤ 500 chars, hard-capped).
-        Falls back to a locally-assembled prompt if Gemini is unavailable.
+        Generated video prompt string (≤ 500 chars, hard-capped)
+
+    Falls back to a locally-assembled prompt if Gemini is unavailable.
     """
     # Build the creative-direction selections the user picked
     selections = []
-    if mood:          selections.append(f"Mood/Vibe: {mood}")
-    if style:         selections.append(f"Visual Style: {style}")
-    if focus:         selections.append(f"Scene Focus: {focus}")
-    if target:        selections.append(f"Target Audience: {target}")
-    if lighting:      selections.append(f"Lighting & Environment: {lighting}")
-    if camera_motion: selections.append(f"Camera Motion: {camera_motion}")
+    if mood:     selections.append(f"Mood/Vibe: {mood}")
+    if style:    selections.append(f"Visual Style: {style}")
+    if focus:    selections.append(f"Scene Focus: {focus}")
+    if target:   selections.append(f"Target Audience: {target}")
+    if lighting: selections.append(f"Lighting & Environment: {lighting}")
 
     # Local fallback: build prompt without Gemini
     def _local_fallback() -> str:
@@ -411,44 +409,36 @@ async def generate_guided_prompt(
         logger.warning("GOOGLE_AI_API_KEY not set — returning locally-assembled guided prompt")
         return _local_fallback()
 
-    # Translate the Guide Me chip selections into an LTX Video 2.3 optimised prompt.
-    # LTX responds best to short, motion-first prompts with explicit camera cues.
-    # Camera Motion chip maps directly to an LTX camera instruction in the output.
+    # Generate a Kling 2.6 optimised scene + motion prompt from the creative chips.
+    # Translate abstract card selections into concrete scene and motion descriptions
+    # that Kling Video 2.6 renders naturally and cinematically.
     system_prompt = (
-        "You are an expert prompt engineer for LTX Video 2.3 — a fast AI video model "
-        "that animates a product photo into a cinematic vertical reel.\n\n"
-        "The product photo is passed directly to LTX as a visual anchor. "
-        "Your job is to translate the creative chip selections into a concise, motion-first prompt.\n\n"
+        "You are an expert prompt engineer for a two-stage AI video pipeline:\n"
+        "  Stage 1 — Flux General (IP-Adapter): generates a first frame from product "
+        "photos + your scene prompt.\n"
+        "  Stage 2 — Kling Video 2.6 Pro: animates the first frame cinematically.\n\n"
+        "YOUR JOB: Translate the creative chips below into a concrete scene prompt.\n\n"
         "CRITICAL RULES:\n"
         "- DO NOT describe the product's appearance (colour, material, shape, logo).\n"
-        "  LTX sees the product photo directly — describing appearance wastes characters.\n"
-        "- DO describe: WHO is in the scene, WHAT action is happening, WHERE it takes place\n"
-        "- CAMERA IS MANDATORY: use the 'Camera Motion' chip if selected, "
-        "otherwise add a default camera cue ('camera slowly zooms in', 'dolly forward')\n"
-        "- MOTION IS MANDATORY: subject movement ('person lifts product', 'steam curls up')\n"
-        "- ONE continuous shot — no cuts or transitions\n\n"
-        "Translate abstract chips into CONCRETE scene details:\n"
-        "  'Luxury & Premium'  → marble surface, model's hand beside product, warm spotlight\n"
-        "  'Fun & Energetic'   → bright outdoor, person running holding product, vivid light\n"
-        "  'Eco & Natural'     → forest clearing, person crouching with product, soft daylight\n"
-        "  'Dark & Mysterious' → shadowed room, single shaft of light, slow product reveal\n"
-        "  'Dreamy / Soft'     → pastel backdrop, soft diffused light, gentle motion\n"
-        "Camera Motion chip → LTX camera instruction:\n"
-        "  'Slow Zoom In'      → 'camera slowly zooms in'\n"
-        "  'Orbit / Revolve'   → 'camera orbits smoothly around the subject'\n"
-        "  'Dolly Forward'     → 'camera dollies forward'\n"
-        "  'Handheld'          → 'subtle handheld camera shake'\n"
-        "  'Static Close-up'   → 'camera holds on a tight close-up'\n"
-        "  'Tilt Reveal'       → 'camera tilts down to reveal the product'\n\n"
-        "FORMAT: [Subject + action]. [Camera movement]. [Lighting/environment].\n\n"
+        "  Product photos are provided as visual reference — Flux already knows what it looks like.\n"
+        "- DO describe: SCENE, ENVIRONMENT, PEOPLE/SUBJECTS, ACTION, ATMOSPHERE, LIGHTING\n"
+        "- ADD CAMERA MOVEMENT: 'camera slowly zooms in', 'smooth orbit', 'dolly right'\n"
+        "- ADD MOTION: 'person lifts the product', 'steam rises', 'product spins', 'crowd blurs'\n"
+        "- ONE continuous shot — no cuts, transitions, or montage\n"
+        "- Translate abstract chips into CONCRETE scene + people details:\n"
+        "  'Luxury & Premium' → marble surface, warm spotlight, model's hand resting beside product\n"
+        "  'Fun & Energetic' → bright outdoor setting, person running holding product, vivid light\n"
+        "  'Eco & Natural' → forest clearing, person crouching with product, soft natural light\n"
+        "  'Dark & Mysterious' → dark alley, single shaft of light, slow product reveal\n"
+        "  'Cute & Warm' → pastel kitchen, cheerful person using product, soft bokeh\n\n"
         "GOOD: 'A woman in a sunlit park holds the product toward the camera and smiles. "
-        "Camera slowly dollies in. Golden hour, leaves flutter.'\n"
-        "BAD: 'A gold lipstick on velvet.' ← never describe product appearance\n\n"
+        "Golden hour. Camera slowly dollies in. Leaves flutter in the background.'\n"
+        "BAD: 'A gold lipstick on velvet with luxury feel.' ← never describe product appearance\n\n"
         "Requirements:\n"
-        "- 200–350 characters RECOMMENDED (500 maximum)\n"
-        "- Always include camera movement + subject motion\n"
-        "- No hashtags, captions, platform names, or pricing\n"
-        "- Return ONLY the prompt — no explanation, no quotes"
+        "- STRICTLY under 500 characters\n"
+        "- Always include camera movement + motion\n"
+        "- Do NOT include hashtags, captions, platform names, or pricing\n"
+        "- Return ONLY the prompt text — no explanation, no quotes"
     )
 
     context_parts = [f"Duration: {duration} seconds"]
@@ -489,3 +479,73 @@ async def generate_guided_prompt(
         return _local_fallback()
 
 
+async def score_prompt_fidelity(prompt: str) -> float:
+    """
+    Score how much the video prompt demands product-faithful output.
+    Returns a Flux IP-Adapter weight in the range 0.30 – 0.80.
+
+    Scoring logic (Gemini rates 1–5):
+        1 = very surreal / imaginative  (e.g. "doll comes alive, glows magically")
+            → weight 0.30: Flux has maximum creative freedom; product shape can change
+        3 = balanced lifestyle scene    (e.g. "woman holds bag on the beach")
+            → weight 0.55: preserve product identity but allow creative scene
+        5 = product-realistic close-up  (e.g. "zoom into product texture, sharp detail")
+            → weight 0.80: maximum product fidelity; Flux closely follows reference
+
+    Weight formula: 0.30 + (score − 1) / 4 × 0.50
+    Fallback: returns 0.60 (balanced) if Gemini unavailable or call fails.
+
+    Args:
+        prompt: The final video scene prompt to evaluate.
+
+    Returns:
+        float in [0.30, 0.80] — Flux IP-Adapter weight for this prompt.
+    """
+    WEIGHT_MIN   = 0.30
+    WEIGHT_MAX   = 0.80
+    WEIGHT_DEFAULT = 0.60  # Returned on any error
+
+    if not GOOGLE_AI_API_KEY:
+        return WEIGHT_DEFAULT
+
+    system_prompt = (
+        "You are evaluating a video scene prompt to decide how faithful the AI "
+        "image generator should be to the product's physical appearance.\n\n"
+        "Score the prompt from 1 to 5:\n"
+        "  1 = very surreal or imaginative — product transforms, gains impossible "
+        "properties, or looks completely different from reality "
+        "(e.g. 'doll comes alive', 'bag transforms into butterfly')\n"
+        "  2 = mostly creative — strong stylisation, fantasy elements, loose product tie\n"
+        "  3 = balanced — realistic setting but product in action "
+        "(e.g. 'woman holds bag on beach', 'person unboxes product')\n"
+        "  4 = product-focused — scene exists mainly to show the product clearly\n"
+        "  5 = maximum realism — close-up, product detail, accurate textures required "
+        "(e.g. 'tight zoom on stitching detail', 'product on marble with sharp focus')\n\n"
+        "Return ONLY a single integer from 1 to 5. No explanation."
+    )
+
+    try:
+        client = _get_client()
+
+        def _score():
+            response = client.models.generate_content(
+                model="gemini-3.5-flash",
+                contents=system_prompt + f"\n\nPrompt to evaluate:\n{prompt}",
+            )
+            raw = response.text.strip()
+            # Extract first digit found in response (handles "3", "Score: 3", etc.)
+            for ch in raw:
+                if ch.isdigit() and ch in "12345":
+                    return int(ch)
+            return 3  # Default to balanced if no valid digit found
+
+        loop = asyncio.get_running_loop()
+        score = await loop.run_in_executor(None, _score)
+        score = max(1, min(5, score))  # Clamp to [1, 5]
+        weight = round(WEIGHT_MIN + (score - 1) / 4.0 * (WEIGHT_MAX - WEIGHT_MIN), 3)
+        logger.info(f"[FidelityScore] Prompt scored {score}/5 → Flux IP-Adapter weight={weight}")
+        return weight
+
+    except Exception as e:
+        logger.warning(f"[FidelityScore] Failed, using default weight {WEIGHT_DEFAULT}: {e}")
+        return WEIGHT_DEFAULT
