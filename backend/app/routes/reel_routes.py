@@ -1,7 +1,8 @@
 import os
 import logging
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy.orm import Session
 from uuid import UUID
 from typing import Optional
@@ -456,76 +457,93 @@ async def generate_guided_prompt_endpoint(
 
 
 @router.get("/{reel_id}/download")
-def download_reel_video(
+async def download_reel_video(
     reel_id: UUID,
     with_logo: bool = True,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    F2-URS05 Option B: Download reel video with or without logo overlay.
+    F2-URS05 Option B: Download reel video with or without brand logo.
 
-    Unlike static video endpoints, this endpoint respects the user's logo toggle:
-        with_logo=true  → serve final_commercial_video_url (logo baked in by worker)
-        with_logo=false → serve raw_video_url (pre-overlay, no logo)
-                          falls back to final_commercial_video_url if raw is unavailable
+    with_logo=true  → final_commercial_video_url (logo baked by worker)
+    with_logo=false → raw_video_url (pre-overlay, no logo); falls back to overlaid
 
-    Uses StreamingResponse to proxy R2 content through the backend so the browser
-    receives Content-Disposition: attachment (triggering download dialog) regardless
-    of origin — the HTML <a download> attribute is silently ignored for cross-origin URLs.
+    Two response strategies depending on where the video is stored:
 
-    Args:
-        reel_id:   UUID of the reel to download
-        with_logo: True = download with brand logo baked in; False = clean video
+    R2 object key → JSONResponse {"download_url": "<presigned>"}.
+        Presigned URL has ResponseContentDisposition=attachment so the browser
+        downloads the file directly from Cloudflare R2 without routing through
+        this server. Fast, no memory usage, supports large files.
+
+    CDN URL (fal.ai) → async StreamingResponse.
+        Proxies the CDN video through the backend with chunked transfer.
+        Uses httpx.AsyncClient.stream() to avoid buffering large videos in RAM.
+
+    Returns:
+        JSONResponse  { download_url } for R2 keys
+        StreamingResponse              for CDN URLs
     """
-    from app.services.storage_service import get_file, _guess_content_type
-    import httpx
+    from app.services.storage_service import _get_s3_client
+    from app.core.config import R2_BUCKET_NAME
 
     reel = get_reel(db=db, reel_id=reel_id, user_id=current_user.user_id)
     if not reel:
         raise HTTPException(status_code=404, detail="Reel not found")
 
-    # Choose video URL based on logo preference
-    if with_logo:
-        video_ref = reel.final_commercial_video_url
-    else:
-        # Use raw (no logo) if available; fall back to overlaid if not
-        video_ref = reel.raw_video_url or reel.final_commercial_video_url
+    video_ref = (
+        reel.final_commercial_video_url
+        if with_logo
+        else (reel.raw_video_url or reel.final_commercial_video_url)
+    )
 
     if not video_ref:
         raise HTTPException(status_code=404, detail="Video not ready yet")
 
     filename = f"reel_{reel_id}.mp4"
-    download_headers = {
-        "Content-Disposition": f'attachment; filename="{filename}"',
-        "Cache-Control": "no-cache",
-    }
 
-    # ── R2 object key (not a full URL) ────────────────────────────────────────
+    # ── R2 object key → presigned URL (browser downloads directly from R2) ───
+    # Avoids routing video bytes through this server — fast and memory-efficient.
+    # ResponseContentDisposition forces the browser download dialog regardless of
+    # the <a download> cross-origin restriction.
     if not video_ref.startswith("http"):
         try:
-            file_obj = get_file(video_ref)
-        except RuntimeError as exc:
-            raise HTTPException(status_code=404, detail=str(exc))
-        content_type = file_obj.get("ContentType", "video/mp4")
-        return StreamingResponse(
-            file_obj["Body"],
-            media_type=content_type,
-            headers=download_headers,
-        )
+            s3 = _get_s3_client()
+            presigned = s3.generate_presigned_url(
+                "get_object",
+                Params={
+                    "Bucket": R2_BUCKET_NAME,
+                    "Key": video_ref,
+                    "ResponseContentDisposition": f'attachment; filename="{filename}"',
+                    "ResponseContentType": "video/mp4",
+                },
+                ExpiresIn=300,  # 5 min TTL — enough for a single download
+            )
+            logger.info(f"[Download] Presigned URL generated for reel {reel_id} (with_logo={with_logo})")
+            return JSONResponse({"download_url": presigned})
+        except Exception as exc:
+            logger.error(f"[Download] Presigned URL generation failed for reel {reel_id}: {exc}")
+            raise HTTPException(status_code=500, detail=f"Could not generate download URL: {exc}")
 
-    # ── External CDN URL (fal.ai / Veo) — proxy through backend ──────────────
-    # fal.ai CDN URLs may expire after ~24h. If this fails, the caller sees a 502.
-    try:
-        resp = httpx.get(video_ref, timeout=30, follow_redirects=True)
-        resp.raise_for_status()
-    except Exception as exc:
-        logger.error(f"[Download] Failed to fetch CDN video for reel {reel_id}: {exc}")
-        raise HTTPException(status_code=502, detail="Could not retrieve video from CDN")
+    # ── CDN URL (fal.ai / Veo) → async streaming proxy ───────────────────────
+    # Chunks are forwarded immediately without buffering the entire video in RAM.
+    logger.info(f"[Download] Streaming CDN video for reel {reel_id} (with_logo={with_logo})")
 
-    content_type = resp.headers.get("content-type", "video/mp4")
+    async def _stream_cdn():
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(120.0, connect=10.0),
+            follow_redirects=True,
+        ) as client:
+            async with client.stream("GET", video_ref) as r:
+                r.raise_for_status()
+                async for chunk in r.aiter_bytes(chunk_size=65536):
+                    yield chunk
+
     return StreamingResponse(
-        iter([resp.content]),
-        media_type=content_type,
-        headers=download_headers,
+        _stream_cdn(),
+        media_type="video/mp4",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-cache",
+        },
     )

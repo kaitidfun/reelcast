@@ -326,6 +326,10 @@ async def generate_first_frame_with_flux(
         )
 
         def _run_with_ip_adapter():
+            logger.info(
+                f"[Flux] Calling flux-general + IP-Adapter | "
+                f"image: {primary_image_url[:80]} | scale={ip_weight} | guidance={guidance_scale}"
+            )
             result = fal_client.run(
                 FLUX_GENERAL_MODEL,
                 arguments={
@@ -338,8 +342,7 @@ async def generate_first_frame_with_flux(
                     "enable_safety_checker": True,
                     # IP-Adapter: sends primary product image as visual reference.
                     # InstantX/FLUX.1-dev-IP-Adapter is the standard FLUX.1 IP-Adapter.
-                    # scale = ip_weight (0.30–0.80) — how strictly product identity is preserved.
-                    # Low scale = Flux has creative freedom; high scale = product-faithful.
+                    # scale = ip_weight (0.30–0.80) controls product-faithful vs creative.
                     "ip_adapters": [
                         {
                             "path": FLUX_IP_ADAPTER_PATH,
@@ -350,9 +353,11 @@ async def generate_first_frame_with_flux(
                     ],
                 },
             )
+            logger.info(f"[Flux] flux-general raw response keys: {list(result.keys()) if isinstance(result, dict) else type(result)}")
+            # flux-general returns {"images": [...]} same format as flux/dev
             images = result.get("images") or []
             if not images:
-                raise RuntimeError(f"flux-general returned no images. Response: {result}")
+                raise RuntimeError(f"flux-general returned no images. Response keys: {list(result.keys()) if isinstance(result, dict) else result}")
             url = images[0].get("url")
             if not url:
                 raise RuntimeError(f"flux-general image missing 'url'. Entry: {images[0]}")
@@ -361,16 +366,23 @@ async def generate_first_frame_with_flux(
         loop = asyncio.get_running_loop()
         try:
             url = await loop.run_in_executor(None, _run_with_ip_adapter)
-            logger.info(f"[Flux] IP-Adapter first frame ready: {url}")
+            logger.info(f"[Flux] ✅ IP-Adapter first frame ready: {url[:80]}")
             return url
         except Exception as ip_err:
-            # IP-Adapter failed (checkpoint loading, API error, etc.) — fall back to flux/dev
+            # IP-Adapter failed (checkpoint path, format, or API error) — fall back to flux/dev
             logger.warning(
-                f"[Flux] flux-general IP-Adapter failed, falling back to flux/dev: {ip_err}"
+                f"[Flux] ⚠️ flux-general IP-Adapter FAILED — falling back to flux/dev text-only. "
+                f"Reason: {ip_err}"
             )
 
-        # ── Fallback: flux/dev text-only ──────────────────────────────────────
-        logger.info(f"[Flux] Fallback: flux/dev text-only (guidance={guidance_scale})")
+        # ── Fallback: flux/dev text-only (no product image reference) ───────────
+        # NOTE: This path does NOT use the product image — the generated first frame
+        # will show a cinematic scene from the text prompt only, without product visual
+        # fidelity. If this fallback triggers, check the IP-Adapter path/format above.
+        logger.warning(
+            f"[Flux] ❌ Using flux/dev TEXT-ONLY fallback — product image NOT applied. "
+            f"guidance={guidance_scale}, prompt={prompt[:60]}..."
+        )
 
         def _run_text_only():
             result = fal_client.run(
@@ -386,14 +398,14 @@ async def generate_first_frame_with_flux(
             )
             images = result.get("images") or []
             if not images:
-                raise RuntimeError(f"flux/dev returned no images. Response: {result}")
+                raise RuntimeError(f"flux/dev returned no images. Response keys: {list(result.keys()) if isinstance(result, dict) else result}")
             url = images[0].get("url")
             if not url:
                 raise RuntimeError(f"flux/dev image missing 'url'. Entry: {images[0]}")
             return url
 
         url = await loop.run_in_executor(None, _run_text_only)
-        logger.info(f"[Flux] Fallback first frame ready: {url}")
+        logger.warning(f"[Flux] ❌ flux/dev fallback first frame (text-only): {url[:80]}")
         return url
 
     except Exception as e:

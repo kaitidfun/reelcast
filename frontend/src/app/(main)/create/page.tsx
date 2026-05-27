@@ -848,38 +848,51 @@ const CreateReel = () => {
   /**
    * Download the generated/uploaded video to the user's device.
    *
-   * Option B logo toggle: uses the authenticated /api/reels/{id}/download endpoint
-   * which serves either the overlaid video (with_logo=true) or the raw pre-overlay
-   * video (with_logo=false) depending on the current showLogo state.
+   * Option B logo toggle: calls /api/reels/{id}/download?with_logo=<showLogo>
+   *   with_logo=true  → video with brand logo baked
+   *   with_logo=false → clean video (no logo)
    *
-   * The backend endpoint responds with Content-Disposition: attachment which forces
-   * the browser download dialog regardless of origin — the HTML <a download> attribute
-   * is silently ignored for cross-origin URLs (port 3000 ≠ 8000).
+   * Two backend response strategies:
+   *   JSON { download_url }  → R2 presigned URL — navigate directly (browser downloads from R2)
+   *   StreamingResponse      → CDN video — blob fetch then trigger download
    */
   const handleDownload = async () => {
     if (!reelId) return;
     try {
       const filename = `reel_${reelId}.mp4`;
       const token = localStorage.getItem("rf_token");
-
-      // Authenticated download endpoint — respects showLogo via with_logo param
       const downloadEndpoint = `http://localhost:8000/api/reels/${reelId}/download?with_logo=${showLogo}`;
 
       const res = await fetch(downloadEndpoint, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      toast({ title: "Download failed", description: "Could not download the video.", variant: "destructive" });
+      if (!res.ok) throw new Error(`HTTP ${res.status} — Could not get download URL`);
+
+      const contentType = res.headers.get("content-type") || "";
+
+      if (contentType.includes("application/json")) {
+        // R2 presigned URL — navigate directly (no CORS issue, browser downloads from R2)
+        const data = await res.json();
+        const a = document.createElement("a");
+        a.href = data.download_url;
+        a.setAttribute("download", filename);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        // CDN streaming response — receive blob, then trigger download
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }
+    } catch (err: any) {
+      toast({ title: "Download failed", description: err.message || "Could not download the video.", variant: "destructive" });
     }
   };
 
@@ -1569,11 +1582,13 @@ const CreateReel = () => {
                 <div className="relative h-full aspect-[9/16] max-h-full overflow-hidden rounded-[28px] border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 ring-1 ring-inset ring-white/5">
                   {generationStatus === "done" ? (
                     <>
-                      {/* Real video from Veo / fal.ai */}
+                      {/* Preview video — uses rawVideoUrl (no logo baked) when available so
+                          the CSS logo overlay below is the only logo shown in preview.
+                          Falls back to videoUrl for old reels that lack raw_video_url. */}
                       {videoUrl ? (
                         <video
                           ref={videoRef}
-                          src={videoUrl}
+                          src={rawVideoUrl ?? videoUrl}
                           className="absolute inset-0 w-full h-full object-cover"
                           loop
                           playsInline
@@ -1890,13 +1905,11 @@ const CreateReel = () => {
             <DialogDescription>Watch the generated Reel in fullscreen</DialogDescription>
           </DialogHeader>
           <div className="relative aspect-[9/16] w-full overflow-hidden bg-black">
-            {/* Actual video in fullscreen — no autoPlay (controlled by useEffect).
-                onTimeUpdate keeps the seek bar in sync while fullscreen is active
-                (main videoRef is paused, so only this element fires timeupdate). */}
+            {/* Fullscreen video — same rawVideoUrl preference as main preview. */}
             {videoUrl ? (
               <video
                 ref={videoRefFullscreen}
-                src={videoUrl}
+                src={rawVideoUrl ?? videoUrl}
                 className="absolute inset-0 w-full h-full object-cover"
                 loop
                 playsInline
