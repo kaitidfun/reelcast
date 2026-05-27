@@ -132,13 +132,19 @@ def serve_generic_image(
 @router.get("/videos/{object_key:path}")
 def serve_generic_video(
     object_key: str,
+    download: bool = False,
 ):
     """
     Public endpoint that proxies any video from R2 by its key.
 
     Used by the frontend to stream R2-stored videos (uploaded reels, overlaid outputs)
-    since the R2 bucket may not have public access enabled.  Pattern mirrors the
-    /images/{key} endpoint so the frontend can use a consistent proxy strategy.
+    since the R2 bucket may not have public access enabled.
+
+    Args:
+        object_key: R2 object key of the video file
+        download:   If True, adds Content-Disposition: attachment so the browser
+                    downloads the file instead of playing it inline.
+                    Frontend passes ?download=true to trigger this path.
     """
     if not object_key:
         raise HTTPException(status_code=400, detail="No object key provided")
@@ -150,12 +156,22 @@ def serve_generic_video(
 
     content_type = file_obj.get("ContentType", "video/mp4")
 
+    # Derive a clean filename from the object key (last path segment)
+    filename = object_key.split("/")[-1] or "reel.mp4"
+
+    headers: dict = {
+        # Allow partial-content requests (required for HTML5 video seeking)
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "public, max-age=3600",
+    }
+    if download:
+        # Content-Disposition: attachment triggers browser download dialog.
+        # This is the only reliable way to force download for cross-origin resources
+        # because the HTML <a download> attribute is ignored for cross-origin URLs.
+        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+
     return StreamingResponse(
         file_obj["Body"],
         media_type=content_type,
-        headers={
-            # Allow partial-content requests (required for HTML5 video seeking)
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "public, max-age=3600",
-        },
+        headers=headers,
     )

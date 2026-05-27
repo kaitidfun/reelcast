@@ -832,16 +832,37 @@ const CreateReel = () => {
   const handleDownload = async () => {
     if (!videoUrl) return;
     try {
-      // Fetch video bytes and create a local blob URL to trigger browser download.
-      // Needed because CDN URLs (fal.ai) don't honour the `download` attribute due to CORS.
-      const res = await fetch(videoUrl);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = `reel_${reelId ?? "video"}.mp4`;
-      a.click();
-      URL.revokeObjectURL(blobUrl);
+      const filename = `reel_${reelId ?? "video"}.mp4`;
+
+      if (videoUrl.includes("localhost:8000") && videoUrl.includes("/videos/")) {
+        // ── Backend-proxied R2 video ─────────────────────────────────────────
+        // The HTML <a download> attribute is silently ignored for cross-origin
+        // URLs (port 3000 ≠ 8000). Instead, append ?download=true so the backend
+        // responds with Content-Disposition: attachment — the browser then shows
+        // the download dialog regardless of origin.
+        const downloadUrl = videoUrl + (videoUrl.includes("?") ? "&download=true" : "?download=true");
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.setAttribute("download", filename);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        // ── External CDN URL (fal.ai) ────────────────────────────────────────
+        // Fetch the bytes server-side via a blob and create a local object URL.
+        // Note: this path requires the CDN to send permissive CORS headers.
+        const res = await fetch(videoUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }
     } catch {
       toast({ title: "Download failed", description: "Could not download the video.", variant: "destructive" });
     }
