@@ -252,8 +252,15 @@ const CreateReel = () => {
 
   // Settings state
   const [duration, setDuration] = useState(5);  // Default 5s — cheapest single Kling clip for testing
-  // Audio toggle — passed to API; Kling 2.6 may support ambient audio generation
+  // Audio toggle — passed to API; LTX never generates audio, but uploaded videos may have audio
   const [withAudio, setWithAudio] = useState(false);
+  /**
+   * Tracks the withAudio setting that was used on the LAST successful upload.
+   * null = nothing uploaded yet in this session.
+   * Used to re-enable the Upload button when the user toggles audio after an upload
+   * (so they can re-upload with the new audio setting without clearing the file first).
+   */
+  const [uploadedWithAudio, setUploadedWithAudio] = useState<boolean | null>(null);
   // overlayPosition kept as hidden state (sent to API, defaulted to bottom-right)
   const [overlayPosition] = useState("bottom-right");
 
@@ -780,6 +787,8 @@ const CreateReel = () => {
         const data = JSON.parse(xhr.responseText);
         setReelId(data.reel_id);
         setUploadStatus("done");
+        // Remember the audio setting used so we can detect when it changes (smart re-enable)
+        setUploadedWithAudio(withAudio);
         completedModeRef.current = "upload";
         setCompletedMode(null);
         setGenerationStatus("generating");
@@ -894,7 +903,10 @@ const CreateReel = () => {
               <div className="flex items-center gap-2">
                 <ShoppingBag className="h-3.5 w-3.5 text-primary" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-foreground">Product</span>
-                <span className="rounded-full bg-primary/10 text-primary text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 ring-1 ring-primary/20">Required</span>
+                {/* Required badge — disappears once a product is selected */}
+                {!selectedProduct && (
+                  <span className="rounded-full bg-primary/10 text-primary text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 ring-1 ring-primary/20">Required</span>
+                )}
               </div>
               {selectedProduct && (
                 <button
@@ -962,7 +974,11 @@ const CreateReel = () => {
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted/30">
                 <Upload className="h-3.5 w-3.5 text-primary" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-foreground">Upload Reel</span>
-                <span className="text-[10px] text-muted-foreground ml-1">MP4 · MOV · AVI · max 500 MB · max 60 s</span>
+                {/* Required badge — disappears once a file is selected or successfully uploaded */}
+                {!uploadFile && uploadStatus !== "done" && (
+                  <span className="rounded-full bg-primary/10 text-primary text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 ring-1 ring-primary/20">Required</span>
+                )}
+                <span className="text-[10px] text-muted-foreground ml-auto">MP4 · MOV · AVI · max 500 MB · max 60 s</span>
               </div>
               <div className="p-4 space-y-3">
                 {uploadStatus !== "uploading" && !uploadFile && (
@@ -989,7 +1005,7 @@ const CreateReel = () => {
                     </div>
                     <button
                       type="button"
-                      onClick={() => { setUploadFile(null); setUploadStatus("idle"); }}
+                      onClick={() => { setUploadFile(null); setUploadStatus("idle"); setUploadedWithAudio(null); }}
                       className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -1050,13 +1066,21 @@ const CreateReel = () => {
                 </button>
                 <Button
                   onClick={handleUpload}
-                  disabled={!uploadFile || uploadStatus === "uploading" || uploadStatus === "done"}
+                  disabled={
+                    !selectedProduct ||
+                    !uploadFile ||
+                    uploadStatus === "uploading" ||
+                    // Already uploaded with the same audio setting — re-enable only when audio changes
+                    (uploadStatus === "done" && withAudio === uploadedWithAudio)
+                  }
                   className="gradient-primary w-full gap-2 h-9 text-sm text-primary-foreground shadow-glow"
                 >
                   {uploadStatus === "uploading" ? (
                     <><Loader2 className="h-4 w-4 animate-spin" />Uploading…</>
+                  ) : uploadStatus === "done" && withAudio === uploadedWithAudio ? (
+                    <><Check className="h-4 w-4" />Uploaded — toggle audio or select a new file</>
                   ) : uploadStatus === "done" ? (
-                    <><Check className="h-4 w-4" />Uploaded — select a new file to re-upload</>
+                    <><Upload className="h-4 w-4" />Re-upload with new audio setting</>
                   ) : (
                     <><Upload className="h-4 w-4" />Upload &amp; Process</>
                   )}
@@ -1076,7 +1100,10 @@ const CreateReel = () => {
             <div className="flex items-center gap-2 px-5 pt-4 pb-1 flex-wrap">
               <Wand2 className="h-3.5 w-3.5 text-primary" />
               <span className="text-xs font-semibold uppercase tracking-wider text-foreground">Prompt</span>
-              <span className="rounded-full bg-primary/10 text-primary text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 ring-1 ring-primary/20">Required</span>
+              {/* Required badge — disappears once the user types a prompt */}
+              {!promptText.trim() && (
+                <span className="rounded-full bg-primary/10 text-primary text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 ring-1 ring-primary/20">Required</span>
+              )}
               {/* Guided mode toggle — helps users who don't know what to write */}
               <button
                 type="button"
@@ -1335,7 +1362,12 @@ const CreateReel = () => {
               </div>
               <Button
                 onClick={generationStatus === "done" ? () => handleRegenerate("all") : handleGenerate}
-                disabled={generationStatus === "generating"}
+                disabled={
+                  generationStatus === "generating" ||
+                  // Gate pipeline on required fields — product + non-empty prompt
+                  !selectedProduct ||
+                  !promptText.trim()
+                }
                 className="gradient-primary h-9 gap-2 px-4 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
               >
                 {generationStatus === "generating" ? (
