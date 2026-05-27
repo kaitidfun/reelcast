@@ -171,6 +171,16 @@ async def _async_process_reel_generation(
             # Caption-only regeneration — retain existing video
             final_video_url = reel.final_commercial_video_url
 
+        # ── Step 1b: Persist raw (pre-overlay) video URL ─────────────────────
+        # Saved BEFORE overlay so Option B logo toggle works at download time:
+        #   with_logo=True  → frontend uses final_commercial_video_url (baked)
+        #   with_logo=False → frontend uses raw_video_url (no logo)
+        # For upload target, raw = uploaded_video_url (already set by reel_routes).
+        if target in ["all", "video"] and final_video_url:
+            update_reel(db, reel=reel, raw_video_url=final_video_url)
+        elif target == "upload" and reel.uploaded_video_url:
+            update_reel(db, reel=reel, raw_video_url=reel.uploaded_video_url)
+
         # ── Step 2: Apply FFmpeg overlay (brand logo / product image) ───────
         overlay_applied = False  # Track whether FFmpeg ran — needed for audio strip fallback
         if target in ["all", "video", "upload"] and overlay_url and final_video_url:

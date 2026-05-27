@@ -56,18 +56,24 @@ logger = logging.getLogger(__name__)
 LTX_IMAGE_MODEL = "fal-ai/ltx-2.3/image-to-video/fast"  # Flux first frame → animation
 LTX_TEXT_MODEL  = "fal-ai/ltx-2.3/text-to-video/fast"   # text-only fallback (no image)
 
-# Flux Dev — text-to-image first frame generator.
-# Generates a cinematic 9:16 still from the Gemini scene prompt.
-# LTX then animates this still into a product reel.
+# Flux-General (FLUX.1-dev) — first frame generator with IP-Adapter product conditioning.
+# Generates a cinematic 9:16 still from the Gemini scene prompt WHILE anchoring
+# the product's visual identity via the InstantX FLUX.1-dev IP-Adapter.
 #
-# Why flux/dev (not flux-general + IP-Adapter):
-#   flux-general's ip_adapters requires specifying HuggingFace checkpoint paths
-#   (path, image_encoder_path) — complex and version-sensitive.
-#   flux/dev text-to-image is simpler, stable, and Gemini prompts already
-#   describe the full cinematic scene (environment, action, camera).
-FLUX_DEV_MODEL = "fal-ai/flux/dev"
+# IP-Adapter sends the primary product image as a visual reference so Flux renders
+# the correct product appearance (colour, shape, texture) in the first frame.
+# This frame is then animated by LTX Video 2.3 — ensuring the final reel is both
+# cinematic AND product-accurate.
+#
+# Fallback path: if flux-general IP-Adapter call fails → retry with flux/dev (text-only)
+FLUX_GENERAL_MODEL = "fal-ai/flux-general"   # IP-Adapter enabled Flux.1-dev
+FLUX_DEV_MODEL     = "fal-ai/flux/dev"        # text-only fallback (no IP-Adapter)
 
-# ip_weight auto-scored by Gemini (0.30–0.80) → maps to Flux guidance_scale (2.5–4.5).
+# IP-Adapter checkpoint paths (InstantX FLUX.1-dev — most widely used for product shots)
+FLUX_IP_ADAPTER_PATH          = "InstantX/FLUX.1-dev-IP-Adapter"
+FLUX_IP_IMAGE_ENCODER_PATH    = "openai/clip-vit-large-patch14"
+
+# ip_weight auto-scored by Gemini (0.30–0.80) → Flux IP-Adapter scale.
 # Default used when auto-score is unavailable.
 FLUX_IP_TOTAL_WEIGHT = 0.75
 
@@ -278,50 +284,99 @@ async def generate_first_frame_with_flux(
     ip_weight: float = FLUX_IP_TOTAL_WEIGHT,
 ) -> str:
     """
-    Generate a cinematic first frame using Flux Dev (text-to-image).
+    Generate a cinematic first frame using Flux-General + IP-Adapter product conditioning.
 
-    Flux produces a high-quality 9:16 still from the Gemini scene prompt.
-    LTX Video 2.3 then animates this still into a product reel.
+    Two-stage pipeline:
+        Primary:  flux-general + InstantX/FLUX.1-dev-IP-Adapter
+                  Product image sent as IP-Adapter visual reference so Flux renders
+                  the correct product identity (colour, shape, texture) in the scene.
+        Fallback: flux/dev (text-only) — if IP-Adapter call fails for any reason.
 
-    ip_weight → guidance_scale mapping:
-        Low weight  (0.30, surreal / creative prompts) → guidance 2.5 (more imaginative)
-        High weight (0.80, realistic prompts)           → guidance 4.5 (more literal)
+    The first product image URL (primary image) is used as the IP-Adapter reference.
+    ip_weight controls both the IP-Adapter scale AND the guidance_scale:
+        Low weight  (0.30, surreal prompts)   → scale 0.30, guidance 2.5
+        High weight (0.80, realistic prompts) → scale 0.80, guidance 4.5
 
     Args:
         prompt:              Scene description from Gemini (environment, action, camera)
-        product_image_urls:  Product reference URLs — accepted for API compatibility;
-                             not sent to Flux since flux/dev is text-only.
-        ip_weight:           Fidelity weight (0.30–0.80) → Flux guidance_scale (2.5–4.5)
+        product_image_urls:  Product image URLs sorted primary-first. First URL is used
+                             as IP-Adapter reference; remaining available as context.
+        ip_weight:           Fidelity weight (0.30–0.80) from Gemini prompt scoring
 
     Returns:
-        fal.media CDN URL of the Flux-generated first frame image
+        fal.media CDN URL of the Flux-generated 9:16 first frame image
 
     Raises:
-        ValueError:   If product_image_urls is empty (caller sanity check)
-        RuntimeError: If fal.ai API call fails
+        ValueError:   If product_image_urls is empty
+        RuntimeError: If both flux-general AND flux/dev API calls fail
     """
     if not product_image_urls:
         raise ValueError("At least one product image URL is required")
 
     # Map ip_weight (0.30–0.80) → guidance_scale (2.5–4.5)
-    # Formula: (weight - min_w) / range_w * range_g + min_g
     guidance_scale = round(2.5 + (ip_weight - 0.30) / 0.50 * 2.0, 2)
+    primary_image_url = product_image_urls[0]
 
     try:
         import fal_client
 
         logger.info(
-            f"[Flux] Generating first frame "
-            f"(guidance={guidance_scale}, weight={ip_weight}): {prompt[:60]}..."
+            f"[Flux] Generating first frame via flux-general + IP-Adapter "
+            f"(scale={ip_weight}, guidance={guidance_scale}): {prompt[:60]}..."
         )
 
-        def _run():
+        def _run_with_ip_adapter():
+            result = fal_client.run(
+                FLUX_GENERAL_MODEL,
+                arguments={
+                    "prompt": prompt,
+                    # portrait_16_9 = tall 9:16 matching LTX 2.3 aspect ratio
+                    "image_size": "portrait_16_9",
+                    "num_inference_steps": 28,
+                    "guidance_scale": guidance_scale,
+                    "num_images": 1,
+                    "enable_safety_checker": True,
+                    # IP-Adapter: sends primary product image as visual reference.
+                    # InstantX/FLUX.1-dev-IP-Adapter is the standard FLUX.1 IP-Adapter.
+                    # scale = ip_weight (0.30–0.80) — how strictly product identity is preserved.
+                    # Low scale = Flux has creative freedom; high scale = product-faithful.
+                    "ip_adapters": [
+                        {
+                            "path": FLUX_IP_ADAPTER_PATH,
+                            "image_encoder_path": FLUX_IP_IMAGE_ENCODER_PATH,
+                            "image_url": primary_image_url,
+                            "scale": ip_weight,
+                        }
+                    ],
+                },
+            )
+            images = result.get("images") or []
+            if not images:
+                raise RuntimeError(f"flux-general returned no images. Response: {result}")
+            url = images[0].get("url")
+            if not url:
+                raise RuntimeError(f"flux-general image missing 'url'. Entry: {images[0]}")
+            return url
+
+        loop = asyncio.get_running_loop()
+        try:
+            url = await loop.run_in_executor(None, _run_with_ip_adapter)
+            logger.info(f"[Flux] IP-Adapter first frame ready: {url}")
+            return url
+        except Exception as ip_err:
+            # IP-Adapter failed (checkpoint loading, API error, etc.) — fall back to flux/dev
+            logger.warning(
+                f"[Flux] flux-general IP-Adapter failed, falling back to flux/dev: {ip_err}"
+            )
+
+        # ── Fallback: flux/dev text-only ──────────────────────────────────────
+        logger.info(f"[Flux] Fallback: flux/dev text-only (guidance={guidance_scale})")
+
+        def _run_text_only():
             result = fal_client.run(
                 FLUX_DEV_MODEL,
                 arguments={
                     "prompt": prompt,
-                    # "portrait_16_9" = tall 9:16 portrait matching LTX 2.3 output.
-                    # fal-ai uses H:W ratio in preset names, so portrait_16_9 → H=16, W=9 → tall.
                     "image_size": "portrait_16_9",
                     "num_inference_steps": 28,
                     "guidance_scale": guidance_scale,
@@ -329,22 +384,20 @@ async def generate_first_frame_with_flux(
                     "enable_safety_checker": True,
                 },
             )
-            # flux/dev response: {"images": [{"url": "...", "width": int, "height": int}]}
             images = result.get("images") or []
             if not images:
-                raise RuntimeError(f"Flux returned no images. Response: {result}")
+                raise RuntimeError(f"flux/dev returned no images. Response: {result}")
             url = images[0].get("url")
             if not url:
-                raise RuntimeError(f"Flux image missing 'url'. Entry: {images[0]}")
+                raise RuntimeError(f"flux/dev image missing 'url'. Entry: {images[0]}")
             return url
 
-        loop = asyncio.get_running_loop()
-        url = await loop.run_in_executor(None, _run)
-        logger.info(f"[Flux] First frame ready: {url}")
+        url = await loop.run_in_executor(None, _run_text_only)
+        logger.info(f"[Flux] Fallback first frame ready: {url}")
         return url
 
     except Exception as e:
-        logger.error(f"[Flux] First frame generation failed: {e}")
+        logger.error(f"[Flux] First frame generation failed entirely: {e}")
         raise RuntimeError(f"Flux first frame generation failed: {e}") from e
 
 

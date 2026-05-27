@@ -1,6 +1,7 @@
 import os
 import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from uuid import UUID
 from typing import Optional
@@ -134,6 +135,9 @@ class ReelResponse(BaseModel):
     prompt_text: str
     error_message: Optional[str] = None
     final_commercial_video_url: Optional[str] = None
+    # raw_video_url: pre-overlay video (no logo) — used by frontend for
+    # Option B logo toggle: download without logo uses this URL instead.
+    raw_video_url: Optional[str] = None
     caption_and_hashtags: Optional[dict] = None
     class Config:
         from_attributes = True
@@ -449,3 +453,79 @@ async def generate_guided_prompt_endpoint(
         duration=req.duration or 30,
     )
     return {"prompt": prompt}
+
+
+@router.get("/{reel_id}/download")
+def download_reel_video(
+    reel_id: UUID,
+    with_logo: bool = True,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    F2-URS05 Option B: Download reel video with or without logo overlay.
+
+    Unlike static video endpoints, this endpoint respects the user's logo toggle:
+        with_logo=true  → serve final_commercial_video_url (logo baked in by worker)
+        with_logo=false → serve raw_video_url (pre-overlay, no logo)
+                          falls back to final_commercial_video_url if raw is unavailable
+
+    Uses StreamingResponse to proxy R2 content through the backend so the browser
+    receives Content-Disposition: attachment (triggering download dialog) regardless
+    of origin — the HTML <a download> attribute is silently ignored for cross-origin URLs.
+
+    Args:
+        reel_id:   UUID of the reel to download
+        with_logo: True = download with brand logo baked in; False = clean video
+    """
+    from app.services.storage_service import get_file, _guess_content_type
+    import httpx
+
+    reel = get_reel(db=db, reel_id=reel_id, user_id=current_user.user_id)
+    if not reel:
+        raise HTTPException(status_code=404, detail="Reel not found")
+
+    # Choose video URL based on logo preference
+    if with_logo:
+        video_ref = reel.final_commercial_video_url
+    else:
+        # Use raw (no logo) if available; fall back to overlaid if not
+        video_ref = reel.raw_video_url or reel.final_commercial_video_url
+
+    if not video_ref:
+        raise HTTPException(status_code=404, detail="Video not ready yet")
+
+    filename = f"reel_{reel_id}.mp4"
+    download_headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "no-cache",
+    }
+
+    # ── R2 object key (not a full URL) ────────────────────────────────────────
+    if not video_ref.startswith("http"):
+        try:
+            file_obj = get_file(video_ref)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        content_type = file_obj.get("ContentType", "video/mp4")
+        return StreamingResponse(
+            file_obj["Body"],
+            media_type=content_type,
+            headers=download_headers,
+        )
+
+    # ── External CDN URL (fal.ai / Veo) — proxy through backend ──────────────
+    # fal.ai CDN URLs may expire after ~24h. If this fails, the caller sees a 502.
+    try:
+        resp = httpx.get(video_ref, timeout=30, follow_redirects=True)
+        resp.raise_for_status()
+    except Exception as exc:
+        logger.error(f"[Download] Failed to fetch CDN video for reel {reel_id}: {exc}")
+        raise HTTPException(status_code=502, detail="Could not retrieve video from CDN")
+
+    content_type = resp.headers.get("content-type", "video/mp4")
+    return StreamingResponse(
+        iter([resp.content]),
+        media_type=content_type,
+        headers=download_headers,
+    )

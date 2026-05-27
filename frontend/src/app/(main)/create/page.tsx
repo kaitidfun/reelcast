@@ -254,8 +254,8 @@ const CreateReel = () => {
 
   // Settings state
   const [duration, setDuration] = useState(6);  // Default 6s — LTX 2.3 minimum valid duration
-  // Audio toggle — passed to API; LTX never generates audio, but uploaded videos may have audio
-  const [withAudio, setWithAudio] = useState(false);
+  // Audio toggle — passed to API; LTX 2.3 generates native audio when true (generate_audio param)
+  const [withAudio, setWithAudio] = useState(true);
   /**
    * Tracks the withAudio setting that was used on the LAST successful upload.
    * null = nothing uploaded yet in this session.
@@ -263,8 +263,8 @@ const CreateReel = () => {
    * (so they can re-upload with the new audio setting without clearing the file first).
    */
   const [uploadedWithAudio, setUploadedWithAudio] = useState<boolean | null>(null);
-  // overlayPosition kept as hidden state (sent to API, defaulted to bottom-right)
-  const [overlayPosition] = useState("bottom-right");
+  // overlayPosition — logo is placed top-right to match the toggle preview overlay
+  const [overlayPosition] = useState("top-right");
 
   // Output / preview state
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
@@ -283,6 +283,12 @@ const CreateReel = () => {
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [reelId, setReelId] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  /**
+   * rawVideoUrl: pre-overlay video URL (no brand logo baked).
+   * Set when generation completes and the backend returns raw_video_url.
+   * Used by handleDownload when showLogo=false (Option B logo toggle).
+   */
+  const [rawVideoUrl, setRawVideoUrl] = useState<string | null>(null);
 
   // Video playback tracking (for real-time seek bar + fullscreen)
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
@@ -367,6 +373,14 @@ const CreateReel = () => {
                   : `http://localhost:8000/api/upload/videos/${rawUrl}`;
                 setVideoUrl(resolvedUrl);
                 setIsPlaying(true);   // Auto-play as soon as the generated video is ready
+              }
+              // Store raw (pre-overlay) video URL for Option B logo toggle.
+              // When showLogo=false at download time, this URL is used instead.
+              if (data.raw_video_url) {
+                const resolvedRaw: string = data.raw_video_url.startsWith("http")
+                  ? data.raw_video_url
+                  : `http://localhost:8000/api/upload/videos/${data.raw_video_url}`;
+                setRawVideoUrl(resolvedRaw);
               }
               if (data.caption_and_hashtags) {
                 setCaption(data.caption_and_hashtags.caption + "\n\n" + (data.caption_and_hashtags.hashtags?.join(" ") || ""));
@@ -658,6 +672,7 @@ const CreateReel = () => {
     setElapsedSeconds(0);
     // Clear previous result so the player doesn't show stale content during generation
     setVideoUrl(null);
+    setRawVideoUrl(null);
     setIsPlaying(false);
 
     try {
@@ -696,7 +711,8 @@ const CreateReel = () => {
     setGenerationStartTime(Date.now());
     setElapsedSeconds(0);
     setGenerationTime(null);
-    setVideoUrl(null);    // Clear stale video during regeneration
+    setVideoUrl(null);       // Clear stale video during regeneration
+    setRawVideoUrl(null);
     setIsPlaying(false);
     try {
       const token = localStorage.getItem("rf_token");
@@ -797,7 +813,8 @@ const CreateReel = () => {
         setIsApproved(false);
         setGenerationStartTime(Date.now());
         setElapsedSeconds(0);
-        setVideoUrl(null);     // Clear any previous video while overlay/captions process
+        setVideoUrl(null);       // Clear any previous video while overlay/captions process
+        setRawVideoUrl(null);
         setIsPlaying(false);
         // Notify global context so background polling works when user navigates away
         startGeneration(data.reel_id, selectedProduct?.name ?? "Video Upload");
@@ -828,41 +845,39 @@ const CreateReel = () => {
     toast({ title: "Published!", description: `Reel has been distributed to ${names.join(", ")} 🎉` });
   };
 
-  /** Download the generated/uploaded video to the user's device. */
+  /**
+   * Download the generated/uploaded video to the user's device.
+   *
+   * Option B logo toggle: uses the authenticated /api/reels/{id}/download endpoint
+   * which serves either the overlaid video (with_logo=true) or the raw pre-overlay
+   * video (with_logo=false) depending on the current showLogo state.
+   *
+   * The backend endpoint responds with Content-Disposition: attachment which forces
+   * the browser download dialog regardless of origin — the HTML <a download> attribute
+   * is silently ignored for cross-origin URLs (port 3000 ≠ 8000).
+   */
   const handleDownload = async () => {
-    if (!videoUrl) return;
+    if (!reelId) return;
     try {
-      const filename = `reel_${reelId ?? "video"}.mp4`;
+      const filename = `reel_${reelId}.mp4`;
+      const token = localStorage.getItem("rf_token");
 
-      if (videoUrl.includes("localhost:8000") && videoUrl.includes("/videos/")) {
-        // ── Backend-proxied R2 video ─────────────────────────────────────────
-        // The HTML <a download> attribute is silently ignored for cross-origin
-        // URLs (port 3000 ≠ 8000). Instead, append ?download=true so the backend
-        // responds with Content-Disposition: attachment — the browser then shows
-        // the download dialog regardless of origin.
-        const downloadUrl = videoUrl + (videoUrl.includes("?") ? "&download=true" : "?download=true");
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.setAttribute("download", filename);
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      } else {
-        // ── External CDN URL (fal.ai) ────────────────────────────────────────
-        // Fetch the bytes server-side via a blob and create a local object URL.
-        // Note: this path requires the CDN to send permissive CORS headers.
-        const res = await fetch(videoUrl);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
-      }
+      // Authenticated download endpoint — respects showLogo via with_logo param
+      const downloadEndpoint = `http://localhost:8000/api/reels/${reelId}/download?with_logo=${showLogo}`;
+
+      const res = await fetch(downloadEndpoint, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
     } catch {
       toast({ title: "Download failed", description: "Could not download the video.", variant: "destructive" });
     }
@@ -897,7 +912,7 @@ const CreateReel = () => {
           {/* Feature 2: Creator mode switch (F2-URS02 AI gen vs F2-URS04 upload) */}
           <div className="flex rounded-xl border border-border bg-muted/30 p-1 gap-1">
             <button
-              onClick={() => { setCreatorMode("generate"); setWithAudio(false); }}
+              onClick={() => { setCreatorMode("generate"); setWithAudio(true); }}
               className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
                 creatorMode === "generate"
                   ? "bg-card text-foreground shadow-sm ring-1 ring-border"
@@ -1441,7 +1456,7 @@ const CreateReel = () => {
                   </span>
                 </button>
               </div>
-              <p className="mt-2 text-[9px] text-muted-foreground/60 text-center">Preview only — overlays are baked into the exported video</p>
+              <p className="mt-2 text-[9px] text-muted-foreground/60 text-center">Brand Logo toggle applies at download — Product preview is UI-only</p>
             </motion.div>
           )}
 

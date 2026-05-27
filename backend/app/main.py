@@ -3,11 +3,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.core.config import ALLOWED_ORIGINS, SESSION_SECRET_KEY
+from sqlalchemy import text as sa_text
 from app.database import engine, Base, SessionLocal
 import app.models.models  # Import models so Base knows about them
 from app.routes import auth_routes, twofa_routes, oauth_routes, upload_routes, product_routes, campaign_routes, reel_routes
-# Create all database tables
+
+# Create all database tables (no-op for existing tables — safe on every restart)
 Base.metadata.create_all(bind=engine)
+
+# Safe incremental migrations — ADD COLUMN IF NOT EXISTS is idempotent on PostgreSQL.
+# These run on every startup and are skipped automatically if the column already exists.
+with engine.connect() as _conn:
+    _conn.execute(sa_text(
+        "ALTER TABLE reels ADD COLUMN IF NOT EXISTS raw_video_url TEXT"
+    ))
+    _conn.commit()
 
 def get_db():
     """Dependency to yield database session."""

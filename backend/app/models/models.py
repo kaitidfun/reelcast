@@ -224,6 +224,9 @@ class Reel(Base):
     caption_and_hashtags = Column(JSONB, nullable=True)
     uploaded_video_url = Column(String, nullable=True)
     b_roll_url = Column(String, nullable=True)
+    # raw_video_url: pre-overlay video (no logo baked). Populated by worker before
+    # apply_overlay() so Option B logo-at-download works without re-generation.
+    raw_video_url = Column(String, nullable=True)
     final_commercial_video_url = Column(String, nullable=True)
     status = Column(
         Enum(
