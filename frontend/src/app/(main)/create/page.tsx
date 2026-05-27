@@ -86,9 +86,11 @@ const promptTemplates = [
   { label: "🎯 How-To / Tutorial",  type: "tutorial" },
 ];
 
-// Kling 2.6 supports "5" or "10" per clip (snapped in backend).
-// Longer options (15, 30, 60) snap to 10s — kept in UI as future multi-clip support.
-const durationOptions = [5, 10, 15, 30, 60];
+// LTX 2.3 fast valid durations: 6–20s per clip (even steps), max 20s per call.
+// 30s and 60s use the extend chain (chained clips via last-frame extraction):
+//   30s = 2 clips (20s + 10s)  |  60s = 3 clips (20s × 3)
+// 15s snaps to 16s on the backend (_snap_to_ltx_duration).
+const durationOptions = [6, 10, 15, 30, 60];
 
 // ─── Guide Me — chip options for each row ────────────────────────────────────
 // 6 options per category → grid-cols-3 gives exactly 2 equal rows of 3.
@@ -251,7 +253,7 @@ const CreateReel = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Settings state
-  const [duration, setDuration] = useState(5);  // Default 5s — cheapest single Kling clip for testing
+  const [duration, setDuration] = useState(6);  // Default 6s — LTX 2.3 minimum valid duration
   // Audio toggle — passed to API; LTX never generates audio, but uploaded videos may have audio
   const [withAudio, setWithAudio] = useState(false);
   /**
@@ -1328,7 +1330,7 @@ const CreateReel = () => {
                 </PopoverContent>
               </Popover>
 
-              {/* Audio toggle — controls whether Kling 2.6 generates ambient audio for AI reels */}
+              {/* Audio toggle — LTX 2.3 native audio generation (generate_audio param) */}
               <button
                 type="button"
                 onClick={() => setWithAudio((v) => !v)}
@@ -1337,7 +1339,7 @@ const CreateReel = () => {
                     ? "border-primary/40 bg-primary/10 text-primary"
                     : "border-border bg-muted/40 text-muted-foreground hover:text-foreground hover:border-primary/30"
                 }`}
-                title={withAudio ? "Kling will generate ambient audio" : "Video will be silent (no AI-generated audio)"}
+                title={withAudio ? "LTX 2.3 will generate native ambient audio" : "Video will be silent (no audio generated)"}
               >
                 {withAudio ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
                 {withAudio ? "With Audio" : "No Audio"}
