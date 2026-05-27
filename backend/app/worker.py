@@ -13,6 +13,7 @@ from app.services.video_generation_service import (
     generate_with_ltx,
     generate_extended_ltx,
     generate_first_frame_with_flux,
+    LTX_MAX_CLIP_DURATION,
 )
 from app.services.overlay_service import apply_overlay, strip_audio_from_video
 from app.services.reel_service import update_reel
@@ -48,8 +49,8 @@ def process_reel_generation(
         overlay_position: Logo/product placement (top-left/right, bottom-left/right, center)
         target: Generation scope — "all" (full pipeline) | "video" (Kling only) |
                 "caption" (Gemini only) | "upload" (uploaded video → overlay → captions)
-        duration: Video length in seconds — snapped to 5 or 10 for Kling 2.6
-        with_audio: Whether to request ambient audio generation from Kling
+        duration: Video length in seconds — snapped to nearest valid LTX value (6–20s)
+        with_audio: True = LTX generates native audio; False = silent video
     """
     asyncio.run(_async_process_reel_generation(
         reel_id, platform, overlay_position, target, duration, with_audio
@@ -70,8 +71,9 @@ async def _async_process_reel_generation(
              > 10s → multi-clip extend chain (clips chained via last-frame extraction)
            OR use uploaded video (target="upload")
         3. Apply FFmpeg overlay (product image + brand logo) (F2-URS05-SRS01)
-           If with_audio=False: FFmpeg strips audio during overlay pass.
-           If no overlay was applied: separate FFmpeg audio strip pass.
+           with_audio controls whether the overlay pass preserves the audio track.
+           For AI videos: audio was already set at LTX generation time (generate_audio).
+           For uploads: strip_audio fallback runs if overlay was skipped.
         4. Generate captions + hashtags with Gemini (F2-URS03)
         5. Persist all outputs to DB and mark reel Complete
     """
@@ -198,11 +200,14 @@ async def _async_process_reel_generation(
                 # Keep final_video_url as the original R2 key or fal.ai CDN URL
                 logger.warning(f"[Worker] Overlay failed, keeping original video: {overlay_err}")
 
-        # ── Step 2b: Audio strip fallback (no overlay ran, but user wants no audio)
-        # When there's no product logo / image the overlay step is skipped entirely,
-        # leaving any audio from Kling in the final video.  Run a dedicated FFmpeg
-        # pass (vcodec copy + -an) to strip it without re-encoding.
-        if not with_audio and not overlay_applied and final_video_url:
+        # ── Step 2b: Audio strip fallback (upload path only)
+        # For AI-generated videos (target="all"/"video") LTX already produced the
+        # video silent when with_audio=False (generate_audio=False at generation time)
+        # — no FFmpeg strip needed.
+        # For user-uploaded videos (target="upload") the original video may have audio
+        # even when the overlay step was skipped (no product logo/image configured).
+        # In that case run a dedicated FFmpeg pass (vcodec copy + -an) to strip it.
+        if not with_audio and not overlay_applied and final_video_url and target == "upload":
             video_for_strip = final_video_url
             if not final_video_url.startswith("http"):
                 video_for_strip = get_presigned_url(final_video_url)
@@ -271,10 +276,10 @@ async def _run_ltx_generation(
         - Flux API fails              → graceful degradation to raw product image
 
     Duration routing:
-        ≤ 10s → generate_with_ltx()        (single API call)
-        > 10s → generate_extended_ltx()    (chained clips via last-frame extraction)
+        ≤ 20s → generate_with_ltx()        (single API call — LTX 2.3 native)
+        > 20s → generate_extended_ltx()    (chained clips via last-frame extraction)
 
-    Prompt guidance for >10s extend chains:
+    Prompt guidance for >20s extend chains:
         Use cyclic/ambient motion (gentle rotation, soft drift) — directional
         motions (zoom in, dolly) become incoherent after the first clip because
         each clip starts from a new position.
@@ -332,15 +337,18 @@ async def _run_ltx_generation(
     mode = "image-to-video" if ltx_image_url else "text-to-video"
 
     # ── Step 3: LTX Video 2.3 animation ──────────────────────────────────────
-    if duration <= 10:
+    # LTX 2.3 natively supports up to 20s per call — extend chain only for > 20s.
+    # with_audio maps directly to LTX's generate_audio param (no FFmpeg strip needed).
+    if duration <= LTX_MAX_CLIP_DURATION:
         logger.info(f"[LTX] Single clip {mode} ({duration}s, audio={with_audio})")
         video_url = await generate_with_ltx(
             prompt=prompt,
             image_url=ltx_image_url,
             duration=duration,
+            with_audio=with_audio,
         )
     else:
-        num_clips = math.ceil(duration / 10)
+        num_clips = math.ceil(duration / LTX_MAX_CLIP_DURATION)
         logger.info(
             f"[LTX] Extended {mode}: {duration}s = {num_clips} clips "
             f"(audio={with_audio})"
@@ -350,6 +358,7 @@ async def _run_ltx_generation(
             image_url=ltx_image_url,
             total_duration=duration,
             reel_id=reel_id,
+            with_audio=with_audio,
         )
 
     logger.info(f"[LTX] Done: {video_url}")

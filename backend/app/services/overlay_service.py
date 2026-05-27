@@ -198,9 +198,11 @@ async def strip_audio_from_video(video_url: str, reel_id: str) -> str:
     Download a video, strip its audio track with FFmpeg (-an / vcodec copy),
     and upload the silent result to R2.
 
-    Used as a fallback when the user selects "No Audio" but the overlay step
-    was skipped (no product logo / product image configured) — in that case
-    Kling's generated audio would otherwise survive in the final video.
+    Used as a fallback when the user selects "Strip Audio" on an uploaded video
+    but the overlay step was skipped (no product logo / product image configured).
+    Without this pass the original audio from the uploaded file would survive.
+    Not needed for AI-generated videos — LTX 2.3 handles audio at generation time
+    via the generate_audio parameter.
 
     vcodec copy means no video re-encode: fast and lossless.
 
