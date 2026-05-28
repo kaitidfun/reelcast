@@ -119,10 +119,6 @@ class ReelGenerateRequest(BaseModel):
     overlay_position: Optional[str] = "bottom-right"
     duration: Optional[int] = 10
     with_audio: Optional[bool] = False
-    # User-controlled Flux IP-Adapter fidelity — how closely the first frame
-    # matches the actual product photo. Maps to ip_weight in worker via
-    # _PRODUCT_MATCH_WEIGHTS: creative=0.35, natural=0.50, balanced=0.62, faithful=0.80
-    product_match: Optional[str] = "faithful"
 
 class ReelRegenerateRequest(BaseModel):
     target: str = Field(..., description="'video' or 'caption'")
@@ -130,7 +126,6 @@ class ReelRegenerateRequest(BaseModel):
     overlay_position: Optional[str] = "bottom-right"
     duration: Optional[int] = 30
     with_audio: Optional[bool] = False  # Must mirror the original generation's audio choice
-    product_match: Optional[str] = "faithful"
     # Optional new prompt — user may have edited the prompt before re-generating.
     # If provided, overwrites the reel's stored prompt_text before queuing the worker.
     prompt_text: Optional[str] = Field(None, max_length=500)
@@ -188,7 +183,6 @@ def trigger_generation(
         str(reel.reel_id), req.platform, req.overlay_position,
         duration=req.duration,
         with_audio=req.with_audio,
-        product_match=req.product_match or "faithful",
     )
 
     return reel
@@ -254,12 +248,11 @@ def trigger_regeneration(
         update_reel(db, reel=reel, status="Generating")
     logger.info(f"Reel {reel_id} status reset to Generating for regen target='{req.target}'")
 
-    # Send task to Celery — pass with_audio and product_match for regen consistency
+    # Send task to Celery — pass with_audio for regen consistency
     process_reel_generation.delay(
         str(reel.reel_id), req.platform, req.overlay_position, req.target,
         duration=req.duration,
         with_audio=req.with_audio,
-        product_match=req.product_match or "faithful",
     )
 
     return reel

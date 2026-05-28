@@ -170,12 +170,12 @@ async def generate_prompt_from_template(
     #     rotation) — directional motion (zoom in, dolly) breaks across clips
     system_prompt = (
         "You are an expert prompt engineer for a two-stage AI video pipeline:\n"
-        "  Stage 1 — Flux Dev (text-to-image): generates a cinematic 9:16 first frame.\n"
+        "  Stage 1 — Imagen 3 (text-to-image with product reference): generates a cinematic 9:16 first frame.\n"
         "  Stage 2 — LTX Video 2.3 fast (image-to-video): animates that frame (~30s).\n\n"
         "YOUR JOB: Write the scene prompt that drives BOTH stages.\n\n"
         "CRITICAL RULES:\n"
         "- DO NOT describe the product's appearance (colour, shape, material, logo).\n"
-        "  Product PHOTOS are already provided to Flux — it knows what the product looks like.\n"
+        "  Product PHOTOS are already provided as SUBJECT reference to Imagen 3.\n"
         "- DO describe: ACTION, SCENE, ENVIRONMENT, PEOPLE, ATMOSPHERE, LIGHTING\n"
         "- MOTION FIRST: start with the main action, then describe the setting\n"
         "- ALWAYS end with an explicit camera instruction:\n"
@@ -276,16 +276,16 @@ async def enhance_prompt(
         )[:500]
 
     # Enhance the user's prompt for the two-stage pipeline:
-    # Flux Dev (first frame) → LTX Video 2.3 (animation).
+    # Imagen 3 (first frame) → LTX Video 2.3 (animation).
     # LTX works best with short, motion-first prompts ending with a camera instruction.
     system_prompt = (
         "You are an expert prompt engineer for a two-stage AI video pipeline:\n"
-        "  Stage 1 — Flux Dev (text-to-image): generates a cinematic 9:16 first frame.\n"
+        "  Stage 1 — Imagen 3 (text-to-image with product reference): generates a cinematic 9:16 first frame.\n"
         "  Stage 2 — LTX Video 2.3 fast (image-to-video): animates that frame (~30s).\n\n"
         "YOUR JOB: Rewrite the user's prompt while keeping their core idea.\n\n"
         "CRITICAL RULES:\n"
         "- DO NOT describe the product's appearance (colour, material, shape, logo).\n"
-        "  Product photos are already provided as reference — Flux knows what it looks like.\n"
+        "  Product photos are already provided as SUBJECT reference to Imagen 3.\n"
         "- DO describe: ACTION, SCENE, ENVIRONMENT, PEOPLE, ATMOSPHERE, LIGHTING\n"
         "- MOTION FIRST: lead with the main action, then describe the setting\n"
         "- ALWAYS end with an explicit camera instruction:\n"
@@ -415,12 +415,12 @@ async def generate_guided_prompt(
     # Camera Motion chip (if selected) must appear verbatim at the end of the prompt.
     system_prompt = (
         "You are an expert prompt engineer for a two-stage AI video pipeline:\n"
-        "  Stage 1 — Flux Dev (text-to-image): generates a cinematic 9:16 first frame.\n"
+        "  Stage 1 — Imagen 3 (text-to-image with product reference): generates a cinematic 9:16 first frame.\n"
         "  Stage 2 — LTX Video 2.3 fast (image-to-video): animates that frame (~30s).\n\n"
         "YOUR JOB: Translate the creative chips below into a concrete scene prompt.\n\n"
         "CRITICAL RULES:\n"
         "- DO NOT describe the product's appearance (colour, material, shape, logo).\n"
-        "  Product photos are provided as reference — Flux already knows what it looks like.\n"
+        "  Product photos are provided as SUBJECT reference to Imagen 3.\n"
         "- DO describe: ACTION, SCENE, ENVIRONMENT, PEOPLE, ATMOSPHERE, LIGHTING\n"
         "- MOTION FIRST: start with the main action, then describe the setting\n"
         "- ALWAYS end with an explicit camera instruction matching the Camera Motion chip.\n"
@@ -493,34 +493,33 @@ async def generate_first_frame_prompt(
     product_images: list[tuple[bytes, str]] | None = None,
 ) -> str:
     """
-    Convert a motion-oriented video prompt into a static first-frame description for Flux.
+    Convert a motion-oriented video prompt into a static first-frame description for Imagen 3.
 
     WHY this is needed:
         The video prompt is written for LTX animation ("A hand clips the keychain onto
         the zipper. Backpack bounces as a teenager walks...") — it's motion-forward and
         doesn't describe what the product looks like in the opening frame.
 
-        Flux text-to-image needs a STATIC SCENE DESCRIPTION to produce an accurate first
-        frame, especially when combined with IP-Adapter. A product-specific description
-        ("Tiny green plankton keychain clipped to a dark zipper, close-up, school corridor
-        bokeh") gives Flux a clear product-accurate target to hit, which IP-Adapter then
-        reinforces with the actual product image.
+        Imagen 3 needs a STATIC SCENE DESCRIPTION to produce an accurate first frame.
+        A product-specific description ("Tiny green plankton keychain clipped to a dark
+        zipper, close-up, school corridor bokeh") combined with the SUBJECT reference
+        image gives Imagen 3 both semantic and visual product context.
 
         When product_images is provided, this call is MULTIMODAL — Gemini actually SEES
         the product photos and can describe the product's exact appearance (colour, shape,
         texture, character face, logo details) rather than relying only on the text name.
-        This produces a far more accurate first-frame description for Flux.
+        This produces a far more accurate first-frame description for Imagen 3.
 
     Args:
         video_prompt:        LTX motion prompt (the prompt user sees + product name appended)
         product_name:        Product name from the library (e.g. "fuggler: plankton")
         product_description: Product description (e.g. "ugly cute plankton, Spongebob show")
-        product_images:      List of (bytes, mime_type) tuples — up to 2 product photos.
+        product_images:      List of (bytes, mime_type) tuples — all product photos.
                              When provided, Gemini sees the actual product images and can
                              describe exact colours, shapes, and distinguishing features.
 
     Returns:
-        Static first-frame description (120–220 chars) for Flux.
+        Static first-frame description (120–220 chars) for Imagen 3.
         Falls back to a simple product-focused description on any error.
     """
     # Fallback: use product name + video scene if Gemini is unavailable
@@ -546,7 +545,7 @@ async def generate_first_frame_prompt(
             "  - Precise colours (e.g. 'matte olive green', 'translucent pink')\n"
             "  - Shape and form (e.g. 'round with protruding teeth', 'tall cylinder')\n"
             "  - Distinguishing details (e.g. 'one large eye, white pupils', 'embossed logo')\n"
-            "This level of detail helps Flux generate an accurate first frame.\n"
+            "This level of detail helps Imagen 3 generate a product-accurate first frame.\n"
         )
     else:
         visual_instruction = (
@@ -556,9 +555,10 @@ async def generate_first_frame_prompt(
 
     system_prompt = (
         "You are writing a FIRST-FRAME DESCRIPTION for a product video reel.\n\n"
-        "This still image is generated by Flux (text-to-image) and becomes the opening\n"
-        "frame of the video. An IP-Adapter will also inject the product's visual appearance,\n"
-        "so your job is to describe the SCENE and PRODUCT POSITION accurately.\n\n"
+        "This still image is generated by Imagen 3 (Google) and becomes the opening\n"
+        "frame of the video. The product photo is also provided as a SUBJECT reference\n"
+        "so Imagen 3 can recreate the product faithfully in the generated scene.\n"
+        "Your description tells Imagen 3 WHERE the product is and WHAT SCENE it's in.\n\n"
         + visual_instruction + "\n"
         "RULES:\n"
         "1. Product MUST be the clear focal point — clearly visible, recognisable\n"
@@ -620,77 +620,3 @@ async def generate_first_frame_prompt(
         return fallback
 
 
-async def score_prompt_fidelity(prompt: str) -> float:
-    """
-    Score how much the video prompt demands product-faithful output.
-    Returns a Flux IP-Adapter weight in the range 0.30 – 0.80.
-
-    Scoring logic (Gemini rates 1–5):
-        1 = very surreal / imaginative  (e.g. "doll comes alive, glows magically")
-            → weight 0.30: Flux has maximum creative freedom; product shape can change
-        3 = balanced lifestyle scene    (e.g. "woman holds bag on the beach")
-            → weight 0.55: preserve product identity but allow creative scene
-        5 = product-realistic close-up  (e.g. "zoom into product texture, sharp detail")
-            → weight 0.80: maximum product fidelity; Flux closely follows reference
-
-    Weight formula: 0.30 + (score − 1) / 4 × 0.50
-    Fallback: returns 0.60 (balanced) if Gemini unavailable or call fails.
-
-    Args:
-        prompt: The final video scene prompt to evaluate.
-
-    Returns:
-        float in [0.30, 0.80] — Flux IP-Adapter weight for this prompt.
-    """
-    # Product advertising always needs the product to be recognisable.
-    # IP-Adapter scale < 0.65 is too weak for character products (specific eyes,
-    # teeth, colour details) — CLIP embeddings don't preserve fine features at low scale.
-    # Range 0.65–0.85 gives recognisable product while still allowing creative scenes.
-    WEIGHT_MIN   = 0.65
-    WEIGHT_MAX   = 0.85
-    WEIGHT_DEFAULT = 0.72  # Returned on any error (balanced, product-visible)
-
-    if not GOOGLE_AI_API_KEY:
-        return WEIGHT_DEFAULT
-
-    system_prompt = (
-        "You are evaluating a video scene prompt to decide how faithful the AI "
-        "image generator should be to the product's physical appearance.\n\n"
-        "Score the prompt from 1 to 5:\n"
-        "  1 = very surreal or imaginative — product transforms, gains impossible "
-        "properties, or looks completely different from reality "
-        "(e.g. 'doll comes alive', 'bag transforms into butterfly')\n"
-        "  2 = mostly creative — strong stylisation, fantasy elements, loose product tie\n"
-        "  3 = balanced — realistic setting but product in action "
-        "(e.g. 'woman holds bag on beach', 'person unboxes product')\n"
-        "  4 = product-focused — scene exists mainly to show the product clearly\n"
-        "  5 = maximum realism — close-up, product detail, accurate textures required "
-        "(e.g. 'tight zoom on stitching detail', 'product on marble with sharp focus')\n\n"
-        "Return ONLY a single integer from 1 to 5. No explanation."
-    )
-
-    try:
-        client = _get_client()
-
-        def _score():
-            response = client.models.generate_content(
-                model="gemini-3.5-flash",
-                contents=system_prompt + f"\n\nPrompt to evaluate:\n{prompt}",
-            )
-            raw = response.text.strip()
-            # Extract first digit found in response (handles "3", "Score: 3", etc.)
-            for ch in raw:
-                if ch.isdigit() and ch in "12345":
-                    return int(ch)
-            return 3  # Default to balanced if no valid digit found
-
-        loop = asyncio.get_running_loop()
-        score = await loop.run_in_executor(None, _score)
-        score = max(1, min(5, score))  # Clamp to [1, 5]
-        weight = round(WEIGHT_MIN + (score - 1) / 4.0 * (WEIGHT_MAX - WEIGHT_MIN), 3)
-        logger.info(f"[FidelityScore] Prompt scored {score}/5 → Flux IP-Adapter weight={weight}")
-        return weight
-
-    except Exception as e:
-        logger.warning(f"[FidelityScore] Failed, using default weight {WEIGHT_DEFAULT}: {e}")
-        return WEIGHT_DEFAULT

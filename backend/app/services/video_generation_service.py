@@ -1,26 +1,27 @@
 """
 Video Generation Service
 ========================
-Handles AI video generation via LTX Video 2.3 fast (fal.ai).
+Handles AI video generation via Imagen 3 (first frame) + LTX Video 2.3 fast (animation).
 
 Primary Pipeline (when product image is available):
-    1. Flux Dev image-to-image → transforms product photo into cinematic 9:16 first frame
+    1. Google Imagen 3 → generates a product-accurate cinematic 9:16 first frame
     2. LTX Video 2.3 fast image-to-video → animate that frame (~30s)
 
     WHY two-step:
     - Raw product photos (plain white background) produce boring animations
-    - Flux image-to-image keeps the product visually anchored while adding a cinematic scene
-      (strength 0.65–0.80: the product shape/colour is preserved, background transforms)
+    - Imagen 3 uses semantic scene understanding with SUBJECT reference images:
+      the product's specific visual features (character details, colour gradients,
+      logo markings) are faithfully reproduced in a new cinematic scene
     - LTX then animates that scene → fast, cinematic product reel
 
-    WHY image-to-image instead of IP-Adapter:
-    - InstantX/FLUX.1-dev-IP-Adapter only ships ip-adapter.bin (5.29 GB Pickle format)
-    - fal.ai cannot load non-safetensors IP-Adapter weights → HTTP 422 at runtime
-    - image-to-image achieves the same visual anchoring more reliably:
-      the product IS the input image, so it appears in the output naturally
+    WHY Imagen 3 over Flux + IP-Adapter:
+    - CLIP-based IP-Adapters capture only statistical colour/shape patterns — they
+      cannot reproduce specific character details (one eye, particular teeth, tiny logo)
+    - Imagen 3 uses semantic understanding + SUBJECT reference: it actually recognises
+      the product and recreates it faithfully in a new environment and lighting context
 
-Fallback Pipeline (when no product image):
-    LTX Video 2.3 fast text-to-video → scene from prompt only
+Fallback Pipeline (when no product image / Imagen unavailable):
+    LTX Video 2.3 fast text-to-video → scene from Gemini-crafted prompt only
 
 Audio:
     LTX 2.3 generates native audio alongside video (ambient / sound-effects).
@@ -36,9 +37,9 @@ Duration handling:
     Note: durations > 10s require fps=25 + resolution="1080p" (fal.ai API constraint).
 
 Providers (priority order):
-    1. fal.ai Flux Dev + LTX Video 2.3 fast  — primary (fast, ~30s per clip)
-    2. Google Veo 2.0                         — quality fallback (slow, expensive)
-    3. Sample video                           — free fallback for dev/CI
+    1. Imagen 3 (first frame) + LTX Video 2.3 fast  — primary (product-accurate, ~30s/clip)
+    2. Google Veo 2.0                                — quality fallback (slow, expensive)
+    3. Sample video                                  — free fallback for dev/CI
 """
 
 import os
@@ -60,44 +61,8 @@ logger = logging.getLogger(__name__)
 
 # LTX Video 2.3 fast — two variants depending on whether a first frame is provided.
 # Fast endpoint: ~$0.04/s — good balance of speed and quality.
-LTX_IMAGE_MODEL = "fal-ai/ltx-2.3/image-to-video/fast"  # Flux first frame → animation
+LTX_IMAGE_MODEL = "fal-ai/ltx-2.3/image-to-video/fast"  # Imagen 3 first frame → animation
 LTX_TEXT_MODEL  = "fal-ai/ltx-2.3/text-to-video/fast"   # text-only fallback (no image)
-
-# Flux — first frame generator with three-tier product conditioning.
-#
-# Tier 1 — fal-ai/flux-general + XLabs IP-Adapter (primary, best result):
-#   "Injects" product identity (colour, shape, texture) into a brand-new FLUX generation.
-#   XLabs-AI/flux-ip-adapter is a FLUX.1-dev-native IP-Adapter that ships as
-#   ip_adapter.safetensors (unlike InstantX which is .bin/Pickle and fails on fal.ai).
-#   The model generates a fresh cinematic scene from the prompt WHILE anchoring
-#   the product's visual identity via the IP-Adapter reference — the ideal approach
-#   for product advertising because the scene is truly cinematic and the product is faithful.
-#
-# Tier 2 — fal-ai/flux/dev/image-to-image (fallback if IP-Adapter fails):
-#   Sends product photo as input; Flux transforms the background into the cinematic scene
-#   while partially preserving the product. Trade-off: strength controls product vs scene
-#   balance — not as clean as IP-Adapter but better than text-only.
-#   strength (0.65–0.80) driven by ip_weight from Gemini fidelity scoring.
-#
-# Tier 3 — fal-ai/flux/dev text-only (final fallback):
-#   Pure text prompt. Gemini prompt includes product description so scene quality is
-#   still good, but no direct product visual anchoring.
-FLUX_GENERAL_MODEL = "fal-ai/flux-general"              # IP-Adapter-capable FLUX.1-dev
-FLUX_IMG2IMG_MODEL = "fal-ai/flux/dev/image-to-image"   # img2img fallback
-FLUX_DEV_MODEL     = "fal-ai/flux/dev"                  # text-only final fallback
-
-# XLabs FLUX IP-Adapter — FLUX.1-dev native, ships as safetensors (fal.ai compatible).
-# Chosen over InstantX/FLUX.1-dev-IP-Adapter which is .bin (Pickle) format and fails
-# on fal.ai with: 'NoneType object has no attribute split' → HTTP 422.
-FLUX_IP_ADAPTER_PATH       = "XLabs-AI/flux-ip-adapter"
-FLUX_IP_ADAPTER_WEIGHT     = "ip_adapter.safetensors"
-FLUX_IP_IMAGE_ENCODER_PATH = "openai/clip-vit-large-patch14"
-
-# ip_weight scored by Gemini (0.30–0.80):
-#   → IP-Adapter scale       (0.30–0.80): higher = product more dominant in generation
-#   → img2img strength       (0.65–0.80): higher = less background transformation
-#   → guidance_scale         (2.5–4.5):   higher = more prompt-faithful
-FLUX_IP_TOTAL_WEIGHT = 0.75
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -297,201 +262,168 @@ async def _concat_clips(clip_urls: list[str], reel_id: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Flux Dev — First Frame Generator
+# Imagen 3 — First Frame Generator
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def generate_first_frame_with_flux(
-    prompt: str,
-    product_image_urls: list[str],
-    ip_weight: float = FLUX_IP_TOTAL_WEIGHT,
-) -> str:
+async def _upload_image_to_fal(image_bytes: bytes, suffix: str = ".png") -> str:
     """
-    Generate a cinematic first frame using Flux with three-tier product conditioning.
+    Write image bytes to a temp file and upload to fal.ai storage.
 
-    Tier 1 — flux-general + XLabs IP-Adapter (primary, best result):
-        Injects product identity (colour, shape, texture) into a fresh FLUX generation.
-        XLabs-AI/flux-ip-adapter ships as ip_adapter.safetensors — compatible with fal.ai.
-        Generates a new cinematic scene from the Gemini prompt while the IP-Adapter
-        anchors the product's visual identity. Best approach for product advertising.
-
-    Tier 2 — flux/dev image-to-image (fallback):
-        Product photo sent as input; Flux transforms background into the cinematic scene.
-        Trade-off: strength (0.65–0.80) controls product preservation vs scene transformation.
-        Not as clean as IP-Adapter but still uses the real product image.
-
-    Tier 3 — flux/dev text-only (final fallback):
-        Pure text generation. Gemini prompt includes product description so scene quality
-        is maintained, but no direct product visual anchoring.
+    LTX Video 2.3 requires a publicly accessible URL for its image_url parameter —
+    it cannot receive raw bytes directly. fal.ai storage provides a short-lived CDN
+    URL (~24h TTL) that LTX fetches during generation.
 
     Args:
-        prompt:              Cinematic scene description from Gemini (environment, action, camera)
-        product_image_urls:  Product image URLs sorted primary-first. First URL is used as
-                             IP-Adapter / img2img reference; remaining available as context.
-        ip_weight:           Fidelity weight (0.30–0.80) from Gemini prompt scoring.
-                             Maps to: IP-Adapter scale, img2img strength, and guidance_scale.
+        image_bytes: Raw image data (PNG from Imagen 3, or JPEG from last-frame extract)
+        suffix:      File extension hint for MIME detection (".png" default)
 
     Returns:
-        fal.media CDN URL of the Flux-generated first frame image
+        Public fal.media CDN URL that LTX can fetch
 
     Raises:
-        ValueError:   If product_image_urls is empty
-        RuntimeError: If all three generation tiers fail
+        RuntimeError: If fal_client upload fails
     """
-    if not product_image_urls:
-        raise ValueError("At least one product image URL is required")
+    import fal_client
 
-    primary_image_url = product_image_urls[0]
-
-    # Map ip_weight (0.30–0.80) → guidance_scale (2.5–4.5)
-    guidance_scale = round(2.5 + (ip_weight - 0.30) / 0.50 * 2.0, 2)
-
-    # Map ip_weight (0.30–0.80) → img2img strength (0.65–0.80) for Tier 2 fallback.
-    # Higher ip_weight = more product-faithful → higher strength (less scene transformation).
-    img2img_strength = round(0.65 + (ip_weight - 0.30) / 0.50 * 0.15, 2)
+    loop = asyncio.get_running_loop()
+    fd, tmp_path = tempfile.mkstemp(suffix=suffix)
 
     try:
-        import fal_client
-        loop = asyncio.get_running_loop()
+        with os.fdopen(fd, "wb") as f:
+            f.write(image_bytes)
 
-        # ── Tier 1: flux-general + XLabs IP-Adapter ──────────────────────────────
-        # XLabs-AI/flux-ip-adapter is FLUX.1-dev native and ships as safetensors —
-        # unlike InstantX/FLUX.1-dev-IP-Adapter (.bin/Pickle) which fails on fal.ai.
-        logger.info(
-            f"[Flux] Tier 1: flux-general + XLabs IP-Adapter "
-            f"(scale={ip_weight}, guidance={guidance_scale}): {prompt[:60]}..."
-        )
+        def _upload():
+            return fal_client.upload_file(tmp_path)
 
-        def _run_ip_adapter():
-            logger.info(
-                f"[Flux] Calling flux-general + XLabs IP-Adapter | "
-                f"image: {primary_image_url[:80]} | scale={ip_weight} | guidance={guidance_scale}"
-            )
-            result = fal_client.run(
-                FLUX_GENERAL_MODEL,
-                arguments={
-                    "prompt":               prompt,
-                    "image_size":           "portrait_16_9",  # 9:16 portrait for social reels
-                    "num_inference_steps":  28,
-                    "guidance_scale":       guidance_scale,
-                    "num_images":           1,
-                    "enable_safety_checker": True,
-                    "ip_adapters": [
-                        {
-                            "path":                FLUX_IP_ADAPTER_PATH,
-                            "weight_name":         FLUX_IP_ADAPTER_WEIGHT,   # ip_adapter.safetensors
-                            "image_encoder_path":  FLUX_IP_IMAGE_ENCODER_PATH,
-                            "image_url":           primary_image_url,
-                            "scale":               ip_weight,
-                        }
-                    ],
-                },
-            )
-            images = result.get("images") or []
-            if not images:
-                raise RuntimeError(
-                    f"flux-general returned no images. "
-                    f"Response keys: {list(result.keys()) if isinstance(result, dict) else result}"
-                )
-            url = images[0].get("url")
-            if not url:
-                raise RuntimeError(f"flux-general image missing 'url'. Entry: {images[0]}")
-            return url
-
-        try:
-            url = await loop.run_in_executor(None, _run_ip_adapter)
-            logger.info(f"[Flux] ✅ Tier 1 IP-Adapter first frame ready: {url[:80]}")
-            return url
-        except Exception as ip_err:
-            logger.warning(
-                f"[Flux] ⚠️ Tier 1 IP-Adapter FAILED — trying Tier 2 img2img. "
-                f"Reason: {ip_err}"
-            )
-
-        # ── Tier 2: flux/dev image-to-image ──────────────────────────────────────
-        # Product photo as input; Flux transforms background while partially preserving
-        # product. Trade-off vs IP-Adapter: can't simultaneously keep product 100% intact
-        # AND transform background fully — strength controls which side wins.
-        logger.warning(
-            f"[Flux] Tier 2: flux/dev image-to-image "
-            f"(strength={img2img_strength}, guidance={guidance_scale}): {prompt[:60]}..."
-        )
-
-        def _run_img2img():
-            logger.info(
-                f"[Flux] Calling flux/dev image-to-image | "
-                f"image: {primary_image_url[:80]} | strength={img2img_strength}"
-            )
-            result = fal_client.run(
-                FLUX_IMG2IMG_MODEL,
-                arguments={
-                    "prompt":               prompt,
-                    "image_url":            primary_image_url,
-                    "strength":             img2img_strength,
-                    "num_inference_steps":  28,
-                    "guidance_scale":       guidance_scale,
-                    "num_images":           1,
-                    "enable_safety_checker": True,
-                },
-            )
-            images = result.get("images") or []
-            if not images:
-                raise RuntimeError(
-                    f"flux/dev image-to-image returned no images. "
-                    f"Response keys: {list(result.keys()) if isinstance(result, dict) else result}"
-                )
-            url = images[0].get("url")
-            if not url:
-                raise RuntimeError(f"flux/dev image-to-image missing 'url'. Entry: {images[0]}")
-            return url
-
-        try:
-            url = await loop.run_in_executor(None, _run_img2img)
-            logger.warning(f"[Flux] ⚠️ Tier 2 img2img first frame (product may vary): {url[:80]}")
-            return url
-        except Exception as img2img_err:
-            logger.warning(
-                f"[Flux] ⚠️ Tier 2 img2img FAILED — falling back to Tier 3 text-only. "
-                f"Reason: {img2img_err}"
-            )
-
-        # ── Tier 3: flux/dev text-only ────────────────────────────────────────────
-        # Pure text generation. The Gemini prompt includes product description so
-        # scene quality is still good, but no direct product visual anchoring.
-        logger.warning(
-            f"[Flux] ❌ Tier 3: flux/dev TEXT-ONLY — product image NOT applied. "
-            f"guidance={guidance_scale}, prompt={prompt[:60]}..."
-        )
-
-        def _run_text_only():
-            result = fal_client.run(
-                FLUX_DEV_MODEL,
-                arguments={
-                    "prompt":               prompt,
-                    "image_size":           "portrait_16_9",
-                    "num_inference_steps":  28,
-                    "guidance_scale":       guidance_scale,
-                    "num_images":           1,
-                    "enable_safety_checker": True,
-                },
-            )
-            images = result.get("images") or []
-            if not images:
-                raise RuntimeError(
-                    f"flux/dev returned no images. "
-                    f"Response keys: {list(result.keys()) if isinstance(result, dict) else result}"
-                )
-            url = images[0].get("url")
-            if not url:
-                raise RuntimeError(f"flux/dev image missing 'url'. Entry: {images[0]}")
-            return url
-
-        url = await loop.run_in_executor(None, _run_text_only)
-        logger.warning(f"[Flux] ❌ Tier 3 text-only first frame: {url[:80]}")
+        url: str = await loop.run_in_executor(None, _upload)
+        logger.info(f"[Imagen3] Frame uploaded to fal.ai storage: {url[:80]}")
         return url
+    finally:
+        _cleanup_temp(tmp_path)
 
+
+async def generate_first_frame_with_imagen(
+    prompt: str,
+    product_images: list[tuple[bytes, str]],
+    aspect_ratio: str = "9:16",
+) -> str:
+    """
+    Generate a cinematic first frame using Google Imagen 3 with product reference images.
+
+    Imagen 3 uses semantic scene understanding + a SUBJECT reference image to produce
+    a new scene in which the product appears faithfully — preserving specific character
+    details (eye shape, tooth pattern, colour gradients) that CLIP-based IP-Adapters
+    cannot replicate at any scale.
+
+    Pipeline:
+        Primary:  Imagen 3 generate_images() with first product photo as SUBJECT reference
+                  → semantic product fidelity in a fresh cinematic composition
+        Fallback: Imagen 3 text-only (reference call failed) — Gemini prompt still describes
+                  the product accurately via generate_first_frame_prompt()
+        Then:     Upload PNG bytes to fal.ai storage → return public CDN URL for LTX
+
+    Args:
+        prompt:         Static first-frame scene description from generate_first_frame_prompt().
+                        Describes the product, scene, environment, and composition in detail.
+        product_images: List of (bytes, mime_type) tuples downloaded from R2.
+                        The first image is used as the SUBJECT reference for Imagen 3.
+        aspect_ratio:   Output aspect ratio — "9:16" for social reels (vertical portrait)
+
+    Returns:
+        fal.media CDN URL of the Imagen-generated first frame image
+
+    Raises:
+        RuntimeError: If GOOGLE_AI_API_KEY is missing or all generation attempts fail
+    """
+    import os as _os
+    from google import genai
+    from google.genai import types as genai_types
+
+    google_ai_key = _os.getenv("GOOGLE_AI_API_KEY")
+    if not google_ai_key:
+        raise RuntimeError("GOOGLE_AI_API_KEY not configured — Imagen 3 unavailable")
+
+    loop = asyncio.get_running_loop()
+    client = genai.Client(api_key=google_ai_key)
+
+    primary_img_bytes = product_images[0][0] if product_images else None
+
+    # ── Primary: Imagen 3 with SUBJECT reference ──────────────────────────────
+    # SUBJECT reference tells Imagen 3 to treat the image as a product reference
+    # and recreate it faithfully in the generated scene — semantic understanding,
+    # not statistical CLIP matching.
+    if primary_img_bytes:
+        try:
+            def _gen_with_reference():
+                response = client.models.generate_images(
+                    model="imagen-3.0-generate-002",
+                    prompt=prompt,
+                    config=genai_types.GenerateImagesConfig(
+                        number_of_images=1,
+                        aspect_ratio=aspect_ratio,
+                        reference_images=[
+                            genai_types.ReferenceImage(
+                                reference_id=1,
+                                reference_image=genai_types.Image(
+                                    image_bytes=primary_img_bytes
+                                ),
+                                config=genai_types.ReferenceImageConfig(
+                                    reference_type="SUBJECT",
+                                    subject_image_config=genai_types.SubjectImageConfig(
+                                        subject_type="PRODUCT"
+                                    ),
+                                ),
+                            )
+                        ],
+                    ),
+                )
+                generated = response.generated_images
+                if not generated:
+                    raise RuntimeError("Imagen 3 returned no images (SUBJECT reference)")
+                img_bytes = generated[0].image.image_bytes
+                if not img_bytes:
+                    raise RuntimeError("Imagen 3 image has no bytes (SUBJECT reference)")
+                return img_bytes
+
+            img_bytes = await loop.run_in_executor(None, _gen_with_reference)
+            logger.info(f"[Imagen3] ✅ First frame with SUBJECT reference: {len(img_bytes):,} bytes")
+            return await _upload_image_to_fal(img_bytes)
+
+        except Exception as ref_err:
+            logger.warning(
+                f"[Imagen3] ⚠️ SUBJECT reference failed — falling back to text-only. "
+                f"Reason: {ref_err}"
+            )
+
+    # ── Fallback: Imagen 3 text-only ──────────────────────────────────────────
+    # Gemini-crafted prompt describes the product visually in detail (see
+    # generate_first_frame_prompt()) so text-only still produces a product-aware frame.
+    logger.warning(f"[Imagen3] Text-only fallback: {prompt[:80]}...")
+
+    def _gen_text_only():
+        response = client.models.generate_images(
+            model="imagen-3.0-generate-002",
+            prompt=prompt,
+            config=genai_types.GenerateImagesConfig(
+                number_of_images=1,
+                aspect_ratio=aspect_ratio,
+            ),
+        )
+        generated = response.generated_images
+        if not generated:
+            raise RuntimeError("Imagen 3 returned no images (text-only)")
+        img_bytes = generated[0].image.image_bytes
+        if not img_bytes:
+            raise RuntimeError("Imagen 3 image has no bytes (text-only)")
+        return img_bytes
+
+    try:
+        img_bytes = await loop.run_in_executor(None, _gen_text_only)
+        logger.warning(f"[Imagen3] ⚠️ Text-only first frame: {len(img_bytes):,} bytes")
+        return await _upload_image_to_fal(img_bytes)
     except Exception as e:
-        logger.error(f"[Flux] First frame generation failed entirely: {e}")
-        raise RuntimeError(f"Flux first frame generation failed: {e}") from e
+        logger.error(f"[Imagen3] Both generation attempts failed: {e}")
+        raise RuntimeError(f"Imagen 3 first frame generation failed: {e}") from e
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -511,7 +443,7 @@ async def generate_with_ltx(
     generate_extended_ltx() which chains clips via last-frame extraction.
 
     Mode selection:
-        With image_url  → LTX_IMAGE_MODEL (image-to-video): Flux first frame anchors
+        With image_url  → LTX_IMAGE_MODEL (image-to-video): Imagen 3 first frame anchors
                           the animation for visual consistency.
         Without image   → LTX_TEXT_MODEL (text-to-video): pure text prompt.
 
@@ -528,7 +460,7 @@ async def generate_with_ltx(
 
     Args:
         prompt:     Motion-first scene description (200–350 chars, LTX-optimised)
-        image_url:  Flux-generated first frame URL (None → text-to-video mode)
+        image_url:  Imagen 3 first frame URL (None → text-to-video mode)
         duration:   Requested clip length in seconds (snapped to nearest valid value)
         with_audio: True to generate native audio; False for silent video
 
@@ -594,7 +526,7 @@ async def generate_extended_ltx(
     extracted with FFmpeg and uploaded to fal.ai — so the scene flows seamlessly.
 
     Example for 60s (3 × 20s clips):
-        Clip 1 (20s): flux_first_frame → LTX 2.3
+        Clip 1 (20s): imagen3_first_frame → LTX 2.3
         Clip 2 (20s): last_frame(clip1) → LTX 2.3
         Clip 3 (20s): last_frame(clip2) → LTX 2.3
         ↓ FFmpeg concat → 60s video → R2 upload → object key returned
@@ -610,7 +542,7 @@ async def generate_extended_ltx(
 
     Args:
         prompt:         LTX-optimised scene description (motion-first, 200–350 chars)
-        image_url:      Flux-generated first frame for clip 1 (None → text-to-video)
+        image_url:      Imagen 3 first frame for clip 1 (None → text-to-video)
         total_duration: Target duration in seconds (must exceed LTX_MAX_CLIP_DURATION)
         reel_id:        Reel UUID — used for R2 key naming of the concatenated output
         with_audio:     True to generate native audio for all clips
@@ -629,7 +561,7 @@ async def generate_extended_ltx(
     )
 
     clip_urls: list[str] = []
-    current_image_url = image_url  # Clip 1 uses Flux first frame; subsequent = last frame
+    current_image_url = image_url  # Clip 1 uses Imagen 3 first frame; subsequent = last frame
 
     for i in range(num_clips):
         remaining = total_duration - i * LTX_MAX_CLIP_DURATION
@@ -679,7 +611,8 @@ async def generate_video(
     Generate a video using the best available provider (LTX → Veo → sample).
 
     Used by the worker when FAL_KEY is not configured (fallback path).
-    For the primary worker flow see _run_ltx_generation() in worker.py.
+    For the primary worker flow see _run_ltx_generation() in worker.py which
+    uses Imagen 3 → LTX Video 2.3 for product-accurate generation.
 
     Args:
         prompt:     Creative brief (enriched with product metadata by worker)

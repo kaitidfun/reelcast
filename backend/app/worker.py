@@ -12,7 +12,7 @@ from app.services.video_generation_service import (
     generate_video,
     generate_with_ltx,
     generate_extended_ltx,
-    generate_first_frame_with_flux,
+    generate_first_frame_with_imagen,
     LTX_MAX_CLIP_DURATION,
 )
 from app.services.overlay_service import apply_overlay, strip_audio_from_video
@@ -31,58 +31,44 @@ celery_app.conf.task_routes = {
     "app.worker.process_reel_generation": "main-queue"
 }
 
-# Maps user-selected product_match level → Flux IP-Adapter scale (ip_weight).
-# Higher scale = product appearance injected more strongly into the generated frame.
-# Range kept ≤ 0.80 — above this, IP-Adapter can degrade image quality / scene detail.
-_PRODUCT_MATCH_WEIGHTS: dict[str, float] = {
-    "creative":  0.35,  # Scene-first: product may look loosely similar
-    "natural":   0.50,  # Relaxed: product colour/shape roughly preserved
-    "balanced":  0.62,  # Good blend of scene quality and product accuracy
-    "faithful":  0.80,  # Maximum product fidelity (default)
-}
-
 
 @celery_app.task(name="app.worker.process_reel_generation")
 def process_reel_generation(
     reel_id: str, platform: str, overlay_position: str,
     target: str = "all", duration: int = 10, with_audio: bool = False,
-    product_match: str = "faithful",
 ):
     """
     Celery background task: orchestrate reel generation pipeline.
 
-    Handles AI video generation (Flux + LTX), FFmpeg overlay, and caption generation.
+    Handles AI video generation (Imagen 3 + LTX), FFmpeg overlay, and caption generation.
     Supports partial regeneration (e.g., video only, caption only).
 
     Args:
-        reel_id: UUID of reel being processed
-        platform: Target social platform (ig/fb/tt/yt) for caption optimization
+        reel_id:          UUID of reel being processed
+        platform:         Target social platform (ig/fb/tt/yt) for caption optimization
         overlay_position: Logo/product placement (top-left/right, bottom-left/right, center)
-        target: Generation scope — "all" (full pipeline) | "video" (video only) |
-                "caption" (Gemini only) | "upload" (uploaded video → overlay → captions)
-        duration: Video length in seconds — snapped to nearest valid LTX value (6–20s)
-        with_audio: True = LTX generates native audio; False = silent video
-        product_match: IP-Adapter fidelity level — "creative" | "natural" | "balanced" | "faithful"
-                       Controls how closely the generated first frame matches the product image.
+        target:           Generation scope — "all" (full pipeline) | "video" (video only) |
+                          "caption" (Gemini only) | "upload" (uploaded video → overlay → captions)
+        duration:         Video length in seconds — snapped to nearest valid LTX value (6–20s)
+        with_audio:       True = LTX generates native audio; False = silent video
     """
     asyncio.run(_async_process_reel_generation(
-        reel_id, platform, overlay_position, target, duration, with_audio, product_match
+        reel_id, platform, overlay_position, target, duration, with_audio
     ))
 
 
 async def _async_process_reel_generation(
     reel_id: str, platform: str, overlay_position: str,
     target: str = "all", duration: int = 10, with_audio: bool = False,
-    product_match: str = "faithful",
 ):
     """
     Async implementation: AI generation + overlay + caption pipeline.
 
     Workflow:
         1. Load reel + product from DB; enrich prompt with product metadata (F2-URS02-SRS01)
-        2. Generate video via Flux Dev + LTX Video 2.3:
-             ≤ 10s → single clip
-             > 10s → multi-clip extend chain (clips chained via last-frame extraction)
+        2. Generate video via Imagen 3 (first frame) + LTX Video 2.3 (animation):
+             ≤ 20s → single LTX clip
+             > 20s → multi-clip extend chain (clips chained via last-frame extraction)
            OR use uploaded video (target="upload")
         3. Apply FFmpeg overlay (product image + brand logo) (F2-URS05-SRS01)
            with_audio controls whether the overlay pass preserves the audio track.
@@ -116,10 +102,10 @@ async def _async_process_reel_generation(
 
         # Resolve product image URLs:
         #   product_image_url  (primary only) — used for overlay watermark fallback
-        #   product_image_urls (ALL images)   — passed to Flux Dev so it
-        #       has every angle/view available when scoring fidelity for first frame
+        #   product_image_urls (ALL images)   — downloaded as bytes for Imagen 3 SUBJECT
+        #       reference and for Gemini first-frame prompt generation
         product_image_url: str | None = None   # Primary — overlay fallback
-        product_image_urls: list[str] = []      # All images — Flux IP-Adapter reference
+        product_image_urls: list[str] = []      # All images — presigned URLs for download
 
         if product and product.images:
             primary = next((img for img in product.images if img.is_primary), None)
@@ -128,7 +114,7 @@ async def _async_process_reel_generation(
             # Presigned URL (1h) — valid for fal.ai fetch and httpx overlay download
             product_image_url = get_presigned_url(raw_primary_key) if raw_primary_key else None
 
-            # Collect ALL product image URLs for Flux multi-reference (IP-Adapter)
+            # Collect ALL product image URLs — will be downloaded as bytes for Imagen 3
             for img in product.images:
                 if img.image_url:
                     product_image_urls.append(get_presigned_url(img.image_url))
@@ -159,64 +145,56 @@ async def _async_process_reel_generation(
             name_lower = product.product_name.lower()
             prompt_lower = reel.prompt_text.lower()
             if name_lower not in prompt_lower:
-                # Append product name so both Flux and LTX know the subject (F2-URS02-SRS01)
+                # Append product name so both Imagen 3 and LTX know the subject (F2-URS02-SRS01)
                 video_prompt = f"{reel.prompt_text.rstrip('.')}. Product: {product.product_name}."
 
         # ── Step 1: Determine video source ──────────────────────────────────
         if target in ["all", "video"]:
-            # Pipeline: Flux Dev (first frame) → LTX Video 2.3 (animation)
+            # Pipeline: Imagen 3 (first frame) → LTX Video 2.3 (animation)
             #
-            # Flux and LTX receive DIFFERENT prompts:
-            #   flux_prompt  — static scene description, product-focused (for first frame)
-            #   video_prompt — motion description, action-forward (for LTX animation)
+            # Two prompts are generated for the two stages:
+            #   imagen_prompt — static scene description, product-focused (for first frame)
+            #   video_prompt  — motion description, action-forward (for LTX animation)
             #
             # WHY different: LTX works best with motion prompts ("A hand clips...").
-            # Flux text-to-image needs a static scene description with explicit product
-            # features so the first frame shows the correct product accurately.
-            # IP-Adapter reinforces product appearance visually on top of the text.
-            flux_prompt: str | None = None
+            # Imagen 3 needs a static scene description describing the product's visual
+            # features so it can generate an accurate, product-faithful first frame.
+            # The product photo is also sent as a SUBJECT reference for semantic fidelity.
+            imagen_prompt: str | None = None
+            product_image_bytes: list[tuple[bytes, str]] = []
+
             if product and product_image_urls:
                 try:
-                    # Fetch ALL product images as bytes so Gemini can SEE every angle.
-                    # Multimodal Gemini produces far more accurate first-frame descriptions
-                    # (exact colour, shape, character details) than text-only generation.
-                    # Sending all images lets Gemini pick the most informative view.
+                    # Fetch ALL product images as bytes for both Gemini (prompt generation)
+                    # and Imagen 3 (SUBJECT reference). More angles = better fidelity.
                     product_image_bytes = await _fetch_product_image_bytes(
                         product_image_urls
                     )
-                    flux_prompt = await generate_first_frame_prompt(
+                    imagen_prompt = await generate_first_frame_prompt(
                         video_prompt=video_prompt,
                         product_name=product.product_name or "",
                         product_description=product.description or "",
                         product_images=product_image_bytes or None,
                     )
                     logger.info(
-                        f"[Worker] Flux first-frame prompt "
+                        f"[Worker] Imagen 3 first-frame prompt "
                         f"({len(product_image_bytes)} image(s) sent to Gemini): "
-                        f"{flux_prompt[:80]}..."
+                        f"{imagen_prompt[:80]}..."
                     )
                 except Exception as ffp_err:
                     logger.warning(
                         f"[Worker] First-frame prompt generation failed, "
-                        f"using video prompt for Flux: {ffp_err}"
+                        f"using video prompt for Imagen 3: {ffp_err}"
                     )
-
-            # Resolve user-selected product_match level → Flux IP-Adapter scale.
-            # Default to "faithful" (0.80) if an unrecognised value is passed.
-            ip_weight = _PRODUCT_MATCH_WEIGHTS.get(product_match, 0.80)
-            logger.info(
-                f"[Worker] Product match: '{product_match}' → ip_weight={ip_weight}"
-            )
 
             final_video_url = await _run_ltx_generation(
                 prompt=video_prompt,
-                image_url=product_image_url,           # Primary — LTX fallback if Flux fails
-                product_image_urls=product_image_urls, # All — Flux IP-Adapter reference
+                image_url=product_image_url,              # Primary product image URL (LTX fallback)
+                product_image_bytes=product_image_bytes,  # All images as bytes — Imagen 3 SUBJECT ref
                 duration=duration,
                 with_audio=with_audio,
                 reel_id=reel_id,
-                flux_prompt=flux_prompt,               # Static first-frame prompt for Flux
-                ip_weight=ip_weight,                   # User-controlled product fidelity
+                imagen_prompt=imagen_prompt,              # Static first-frame prompt for Imagen 3
             )
         elif target == "upload":
             # User-uploaded video — apply overlay + captions, skip AI generation
@@ -329,7 +307,7 @@ async def _async_process_reel_generation(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LTX Video 2.3 Generation (Flux Dev first frame → LTX animation)
+# LTX Video 2.3 Generation (Imagen 3 first frame → LTX animation)
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def _run_ltx_generation(
@@ -338,27 +316,27 @@ async def _run_ltx_generation(
     duration: int,
     with_audio: bool = False,
     reel_id: str = "unknown",
-    product_image_urls: list[str] | None = None,
-    flux_prompt: str | None = None,
-    ip_weight: float = 0.80,
+    product_image_bytes: list[tuple[bytes, str]] | None = None,
+    imagen_prompt: str | None = None,
 ) -> str:
     """
-    Generate a product reel using Flux Dev (first frame) → LTX Video 2.3 (animation).
+    Generate a product reel using Imagen 3 (first frame) → LTX Video 2.3 (animation).
 
     Full pipeline:
-        1. Flux Dev + XLabs IP-Adapter → cinematic 9:16 first frame (ip_weight controls fidelity)
-        2. LTX Video 2.3 image-to-video → animate the Flux first frame (~30s fast)
+        1. Imagen 3 + SUBJECT reference → cinematic 9:16 first frame (product-accurate)
+        2. LTX Video 2.3 image-to-video → animate the Imagen 3 first frame (~30s fast)
 
     Two-prompt strategy:
-        flux_prompt (static): "Tiny green plankton keychain on dark zipper, close-up, bokeh"
-            → Flux generates a product-accurate first frame
-        prompt (motion):      "A hand clips the keychain onto a zipper. Camera pushes in."
+        imagen_prompt (static): "Tiny green plankton keychain on dark zipper, close-up, bokeh"
+            → Imagen 3 generates a product-faithful first frame using semantic understanding
+        prompt (motion):        "A hand clips the keychain onto a zipper. Camera pushes in."
             → LTX animates the first frame into a cinematic scene
 
-    Flux skipped when:
-        - No product images available → LTX text-to-video directly
-        - FAL_KEY not set             → generate_video() facade (Veo / sample)
-        - Flux API fails              → graceful degradation to raw product image
+    Imagen 3 skipped when:
+        - No product images available      → LTX text-to-video directly
+        - GOOGLE_AI_API_KEY not set        → LTX uses raw product image URL
+        - Imagen 3 API fails               → graceful degradation to raw product image
+        - FAL_KEY not set                  → generate_video() facade (Veo / sample)
 
     Duration routing:
         ≤ 20s → generate_with_ltx()        (single API call — LTX 2.3 native)
@@ -366,20 +344,18 @@ async def _run_ltx_generation(
 
     Args:
         prompt:               LTX motion prompt (200–350 chars, action-first, camera at end)
-        image_url:            Primary product image URL — LTX fallback if Flux fails
-        duration:             Requested seconds (5, 10, 15, 30, 60)
-        with_audio:           Passed through for downstream FFmpeg audio control
+        image_url:            Primary product image URL — LTX fallback if Imagen fails
+        duration:             Requested seconds (6, 10, 15, 30, 60)
+        with_audio:           True = LTX generates native audio; False = silent video
         reel_id:              Reel UUID for R2 key naming in multi-clip concat
-        product_image_urls:   ALL product image URLs → Flux IP-Adapter reference
-        flux_prompt:          Static first-frame description (product-focused, no motion).
+        product_image_bytes:  ALL product images as (bytes, mime_type) tuples —
+                              first image used as Imagen 3 SUBJECT reference
+        imagen_prompt:        Static first-frame description (product-focused, no motion).
                               Generated by generate_first_frame_prompt(). Falls back to
                               `prompt` if None.
-        ip_weight:            Flux IP-Adapter scale from _PRODUCT_MATCH_WEIGHTS (0.35–0.80).
-                              Passed from user-selected product_match level — replaces
-                              the old Gemini auto-scoring (score_prompt_fidelity).
 
     Returns:
-        fal.media CDN URL  (single clip ≤ 10s)
+        fal.media CDN URL  (single clip ≤ 20s)
         OR R2 object key   (multi-clip extend, proxied by /api/upload/videos/{key})
     """
     fal_key = os.getenv("FAL_KEY", "")
@@ -389,43 +365,37 @@ async def _run_ltx_generation(
         logger.info("[LTX] No FAL_KEY, delegating to generate_video() facade")
         return await generate_video(prompt=prompt, image_url=image_url, duration=duration)
 
-    # ── Step 1: Flux Dev first frame ──────────────────────────────────────────
-    # ip_weight comes directly from the user's product_match selection (0.35–0.80).
-    # No Gemini scoring needed — user controls the fidelity level explicitly.
-    flux_inputs = product_image_urls or ([image_url] if image_url else [])
-    ltx_image_url = image_url  # Default fallback = primary product image
+    # ── Step 1: Imagen 3 first frame ──────────────────────────────────────────
+    # imagen_prompt (static, product-focused) describes the product and scene accurately.
+    # The product photos are also provided as SUBJECT reference for semantic fidelity.
+    # Falls back to the LTX motion prompt if imagen_prompt was not generated.
+    ltx_image_url = image_url  # Default fallback = primary product image URL
 
-    if flux_inputs:
-        # ── Flux Dev first frame ───────────────────────────────────────────────
-        # flux_prompt (static, product-focused) is used instead of the LTX motion
-        # prompt so Flux generates a frame that shows the product accurately.
-        # IP-Adapter reinforces visual identity on top of the text description.
-        # Falls back to motion prompt if flux_prompt was not generated.
-        effective_flux_prompt = flux_prompt or prompt
+    if product_image_bytes:
+        effective_imagen_prompt = imagen_prompt or prompt
         logger.info(
-            f"[Worker] Flux prompt: '{effective_flux_prompt[:80]}...' "
-            f"({'dedicated' if flux_prompt else 'fallback=video prompt'})"
+            f"[Worker] Imagen 3 prompt: '{effective_imagen_prompt[:80]}...' "
+            f"({'dedicated' if imagen_prompt else 'fallback=video prompt'})"
         )
         try:
-            ltx_image_url = await generate_first_frame_with_flux(
-                prompt=effective_flux_prompt,
-                product_image_urls=flux_inputs,
-                ip_weight=ip_weight,
+            ltx_image_url = await generate_first_frame_with_imagen(
+                prompt=effective_imagen_prompt,
+                product_images=product_image_bytes,
             )
             logger.info(
-                f"[Worker] Flux first frame ready "
-                f"({len(flux_inputs)} reference(s), weight={ip_weight}) → passing to LTX"
+                f"[Worker] ✅ Imagen 3 first frame ready "
+                f"({len(product_image_bytes)} reference(s)) → passing to LTX"
             )
-        except Exception as flux_err:
-            # Graceful degradation: Flux failed → LTX uses raw product image
+        except Exception as imagen_err:
+            # Graceful degradation: Imagen 3 failed → LTX uses raw product image URL
             logger.warning(
-                f"[Worker] Flux first frame failed, falling back to product image: {flux_err}"
+                f"[Worker] Imagen 3 first frame failed, falling back to product image: {imagen_err}"
             )
             ltx_image_url = image_url
 
     mode = "image-to-video" if ltx_image_url else "text-to-video"
 
-    # ── Step 3: LTX Video 2.3 animation ──────────────────────────────────────
+    # ── Step 2: LTX Video 2.3 animation ──────────────────────────────────────
     # LTX 2.3 natively supports up to 20s per call — extend chain only for > 20s.
     # with_audio maps directly to LTX's generate_audio param (no FFmpeg strip needed).
     if duration <= LTX_MAX_CLIP_DURATION:
@@ -467,11 +437,13 @@ async def _fetch_product_image_bytes(
     WHY: generate_first_frame_prompt() sends product photos to Gemini so it can SEE the
     actual product appearance (exact colour, shape, character details) rather than
     relying only on the text description.  This produces far more accurate first-frame
-    descriptions for Flux.
+    descriptions for Imagen 3, and the same bytes are also used as the Imagen 3 SUBJECT
+    reference for semantic product fidelity in the generated scene.
 
     Args:
-        image_urls: List of presigned R2 URLs (already resolved by get_presigned_url())
-                    Caller should cap to 2 URLs to keep Gemini token cost low.
+        image_urls: List of presigned R2 URLs (already resolved by get_presigned_url()).
+                    All URLs are fetched — more images give Gemini and Imagen 3 more
+                    visual context for accurate product representation.
 
     Returns:
         List of (bytes, mime_type) tuples — only successfully downloaded images included.
