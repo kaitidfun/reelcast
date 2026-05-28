@@ -173,11 +173,25 @@ async def _async_process_reel_generation(
 
         # ── Step 1b: Persist raw (pre-overlay) video URL ─────────────────────
         # Saved BEFORE overlay so Option B logo toggle works at download time:
-        #   with_logo=True  → frontend uses final_commercial_video_url (baked)
+        #   with_logo=True  → frontend uses final_commercial_video_url (baked logo)
         #   with_logo=False → frontend uses raw_video_url (no logo)
-        # For upload target, raw = uploaded_video_url (already set by reel_routes).
+        #
+        # WHY upload CDN URLs to R2:
+        #   fal.ai CDN URLs (https://fal.media/...) are temporary (~24h TTL).
+        #   Storing an R2 key ensures raw_video_url remains valid indefinitely.
+        #   R2 keys also guarantee the download endpoint returns a presigned URL
+        #   (JSONResponse) instead of streaming — streaming is intercepted by IDM
+        #   (Internet Download Manager) browser extension which returns 204 without
+        #   CORS headers, breaking the frontend fetch call entirely.
         if target in ["all", "video"] and final_video_url:
-            update_reel(db, reel=reel, raw_video_url=final_video_url)
+            raw_ref = final_video_url
+            if raw_ref.startswith("http"):
+                try:
+                    raw_ref = await _upload_cdn_video_to_r2(final_video_url, reel_id)
+                    logger.info(f"[Worker] Raw video persisted to R2: {raw_ref}")
+                except Exception as e:
+                    logger.warning(f"[Worker] Raw R2 upload failed, keeping CDN URL: {e}")
+            update_reel(db, reel=reel, raw_video_url=raw_ref)
         elif target == "upload" and reel.uploaded_video_url:
             update_reel(db, reel=reel, raw_video_url=reel.uploaded_video_url)
 
@@ -373,3 +387,57 @@ async def _run_ltx_generation(
 
     logger.info(f"[LTX] Done: {video_url}")
     return video_url
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Storage Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _upload_cdn_video_to_r2(cdn_url: str, reel_id: str) -> str:
+    """
+    Download a temporary CDN video (fal.ai, Veo) and upload it to R2.
+    Returns the R2 object key for permanent storage.
+
+    WHY this is needed instead of storing the CDN URL directly:
+        - fal.ai CDN URLs expire in ~24h → raw_video_url becomes a broken link
+        - CDN URLs hit the streaming path in the download endpoint, which is
+          intercepted by IDM (Internet Download Manager) returning 204 without
+          CORS headers → frontend fetch fails with "Failed to fetch"
+        - R2 keys always resolve to a presigned URL (JSONResponse) →
+          browser navigates to presigned URL → IDM downloads correctly
+
+    Args:
+        cdn_url:  Publicly accessible video URL (fal.ai CDN or similar)
+        reel_id:  Reel UUID — used for the R2 object key naming
+
+    Returns:
+        R2 object key (e.g. "videos/reels/raw/.../reel_xxx_raw.mp4")
+
+    Raises:
+        httpx.HTTPError: If the CDN download fails
+        RuntimeError:   If the R2 upload fails
+    """
+    import httpx
+    from app.services.storage_service import upload_raw_bytes_to_r2
+
+    logger.info(f"[Worker] Downloading raw video from CDN: {cdn_url[:80]}")
+    async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+        resp = await client.get(cdn_url)
+        resp.raise_for_status()
+
+    video_bytes = resp.content
+    logger.info(f"[Worker] Downloaded {len(video_bytes):,} bytes — uploading to R2")
+
+    # upload_raw_bytes_to_r2 is sync (boto3) — run in thread executor
+    loop = asyncio.get_event_loop()
+    key = await loop.run_in_executor(
+        None,
+        lambda: upload_raw_bytes_to_r2(
+            data=video_bytes,
+            filename=f"reel_{reel_id}_raw.mp4",
+            prefix="videos/reels/raw",
+            category=reel_id,
+            return_key_only=True,
+        ),
+    )
+    return key
