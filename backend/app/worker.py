@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import SessionLocal
 from app.models.models import Reel, Product
-from app.services.ai_service import generate_captions, score_prompt_fidelity
+from app.services.ai_service import generate_captions, score_prompt_fidelity, generate_first_frame_prompt
 from app.services.video_generation_service import (
     generate_video,
     generate_with_ltx,
@@ -152,17 +152,37 @@ async def _async_process_reel_generation(
         if target in ["all", "video"]:
             # Pipeline: Flux Dev (first frame) → LTX Video 2.3 (animation)
             #
-            # product_image_urls → fidelity scoring → Flux guidance_scale
-            # Flux generates cinematic 9:16 first frame from prompt
-            # LTX animates that frame → final video
-            # Fallback: no product images → LTX text-to-video directly
+            # Flux and LTX receive DIFFERENT prompts:
+            #   flux_prompt  — static scene description, product-focused (for first frame)
+            #   video_prompt — motion description, action-forward (for LTX animation)
+            #
+            # WHY different: LTX works best with motion prompts ("A hand clips...").
+            # Flux text-to-image needs a static scene description with explicit product
+            # features so the first frame shows the correct product accurately.
+            # IP-Adapter reinforces product appearance visually on top of the text.
+            flux_prompt: str | None = None
+            if product and product_image_urls:
+                try:
+                    flux_prompt = await generate_first_frame_prompt(
+                        video_prompt=video_prompt,
+                        product_name=product.product_name or "",
+                        product_description=product.description or "",
+                    )
+                    logger.info(f"[Worker] Flux first-frame prompt: {flux_prompt[:80]}...")
+                except Exception as ffp_err:
+                    logger.warning(
+                        f"[Worker] First-frame prompt generation failed, "
+                        f"using video prompt for Flux: {ffp_err}"
+                    )
+
             final_video_url = await _run_ltx_generation(
                 prompt=video_prompt,
                 image_url=product_image_url,           # Primary — LTX fallback if Flux fails
-                product_image_urls=product_image_urls, # All — Flux first-frame reference
+                product_image_urls=product_image_urls, # All — Flux IP-Adapter reference
                 duration=duration,
                 with_audio=with_audio,
                 reel_id=reel_id,
+                flux_prompt=flux_prompt,               # Static first-frame prompt for Flux
             )
         elif target == "upload":
             # User-uploaded video — apply overlay + captions, skip AI generation
@@ -285,6 +305,7 @@ async def _run_ltx_generation(
     with_audio: bool = False,
     reel_id: str = "unknown",
     product_image_urls: list[str] | None = None,
+    flux_prompt: str | None = None,
 ) -> str:
     """
     Generate a product reel using Flux Dev (first frame) → LTX Video 2.3 (animation).
@@ -293,6 +314,12 @@ async def _run_ltx_generation(
         1. Gemini scores prompt fidelity (1–5) → Flux guidance_scale (2.5–4.5)
         2. Flux Dev text-to-image → cinematic 9:16 first frame
         3. LTX Video 2.3 image-to-video → animate the Flux first frame (~30s fast)
+
+    Two-prompt strategy:
+        flux_prompt (static): "Tiny green plankton keychain on dark zipper, close-up, bokeh"
+            → Flux generates a product-accurate first frame
+        prompt (motion):      "A hand clips the keychain onto a zipper. Camera pushes in."
+            → LTX animates the first frame into a cinematic scene
 
     Flux skipped when:
         - No product images available → LTX text-to-video directly
@@ -303,19 +330,16 @@ async def _run_ltx_generation(
         ≤ 20s → generate_with_ltx()        (single API call — LTX 2.3 native)
         > 20s → generate_extended_ltx()    (chained clips via last-frame extraction)
 
-    Prompt guidance for >20s extend chains:
-        Use cyclic/ambient motion (gentle rotation, soft drift) — directional
-        motions (zoom in, dolly) become incoherent after the first clip because
-        each clip starts from a new position.
-
     Args:
-        prompt:               LTX-optimised scene description (200–350 chars,
-                              motion-first, explicit camera instruction at end)
+        prompt:               LTX motion prompt (200–350 chars, action-first, camera at end)
         image_url:            Primary product image URL — LTX fallback if Flux fails
         duration:             Requested seconds (5, 10, 15, 30, 60)
         with_audio:           Passed through for downstream FFmpeg audio control
         reel_id:              Reel UUID for R2 key naming in multi-clip concat
-        product_image_urls:   ALL product image URLs → Flux sees every product angle
+        product_image_urls:   ALL product image URLs → Flux IP-Adapter reference
+        flux_prompt:          Static first-frame description (product-focused, no motion).
+                              Generated by generate_first_frame_prompt(). Falls back to
+                              `prompt` if None.
 
     Returns:
         fal.media CDN URL  (single clip ≤ 10s)
@@ -339,11 +363,18 @@ async def _run_ltx_generation(
         ip_weight = await score_prompt_fidelity(prompt)
 
         # ── Step 2: Flux Dev first frame ──────────────────────────────────────
-        # ip_weight from Step 1 → guidance_scale for Flux (0.30→2.5, 0.80→4.5)
-        # Falls back to raw primary product image if Flux fails.
+        # flux_prompt (static, product-focused) is used instead of the LTX motion
+        # prompt so Flux generates a frame that shows the product accurately.
+        # IP-Adapter reinforces visual identity on top of the text description.
+        # Falls back to motion prompt if flux_prompt was not generated.
+        effective_flux_prompt = flux_prompt or prompt
+        logger.info(
+            f"[Worker] Flux prompt: '{effective_flux_prompt[:80]}...' "
+            f"({'dedicated' if flux_prompt else 'fallback=video prompt'})"
+        )
         try:
             ltx_image_url = await generate_first_frame_with_flux(
-                prompt=prompt,
+                prompt=effective_flux_prompt,
                 product_image_urls=flux_inputs,
                 ip_weight=ip_weight,
             )
