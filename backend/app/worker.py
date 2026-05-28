@@ -163,12 +163,24 @@ async def _async_process_reel_generation(
             flux_prompt: str | None = None
             if product and product_image_urls:
                 try:
+                    # Fetch up to 2 product images as bytes so Gemini can SEE the product.
+                    # Multimodal Gemini produces far more accurate first-frame descriptions
+                    # (exact colour, shape, character details) than text-only generation.
+                    # We cap at 2 to keep Gemini token cost low; primary image is first.
+                    product_image_bytes = await _fetch_product_image_bytes(
+                        product_image_urls[:2]
+                    )
                     flux_prompt = await generate_first_frame_prompt(
                         video_prompt=video_prompt,
                         product_name=product.product_name or "",
                         product_description=product.description or "",
+                        product_images=product_image_bytes or None,
                     )
-                    logger.info(f"[Worker] Flux first-frame prompt: {flux_prompt[:80]}...")
+                    logger.info(
+                        f"[Worker] Flux first-frame prompt "
+                        f"({len(product_image_bytes)} image(s) sent to Gemini): "
+                        f"{flux_prompt[:80]}..."
+                    )
                 except Exception as ffp_err:
                     logger.warning(
                         f"[Worker] First-frame prompt generation failed, "
@@ -423,6 +435,49 @@ async def _run_ltx_generation(
 # ─────────────────────────────────────────────────────────────────────────────
 # Storage Helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
+async def _fetch_product_image_bytes(
+    image_urls: list[str],
+) -> list[tuple[bytes, str]]:
+    """
+    Download product images from presigned R2 URLs and return as (bytes, mime_type) tuples.
+
+    WHY: generate_first_frame_prompt() sends product photos to Gemini so it can SEE the
+    actual product appearance (exact colour, shape, character details) rather than
+    relying only on the text description.  This produces far more accurate first-frame
+    descriptions for Flux.
+
+    Args:
+        image_urls: List of presigned R2 URLs (already resolved by get_presigned_url())
+                    Caller should cap to 2 URLs to keep Gemini token cost low.
+
+    Returns:
+        List of (bytes, mime_type) tuples — only successfully downloaded images included.
+        Empty list if all downloads fail (caller falls back to text-only prompt).
+    """
+    import httpx
+
+    results: list[tuple[bytes, str]] = []
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        for url in image_urls:
+            try:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                # Determine MIME type from Content-Type header, default to JPEG
+                mime = resp.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+                results.append((resp.content, mime))
+                logger.debug(
+                    f"[Worker] Fetched product image for Gemini: "
+                    f"{len(resp.content):,} bytes ({mime})"
+                )
+            except Exception as e:
+                logger.warning(f"[Worker] Failed to fetch product image for Gemini ({url[:60]}): {e}")
+    logger.info(
+        f"[Worker] Product images fetched for first-frame prompt: "
+        f"{len(results)}/{len(image_urls)} succeeded"
+    )
+    return results
+
 
 async def _upload_cdn_video_to_r2(cdn_url: str, reel_id: str) -> str:
     """
