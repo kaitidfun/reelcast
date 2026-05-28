@@ -27,6 +27,7 @@ import {
   Upload,
   Lightbulb,
   Brain,
+  Crosshair,
 } from "lucide-react";
 import { useGenerationQueue } from "@/contexts/GenerationQueueContext";
 import { Button } from "@/components/ui/button";
@@ -91,6 +92,17 @@ const promptTemplates = [
 //   30s = 2 clips (20s + 10s)  |  60s = 3 clips (20s × 3)
 // 15s snaps to 16s on the backend (_snap_to_ltx_duration).
 const durationOptions = [6, 10, 15, 30, 60];
+
+/** How closely Flux IP-Adapter should match the product image.
+ *  Maps to ip_weight in worker._PRODUCT_MATCH_WEIGHTS.
+ *  Default: "faithful" (0.80) — highest product fidelity. */
+const productMatchOptions = [
+  { value: "creative",  label: "Creative",  desc: "Scene-first, loose product resemblance" },
+  { value: "natural",   label: "Natural",   desc: "Relaxed, product colour/shape roughly kept" },
+  { value: "balanced",  label: "Balanced",  desc: "Good mix of scene quality and accuracy" },
+  { value: "faithful",  label: "Faithful",  desc: "Maximum product fidelity" },
+] as const;
+type ProductMatch = typeof productMatchOptions[number]["value"];
 
 // ─── Guide Me — chip options for each row ────────────────────────────────────
 // 6 options per category → grid-cols-3 gives exactly 2 equal rows of 3.
@@ -254,6 +266,7 @@ const CreateReel = () => {
 
   // Settings state
   const [duration, setDuration] = useState(6);  // Default 6s — LTX 2.3 minimum valid duration
+  const [productMatch, setProductMatch] = useState<ProductMatch>("faithful");  // Default: max product fidelity
   // Audio toggle — passed to API; LTX 2.3 generates native audio when true (generate_audio param)
   const [withAudio, setWithAudio] = useState(true);
   /**
@@ -687,6 +700,7 @@ const CreateReel = () => {
           overlay_position: overlayPosition,
           duration: duration,
           with_audio: withAudio,
+          product_match: productMatch,
         })
       });
       if (!res.ok) throw new Error("Failed to start generation");
@@ -727,6 +741,8 @@ const CreateReel = () => {
           duration,
           // Mirror the current audio choice so FFmpeg strips correctly on regen
           with_audio: withAudio,
+          // Mirror product match so regen uses the same fidelity level
+          product_match: productMatch,
           // Send current prompt — user may have edited it before clicking Re-generate
           prompt_text: target !== "caption" ? promptText : undefined,
         })
@@ -1393,6 +1409,32 @@ const CreateReel = () => {
                 {withAudio ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
                 {withAudio ? "With Audio" : "No Audio"}
               </button>
+
+              {/* Product Match — controls Flux IP-Adapter scale (how closely first frame matches product photo) */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors">
+                    <Crosshair className="h-3.5 w-3.5" />
+                    {productMatchOptions.find((o) => o.value === productMatch)?.label ?? "Faithful"}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-52 p-2">
+                  <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Product Match</p>
+                  {productMatchOptions.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setProductMatch(opt.value)}
+                      className={`flex w-full flex-col rounded-md px-2 py-1.5 text-left hover:bg-accent ${productMatch === opt.value ? "text-primary" : "text-foreground"}`}
+                    >
+                      <span className="flex items-center justify-between text-xs font-medium">
+                        {opt.label}
+                        {productMatch === opt.value && <Check className="h-3.5 w-3.5" />}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">{opt.desc}</span>
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* Action bar (footer of monolith) */}

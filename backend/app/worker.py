@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import SessionLocal
 from app.models.models import Reel, Product
-from app.services.ai_service import generate_captions, score_prompt_fidelity, generate_first_frame_prompt
+from app.services.ai_service import generate_captions, generate_first_frame_prompt
 from app.services.video_generation_service import (
     generate_video,
     generate_with_ltx,
@@ -31,35 +31,49 @@ celery_app.conf.task_routes = {
     "app.worker.process_reel_generation": "main-queue"
 }
 
+# Maps user-selected product_match level → Flux IP-Adapter scale (ip_weight).
+# Higher scale = product appearance injected more strongly into the generated frame.
+# Range kept ≤ 0.80 — above this, IP-Adapter can degrade image quality / scene detail.
+_PRODUCT_MATCH_WEIGHTS: dict[str, float] = {
+    "creative":  0.35,  # Scene-first: product may look loosely similar
+    "natural":   0.50,  # Relaxed: product colour/shape roughly preserved
+    "balanced":  0.62,  # Good blend of scene quality and product accuracy
+    "faithful":  0.80,  # Maximum product fidelity (default)
+}
+
 
 @celery_app.task(name="app.worker.process_reel_generation")
 def process_reel_generation(
     reel_id: str, platform: str, overlay_position: str,
     target: str = "all", duration: int = 10, with_audio: bool = False,
+    product_match: str = "faithful",
 ):
     """
     Celery background task: orchestrate reel generation pipeline.
 
-    Handles AI video generation (Kling 2.6), FFmpeg overlay, and caption generation.
+    Handles AI video generation (Flux + LTX), FFmpeg overlay, and caption generation.
     Supports partial regeneration (e.g., video only, caption only).
 
     Args:
         reel_id: UUID of reel being processed
         platform: Target social platform (ig/fb/tt/yt) for caption optimization
         overlay_position: Logo/product placement (top-left/right, bottom-left/right, center)
-        target: Generation scope — "all" (full pipeline) | "video" (Kling only) |
+        target: Generation scope — "all" (full pipeline) | "video" (video only) |
                 "caption" (Gemini only) | "upload" (uploaded video → overlay → captions)
         duration: Video length in seconds — snapped to nearest valid LTX value (6–20s)
         with_audio: True = LTX generates native audio; False = silent video
+        product_match: IP-Adapter fidelity level — "creative" | "natural" | "balanced" | "faithful"
+                       Controls how closely the generated first frame matches the product image.
     """
     asyncio.run(_async_process_reel_generation(
-        reel_id, platform, overlay_position, target, duration, with_audio
+        reel_id, platform, overlay_position, target, duration, with_audio, product_match
     ))
 
 
 async def _async_process_reel_generation(
     reel_id: str, platform: str, overlay_position: str,
     target: str = "all", duration: int = 10, with_audio: bool = False,
+    product_match: str = "faithful",
 ):
     """
     Async implementation: AI generation + overlay + caption pipeline.
@@ -187,6 +201,13 @@ async def _async_process_reel_generation(
                         f"using video prompt for Flux: {ffp_err}"
                     )
 
+            # Resolve user-selected product_match level → Flux IP-Adapter scale.
+            # Default to "faithful" (0.80) if an unrecognised value is passed.
+            ip_weight = _PRODUCT_MATCH_WEIGHTS.get(product_match, 0.80)
+            logger.info(
+                f"[Worker] Product match: '{product_match}' → ip_weight={ip_weight}"
+            )
+
             final_video_url = await _run_ltx_generation(
                 prompt=video_prompt,
                 image_url=product_image_url,           # Primary — LTX fallback if Flux fails
@@ -195,6 +216,7 @@ async def _async_process_reel_generation(
                 with_audio=with_audio,
                 reel_id=reel_id,
                 flux_prompt=flux_prompt,               # Static first-frame prompt for Flux
+                ip_weight=ip_weight,                   # User-controlled product fidelity
             )
         elif target == "upload":
             # User-uploaded video — apply overlay + captions, skip AI generation
@@ -318,14 +340,14 @@ async def _run_ltx_generation(
     reel_id: str = "unknown",
     product_image_urls: list[str] | None = None,
     flux_prompt: str | None = None,
+    ip_weight: float = 0.80,
 ) -> str:
     """
     Generate a product reel using Flux Dev (first frame) → LTX Video 2.3 (animation).
 
     Full pipeline:
-        1. Gemini scores prompt fidelity (1–5) → Flux guidance_scale (2.5–4.5)
-        2. Flux Dev text-to-image → cinematic 9:16 first frame
-        3. LTX Video 2.3 image-to-video → animate the Flux first frame (~30s fast)
+        1. Flux Dev + XLabs IP-Adapter → cinematic 9:16 first frame (ip_weight controls fidelity)
+        2. LTX Video 2.3 image-to-video → animate the Flux first frame (~30s fast)
 
     Two-prompt strategy:
         flux_prompt (static): "Tiny green plankton keychain on dark zipper, close-up, bokeh"
@@ -352,6 +374,9 @@ async def _run_ltx_generation(
         flux_prompt:          Static first-frame description (product-focused, no motion).
                               Generated by generate_first_frame_prompt(). Falls back to
                               `prompt` if None.
+        ip_weight:            Flux IP-Adapter scale from _PRODUCT_MATCH_WEIGHTS (0.35–0.80).
+                              Passed from user-selected product_match level — replaces
+                              the old Gemini auto-scoring (score_prompt_fidelity).
 
     Returns:
         fal.media CDN URL  (single clip ≤ 10s)
@@ -364,17 +389,14 @@ async def _run_ltx_generation(
         logger.info("[LTX] No FAL_KEY, delegating to generate_video() facade")
         return await generate_video(prompt=prompt, image_url=image_url, duration=duration)
 
-    # ── Step 1: Auto-score fidelity → set Flux guidance_scale ────────────────
-    # Gemini reads the prompt and scores 1–5 (surreal→realistic).
-    # Score maps to Flux guidance_scale: 1 → 2.5 (creative), 5 → 4.5 (faithful)
-    # Runs concurrently with other work — if it fails, default weight 0.60 is used.
+    # ── Step 1: Flux Dev first frame ──────────────────────────────────────────
+    # ip_weight comes directly from the user's product_match selection (0.35–0.80).
+    # No Gemini scoring needed — user controls the fidelity level explicitly.
     flux_inputs = product_image_urls or ([image_url] if image_url else [])
     ltx_image_url = image_url  # Default fallback = primary product image
 
     if flux_inputs:
-        ip_weight = await score_prompt_fidelity(prompt)
-
-        # ── Step 2: Flux Dev first frame ──────────────────────────────────────
+        # ── Flux Dev first frame ───────────────────────────────────────────────
         # flux_prompt (static, product-focused) is used instead of the LTX motion
         # prompt so Flux generates a frame that shows the product accurately.
         # IP-Adapter reinforces visual identity on top of the text description.
