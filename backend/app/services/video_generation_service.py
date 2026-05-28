@@ -63,23 +63,40 @@ logger = logging.getLogger(__name__)
 LTX_IMAGE_MODEL = "fal-ai/ltx-2.3/image-to-video/fast"  # Flux first frame → animation
 LTX_TEXT_MODEL  = "fal-ai/ltx-2.3/text-to-video/fast"   # text-only fallback (no image)
 
-# Flux Dev — first frame generator with product image conditioning.
-# Two-step pipeline: product image → cinematic scene (image-to-image) → animate (LTX)
+# Flux — first frame generator with three-tier product conditioning.
 #
-# fal-ai/flux/dev/image-to-image (primary):
-#   Sends product photo as input; Flux transforms the background into a cinematic scene
-#   while the product's visual identity (colour, shape, texture) stays anchored.
-#   strength (0.65–0.80) controls how much the original product image influences output:
-#       0.65 = more creative scene transformation, product loosely anchored
-#       0.80 = product-heavy, background clearly changed but product dominant
+# Tier 1 — fal-ai/flux-general + XLabs IP-Adapter (primary, best result):
+#   "Injects" product identity (colour, shape, texture) into a brand-new FLUX generation.
+#   XLabs-AI/flux-ip-adapter is a FLUX.1-dev-native IP-Adapter that ships as
+#   ip_adapter.safetensors (unlike InstantX which is .bin/Pickle and fails on fal.ai).
+#   The model generates a fresh cinematic scene from the prompt WHILE anchoring
+#   the product's visual identity via the IP-Adapter reference — the ideal approach
+#   for product advertising because the scene is truly cinematic and the product is faithful.
 #
-# fal-ai/flux/dev (fallback):
-#   Text-only when image-to-image fails; uses Gemini scene prompt with product description.
-FLUX_IMG2IMG_MODEL = "fal-ai/flux/dev/image-to-image"  # image-to-image (product → scene)
-FLUX_DEV_MODEL     = "fal-ai/flux/dev"                  # text-only fallback
+# Tier 2 — fal-ai/flux/dev/image-to-image (fallback if IP-Adapter fails):
+#   Sends product photo as input; Flux transforms the background into the cinematic scene
+#   while partially preserving the product. Trade-off: strength controls product vs scene
+#   balance — not as clean as IP-Adapter but better than text-only.
+#   strength (0.65–0.80) driven by ip_weight from Gemini fidelity scoring.
+#
+# Tier 3 — fal-ai/flux/dev text-only (final fallback):
+#   Pure text prompt. Gemini prompt includes product description so scene quality is
+#   still good, but no direct product visual anchoring.
+FLUX_GENERAL_MODEL = "fal-ai/flux-general"              # IP-Adapter-capable FLUX.1-dev
+FLUX_IMG2IMG_MODEL = "fal-ai/flux/dev/image-to-image"   # img2img fallback
+FLUX_DEV_MODEL     = "fal-ai/flux/dev"                  # text-only final fallback
 
-# ip_weight scored by Gemini (0.30–0.80) → maps to img2img strength (0.65–0.80).
-# Higher ip_weight = more realistic/product-focused → higher strength (less scene transformation).
+# XLabs FLUX IP-Adapter — FLUX.1-dev native, ships as safetensors (fal.ai compatible).
+# Chosen over InstantX/FLUX.1-dev-IP-Adapter which is .bin (Pickle) format and fails
+# on fal.ai with: 'NoneType object has no attribute split' → HTTP 422.
+FLUX_IP_ADAPTER_PATH       = "XLabs-AI/flux-ip-adapter"
+FLUX_IP_ADAPTER_WEIGHT     = "ip_adapter.safetensors"
+FLUX_IP_IMAGE_ENCODER_PATH = "openai/clip-vit-large-patch14"
+
+# ip_weight scored by Gemini (0.30–0.80):
+#   → IP-Adapter scale       (0.30–0.80): higher = product more dominant in generation
+#   → img2img strength       (0.65–0.80): higher = less background transformation
+#   → guidance_scale         (2.5–4.5):   higher = more prompt-faithful
 FLUX_IP_TOTAL_WEIGHT = 0.75
 
 
@@ -289,67 +306,127 @@ async def generate_first_frame_with_flux(
     ip_weight: float = FLUX_IP_TOTAL_WEIGHT,
 ) -> str:
     """
-    Generate a cinematic first frame using Flux image-to-image with product conditioning.
+    Generate a cinematic first frame using Flux with three-tier product conditioning.
 
-    Two-stage pipeline:
-        Primary:  flux/dev image-to-image
-                  Product photo sent as input image; Flux transforms the background
-                  into the cinematic scene described by the Gemini prompt while
-                  preserving the product's colour, shape, and texture naturally.
-                  strength (0.65–0.80) controls product vs scene balance:
-                      low ip_weight → strength 0.65 (more scene, product loosely anchored)
-                      high ip_weight → strength 0.80 (product dominant, background changed)
-        Fallback: flux/dev text-only — if image-to-image fails for any reason.
+    Tier 1 — flux-general + XLabs IP-Adapter (primary, best result):
+        Injects product identity (colour, shape, texture) into a fresh FLUX generation.
+        XLabs-AI/flux-ip-adapter ships as ip_adapter.safetensors — compatible with fal.ai.
+        Generates a new cinematic scene from the Gemini prompt while the IP-Adapter
+        anchors the product's visual identity. Best approach for product advertising.
 
-    WHY image-to-image instead of IP-Adapter:
-        InstantX/FLUX.1-dev-IP-Adapter ships only ip-adapter.bin (5.29 GB Pickle format).
-        fal.ai requires safetensors-format weights; the .bin file triggers HTTP 422 at load
-        time. image-to-image achieves the same product anchoring: the product IS the input.
+    Tier 2 — flux/dev image-to-image (fallback):
+        Product photo sent as input; Flux transforms background into the cinematic scene.
+        Trade-off: strength (0.65–0.80) controls product preservation vs scene transformation.
+        Not as clean as IP-Adapter but still uses the real product image.
+
+    Tier 3 — flux/dev text-only (final fallback):
+        Pure text generation. Gemini prompt includes product description so scene quality
+        is maintained, but no direct product visual anchoring.
 
     Args:
         prompt:              Cinematic scene description from Gemini (environment, action, camera)
         product_image_urls:  Product image URLs sorted primary-first. First URL is used as
-                             the image-to-image input; remaining are available for context.
-        ip_weight:           Fidelity weight (0.30–0.80) from Gemini prompt scoring
+                             IP-Adapter / img2img reference; remaining available as context.
+        ip_weight:           Fidelity weight (0.30–0.80) from Gemini prompt scoring.
+                             Maps to: IP-Adapter scale, img2img strength, and guidance_scale.
 
     Returns:
         fal.media CDN URL of the Flux-generated first frame image
 
     Raises:
         ValueError:   If product_image_urls is empty
-        RuntimeError: If both image-to-image AND flux/dev text-only calls fail
+        RuntimeError: If all three generation tiers fail
     """
     if not product_image_urls:
         raise ValueError("At least one product image URL is required")
 
     primary_image_url = product_image_urls[0]
 
-    # Map ip_weight (0.30–0.80) → img2img strength (0.65–0.80)
-    # Higher ip_weight = more product-faithful → higher strength (less transformation)
-    strength = round(0.65 + (ip_weight - 0.30) / 0.50 * 0.15, 2)
-
     # Map ip_weight (0.30–0.80) → guidance_scale (2.5–4.5)
     guidance_scale = round(2.5 + (ip_weight - 0.30) / 0.50 * 2.0, 2)
 
+    # Map ip_weight (0.30–0.80) → img2img strength (0.65–0.80) for Tier 2 fallback.
+    # Higher ip_weight = more product-faithful → higher strength (less scene transformation).
+    img2img_strength = round(0.65 + (ip_weight - 0.30) / 0.50 * 0.15, 2)
+
     try:
         import fal_client
+        loop = asyncio.get_running_loop()
 
+        # ── Tier 1: flux-general + XLabs IP-Adapter ──────────────────────────────
+        # XLabs-AI/flux-ip-adapter is FLUX.1-dev native and ships as safetensors —
+        # unlike InstantX/FLUX.1-dev-IP-Adapter (.bin/Pickle) which fails on fal.ai.
         logger.info(
-            f"[Flux] Generating first frame via flux/dev image-to-image "
-            f"(strength={strength}, guidance={guidance_scale}): {prompt[:60]}..."
+            f"[Flux] Tier 1: flux-general + XLabs IP-Adapter "
+            f"(scale={ip_weight}, guidance={guidance_scale}): {prompt[:60]}..."
+        )
+
+        def _run_ip_adapter():
+            logger.info(
+                f"[Flux] Calling flux-general + XLabs IP-Adapter | "
+                f"image: {primary_image_url[:80]} | scale={ip_weight} | guidance={guidance_scale}"
+            )
+            result = fal_client.run(
+                FLUX_GENERAL_MODEL,
+                arguments={
+                    "prompt":               prompt,
+                    "image_size":           "portrait_16_9",  # 9:16 portrait for social reels
+                    "num_inference_steps":  28,
+                    "guidance_scale":       guidance_scale,
+                    "num_images":           1,
+                    "enable_safety_checker": True,
+                    "ip_adapters": [
+                        {
+                            "path":                FLUX_IP_ADAPTER_PATH,
+                            "weight_name":         FLUX_IP_ADAPTER_WEIGHT,   # ip_adapter.safetensors
+                            "image_encoder_path":  FLUX_IP_IMAGE_ENCODER_PATH,
+                            "image_url":           primary_image_url,
+                            "scale":               ip_weight,
+                        }
+                    ],
+                },
+            )
+            images = result.get("images") or []
+            if not images:
+                raise RuntimeError(
+                    f"flux-general returned no images. "
+                    f"Response keys: {list(result.keys()) if isinstance(result, dict) else result}"
+                )
+            url = images[0].get("url")
+            if not url:
+                raise RuntimeError(f"flux-general image missing 'url'. Entry: {images[0]}")
+            return url
+
+        try:
+            url = await loop.run_in_executor(None, _run_ip_adapter)
+            logger.info(f"[Flux] ✅ Tier 1 IP-Adapter first frame ready: {url[:80]}")
+            return url
+        except Exception as ip_err:
+            logger.warning(
+                f"[Flux] ⚠️ Tier 1 IP-Adapter FAILED — trying Tier 2 img2img. "
+                f"Reason: {ip_err}"
+            )
+
+        # ── Tier 2: flux/dev image-to-image ──────────────────────────────────────
+        # Product photo as input; Flux transforms background while partially preserving
+        # product. Trade-off vs IP-Adapter: can't simultaneously keep product 100% intact
+        # AND transform background fully — strength controls which side wins.
+        logger.warning(
+            f"[Flux] Tier 2: flux/dev image-to-image "
+            f"(strength={img2img_strength}, guidance={guidance_scale}): {prompt[:60]}..."
         )
 
         def _run_img2img():
             logger.info(
                 f"[Flux] Calling flux/dev image-to-image | "
-                f"image: {primary_image_url[:80]} | strength={strength} | guidance={guidance_scale}"
+                f"image: {primary_image_url[:80]} | strength={img2img_strength}"
             )
             result = fal_client.run(
                 FLUX_IMG2IMG_MODEL,
                 arguments={
                     "prompt":               prompt,
                     "image_url":            primary_image_url,
-                    "strength":             strength,
+                    "strength":             img2img_strength,
                     "num_inference_steps":  28,
                     "guidance_scale":       guidance_scale,
                     "num_images":           1,
@@ -364,27 +441,24 @@ async def generate_first_frame_with_flux(
                 )
             url = images[0].get("url")
             if not url:
-                raise RuntimeError(f"flux/dev image-to-image image missing 'url'. Entry: {images[0]}")
+                raise RuntimeError(f"flux/dev image-to-image missing 'url'. Entry: {images[0]}")
             return url
 
-        loop = asyncio.get_running_loop()
         try:
             url = await loop.run_in_executor(None, _run_img2img)
-            logger.info(f"[Flux] ✅ image-to-image first frame ready: {url[:80]}")
+            logger.warning(f"[Flux] ⚠️ Tier 2 img2img first frame (product may vary): {url[:80]}")
             return url
         except Exception as img2img_err:
-            # Image-to-image failed — fall back to text-only generation
             logger.warning(
-                f"[Flux] ⚠️ flux/dev image-to-image FAILED — falling back to text-only. "
+                f"[Flux] ⚠️ Tier 2 img2img FAILED — falling back to Tier 3 text-only. "
                 f"Reason: {img2img_err}"
             )
 
-        # ── Fallback: flux/dev text-only (no product image reference) ───────────
-        # This path generates a cinematic scene from the text prompt only.
-        # The Gemini prompt already includes product description, so scene quality
-        # is still good — just without direct product visual anchoring.
+        # ── Tier 3: flux/dev text-only ────────────────────────────────────────────
+        # Pure text generation. The Gemini prompt includes product description so
+        # scene quality is still good, but no direct product visual anchoring.
         logger.warning(
-            f"[Flux] ❌ Using flux/dev TEXT-ONLY fallback — product image NOT applied. "
+            f"[Flux] ❌ Tier 3: flux/dev TEXT-ONLY — product image NOT applied. "
             f"guidance={guidance_scale}, prompt={prompt[:60]}..."
         )
 
@@ -412,7 +486,7 @@ async def generate_first_frame_with_flux(
             return url
 
         url = await loop.run_in_executor(None, _run_text_only)
-        logger.warning(f"[Flux] ❌ flux/dev text-only first frame: {url[:80]}")
+        logger.warning(f"[Flux] ❌ Tier 3 text-only first frame: {url[:80]}")
         return url
 
     except Exception as e:
