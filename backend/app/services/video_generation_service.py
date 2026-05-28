@@ -93,24 +93,11 @@ FLUX_IP_ADAPTER_PATH       = "XLabs-AI/flux-ip-adapter"
 FLUX_IP_ADAPTER_WEIGHT     = "ip_adapter.safetensors"
 FLUX_IP_IMAGE_ENCODER_PATH = "openai/clip-vit-large-patch14"
 
-# ip_weight scored by Gemini (0.65–0.85) — used as IP-Adapter scale and mapped to
-# img2img strength and guidance_scale for all three Flux tiers.
-FLUX_IP_TOTAL_WEIGHT = 0.72  # default when scoring is unavailable
-
-# Negative prompt applied to ALL Flux tiers.
-#
-# WHY: Without a negative prompt, Flux interprets "green creature with one giant eye"
-# as a living monster/horror character instead of a plush toy product. Adding explicit
-# "no living creature, no horror, plush toy product" prevents the uncanny-valley output
-# that makes plush/character products look scary rather than cute.
-#
-# Applied to: Tier 1 (IP-Adapter), Tier 2 (img2img), Tier 3 (text-only)
-FLUX_NEGATIVE_PROMPT = (
-    "living creature, real animal, monster, horror, grotesque, scary face, "
-    "uncanny valley, deformed, distorted, mutated, "
-    "3d render, CGI, digital art animation, cartoon character in motion, "
-    "fantasy creature, alien lifeform, creature feature"
-)
+# ip_weight scored by Gemini (0.30–0.80):
+#   → IP-Adapter scale       (0.30–0.80): higher = product more dominant in generation
+#   → img2img strength       (0.65–0.80): higher = less background transformation
+#   → guidance_scale         (2.5–4.5):   higher = more prompt-faithful
+FLUX_IP_TOTAL_WEIGHT = 0.75
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -383,7 +370,6 @@ async def generate_first_frame_with_flux(
                 FLUX_GENERAL_MODEL,
                 arguments={
                     "prompt":               prompt,
-                    "negative_prompt":      FLUX_NEGATIVE_PROMPT,
                     "image_size":           "portrait_16_9",  # 9:16 portrait for social reels
                     "num_inference_steps":  28,
                     "guidance_scale":       guidance_scale,
@@ -439,7 +425,6 @@ async def generate_first_frame_with_flux(
                 FLUX_IMG2IMG_MODEL,
                 arguments={
                     "prompt":               prompt,
-                    "negative_prompt":      FLUX_NEGATIVE_PROMPT,
                     "image_url":            primary_image_url,
                     "strength":             img2img_strength,
                     "num_inference_steps":  28,
@@ -482,7 +467,6 @@ async def generate_first_frame_with_flux(
                 FLUX_DEV_MODEL,
                 arguments={
                     "prompt":               prompt,
-                    "negative_prompt":      FLUX_NEGATIVE_PROMPT,
                     "image_size":           "portrait_16_9",
                     "num_inference_steps":  28,
                     "guidance_scale":       guidance_scale,
