@@ -642,9 +642,13 @@ async def score_prompt_fidelity(prompt: str) -> float:
     Returns:
         float in [0.30, 0.80] — Flux IP-Adapter weight for this prompt.
     """
-    WEIGHT_MIN   = 0.30
-    WEIGHT_MAX   = 0.80
-    WEIGHT_DEFAULT = 0.60  # Returned on any error
+    # Product advertising always needs the product to be recognisable.
+    # IP-Adapter scale < 0.65 is too weak for character products (specific eyes,
+    # teeth, colour details) — CLIP embeddings don't preserve fine features at low scale.
+    # Range 0.65–0.85 gives recognisable product while still allowing creative scenes.
+    WEIGHT_MIN   = 0.65
+    WEIGHT_MAX   = 0.85
+    WEIGHT_DEFAULT = 0.72  # Returned on any error (balanced, product-visible)
 
     if not GOOGLE_AI_API_KEY:
         return WEIGHT_DEFAULT
