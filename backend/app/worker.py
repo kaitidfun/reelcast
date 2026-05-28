@@ -163,12 +163,12 @@ async def _async_process_reel_generation(
             flux_prompt: str | None = None
             if product and product_image_urls:
                 try:
-                    # Fetch up to 2 product images as bytes so Gemini can SEE the product.
+                    # Fetch ALL product images as bytes so Gemini can SEE every angle.
                     # Multimodal Gemini produces far more accurate first-frame descriptions
                     # (exact colour, shape, character details) than text-only generation.
-                    # We cap at 2 to keep Gemini token cost low; primary image is first.
+                    # Sending all images lets Gemini pick the most informative view.
                     product_image_bytes = await _fetch_product_image_bytes(
-                        product_image_urls[:2]
+                        product_image_urls
                     )
                     flux_prompt = await generate_first_frame_prompt(
                         video_prompt=video_prompt,

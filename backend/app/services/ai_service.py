@@ -532,8 +532,9 @@ async def generate_first_frame_prompt(
     if not GOOGLE_AI_API_KEY:
         return fallback
 
-    # Cap at 2 images to keep token usage reasonable
-    imgs = (product_images or [])[:2]
+    # Send all product images so Gemini sees every angle/view of the product.
+    # More images = more visual context = more accurate first-frame descriptions.
+    imgs = product_images or []
 
     # Adjust system prompt based on whether we have actual product photos.
     # When Gemini CAN see the product, it should describe visual details from the photos.
