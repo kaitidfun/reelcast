@@ -444,6 +444,17 @@ async def _run_ltx_generation(
 
     mode = "image-to-video" if ltx_image_url else "text-to-video"
 
+    # ── SKIP_LTX dev flag — bypass LTX entirely to test Imagen 3 only ─────────
+    # Set SKIP_LTX=true in .env to stop after first-frame generation.
+    # Returns the Imagen 3 PNG URL directly as the "video" so the rest of the
+    # pipeline (overlay, captions, DB persist) still runs and you can verify
+    # the first frame in the UI without paying for LTX generation.
+    if os.getenv("SKIP_LTX", "").lower() == "true":
+        logger.warning(
+            f"[Worker] SKIP_LTX=true — returning Imagen 3 frame as video: {ltx_image_url}"
+        )
+        return ltx_image_url or ""
+
     # ── Step 2: LTX Video 2.3 animation ──────────────────────────────────────
     # LTX 2.3 natively supports up to 20s per call — extend chain only for > 20s.
     # with_audio maps directly to LTX's generate_audio param (no FFmpeg strip needed).

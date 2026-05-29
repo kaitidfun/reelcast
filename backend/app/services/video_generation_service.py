@@ -413,14 +413,15 @@ async def generate_first_frame_with_imagen(
                     for idx, (img_bytes, _mime) in enumerate(ref_images)
                 ]
 
-                # EDIT_MODE_PRODUCT_IMAGE: generate a lifestyle/scene image of the product
-                # using the subject references — no base image required for this mode.
+                # EDIT_MODE_PRODUCT_IMAGE is not yet supported on the Preview model.
+                # EDIT_MODE_DEFAULT lets Imagen pick the best editing strategy given
+                # the SubjectReferenceImage inputs — works on the current Preview version.
                 response = client.models.edit_image(
                     model="imagen-3.0-capability-001",  # capability model supports references
                     prompt=prompt,
                     reference_images=subject_refs,
                     config=genai_types.EditImageConfig(
-                        edit_mode=genai_types.EditMode.EDIT_MODE_PRODUCT_IMAGE,
+                        edit_mode=genai_types.EditMode.EDIT_MODE_DEFAULT,
                         number_of_images=1,
                         aspect_ratio=aspect_ratio,
                     ),

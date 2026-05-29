@@ -122,14 +122,58 @@ try:
     if r.generated_images:
         img_bytes = r.generated_images[0].image.image_bytes
         print("[OK] Imagen 3 generate_images: %d bytes" % len(img_bytes))
+        img_bytes_text_only = img_bytes  # keep for step 4
         print()
         print(">>> Vertex AI + Imagen 3 are WORKING! Pipeline is ready. <<<")
     else:
+        img_bytes_text_only = None
         print("[WARN] No images returned - model accessible but response empty")
 except Exception as e:
+    img_bytes_text_only = None
     print("[FAIL] Imagen 3 failed:", e)
     print()
     print("If 403 PERMISSION_DENIED: go to console.cloud.google.com")
     print("  -> APIs & Services -> Enable 'Vertex AI API'")
     print("  -> Also enable 'Cloud AI Platform API'")
     print("If 404 NOT_FOUND: check project has Imagen 3 model access")
+
+
+# ── [4] edit_image + SUBJECT reference test (~$0.04) ─────────────────────────
+# Tests the exact path the pipeline uses: SubjectReferenceImage + EDIT_MODE_DEFAULT
+# Uses the text-only result from step 3 as the reference image (a real product-like PNG).
+print()
+print("[4/4] Testing edit_image + SubjectReferenceImage + EDIT_MODE_DEFAULT (~$0.04)...")
+
+if not img_bytes_text_only:
+    print("[SKIP] No reference image from step 3 - skipping")
+else:
+    try:
+        subject_ref = t.SubjectReferenceImage(
+            reference_id=1,
+            reference_image=t.Image(image_bytes=img_bytes_text_only),
+            config=t.SubjectReferenceConfig(
+                subject_type=t.SubjectReferenceType.SUBJECT_TYPE_PRODUCT,
+            ),
+        )
+
+        r2 = client.models.edit_image(
+            model="imagen-3.0-capability-001",
+            prompt="Product on a wooden table with soft studio lighting, 9:16 portrait",
+            reference_images=[subject_ref],
+            config=t.EditImageConfig(
+                edit_mode=t.EditMode.EDIT_MODE_DEFAULT,
+                number_of_images=1,
+                aspect_ratio="9:16",
+            ),
+        )
+        if r2.generated_images:
+            result = r2.generated_images[0].image.image_bytes
+            print("[OK] edit_image SUBJECT ref: %d bytes" % len(result))
+            print()
+            print(">>> SUBJECT reference with EDIT_MODE_DEFAULT WORKS! <<<")
+            print("    Full pipeline with product-faithful first frame is ready.")
+        else:
+            print("[WARN] No images returned from edit_image")
+    except Exception as e:
+        print("[FAIL] edit_image failed:", e)
+        print("       SUBJECT reference not supported - pipeline will use text-only fallback")

@@ -115,3 +115,7 @@ venv/
 ### Bun
 bun.lock
 bun.lockb
+
+### GCP Service Account Keys (never commit)
+backend/*.json
+!backend/package.json
