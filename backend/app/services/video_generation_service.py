@@ -310,14 +310,15 @@ async def generate_first_frame_with_imagen(
     """
     Generate a cinematic first frame using Google Imagen 3 with product reference images.
 
-    Imagen 3 uses semantic scene understanding + a SUBJECT reference image to produce
+    Imagen 3 uses semantic scene understanding + SUBJECT reference images to produce
     a new scene in which the product appears faithfully — preserving specific character
     details (eye shape, tooth pattern, colour gradients) that CLIP-based IP-Adapters
     cannot replicate at any scale.
 
     Pipeline:
-        Primary:  Imagen 3 generate_images() with first product photo as SUBJECT reference
-                  → semantic product fidelity in a fresh cinematic composition
+        Primary:  Imagen 3 generate_images() with ALL product photos as SUBJECT references
+                  (capped at 4 to stay within API limits — multiple angles give Imagen 3
+                  a richer 3-D understanding of the product's shape and details)
         Fallback: Imagen 3 text-only (reference call failed) — Gemini prompt still describes
                   the product accurately via generate_first_frame_prompt()
         Then:     Upload PNG bytes to fal.ai storage → return public CDN URL for LTX
@@ -326,7 +327,8 @@ async def generate_first_frame_with_imagen(
         prompt:         Static first-frame scene description from generate_first_frame_prompt().
                         Describes the product, scene, environment, and composition in detail.
         product_images: List of (bytes, mime_type) tuples downloaded from R2.
-                        The first image is used as the SUBJECT reference for Imagen 3.
+                        All images (up to 4) are sent as SUBJECT references so Imagen 3
+                        sees multiple angles/views of the product for better fidelity.
         aspect_ratio:   Output aspect ratio — "9:16" for social reels (vertical portrait)
 
     Returns:
@@ -346,53 +348,60 @@ async def generate_first_frame_with_imagen(
     loop = asyncio.get_running_loop()
     client = genai.Client(api_key=google_ai_key)
 
-    primary_img_bytes = product_images[0][0] if product_images else None
+    # Cap at 4 images — more angles give Imagen 3 a richer understanding of the
+    # product's shape and character details, but the API has practical reference limits.
+    _MAX_SUBJECT_REFS = 4
+    ref_images = product_images[:_MAX_SUBJECT_REFS]
 
-    # ── Primary: Imagen 3 with SUBJECT reference ──────────────────────────────
-    # SUBJECT reference tells Imagen 3 to treat the image as a product reference
-    # and recreate it faithfully in the generated scene — semantic understanding,
-    # not statistical CLIP matching.
-    if primary_img_bytes:
+    # ── Primary: Imagen 3 with ALL available SUBJECT references ───────────────
+    # Each product photo becomes a separate SUBJECT reference (unique reference_id).
+    # Multiple views help Imagen 3 understand depth, colour on different sides,
+    # and distinguishing details (e.g. a character face on the front vs plain back).
+    if ref_images:
         try:
-            def _gen_with_reference():
+            def _gen_with_references():
+                subject_refs = [
+                    genai_types.ReferenceImage(
+                        reference_id=idx + 1,                          # 1-indexed, must be unique
+                        reference_image=genai_types.Image(image_bytes=img_bytes),
+                        config=genai_types.ReferenceImageConfig(
+                            reference_type="SUBJECT",
+                            subject_image_config=genai_types.SubjectImageConfig(
+                                subject_type="PRODUCT"
+                            ),
+                        ),
+                    )
+                    for idx, (img_bytes, _mime) in enumerate(ref_images)
+                ]
+
                 response = client.models.generate_images(
                     model="imagen-3.0-generate-002",
                     prompt=prompt,
                     config=genai_types.GenerateImagesConfig(
                         number_of_images=1,
                         aspect_ratio=aspect_ratio,
-                        reference_images=[
-                            genai_types.ReferenceImage(
-                                reference_id=1,
-                                reference_image=genai_types.Image(
-                                    image_bytes=primary_img_bytes
-                                ),
-                                config=genai_types.ReferenceImageConfig(
-                                    reference_type="SUBJECT",
-                                    subject_image_config=genai_types.SubjectImageConfig(
-                                        subject_type="PRODUCT"
-                                    ),
-                                ),
-                            )
-                        ],
+                        reference_images=subject_refs,
                     ),
                 )
                 generated = response.generated_images
                 if not generated:
-                    raise RuntimeError("Imagen 3 returned no images (SUBJECT reference)")
+                    raise RuntimeError("Imagen 3 returned no images (SUBJECT references)")
                 img_bytes = generated[0].image.image_bytes
                 if not img_bytes:
-                    raise RuntimeError("Imagen 3 image has no bytes (SUBJECT reference)")
+                    raise RuntimeError("Imagen 3 image has no bytes (SUBJECT references)")
                 return img_bytes
 
-            img_bytes = await loop.run_in_executor(None, _gen_with_reference)
-            logger.info(f"[Imagen3] ✅ First frame with SUBJECT reference: {len(img_bytes):,} bytes")
+            img_bytes = await loop.run_in_executor(None, _gen_with_references)
+            logger.info(
+                f"[Imagen3] ✅ First frame with {len(ref_images)} SUBJECT reference(s): "
+                f"{len(img_bytes):,} bytes"
+            )
             return await _upload_image_to_fal(img_bytes)
 
         except Exception as ref_err:
             logger.warning(
-                f"[Imagen3] ⚠️ SUBJECT reference failed — falling back to text-only. "
-                f"Reason: {ref_err}"
+                f"[Imagen3] ⚠️ SUBJECT reference ({len(ref_images)} image(s)) failed "
+                f"— falling back to text-only. Reason: {ref_err}"
             )
 
     # ── Fallback: Imagen 3 text-only ──────────────────────────────────────────
