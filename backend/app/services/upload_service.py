@@ -109,7 +109,7 @@ async def probe_video_duration(file_bytes: bytes, ext: str) -> Optional[float]:
             fh.write(file_bytes)
 
         # Run ffprobe in executor (blocking operation)
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _probe():
             probe = ffmpeg.probe(tmp_path)

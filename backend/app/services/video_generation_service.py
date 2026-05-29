@@ -316,11 +316,15 @@ async def generate_first_frame_with_imagen(
     cannot replicate at any scale.
 
     Pipeline:
-        Primary:  Imagen 3 generate_images() with ALL product photos as SUBJECT references
-                  (capped at 4 to stay within API limits — multiple angles give Imagen 3
-                  a richer 3-D understanding of the product's shape and details)
-        Fallback: Imagen 3 text-only (reference call failed) — Gemini prompt still describes
-                  the product accurately via generate_first_frame_prompt()
+        Primary:  edit_image() with SubjectReferenceImage — each product photo becomes a
+                  separate SUBJECT reference (up to 4) so Imagen 3 sees multiple angles
+                  and understands the product's shape, colours, and distinguishing details.
+                  Uses EDIT_MODE_PRODUCT_IMAGE which is optimised for product lifestyle shots.
+                  Model: imagen-3.0-capability-001 (the capability/editing model)
+        Fallback: generate_images() text-only — if the reference call fails, the
+                  Gemini-crafted prompt still describes the product accurately via
+                  generate_first_frame_prompt() so text-only still produces a product-aware frame.
+                  Model: imagen-3.0-generate-002 (the standard generation model)
         Then:     Upload PNG bytes to fal.ai storage → return public CDN URL for LTX
 
     Args:
@@ -337,11 +341,10 @@ async def generate_first_frame_with_imagen(
     Raises:
         RuntimeError: If GOOGLE_AI_API_KEY is missing or all generation attempts fail
     """
-    import os as _os
     from google import genai
     from google.genai import types as genai_types
 
-    google_ai_key = _os.getenv("GOOGLE_AI_API_KEY")
+    google_ai_key = os.getenv("GOOGLE_AI_API_KEY")
     if not google_ai_key:
         raise RuntimeError("GOOGLE_AI_API_KEY not configured — Imagen 3 unavailable")
 
@@ -353,50 +356,55 @@ async def generate_first_frame_with_imagen(
     _MAX_SUBJECT_REFS = 4
     ref_images = product_images[:_MAX_SUBJECT_REFS]
 
-    # ── Primary: Imagen 3 with ALL available SUBJECT references ───────────────
-    # Each product photo becomes a separate SUBJECT reference (unique reference_id).
+    # ── Primary: Imagen 3 edit_image() with SUBJECT references ───────────────
+    # Uses client.models.edit_image() (not generate_images) because only the
+    # capability model supports reference images — generate_images() is text-only.
+    #
+    # Each product photo becomes a SubjectReferenceImage with SUBJECT_TYPE_PRODUCT.
     # Multiple views help Imagen 3 understand depth, colour on different sides,
     # and distinguishing details (e.g. a character face on the front vs plain back).
     if ref_images:
         try:
             def _gen_with_references():
                 subject_refs = [
-                    genai_types.ReferenceImage(
-                        reference_id=idx + 1,                          # 1-indexed, must be unique
+                    genai_types.SubjectReferenceImage(
+                        reference_id=idx + 1,  # 1-indexed, must be unique per reference
                         reference_image=genai_types.Image(image_bytes=img_bytes),
-                        config=genai_types.ReferenceImageConfig(
-                            reference_type="SUBJECT",
-                            subject_image_config=genai_types.SubjectImageConfig(
-                                subject_type="PRODUCT"
-                            ),
+                        config=genai_types.SubjectReferenceConfig(
+                            # SUBJECT_TYPE_PRODUCT tells Imagen 3 to recognise and
+                            # faithfully reproduce the product's specific visual identity
+                            subject_type=genai_types.SubjectReferenceType.SUBJECT_TYPE_PRODUCT,
                         ),
                     )
                     for idx, (img_bytes, _mime) in enumerate(ref_images)
                 ]
 
-                response = client.models.generate_images(
-                    model="imagen-3.0-generate-002",
+                # EDIT_MODE_PRODUCT_IMAGE: generate a lifestyle/scene image of the product
+                # using the subject references — no base image required for this mode.
+                response = client.models.edit_image(
+                    model="imagen-3.0-capability-001",  # capability model supports references
                     prompt=prompt,
-                    config=genai_types.GenerateImagesConfig(
+                    reference_images=subject_refs,
+                    config=genai_types.EditImageConfig(
+                        edit_mode=genai_types.EditMode.EDIT_MODE_PRODUCT_IMAGE,
                         number_of_images=1,
                         aspect_ratio=aspect_ratio,
-                        reference_images=subject_refs,
                     ),
                 )
                 generated = response.generated_images
                 if not generated:
                     raise RuntimeError("Imagen 3 returned no images (SUBJECT references)")
-                img_bytes = generated[0].image.image_bytes
-                if not img_bytes:
+                result_bytes = generated[0].image.image_bytes
+                if not result_bytes:
                     raise RuntimeError("Imagen 3 image has no bytes (SUBJECT references)")
-                return img_bytes
+                return result_bytes
 
-            img_bytes = await loop.run_in_executor(None, _gen_with_references)
+            result_bytes = await loop.run_in_executor(None, _gen_with_references)
             logger.info(
                 f"[Imagen3] ✅ First frame with {len(ref_images)} SUBJECT reference(s): "
-                f"{len(img_bytes):,} bytes"
+                f"{len(result_bytes):,} bytes"
             )
-            return await _upload_image_to_fal(img_bytes)
+            return await _upload_image_to_fal(result_bytes)
 
         except Exception as ref_err:
             logger.warning(
@@ -421,15 +429,15 @@ async def generate_first_frame_with_imagen(
         generated = response.generated_images
         if not generated:
             raise RuntimeError("Imagen 3 returned no images (text-only)")
-        img_bytes = generated[0].image.image_bytes
-        if not img_bytes:
+        result_bytes = generated[0].image.image_bytes
+        if not result_bytes:
             raise RuntimeError("Imagen 3 image has no bytes (text-only)")
-        return img_bytes
+        return result_bytes
 
     try:
-        img_bytes = await loop.run_in_executor(None, _gen_text_only)
-        logger.warning(f"[Imagen3] ⚠️ Text-only first frame: {len(img_bytes):,} bytes")
-        return await _upload_image_to_fal(img_bytes)
+        result_bytes = await loop.run_in_executor(None, _gen_text_only)
+        logger.warning(f"[Imagen3] ⚠️ Text-only first frame: {len(result_bytes):,} bytes")
+        return await _upload_image_to_fal(result_bytes)
     except Exception as e:
         logger.error(f"[Imagen3] Both generation attempts failed: {e}")
         raise RuntimeError(f"Imagen 3 first frame generation failed: {e}") from e

@@ -509,7 +509,7 @@ async def _upload_cdn_video_to_r2(cdn_url: str, reel_id: str) -> str:
     logger.info(f"[Worker] Downloaded {len(video_bytes):,} bytes — uploading to R2")
 
     # upload_raw_bytes_to_r2 is sync (boto3) — run in thread executor
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     key = await loop.run_in_executor(
         None,
         lambda: upload_raw_bytes_to_r2(
