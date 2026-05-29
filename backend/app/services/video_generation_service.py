@@ -343,13 +343,47 @@ async def generate_first_frame_with_imagen(
     """
     from google import genai
     from google.genai import types as genai_types
+    from google.oauth2 import service_account as _sa
 
-    google_ai_key = os.getenv("GOOGLE_AI_API_KEY")
-    if not google_ai_key:
-        raise RuntimeError("GOOGLE_AI_API_KEY not configured — Imagen 3 unavailable")
+    # ── Vertex AI client — required for Imagen 3 (edit_image + generate_images) ──
+    # AI Studio API key does NOT support Imagen 3 models.
+    # We use a service account JSON (GOOGLE_APPLICATION_CREDENTIALS) to authenticate
+    # with Vertex AI while keeping Gemini on AI Studio (hybrid setup).
+    google_cloud_project  = os.getenv("GOOGLE_CLOUD_PROJECT")
+    google_cloud_location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+    cred_env              = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+
+    if not google_cloud_project or not cred_env:
+        raise RuntimeError(
+            "GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS not configured "
+            "— Vertex AI (Imagen 3) unavailable"
+        )
+
+    # Resolve credentials path relative to backend/ directory if not absolute.
+    # video_generation_service.py lives at backend/app/services/ — go up 3 levels.
+    _backend_dir = os.path.normpath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+    )
+    cred_path = cred_env if os.path.isabs(cred_env) else os.path.join(_backend_dir, cred_env)
+    if not os.path.exists(cred_path):
+        raise RuntimeError(f"Service account JSON not found: {cred_path}")
+
+    _creds = _sa.Credentials.from_service_account_file(
+        cred_path,
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
 
     loop = asyncio.get_running_loop()
-    client = genai.Client(api_key=google_ai_key)
+    client = genai.Client(
+        vertexai=True,
+        project=google_cloud_project,
+        location=google_cloud_location,
+        credentials=_creds,
+    )
+    logger.info(
+        f"[Imagen3] Vertex AI client ready "
+        f"(project={google_cloud_project}, location={google_cloud_location})"
+    )
 
     # Cap at 4 images — more angles give Imagen 3 a richer understanding of the
     # product's shape and character details, but the API has practical reference limits.
