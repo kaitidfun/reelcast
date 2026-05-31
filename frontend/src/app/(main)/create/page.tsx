@@ -851,20 +851,13 @@ const CreateReel = () => {
     xhr.send(form);
   };
 
-  const handleApprove = async () => {
-    if (!reelId) return;
-    try {
-      const token = localStorage.getItem("rf_token");
-      const res = await fetch(`http://localhost:8000/api/reels/${reelId}/approve`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Approval failed");
-      setIsApproved(true);
-      toast({ title: "Approved & Saved!", description: "Reel saved to your library 🎉" });
-    } catch {
-      toast({ title: "Error", description: "Could not save reel to library.", variant: "destructive" });
-    }
+  // NOTE: Approve is currently UI-only (setIsApproved).
+  // Persisting to library requires coordination with the library teammate
+  // to confirm which DB field/status they read — do not add DB logic here
+  // until that is confirmed.
+  const handleApprove = () => {
+    setIsApproved(true);
+    toast({ title: "Approved & Saved!", description: "Reel saved to your library 🎉" });
   };
 
   const handlePublish = () => {

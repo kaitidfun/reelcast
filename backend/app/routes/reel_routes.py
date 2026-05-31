@@ -456,29 +456,6 @@ async def generate_guided_prompt_endpoint(
     return {"prompt": prompt}
 
 
-@router.post("/{reel_id}/approve", status_code=200)
-def approve_reel(
-    reel_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    F2-URS06: Approve a completed reel and save it to the user's library.
-
-    Sets reel status to "Approved" so the library feature can query approved reels
-    per product. Does not modify video/caption content — approval is status-only.
-    The library teammate reads reels with status="Approved" to populate the library view.
-    """
-    reel = get_reel(db=db, reel_id=reel_id, user_id=current_user.user_id)
-    if not reel:
-        raise HTTPException(status_code=404, detail="Reel not found")
-    if not reel.final_commercial_video_url:
-        raise HTTPException(status_code=400, detail="Reel has no video yet — cannot approve")
-    update_reel(db, reel=reel, status="Approved")
-    logger.info(f"Reel {reel_id} approved by user {current_user.user_id}")
-    return {"message": "Reel approved and saved to library"}
-
-
 @router.get("/{reel_id}/download")
 async def download_reel_video(
     reel_id: UUID,

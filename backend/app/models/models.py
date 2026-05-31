@@ -230,7 +230,7 @@ class Reel(Base):
     final_commercial_video_url = Column(String, nullable=True)
     status = Column(
         Enum(
-            "Pending", "Generating", "Completed", "Failed", "Approved",
+            "Pending", "Generating", "Completed", "Failed",
             name="reel_status_enum",
             create_constraint=True,
         ),
