@@ -182,12 +182,14 @@ async def overlay_watermark(
                     strict='experimental',
                 )
             else:
-                # No audio stream present (static image, audio-less clip, or probe failed).
-                # Output is video-only — no -an needed since we never mapped audio.
+                # No audio: static image input, audio-less clip, or with_audio=False.
+                # Explicit -an prevents FFmpeg from auto-including audio from input 0
+                # when running with a complex filtergraph (behaviour varies by version).
                 out = ffmpeg.output(
                     overlaid,
                     output_path,
                     vcodec='libx264',
+                    an=None,  # -an: hard-strip any audio passthrough
                 )
 
             ffmpeg.run(out, overwrite_output=True, quiet=True, cmd=_FFMPEG_EXE)

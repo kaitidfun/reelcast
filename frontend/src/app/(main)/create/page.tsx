@@ -274,6 +274,8 @@ const CreateReel = () => {
   // null = no result yet; "generate" / "upload" = what created the current video.
   const [completedMode, setCompletedMode] = useState<"generate" | "upload" | null>(null);
   const completedModeRef = useRef<"generate" | "upload">("generate");
+  /** True while a caption-only regen is in flight — prevents polling from clearing videoUrl */
+  const captionOnlyRegenRef = useRef(false);
   const [caption, setCaption] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
   // Overlay preview toggles — UI-only, does not affect the baked video from backend
@@ -361,33 +363,41 @@ const CreateReel = () => {
             const data = await res.json();
             if (data.status === "Completed") {
               setGenerationStatus("done");
-              setCompletedMode(completedModeRef.current);  // lock UI controls to the mode that produced this result
-              // Calculate final elapsed from start time directly — avoids stale closure on elapsedSeconds
+              setCompletedMode(completedModeRef.current);
               setGenerationTime(generationStartTime ? Math.floor((Date.now() - generationStartTime) / 1000) : 0);
-              if (data.final_commercial_video_url) {
-                const rawUrl: string = data.final_commercial_video_url;
-                // fal.ai / Veo return full CDN URLs; R2 uploads return object keys.
-                // Proxy R2 keys through the backend video endpoint for reliable playback.
-                const resolvedUrl = rawUrl.startsWith("http")
-                  ? rawUrl
-                  : `http://localhost:8000/api/upload/videos/${rawUrl}`;
-                setVideoUrl(resolvedUrl);
-                setIsPlaying(true);   // Auto-play as soon as the generated video is ready
+
+              const isCaptionRegen = captionOnlyRegenRef.current;
+              captionOnlyRegenRef.current = false;
+
+              if (!isCaptionRegen) {
+                // Full video regen or first generation — update video player
+                if (data.final_commercial_video_url) {
+                  const rawUrl: string = data.final_commercial_video_url;
+                  // fal.ai / Veo return full CDN URLs; R2 uploads return object keys.
+                  // Proxy R2 keys through the backend video endpoint for reliable playback.
+                  const resolvedUrl = rawUrl.startsWith("http")
+                    ? rawUrl
+                    : `http://localhost:8000/api/upload/videos/${rawUrl}`;
+                  setVideoUrl(resolvedUrl);
+                  setIsPlaying(true);
+                }
+                if (data.raw_video_url) {
+                  const resolvedRaw: string = data.raw_video_url.startsWith("http")
+                    ? data.raw_video_url
+                    : `http://localhost:8000/api/upload/videos/${data.raw_video_url}`;
+                  setRawVideoUrl(resolvedRaw);
+                }
+                // Sync completion to global context (stops background polling, enables status bar)
+                markDone(data.final_commercial_video_url ?? undefined);
+                toast({ title: "Reel created!", description: "Ready to preview and approve" });
+              } else {
+                // Caption-only regen — video stays unchanged, only caption updates
+                toast({ title: "Caption updated!", description: "New caption is ready." });
               }
-              // Store raw (pre-overlay) video URL for Option B logo toggle.
-              // When showLogo=false at download time, this URL is used instead.
-              if (data.raw_video_url) {
-                const resolvedRaw: string = data.raw_video_url.startsWith("http")
-                  ? data.raw_video_url
-                  : `http://localhost:8000/api/upload/videos/${data.raw_video_url}`;
-                setRawVideoUrl(resolvedRaw);
-              }
+
               if (data.caption_and_hashtags) {
                 setCaption(data.caption_and_hashtags.caption + "\n\n" + (data.caption_and_hashtags.hashtags?.join(" ") || ""));
               }
-              // Sync completion to global context (stops background polling, enables status bar)
-              markDone(data.final_commercial_video_url ?? undefined);
-              toast({ title: "Reel created!", description: "Ready to preview and approve" });
               clearInterval(interval);
             } else if (data.status === "Failed") {
               setGenerationStatus("idle");
@@ -702,18 +712,21 @@ const CreateReel = () => {
 
   const handleRegenerate = async (target: "video" | "caption" | "all") => {
     if (!reelId) return;
-    // Keep completedMode of the current result — regen preserves the same mode
     completedModeRef.current = completedMode ?? "generate";
-    setCompletedMode(null);
-    setGenerationStatus("generating");
+    captionOnlyRegenRef.current = (target === "caption");
     setIsApproved(false);
-    // Reset timer for the new generation run (fixes timer counting from old value)
     setGenerationStartTime(Date.now());
     setElapsedSeconds(0);
     setGenerationTime(null);
-    setVideoUrl(null);       // Clear stale video during regeneration
-    setRawVideoUrl(null);
-    setIsPlaying(false);
+    if (target !== "caption") {
+      // Video/all regen — clear stale player so user sees generating state
+      setCompletedMode(null);
+      setVideoUrl(null);
+      setRawVideoUrl(null);
+      setIsPlaying(false);
+    }
+    // Start polling in all cases (caption regen also polls until worker done)
+    setGenerationStatus("generating");
     try {
       const token = localStorage.getItem("rf_token");
       const res = await fetch(`http://localhost:8000/api/reels/${reelId}/regenerate`, {
@@ -835,9 +848,20 @@ const CreateReel = () => {
     xhr.send(form);
   };
 
-  const handleApprove = () => {
-    setIsApproved(true);
-    toast({ title: "Approved & Saved!", description: "Reel saved to your library 🎉" });
+  const handleApprove = async () => {
+    if (!reelId) return;
+    try {
+      const token = localStorage.getItem("rf_token");
+      const res = await fetch(`http://localhost:8000/api/reels/${reelId}/approve`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Approval failed");
+      setIsApproved(true);
+      toast({ title: "Approved & Saved!", description: "Reel saved to your library 🎉" });
+    } catch {
+      toast({ title: "Error", description: "Could not save reel to library.", variant: "destructive" });
+    }
   };
 
   const handlePublish = () => {
@@ -1101,20 +1125,31 @@ const CreateReel = () => {
                 )}
               </div>
               <div className="border-t border-border bg-background/40 px-3 py-2.5 space-y-2">
-                {/* Audio toggle for uploaded videos — default: keep original audio */}
-                <button
-                  type="button"
-                  onClick={() => setWithAudio((v) => !v)}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors ${
-                    withAudio
-                      ? "border-primary/40 bg-primary/10 text-primary"
-                      : "border-border bg-muted/40 text-muted-foreground hover:text-foreground hover:border-primary/30"
-                  }`}
-                  title={withAudio ? "Original audio will be preserved" : "Audio will be stripped from video"}
-                >
-                  {withAudio ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-                  {withAudio ? "Keep Audio" : "Strip Audio"}
-                </button>
+                {/* Audio dropdown for uploaded videos — default: keep original audio */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors">
+                      {withAudio ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+                      {withAudio ? "Keep Audio" : "Strip Audio"}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48 p-2">
+                    <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Audio</p>
+                    {([
+                      { value: true,  label: "Keep Audio",  Icon: Volume2 },
+                      { value: false, label: "Strip Audio", Icon: VolumeX },
+                    ] as const).map(({ value, label, Icon }) => (
+                      <button
+                        key={String(value)}
+                        onClick={() => setWithAudio(value)}
+                        className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs hover:bg-accent ${withAudio === value ? "text-primary" : "text-foreground"}`}
+                      >
+                        <span className="flex items-center gap-1.5"><Icon className="h-3.5 w-3.5" />{label}</span>
+                        {withAudio === value && <Check className="h-3.5 w-3.5" />}
+                      </button>
+                    ))}
+                  </PopoverContent>
+                </Popover>
                 <Button
                   onClick={handleUpload}
                   disabled={
@@ -1379,20 +1414,31 @@ const CreateReel = () => {
                 </PopoverContent>
               </Popover>
 
-              {/* Audio toggle — LTX 2.3 native audio generation (generate_audio param) */}
-              <button
-                type="button"
-                onClick={() => setWithAudio((v) => !v)}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors ${
-                  withAudio
-                    ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-border bg-muted/40 text-muted-foreground hover:text-foreground hover:border-primary/30"
-                }`}
-                title={withAudio ? "LTX 2.3 will generate native ambient audio" : "Video will be silent (no audio generated)"}
-              >
-                {withAudio ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-                {withAudio ? "With Audio" : "No Audio"}
-              </button>
+              {/* Audio dropdown — LTX 2.3 native audio generation (generate_audio param) */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors">
+                    {withAudio ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+                    {withAudio ? "With Audio" : "No Audio"}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-44 p-2">
+                  <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Audio</p>
+                  {([
+                    { value: true,  label: "With Audio", Icon: Volume2 },
+                    { value: false, label: "No Audio",   Icon: VolumeX },
+                  ] as const).map(({ value, label, Icon }) => (
+                    <button
+                      key={String(value)}
+                      onClick={() => setWithAudio(value)}
+                      className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs hover:bg-accent ${withAudio === value ? "text-primary" : "text-foreground"}`}
+                    >
+                      <span className="flex items-center gap-1.5"><Icon className="h-3.5 w-3.5" />{label}</span>
+                      {withAudio === value && <Check className="h-3.5 w-3.5" />}
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
 
             </div>
 
