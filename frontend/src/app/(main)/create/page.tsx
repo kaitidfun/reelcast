@@ -1529,26 +1529,21 @@ const CreateReel = () => {
               <div className="flex items-center gap-1.5">
                 <Brain className="h-3 w-3 text-primary" />
                 <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Caption · Gemini</label>
+                {/* Small spinner next to header — video box stays READY during caption regen */}
+                {isRegeneratingCaption && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
               </div>
-              {isRegeneratingCaption ? (
-                /* Caption-only regen in progress — show spinner, keep video box unchanged */
-                <div className="flex flex-col items-center justify-center gap-2 py-6 rounded-lg bg-muted/40 border border-border">
-                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                  <span className="text-[11px] text-muted-foreground">Generating new caption…</span>
-                </div>
-              ) : (
-                <Textarea
-                  ref={captionTextareaRef}
-                  value={caption}
-                  onChange={(e) => {
-                    setCaption(e.target.value);
-                    e.target.style.height = "auto";
-                    e.target.style.height = `${e.target.scrollHeight}px`;
-                  }}
-                  rows={5}
-                  className="bg-muted/40 border-border resize-none text-[11px] leading-relaxed overflow-hidden"
-                />
-              )}
+              <Textarea
+                ref={captionTextareaRef}
+                value={caption}
+                onChange={(e) => {
+                  setCaption(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = `${e.target.scrollHeight}px`;
+                }}
+                rows={4}
+                disabled={isRegeneratingCaption}
+                className={`bg-muted/40 border-border resize-none text-[11px] leading-relaxed overflow-hidden transition-opacity ${isRegeneratingCaption ? "opacity-40" : ""}`}
+              />
               {/* Target Platforms — slides in between textarea and action buttons after Approve */}
               {isApproved && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-2 overflow-hidden">
