@@ -273,6 +273,13 @@ async def _async_process_reel_generation(
                 except Exception as e:
                     logger.warning(f"[Worker] Raw R2 upload failed, keeping CDN URL: {e}")
             update_reel(db, reel=reel, raw_video_url=raw_ref)
+            # Switch final_video_url to the R2 key so if overlay fails later,
+            # final_commercial_video_url falls back to the permanent R2 copy
+            # rather than an expiring CDN URL (~24h TTL on fal.ai).
+            # This ensures download-with-logo always resolves even when FFmpeg
+            # overlay fails for any reason (e.g. static image input, codec error).
+            if raw_ref and not raw_ref.startswith("http"):
+                final_video_url = raw_ref
         elif target == "upload" and reel.uploaded_video_url:
             update_reel(db, reel=reel, raw_video_url=reel.uploaded_video_url)
 
