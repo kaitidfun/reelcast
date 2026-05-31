@@ -472,8 +472,8 @@ def approve_reel(
     reel = get_reel(db=db, reel_id=reel_id, user_id=current_user.user_id)
     if not reel:
         raise HTTPException(status_code=404, detail="Reel not found")
-    if reel.status != "Completed":
-        raise HTTPException(status_code=400, detail="Only completed reels can be approved")
+    if not reel.final_commercial_video_url:
+        raise HTTPException(status_code=400, detail="Reel has no video yet — cannot approve")
     update_reel(db, reel=reel, status="Approved")
     logger.info(f"Reel {reel_id} approved by user {current_user.user_id}")
     return {"message": "Reel approved and saved to library"}

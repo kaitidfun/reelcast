@@ -276,6 +276,8 @@ const CreateReel = () => {
   const completedModeRef = useRef<"generate" | "upload">("generate");
   /** True while a caption-only regen is in flight — prevents polling from clearing videoUrl */
   const captionOnlyRegenRef = useRef(false);
+  /** Separate loading state for caption-only regen — does NOT affect the video box */
+  const [isRegeneratingCaption, setIsRegeneratingCaption] = useState(false);
   const [caption, setCaption] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
   // Overlay preview toggles — UI-only, does not affect the baked video from backend
@@ -345,7 +347,7 @@ const CreateReel = () => {
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (generationStatus === "generating" && reelId) {
+    if ((generationStatus === "generating" || isRegeneratingCaption) && reelId) {
       interval = setInterval(async () => {
         try {
           const token = localStorage.getItem("rf_token");
@@ -362,15 +364,14 @@ const CreateReel = () => {
           if (res.ok) {
             const data = await res.json();
             if (data.status === "Completed") {
-              setGenerationStatus("done");
-              setCompletedMode(completedModeRef.current);
-              setGenerationTime(generationStartTime ? Math.floor((Date.now() - generationStartTime) / 1000) : 0);
-
               const isCaptionRegen = captionOnlyRegenRef.current;
               captionOnlyRegenRef.current = false;
 
               if (!isCaptionRegen) {
-                // Full video regen or first generation — update video player
+                // Full video regen or first generation — update video player and status
+                setGenerationStatus("done");
+                setCompletedMode(completedModeRef.current);
+                setGenerationTime(generationStartTime ? Math.floor((Date.now() - generationStartTime) / 1000) : 0);
                 if (data.final_commercial_video_url) {
                   const rawUrl: string = data.final_commercial_video_url;
                   // fal.ai / Veo return full CDN URLs; R2 uploads return object keys.
@@ -387,11 +388,11 @@ const CreateReel = () => {
                     : `http://localhost:8000/api/upload/videos/${data.raw_video_url}`;
                   setRawVideoUrl(resolvedRaw);
                 }
-                // Sync completion to global context (stops background polling, enables status bar)
                 markDone(data.final_commercial_video_url ?? undefined);
                 toast({ title: "Reel created!", description: "Ready to preview and approve" });
               } else {
-                // Caption-only regen — video stays unchanged, only caption updates
+                // Caption-only regen — video box stays READY, only caption updates
+                setIsRegeneratingCaption(false);
                 toast({ title: "Caption updated!", description: "New caption is ready." });
               }
 
@@ -414,7 +415,7 @@ const CreateReel = () => {
       }, 3000);
     }
     return () => clearInterval(interval);
-  }, [generationStatus, reelId, toast, generationStartTime]);
+  }, [generationStatus, isRegeneratingCaption, reelId, toast, generationStartTime]);
 
   // Control video playback — only ONE video plays at a time.
   // When fullscreen is open, only videoRefFullscreen plays; main panel is paused.
@@ -718,15 +719,17 @@ const CreateReel = () => {
     setGenerationStartTime(Date.now());
     setElapsedSeconds(0);
     setGenerationTime(null);
-    if (target !== "caption") {
+    if (target === "caption") {
+      // Caption-only regen: keep video box as-is (READY), just spin the caption area
+      setIsRegeneratingCaption(true);
+    } else {
       // Video/all regen — clear stale player so user sees generating state
       setCompletedMode(null);
       setVideoUrl(null);
       setRawVideoUrl(null);
       setIsPlaying(false);
+      setGenerationStatus("generating");
     }
-    // Start polling in all cases (caption regen also polls until worker done)
-    setGenerationStatus("generating");
     try {
       const token = localStorage.getItem("rf_token");
       const res = await fetch(`http://localhost:8000/api/reels/${reelId}/regenerate`, {
@@ -1527,17 +1530,25 @@ const CreateReel = () => {
                 <Brain className="h-3 w-3 text-primary" />
                 <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Caption · Gemini</label>
               </div>
-              <Textarea
-                ref={captionTextareaRef}
-                value={caption}
-                onChange={(e) => {
-                  setCaption(e.target.value);
-                  e.target.style.height = "auto";
-                  e.target.style.height = `${e.target.scrollHeight}px`;
-                }}
-                rows={5}
-                className="bg-muted/40 border-border resize-none text-[11px] leading-relaxed overflow-hidden"
-              />
+              {isRegeneratingCaption ? (
+                /* Caption-only regen in progress — show spinner, keep video box unchanged */
+                <div className="flex flex-col items-center justify-center gap-2 py-6 rounded-lg bg-muted/40 border border-border">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  <span className="text-[11px] text-muted-foreground">Generating new caption…</span>
+                </div>
+              ) : (
+                <Textarea
+                  ref={captionTextareaRef}
+                  value={caption}
+                  onChange={(e) => {
+                    setCaption(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height = `${e.target.scrollHeight}px`;
+                  }}
+                  rows={5}
+                  className="bg-muted/40 border-border resize-none text-[11px] leading-relaxed overflow-hidden"
+                />
+              )}
               {/* Target Platforms — slides in between textarea and action buttons after Approve */}
               {isApproved && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-2 overflow-hidden">
