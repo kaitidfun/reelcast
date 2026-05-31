@@ -372,7 +372,7 @@ async def _run_ltx_generation(
 
     Imagen 3 skipped when:
         - No product images available      → LTX text-to-video directly
-        - GOOGLE_AI_API_KEY not set        → LTX uses raw product image URL
+        - Vertex AI credentials missing    → LTX uses raw product image URL
         - Imagen 3 API fails               → graceful degradation to raw product image
         - FAL_KEY not set                  → generate_video() facade (Veo / sample)
 

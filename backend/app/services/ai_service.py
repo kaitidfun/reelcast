@@ -14,17 +14,18 @@ import os
 import asyncio
 import json
 import logging
+from functools import lru_cache
 from typing import Dict, Any, Optional
 from google import genai
 from google.genai import types
+from google.oauth2 import service_account
 
 # For backward compatibility, re-export video generation from new service
 from app.services.video_generation_service import generate_video  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
-# Configure Gemini with AI Studio Key — reads GOOGLE_AI_API_KEY from .env
-GOOGLE_AI_API_KEY = os.getenv("GOOGLE_AI_API_KEY")
+_GEMINI_MODEL = "gemini-2.5-flash"  # Vertex AI model name (verified working)
 
 # Template descriptions sent to Gemini to frame the generation goal
 # Each maps to the matching quick-prompt chip label in the frontend
@@ -37,10 +38,26 @@ _TEMPLATE_DESCRIPTIONS = {
     "tutorial":         "a quick tutorial showing 2–3 practical ways to use or style the product in real-life scenarios",
 }
 
-def _get_client() -> genai.Client:
-    if not GOOGLE_AI_API_KEY:
-        raise ValueError("GOOGLE_AI_API_KEY is not set in environment variables.")
-    return genai.Client(api_key=GOOGLE_AI_API_KEY)
+@lru_cache(maxsize=1)
+def _get_vertex_client() -> genai.Client:
+    """Return a cached Vertex AI genai.Client using service account credentials."""
+    project  = os.getenv("GOOGLE_CLOUD_PROJECT")
+    location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+    cred_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+
+    if not project or not cred_env:
+        raise RuntimeError("GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS not configured")
+
+    _backend_dir = os.path.normpath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+    )
+    cred_path = cred_env if os.path.isabs(cred_env) else os.path.join(_backend_dir, cred_env)
+
+    creds = service_account.Credentials.from_service_account_file(
+        cred_path,
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
+    return genai.Client(vertexai=True, project=project, location=location, credentials=creds)
 
 
 async def generate_captions(prompt: str, product_info: str, platform: str) -> Dict[str, Any]:
@@ -64,17 +81,8 @@ async def generate_captions(prompt: str, product_info: str, platform: str) -> Di
             - hashtags: List of exactly 4 relevant hashtags (with # prefix)
 
     Raises:
-        Returns fallback mock response if GOOGLE_AI_API_KEY not configured
+        Returns fallback mock response if Vertex AI is not configured
     """
-    if not GOOGLE_AI_API_KEY:
-        # Fallback mock response if no key is configured
-        logger.warning("GOOGLE_AI_API_KEY not set, using mock caption response")
-        await asyncio.sleep(1)
-        return {
-            "caption": f"Check out this amazing product! {prompt[:50]}...",
-            "hashtags": ["#trending", "#musthave", "#reelcast", "#shopnow"]
-        }
-
     system_prompt = f"""You are an expert social media marketer. Generate a caption and hashtags based on the user's prompt and product details.
 Target Platform: {platform}
 
@@ -92,11 +100,11 @@ Rules:
 
     try:
         logger.info(f"Generating captions for platform: {platform}")
-        client = _get_client()
+        client = _get_vertex_client()
 
         def _generate():
             response = client.models.generate_content(
-                model="gemini-3.5-flash",
+                model=_GEMINI_MODEL,
                 contents=full_prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
@@ -152,9 +160,7 @@ async def generate_prompt_from_template(
         f"{template_desc}. Use dynamic transitions, premium lighting, and a compelling call-to-action."
     )
 
-    if not GOOGLE_AI_API_KEY:
-        logger.warning("GOOGLE_AI_API_KEY not set — returning static fallback prompt")
-        return fallback
+    # Vertex AI is the only backend — no early return needed
 
     # Generate a SCENE + MOTION DESCRIPTION optimised for LTX Video 2.3.
     #
@@ -204,13 +210,11 @@ async def generate_prompt_from_template(
     )
 
     try:
-        client = _get_client()
+        client = _get_vertex_client()
 
         def _generate():
             imgs = product_images or []
             if imgs:
-                # Multimodal: all product images first, then the text prompt
-                # Gemini sees every angle/view of the product for richer visual prompts
                 contents = [
                     types.Part(
                         inline_data=types.Blob(data=img_bytes, mime_type=img_mime)
@@ -221,7 +225,7 @@ async def generate_prompt_from_template(
                 contents = system_prompt + "\n\n" + user_content
 
             return client.models.generate_content(
-                model="gemini-3.5-flash",
+                model=_GEMINI_MODEL,
                 contents=contents,
             ).text.strip()
 
@@ -267,13 +271,7 @@ async def enhance_prompt(
     Returns:
         Improved prompt string (≤ 500 chars). Returns original prompt on error.
     """
-    if not GOOGLE_AI_API_KEY:
-        logger.warning("GOOGLE_AI_API_KEY not set — returning locally enhanced prompt")
-        return (
-            f"Create a cinematic {duration}-second vertical Reel: {prompt_text.strip()}. "
-            "Use dynamic camera moves, premium lighting, hero product close-ups, "
-            "vibrant color grading, and a strong call-to-action."
-        )[:500]
+    # Vertex AI is the only backend — no early return needed
 
     # Enhance the user's prompt for the two-stage pipeline:
     # Imagen 3 (first frame) → LTX Video 2.3 (animation).
@@ -315,7 +313,7 @@ async def enhance_prompt(
     )
 
     try:
-        client = _get_client()
+        client = _get_vertex_client()
 
         def _generate():
             imgs = product_images or []
@@ -330,7 +328,7 @@ async def enhance_prompt(
                 contents = system_prompt + "\n\n" + user_content
 
             return client.models.generate_content(
-                model="gemini-3.5-flash",
+                model=_GEMINI_MODEL,
                 contents=contents,
             ).text.strip()
 
@@ -406,9 +404,7 @@ async def generate_guided_prompt(
 
     imgs = product_images or []
 
-    if not GOOGLE_AI_API_KEY:
-        logger.warning("GOOGLE_AI_API_KEY not set — returning locally-assembled guided prompt")
-        return _local_fallback()
+    # Vertex AI is the only backend — no early return needed
 
     # Generate a LTX Video 2.3 optimised scene + motion prompt from the creative chips.
     # LTX works best with short, motion-first prompts ending with a camera instruction.
@@ -455,12 +451,10 @@ async def generate_guided_prompt(
     user_content = system_prompt + "\n\n" + "\n".join(context_parts)
 
     try:
-        client = _get_client()
+        client = _get_vertex_client()
 
         def _generate():
             if imgs:
-                # Multimodal: all product images first, then the creative brief
-                # Gemini sees every angle/view for richer, more visually specific prompts
                 contents = [
                     types.Part(
                         inline_data=types.Blob(data=img_bytes, mime_type=img_mime)
@@ -471,7 +465,7 @@ async def generate_guided_prompt(
                 contents = user_content
 
             return client.models.generate_content(
-                model="gemini-3.5-flash",
+                model=_GEMINI_MODEL,
                 contents=contents,
             ).text.strip()
 
@@ -528,8 +522,7 @@ async def generate_first_frame_prompt(
         f"product in sharp focus, cinematic scene, 9:16 portrait"
     )[:220]
 
-    if not GOOGLE_AI_API_KEY:
-        return fallback
+    # Vertex AI is the only backend — fallback used only on exception
 
     # Send all product images so Gemini sees every angle/view of the product.
     # More images = more visual context = more accurate first-frame descriptions.
@@ -585,13 +578,10 @@ async def generate_first_frame_prompt(
     )
 
     try:
-        client = _get_client()
+        client = _get_vertex_client()
 
         def _generate():
             if imgs:
-                # Multimodal: send product photos first so Gemini sees exact product appearance,
-                # then the text prompt. This produces descriptions with specific visual details
-                # (exact colour, character face, texture) rather than generic descriptions.
                 contents = [
                     types.Part(
                         inline_data=types.Blob(data=img_bytes, mime_type=img_mime)
@@ -602,7 +592,7 @@ async def generate_first_frame_prompt(
                 contents = system_prompt + "\n\n" + user_content
 
             return client.models.generate_content(
-                model="gemini-3.5-flash",
+                model=_GEMINI_MODEL,
                 contents=contents,
             ).text.strip()
 

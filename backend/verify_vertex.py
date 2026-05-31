@@ -107,11 +107,42 @@ client = genai.Client(
 print("[OK] Client ready ->  vertexai=True, project=%s, location=%s" % (project, location))
 
 
-# ── [3] Imagen 3 generate_images (~$0.04) ────────────────────────────────────
-# Skip Gemini test (Generative AI models need separate enablement on Vertex AI).
-# Test Imagen 3 directly — this is what the pipeline actually uses.
+# ── [3] Gemini on Vertex AI (free / very cheap) ──────────────────────────────
+# Verify that the Gemini text model we use for captions + prompts works on Vertex AI
+# before migrating away from AI Studio. Tests the exact model name used in production.
 print()
-print("[3/3] Testing Imagen 3 generate_images (~$0.04)...")
+print("[3/5] Testing gemini-3.5-flash on Vertex AI (text generation)...")
+try:
+    gr = client.models.generate_content(
+        model="gemini-3.5-flash",
+        contents="Say hello in one word.",
+    )
+    reply = gr.text.strip() if gr.text else "(empty)"
+    print("[OK] gemini-3.5-flash: %r" % reply)
+    print()
+    print(">>> gemini-3.5-flash is available on Vertex AI! <<<")
+    _gemini_ok = True
+except Exception as e:
+    _gemini_ok = False
+    print("[FAIL] gemini-3.5-flash:", e)
+    print()
+    print("If 404: model name differs on Vertex AI - trying fallback names...")
+    for fallback in ("gemini-2.5-flash", "gemini-2.0-flash-001", "gemini-1.5-flash-002"):
+        try:
+            gr2 = client.models.generate_content(
+                model=fallback,
+                contents="Say hello in one word.",
+            )
+            reply2 = gr2.text.strip() if gr2.text else "(empty)"
+            print("[OK] %s: %r  <-- use this name in production" % (fallback, reply2))
+            break
+        except Exception as e2:
+            print("[FAIL] %s: %s" % (fallback, str(e2)[:80]))
+
+
+# ── [4] Imagen 3 generate_images (~$0.04) ────────────────────────────────────
+print()
+print("[4/5] Testing Imagen 3 generate_images (text-only, ~$0.04)...")
 from google.genai import types as t
 try:
     r = client.models.generate_images(
@@ -142,7 +173,7 @@ except Exception as e:
 # Tests the exact path the pipeline uses: SubjectReferenceImage + EDIT_MODE_DEFAULT
 # Uses the text-only result from step 3 as the reference image (a real product-like PNG).
 print()
-print("[4/4] Testing edit_image + SubjectReferenceImage + EDIT_MODE_DEFAULT (~$0.04)...")
+print("[5/5] Testing edit_image + SubjectReferenceImage + EDIT_MODE_DEFAULT (~$0.04)...")
 
 if not img_bytes_text_only:
     print("[SKIP] No reference image from step 3 - skipping")

@@ -339,7 +339,7 @@ async def generate_first_frame_with_imagen(
         fal.media CDN URL of the Imagen-generated first frame image
 
     Raises:
-        RuntimeError: If GOOGLE_AI_API_KEY is missing or all generation attempts fail
+        RuntimeError: If Vertex AI credentials are missing or all generation attempts fail
     """
     from google import genai
     from google.genai import types as genai_types
@@ -680,7 +680,7 @@ async def generate_video(
     """
     fal_key       = os.getenv("FAL_KEY", "")
     veo_enabled   = os.getenv("VEO_ENABLED", "false").lower() == "true"
-    google_ai_key = os.getenv("GOOGLE_AI_API_KEY", "")
+    gcp_project   = os.getenv("GOOGLE_CLOUD_PROJECT", "")
 
     # ── Option 1: LTX Video 2.3 via fal.ai (primary — fast, native audio)
     if fal_key:
@@ -690,7 +690,7 @@ async def generate_video(
             logger.warning(f"[LTX] Failed, trying Veo: {e}")
 
     # ── Option 2: Google Veo 2.0 (best quality, slow / expensive)
-    if veo_enabled and google_ai_key:
+    if veo_enabled and gcp_project:
         try:
             return await _generate_with_veo(prompt)
         except Exception as e:
@@ -730,20 +730,32 @@ async def _generate_with_veo(prompt: str) -> str:
     import requests
     import boto3
     from google import genai
+    from google.oauth2 import service_account as _veo_sa
 
-    google_ai_key = os.getenv("GOOGLE_AI_API_KEY")
-    r2_endpoint   = os.getenv("R2_ENDPOINT_URL")
-    r2_key_id     = os.getenv("R2_ACCESS_KEY_ID")
-    r2_secret     = os.getenv("R2_SECRET_ACCESS_KEY")
-    r2_bucket     = os.getenv("R2_BUCKET_NAME")
-    r2_public     = os.getenv("R2_PUBLIC_URL", "").rstrip("/")
+    r2_endpoint = os.getenv("R2_ENDPOINT_URL")
+    r2_key_id   = os.getenv("R2_ACCESS_KEY_ID")
+    r2_secret   = os.getenv("R2_SECRET_ACCESS_KEY")
+    r2_bucket   = os.getenv("R2_BUCKET_NAME")
+    r2_public   = os.getenv("R2_PUBLIC_URL", "").rstrip("/")
 
-    if not google_ai_key:
-        raise RuntimeError("GOOGLE_AI_API_KEY not configured")
+    gcp_project  = os.getenv("GOOGLE_CLOUD_PROJECT")
+    gcp_location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+    cred_env     = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+
+    if not gcp_project or not cred_env:
+        raise RuntimeError("GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS not configured")
+
+    _backend_dir = os.path.normpath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+    )
+    cred_path = cred_env if os.path.isabs(cred_env) else os.path.join(_backend_dir, cred_env)
+    _creds = _veo_sa.Credentials.from_service_account_file(
+        cred_path, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
 
     try:
-        client = genai.Client(api_key=google_ai_key)
-        logger.info(f"[Veo] Starting generation: {prompt[:80]}...")
+        client = genai.Client(vertexai=True, project=gcp_project, location=gcp_location, credentials=_creds)
+        logger.info(f"[Veo] Starting generation (Vertex AI): {prompt[:80]}...")
 
         def _generate_and_upload():
             operation = client.models.generate_videos(
@@ -766,11 +778,8 @@ async def _generate_with_veo(prompt: str) -> str:
                 raise RuntimeError("Veo returned no videos")
 
             veo_uri = operation.response.generated_videos[0].video.uri
-            download_url = (
-                f"{veo_uri}&key={google_ai_key}"
-                if "?" in veo_uri
-                else f"{veo_uri}?key={google_ai_key}"
-            )
+            # Vertex AI: URI is a signed GCS URL — no API key needed
+            download_url = veo_uri
 
             resp = requests.get(download_url, timeout=120)
             resp.raise_for_status()
