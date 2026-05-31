@@ -374,7 +374,7 @@ async def _run_ltx_generation(
         - No product images available      → LTX text-to-video directly
         - Vertex AI credentials missing    → LTX uses raw product image URL
         - Imagen 3 API fails               → graceful degradation to raw product image
-        - FAL_KEY not set                  → generate_video() facade (Veo / sample)
+        - FAL_KEY not set                  → generate_video() facade (sample fallback)
 
     Duration routing:
         ≤ 20s → generate_with_ltx()        (single API call — LTX 2.3 native)
@@ -398,7 +398,7 @@ async def _run_ltx_generation(
     """
     fal_key = os.getenv("FAL_KEY", "")
 
-    # ── Fallback: no fal.ai key → use simple facade (Veo or sample) ──────────
+    # ── Fallback: no fal.ai key → use simple facade (sample video) ──────────
     if not fal_key:
         logger.info("[LTX] No FAL_KEY, delegating to generate_video() facade")
         return await generate_video(prompt=prompt, image_url=image_url, duration=duration)
@@ -524,7 +524,7 @@ async def _fetch_product_image_bytes(
 
 async def _upload_cdn_video_to_r2(cdn_url: str, reel_id: str) -> str:
     """
-    Download a temporary CDN video (fal.ai, Veo) and upload it to R2.
+    Download a temporary CDN video (fal.ai) and upload it to R2.
     Returns the R2 object key for permanent storage.
 
     WHY this is needed instead of storing the CDN URL directly:

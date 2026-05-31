@@ -38,8 +38,7 @@ Duration handling:
 
 Providers (priority order):
     1. Imagen 3 (first frame) + LTX Video 2.3 fast  — primary (product-accurate, ~30s/clip)
-    2. Google Veo 2.0                                — quality fallback (slow, expensive)
-    3. Sample video                                  — free fallback for dev/CI
+    2. Sample video                                  — free fallback for dev/CI
 """
 
 import os
@@ -662,7 +661,7 @@ async def generate_video(
     with_audio: bool = False,
 ) -> str:
     """
-    Generate a video using the best available provider (LTX → Veo → sample).
+    Generate a video using LTX Video 2.3 (primary) with sample fallback.
 
     Used by the worker when FAL_KEY is not configured (fallback path).
     For the primary worker flow see _run_ltx_generation() in worker.py which
@@ -678,140 +677,16 @@ async def generate_video(
     Returns:
         Public URL to the generated video
     """
-    fal_key       = os.getenv("FAL_KEY", "")
-    veo_enabled   = os.getenv("VEO_ENABLED", "false").lower() == "true"
-    gcp_project   = os.getenv("GOOGLE_CLOUD_PROJECT", "")
+    fal_key = os.getenv("FAL_KEY", "")
 
     # ── Option 1: LTX Video 2.3 via fal.ai (primary — fast, native audio)
     if fal_key:
         try:
             return await generate_with_ltx(prompt, image_url, duration, with_audio)
         except Exception as e:
-            logger.warning(f"[LTX] Failed, trying Veo: {e}")
+            logger.warning(f"[LTX] Failed, using sample fallback: {e}")
 
-    # ── Option 2: Google Veo 2.0 (best quality, slow / expensive)
-    if veo_enabled and gcp_project:
-        try:
-            return await _generate_with_veo(prompt)
-        except Exception as e:
-            logger.warning(f"[Veo] Failed, using sample fallback: {e}")
-
-    # ── Option 3: Sample video (development / CI only — no AI cost)
+    # ── Fallback: Sample video (development / CI only — no AI cost)
     logger.info("[Video] No AI provider available — using sample video")
     await asyncio.sleep(3)
     return "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Veo 2.0 — Quality Fallback (not the primary path)
-# ─────────────────────────────────────────────────────────────────────────────
-
-async def _generate_with_veo(prompt: str) -> str:
-    """
-    Generate video using Google Veo 2.0 (best quality but slow / expensive).
-
-    Steps:
-        1. Submit generation request → operation ID
-        2. Poll every 10s (max 5 min timeout)
-        3. Download video from Google storage
-        4. Upload to R2 for a permanent URL
-
-    Args:
-        prompt: Creative brief
-
-    Returns:
-        Public URL to the generated video (R2 or Google URI fallback)
-
-    Raises:
-        RuntimeError: If operation times out, download fails, or R2 upload fails
-    """
-    import time
-    import uuid
-    import requests
-    import boto3
-    from google import genai
-    from google.oauth2 import service_account as _veo_sa
-
-    r2_endpoint = os.getenv("R2_ENDPOINT_URL")
-    r2_key_id   = os.getenv("R2_ACCESS_KEY_ID")
-    r2_secret   = os.getenv("R2_SECRET_ACCESS_KEY")
-    r2_bucket   = os.getenv("R2_BUCKET_NAME")
-    r2_public   = os.getenv("R2_PUBLIC_URL", "").rstrip("/")
-
-    gcp_project  = os.getenv("GOOGLE_CLOUD_PROJECT")
-    gcp_location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
-    cred_env     = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
-
-    if not gcp_project or not cred_env:
-        raise RuntimeError("GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS not configured")
-
-    _backend_dir = os.path.normpath(
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-    )
-    cred_path = cred_env if os.path.isabs(cred_env) else os.path.join(_backend_dir, cred_env)
-    _creds = _veo_sa.Credentials.from_service_account_file(
-        cred_path, scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
-
-    try:
-        client = genai.Client(vertexai=True, project=gcp_project, location=gcp_location, credentials=_creds)
-        logger.info(f"[Veo] Starting generation (Vertex AI): {prompt[:80]}...")
-
-        def _generate_and_upload():
-            operation = client.models.generate_videos(
-                model="veo-2.0-generate-001",
-                prompt=prompt,
-                config={"number_of_videos": 1},
-            )
-            logger.info(f"[Veo] Submitted: {operation.name}")
-
-            max_wait, waited = 300, 0
-            while not operation.done and waited < max_wait:
-                time.sleep(10)
-                waited += 10
-                operation = client.operations.get(operation.name)
-                logger.info(f"[Veo] Generating… ({waited}s)")
-
-            if not operation.done:
-                raise RuntimeError(f"Veo timed out after {max_wait}s")
-            if not (operation.response and operation.response.generated_videos):
-                raise RuntimeError("Veo returned no videos")
-
-            veo_uri = operation.response.generated_videos[0].video.uri
-            # Vertex AI: URI is a signed GCS URL — no API key needed
-            download_url = veo_uri
-
-            resp = requests.get(download_url, timeout=120)
-            resp.raise_for_status()
-            video_bytes = resp.content
-            logger.info(f"[Veo] Downloaded {len(video_bytes):,} bytes")
-
-            if not all([r2_endpoint, r2_key_id, r2_secret, r2_bucket]):
-                logger.warning("[Veo] R2 not configured — returning Google URI")
-                return veo_uri
-
-            s3 = boto3.client(
-                "s3",
-                endpoint_url=r2_endpoint,
-                aws_access_key_id=r2_key_id,
-                aws_secret_access_key=r2_secret,
-                region_name="auto",
-            )
-            object_key = f"videos/reels/veo/{uuid.uuid4().hex}.mp4"
-            s3.put_object(
-                Bucket=r2_bucket, Key=object_key,
-                Body=video_bytes, ContentType="video/mp4",
-            )
-            logger.info(f"[Veo] Uploaded to R2: {object_key}")
-            return (
-                f"{r2_public}/{object_key}"
-                if r2_public
-                else f"{r2_endpoint.rstrip('/')}/{r2_bucket}/{object_key}"
-            )
-
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, _generate_and_upload)
-
-    except Exception as e:
-        logger.error(f"[Veo] Error: {e}")
-        raise

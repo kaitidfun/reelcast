@@ -150,7 +150,7 @@ def trigger_generation(
     current_user: User = Depends(get_current_user)
 ):
     """
-    F2-URS01 & F2-URS02: Trigger reel generation via AI (Veo/fal.ai + Gemini).
+    F2-URS01 & F2-URS02: Trigger reel generation via AI (fal.ai + Gemini).
 
     Creates a new Reel record and queues it for async processing (video generation,
     overlay, and caption generation via Celery).
@@ -221,7 +221,7 @@ def trigger_regeneration(
     F2-URS07: Regenerate reel content (video, caption, or both).
 
     Allows member to re-generate unsatisfactory outputs independently:
-        - target='video': Re-run Veo/fal.ai with modified prompt
+        - target='video': Re-run fal.ai with modified prompt
         - target='caption': Re-run Gemini for new captions/hashtags
         - target='all': Regenerate both
 
@@ -524,7 +524,7 @@ async def download_reel_video(
             logger.error(f"[Download] Presigned URL generation failed for reel {reel_id}: {exc}")
             raise HTTPException(status_code=500, detail=f"Could not generate download URL: {exc}")
 
-    # ── CDN URL (fal.ai / Veo) → async streaming proxy ───────────────────────
+    # ── CDN URL (fal.ai) → async streaming proxy ───────────────────────
     # Chunks are forwarded immediately without buffering the entire video in RAM.
     logger.info(f"[Download] Streaming CDN video for reel {reel_id} (with_logo={with_logo})")
 
