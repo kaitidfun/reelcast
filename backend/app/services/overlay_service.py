@@ -137,7 +137,7 @@ async def overlay_watermark(
 
     def _process():
         try:
-            input_file  = ffmpeg.input(video_path)
+            input_file    = ffmpeg.input(video_path)
             input_overlay = ffmpeg.input(overlay_path)
 
             # ── Explicit stream splitting ─────────────────────────────────────
@@ -153,7 +153,23 @@ async def overlay_watermark(
             # Composite: video_stream has NO audio reference → overlaid is video-only
             overlaid = ffmpeg.overlay(video_stream, input_overlay, x=overlay_x, y=overlay_y)
 
+            # ── Audio availability check ──────────────────────────────────────
+            # Static images (PNG/JPEG from SKIP_LTX mode) and some generated
+            # clips have no audio track.  Attempting -map 0:a on a no-audio
+            # input causes FFmpeg to exit with INVALID_ARGUMENT.
+            # Probe first; only include audio stream when it actually exists.
+            _has_audio = False
             if with_audio:
+                try:
+                    probe = ffmpeg.probe(video_path, cmd=_FFMPEG_EXE)
+                    _has_audio = any(
+                        s.get("codec_type") == "audio"
+                        for s in probe.get("streams", [])
+                    )
+                except Exception:
+                    _has_audio = False  # probe failed — play it safe, no audio
+
+            if _has_audio:
                 # Re-attach audio from original input for the WITH-AUDIO path.
                 # Audio is only added back explicitly here — never leaks into
                 # the no-audio path.
@@ -166,8 +182,8 @@ async def overlay_watermark(
                     strict='experimental',
                 )
             else:
-                # overlaid is already a video-only stream (no audio reference).
-                # Output contains no audio track — no need for -an flag.
+                # No audio stream present (static image, audio-less clip, or probe failed).
+                # Output is video-only — no -an needed since we never mapped audio.
                 out = ffmpeg.output(
                     overlaid,
                     output_path,

@@ -385,9 +385,11 @@ async def generate_first_frame_with_imagen(
         f"(project={google_cloud_project}, location={google_cloud_location})"
     )
 
-    # Cap at 4 images — more angles give Imagen 3 a richer understanding of the
-    # product's shape and character details, but the API has practical reference limits.
-    _MAX_SUBJECT_REFS = 4
+    # Imagen 3 SUBJECT reference limit (Preview, as of 2025-05):
+    #   • Non-square aspect ratios (9:16, 16:9, …): max 2 reference images
+    #   • Square (1:1): up to 4 reference images
+    # Sending more than 2 for non-square returns INVALID_ARGUMENT 400.
+    _MAX_SUBJECT_REFS = 2 if aspect_ratio != "1:1" else 4
     ref_images = product_images[:_MAX_SUBJECT_REFS]
 
     # ── Primary: Imagen 3 edit_image() with SUBJECT references ───────────────
