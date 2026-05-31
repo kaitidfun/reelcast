@@ -264,7 +264,6 @@ async def upload_reel_video(
     product_id: Optional[str] = Form(None),
     platform: str = Form("ig"),
     overlay_position: str = Form("bottom-right"),
-    with_audio: bool = Form(True),   # default True — preserve original audio
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -325,12 +324,12 @@ async def upload_reel_video(
     )
     update_reel(db, reel=reel, uploaded_video_url=video_url)
 
-    # Step 6: Queue caption generation + overlay (target="upload" for worker)
-    # with_audio=True by default — preserve original audio from uploaded video.
-    # User can override via the audio toggle in the UI before uploading.
+    # Step 6: Queue caption generation + overlay (target="upload" for worker).
+    # Audio is always preserved for uploads — FFmpeg probes the file and keeps
+    # whatever audio track exists (with_audio=True).
     process_reel_generation.delay(
         str(reel.reel_id), platform, overlay_position, "upload",
-        with_audio=with_audio,
+        with_audio=True,
     )
 
     logger.info(f"Video upload completed for reel {reel.reel_id}, user {current_user.user_id}")

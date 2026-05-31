@@ -64,7 +64,7 @@ from app.services.video_generation_service import (
     generate_first_frame_with_imagen,
     LTX_MAX_CLIP_DURATION,
 )
-from app.services.overlay_service import apply_overlay, strip_audio_from_video
+from app.services.overlay_service import apply_overlay
 from app.services.reel_service import update_reel
 from app.services.storage_service import get_presigned_url
 
@@ -311,24 +311,6 @@ async def _async_process_reel_generation(
                 # Graceful degradation: reel still works without overlay
                 # Keep final_video_url as the original R2 key or fal.ai CDN URL
                 logger.warning(f"[Worker] Overlay failed, keeping original video: {overlay_err}")
-
-        # ── Step 2b: Audio strip fallback (upload path only)
-        # For AI-generated videos (target="all"/"video") LTX already produced the
-        # video silent when with_audio=False (generate_audio=False at generation time)
-        # — no FFmpeg strip needed.
-        # For user-uploaded videos (target="upload") the original video may have audio
-        # even when the overlay step was skipped (no product logo/image configured).
-        # In that case run a dedicated FFmpeg pass (vcodec copy + -an) to strip it.
-        if not with_audio and not overlay_applied and final_video_url and target == "upload":
-            video_for_strip = final_video_url
-            if not final_video_url.startswith("http"):
-                video_for_strip = get_presigned_url(final_video_url)
-            try:
-                stripped_key = await strip_audio_from_video(video_for_strip, reel_id)
-                final_video_url = stripped_key
-                logger.info(f"[Worker] Audio stripped (no overlay path)")
-            except Exception as strip_err:
-                logger.warning(f"[Worker] Audio strip failed, keeping original: {strip_err}")
 
         # ── Step 3: Generate Captions & Hashtags ─────────────────────────────
         if target in ["all", "caption", "upload"]:

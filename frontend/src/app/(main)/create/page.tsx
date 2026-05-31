@@ -254,15 +254,9 @@ const CreateReel = () => {
 
   // Settings state
   const [duration, setDuration] = useState(6);  // Default 6s — LTX 2.3 minimum valid duration
-  // Audio toggle — passed to API; LTX 2.3 generates native audio when true (generate_audio param)
+  // Audio toggle — controls LTX 2.3 generate_audio param (generate mode only).
+  // Upload mode always preserves the original audio from the uploaded file.
   const [withAudio, setWithAudio] = useState(true);
-  /**
-   * Tracks the withAudio setting that was used on the LAST successful upload.
-   * null = nothing uploaded yet in this session.
-   * Used to re-enable the Upload button when the user toggles audio after an upload
-   * (so they can re-upload with the new audio setting without clearing the file first).
-   */
-  const [uploadedWithAudio, setUploadedWithAudio] = useState<boolean | null>(null);
   // overlayPosition — logo is placed top-right to match the toggle preview overlay
   const [overlayPosition] = useState("top-right");
 
@@ -806,9 +800,6 @@ const CreateReel = () => {
     form.append("product_id", selectedProduct.id);
     form.append("platform", selectedPlatforms[0] || "ig");
     form.append("overlay_position", overlayPosition);
-    // with_audio: true = keep original audio from uploaded video (default)
-    //             false = strip audio (user toggled "Strip Audio" in UI)
-    form.append("with_audio", String(withAudio));
 
     const token = localStorage.getItem("rf_token");
     // XMLHttpRequest allows real-time upload progress tracking (fetch doesn't)
@@ -821,8 +812,6 @@ const CreateReel = () => {
         const data = JSON.parse(xhr.responseText);
         setReelId(data.reel_id);
         setUploadStatus("done");
-        // Remember the audio setting used so we can detect when it changes (smart re-enable)
-        setUploadedWithAudio(withAudio);
         completedModeRef.current = "upload";
         setCompletedMode(null);
         setGenerationStatus("generating");
@@ -956,7 +945,7 @@ const CreateReel = () => {
               Generate with AI
             </button>
             <button
-              onClick={() => { setCreatorMode("upload"); setWithAudio(true); }}
+              onClick={() => setCreatorMode("upload")}
               className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
                 creatorMode === "upload"
                   ? "bg-card text-foreground shadow-sm ring-1 ring-border"
@@ -1120,49 +1109,21 @@ const CreateReel = () => {
                   </div>
                 )}
               </div>
-              <div className="border-t border-border bg-background/40 px-3 py-2.5 space-y-2">
-                {/* Audio dropdown for uploaded videos — default: keep original audio */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors">
-                      {withAudio ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-                      {withAudio ? "Keep Audio" : "Strip Audio"}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-48 p-2">
-                    <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Audio</p>
-                    {([
-                      { value: true,  label: "Keep Audio",  Icon: Volume2 },
-                      { value: false, label: "Strip Audio", Icon: VolumeX },
-                    ] as const).map(({ value, label, Icon }) => (
-                      <button
-                        key={String(value)}
-                        onClick={() => setWithAudio(value)}
-                        className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs hover:bg-accent ${withAudio === value ? "text-primary" : "text-foreground"}`}
-                      >
-                        <span className="flex items-center gap-1.5"><Icon className="h-3.5 w-3.5" />{label}</span>
-                        {withAudio === value && <Check className="h-3.5 w-3.5" />}
-                      </button>
-                    ))}
-                  </PopoverContent>
-                </Popover>
+              <div className="border-t border-border bg-background/40 px-3 py-2.5">
                 <Button
                   onClick={handleUpload}
                   disabled={
                     !selectedProduct ||
                     !uploadFile ||
                     uploadStatus === "uploading" ||
-                    // Already uploaded with the same audio setting — re-enable only when audio changes
-                    (uploadStatus === "done" && withAudio === uploadedWithAudio)
+                    uploadStatus === "done"
                   }
                   className="gradient-primary w-full gap-2 h-9 text-sm text-primary-foreground shadow-glow"
                 >
                   {uploadStatus === "uploading" ? (
                     <><Loader2 className="h-4 w-4 animate-spin" />Uploading…</>
-                  ) : uploadStatus === "done" && withAudio === uploadedWithAudio ? (
-                    <><Check className="h-4 w-4" />Uploaded — toggle audio or select a new file</>
                   ) : uploadStatus === "done" ? (
-                    <><Upload className="h-4 w-4" />Re-upload with new audio setting</>
+                    <><Check className="h-4 w-4" />Uploaded — select a new file to re-upload</>
                   ) : (
                     <><Upload className="h-4 w-4" />Upload &amp; Process</>
                   )}
