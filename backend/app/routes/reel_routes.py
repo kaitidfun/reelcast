@@ -17,6 +17,7 @@ from app.services.upload_service import (
     probe_video_duration,
     upload_video_to_r2,
 )
+from app.services.storage_service import get_video_download_url
 from app.services.ai_service import generate_prompt_from_template, enhance_prompt, generate_guided_prompt
 from app.worker import process_reel_generation
 
@@ -166,10 +167,6 @@ def trigger_generation(
     Returns:
         Reel object with status "Pending" → "Generating" → "Completed"
     """
-    # Validation check
-    if len(req.prompt_text) > 500:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Prompt must be 500 characters or less.")
-
     # Create reel
     reel = create_reel(
         db=db, 
@@ -483,8 +480,6 @@ async def download_reel_video(
         JSONResponse  { download_url } for R2 keys
         StreamingResponse              for CDN URLs
     """
-    from app.services.storage_service import _get_s3_client
-    from app.core.config import R2_BUCKET_NAME
 
     reel = get_reel(db=db, reel_id=reel_id, user_id=current_user.user_id)
     if not reel:
@@ -507,17 +502,7 @@ async def download_reel_video(
     # the <a download> cross-origin restriction.
     if not video_ref.startswith("http"):
         try:
-            s3 = _get_s3_client()
-            presigned = s3.generate_presigned_url(
-                "get_object",
-                Params={
-                    "Bucket": R2_BUCKET_NAME,
-                    "Key": video_ref,
-                    "ResponseContentDisposition": f'attachment; filename="{filename}"',
-                    "ResponseContentType": "video/mp4",
-                },
-                ExpiresIn=300,  # 5 min TTL — enough for a single download
-            )
+            presigned = get_video_download_url(video_ref, filename)
             logger.info(f"[Download] Presigned URL generated for reel {reel_id} (with_logo={with_logo})")
             return JSONResponse({"download_url": presigned})
         except Exception as exc:

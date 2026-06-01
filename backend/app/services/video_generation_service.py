@@ -261,6 +261,64 @@ async def _concat_clips(clip_urls: list[str], reel_id: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Vertex AI Client Cache (Imagen 3)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_vertex_client = None
+_vertex_client_key: tuple | None = None  # (project, location, cred_path) — invalidate if env changes
+
+
+def _get_vertex_client():
+    """
+    Return a cached Vertex AI genai.Client for Imagen 3.
+
+    WHY cached: Loading service account credentials from disk + creating the
+    client takes ~200ms per call. Since generate_first_frame_with_imagen() is
+    called once per reel generation, caching avoids re-reading the JSON on every
+    generation without changing observable behaviour.
+    """
+    global _vertex_client, _vertex_client_key
+
+    from google import genai
+    from google.oauth2 import service_account as _sa
+
+    project  = os.getenv("GOOGLE_CLOUD_PROJECT")
+    location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+    cred_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+
+    if not project or not cred_env:
+        raise RuntimeError(
+            "GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS not configured "
+            "— Vertex AI (Imagen 3) unavailable"
+        )
+
+    _backend_dir = os.path.normpath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+    )
+    cred_path = cred_env if os.path.isabs(cred_env) else os.path.join(_backend_dir, cred_env)
+    if not os.path.exists(cred_path):
+        raise RuntimeError(f"Service account JSON not found: {cred_path}")
+
+    cache_key = (project, location, cred_path)
+    if _vertex_client is not None and _vertex_client_key == cache_key:
+        return _vertex_client
+
+    creds = _sa.Credentials.from_service_account_file(
+        cred_path,
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
+    _vertex_client = genai.Client(
+        vertexai=True,
+        project=project,
+        location=location,
+        credentials=creds,
+    )
+    _vertex_client_key = cache_key
+    logger.info(f"[Imagen3] Vertex AI client initialized (project={project}, location={location})")
+    return _vertex_client
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Imagen 3 — First Frame Generator
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -340,49 +398,10 @@ async def generate_first_frame_with_imagen(
     Raises:
         RuntimeError: If Vertex AI credentials are missing or all generation attempts fail
     """
-    from google import genai
     from google.genai import types as genai_types
-    from google.oauth2 import service_account as _sa
-
-    # ── Vertex AI client — required for Imagen 3 (edit_image + generate_images) ──
-    # AI Studio API key does NOT support Imagen 3 models.
-    # We use a service account JSON (GOOGLE_APPLICATION_CREDENTIALS) to authenticate
-    # with Vertex AI while keeping Gemini on AI Studio (hybrid setup).
-    google_cloud_project  = os.getenv("GOOGLE_CLOUD_PROJECT")
-    google_cloud_location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
-    cred_env              = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
-
-    if not google_cloud_project or not cred_env:
-        raise RuntimeError(
-            "GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS not configured "
-            "— Vertex AI (Imagen 3) unavailable"
-        )
-
-    # Resolve credentials path relative to backend/ directory if not absolute.
-    # video_generation_service.py lives at backend/app/services/ — go up 3 levels.
-    _backend_dir = os.path.normpath(
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-    )
-    cred_path = cred_env if os.path.isabs(cred_env) else os.path.join(_backend_dir, cred_env)
-    if not os.path.exists(cred_path):
-        raise RuntimeError(f"Service account JSON not found: {cred_path}")
-
-    _creds = _sa.Credentials.from_service_account_file(
-        cred_path,
-        scopes=["https://www.googleapis.com/auth/cloud-platform"],
-    )
 
     loop = asyncio.get_running_loop()
-    client = genai.Client(
-        vertexai=True,
-        project=google_cloud_project,
-        location=google_cloud_location,
-        credentials=_creds,
-    )
-    logger.info(
-        f"[Imagen3] Vertex AI client ready "
-        f"(project={google_cloud_project}, location={google_cloud_location})"
-    )
+    client = _get_vertex_client()
 
     # Imagen 3 SUBJECT reference limit (Preview, as of 2025-05):
     #   • Non-square aspect ratios (9:16, 16:9, …): max 2 reference images

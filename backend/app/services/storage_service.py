@@ -472,3 +472,42 @@ def upload_raw_bytes_to_r2(
         return f"{R2_PUBLIC_URL.rstrip('/')}/{object_key}"
     else:
         return f"{R2_ENDPOINT_URL.rstrip('/')}/{target_bucket}/{object_key}"
+
+
+def get_video_download_url(
+    object_key: str,
+    filename: str,
+    expiry: int = 300,
+) -> str:
+    """
+    Generate a presigned GET URL for video download with Content-Disposition header.
+
+    ResponseContentDisposition=attachment forces the browser download dialog
+    regardless of the <a download> cross-origin restriction on R2 URLs.
+    ResponseContentType=video/mp4 ensures correct MIME type for the download.
+
+    Args:
+        object_key: R2 object key (not a full URL)
+        filename:   Suggested download filename shown in the browser dialog
+        expiry:     URL validity in seconds (default 300 = 5 minutes per download)
+
+    Returns:
+        Presigned URL the browser can navigate to directly
+
+    Raises:
+        RuntimeError: If presigned URL generation fails
+    """
+    try:
+        s3 = _get_s3_client()
+        return s3.generate_presigned_url(
+            "get_object",
+            Params={
+                "Bucket": R2_BUCKET_NAME,
+                "Key": object_key,
+                "ResponseContentDisposition": f'attachment; filename="{filename}"',
+                "ResponseContentType": "video/mp4",
+            },
+            ExpiresIn=expiry,
+        )
+    except (BotoCoreError, ClientError) as exc:
+        raise RuntimeError(f"Could not generate download URL: {exc}") from exc

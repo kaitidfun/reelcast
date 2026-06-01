@@ -29,7 +29,8 @@ def _setup_windows_ssl() -> None:
     if os.environ.get("REQUESTS_CA_BUNDLE"):
         return  # Already set externally — don't override
 
-    pems = [open(certifi.where(), "r", encoding="utf-8").read()]
+    with open(certifi.where(), "r", encoding="utf-8") as _f:
+        pems = [_f.read()]
 
     if sys.platform == "win32":
         for store in ("ROOT", "CA"):
@@ -284,7 +285,6 @@ async def _async_process_reel_generation(
             update_reel(db, reel=reel, raw_video_url=reel.uploaded_video_url)
 
         # ── Step 2: Apply FFmpeg overlay (brand logo / product image) ───────
-        overlay_applied = False  # Track whether FFmpeg ran — needed for audio strip fallback
         if target in ["all", "video", "upload"] and overlay_url and final_video_url:
             # R2 object keys (not starting with "http") need a presigned URL so
             # overlay_service.download_to_temp() can fetch them without auth.
@@ -306,7 +306,6 @@ async def _async_process_reel_generation(
                     with_audio=with_audio,
                 )
                 final_video_url = overlaid_key  # R2 key — frontend proxies via /api/upload/videos/{key}
-                overlay_applied = True
             except Exception as overlay_err:
                 # Graceful degradation: reel still works without overlay
                 # Keep final_video_url as the original R2 key or fal.ai CDN URL

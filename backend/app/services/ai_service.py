@@ -6,28 +6,29 @@ Handles AI-powered generation via Google Gemini:
   - Prompt generation from template + product context (generate_prompt_from_template)
   - Prompt enhancement from existing draft (enhance_prompt)
   - Guided prompt generation from chip selections + product image (generate_guided_prompt)
+  - First-frame description for Imagen 3 (generate_first_frame_prompt)
 
-Note: Video generation moved to video_generation_service.py for separation of concerns.
+Note: Video generation is in video_generation_service.py.
 """
 
-import os
 import asyncio
 import json
 import logging
-from typing import Dict, Any, Optional
+import os
+from typing import Any, Dict, Optional
+
 from google import genai
 from google.genai import types
 
-# For backward compatibility, re-export video generation from new service
+# generate_video re-exported so existing callers that imported from here still work
 from app.services.video_generation_service import generate_video  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
-# Configure Gemini with AI Studio Key — reads GOOGLE_AI_API_KEY from .env
 GOOGLE_AI_API_KEY = os.getenv("GOOGLE_AI_API_KEY")
 
-# Template descriptions sent to Gemini to frame the generation goal
-# Each maps to the matching quick-prompt chip label in the frontend
+# Template descriptions sent to Gemini to frame the generation goal.
+# Each maps to the matching quick-prompt chip label in the frontend.
 _TEMPLATE_DESCRIPTIONS = {
     "product_showcase": "a polished showcase that highlights the product's key features, design details, and unique selling points",
     "flash_sale":       "an urgent, high-energy flash sale with bold visual emphasis on the discount, countdown urgency, and clear call-to-action",
@@ -37,11 +38,79 @@ _TEMPLATE_DESCRIPTIONS = {
     "tutorial":         "a quick tutorial showing 2–3 practical ways to use or style the product in real-life scenarios",
 }
 
+
 def _get_client() -> genai.Client:
     if not GOOGLE_AI_API_KEY:
         raise ValueError("GOOGLE_AI_API_KEY is not set in environment variables.")
     return genai.Client(api_key=GOOGLE_AI_API_KEY)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Pipeline context prepended to the system prompt in all three video-prompt
+# generation functions so Gemini understands the output will drive two models.
+_LTX_PIPELINE_PREAMBLE = (
+    "You are an expert prompt engineer for a two-stage AI video pipeline:\n"
+    "  Stage 1 — Imagen 3 (text-to-image with product reference): generates a cinematic 9:16 first frame.\n"
+    "  Stage 2 — LTX Video 2.3 fast (image-to-video): animates that frame (~30s).\n\n"
+)
+
+
+def _build_gemini_contents(
+    text: str,
+    images: list[tuple[bytes, str]] | None = None,
+) -> list | str:
+    """
+    Build Gemini contents — multimodal (images first, then text) or text-only.
+
+    WHY images-first: Gemini processes inputs in order. Placing product photos
+    before the text prompt gives visual context before the instructions, which
+    produces more accurate descriptions of specific product details.
+    """
+    imgs = images or []
+    if not imgs:
+        return text
+    return [
+        types.Part(inline_data=types.Blob(data=img_bytes, mime_type=img_mime))
+        for img_bytes, img_mime in imgs
+    ] + [types.Part(text=text)]
+
+
+async def _run_gemini(
+    contents,
+    *,
+    model: str = "gemini-3.5-flash",
+    response_mime_type: str | None = None,
+) -> str:
+    """
+    Run a synchronous Gemini generate_content call in a thread executor.
+
+    WHY executor: google-genai uses blocking HTTP — calling it directly in
+    an async function stalls the event loop for the full API round-trip
+    (~0.5–3s), blocking all other concurrent tasks in the Celery worker.
+    """
+    client = _get_client()
+    config = (
+        types.GenerateContentConfig(response_mime_type=response_mime_type)
+        if response_mime_type
+        else None
+    )
+
+    def _call() -> str:
+        kwargs: dict = {"model": model, "contents": contents}
+        if config:
+            kwargs["config"] = config
+        return client.models.generate_content(**kwargs).text  # type: ignore[return-value]
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _call)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public API
+# ─────────────────────────────────────────────────────────────────────────────
 
 async def generate_captions(prompt: str, product_info: str, platform: str) -> Dict[str, Any]:
     """
@@ -67,7 +136,6 @@ async def generate_captions(prompt: str, product_info: str, platform: str) -> Di
         Returns fallback mock response if GOOGLE_AI_API_KEY not configured
     """
     if not GOOGLE_AI_API_KEY:
-        # Fallback mock response if no key is configured
         logger.warning("GOOGLE_AI_API_KEY not set, using mock caption response")
         await asyncio.sleep(1)
         return {
@@ -86,30 +154,17 @@ Rules:
 - Provide exactly 4 relevant hashtags (include the # sign).
 - Return ONLY strict JSON with keys: "caption" (string) and "hashtags" (list of strings). No extra text.
 """
-
-    user_content = f"User Prompt: {prompt}\nProduct Details: {product_info}"
-    full_prompt = system_prompt + "\n\n" + user_content
+    full_prompt = system_prompt + "\n\n" + f"User Prompt: {prompt}\nProduct Details: {product_info}"
 
     try:
         logger.info(f"Generating captions for platform: {platform}")
-        client = _get_client()
-
-        def _generate():
-            response = client.models.generate_content(
-                model="gemini-3.5-flash",
-                contents=full_prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                )
-            )
-            return response.text
-
-        loop = asyncio.get_running_loop()
-        result_text = await loop.run_in_executor(None, _generate)
+        result_text = await _run_gemini(full_prompt, response_mime_type="application/json")
         result = json.loads(result_text)
-        logger.info(f"Captions generated for {platform}: {len(result.get('caption', ''))} chars, {len(result.get('hashtags', []))} hashtags")
+        logger.info(
+            f"Captions generated for {platform}: "
+            f"{len(result.get('caption', ''))} chars, {len(result.get('hashtags', []))} hashtags"
+        )
         return result
-
     except Exception as e:
         logger.error(f"Error generating caption: {e}")
         return {
@@ -169,10 +224,8 @@ async def generate_prompt_from_template(
     #   - For >10s extend chains: use cyclic/ambient motion (slow drift, gentle
     #     rotation) — directional motion (zoom in, dolly) breaks across clips
     system_prompt = (
-        "You are an expert prompt engineer for a two-stage AI video pipeline:\n"
-        "  Stage 1 — Imagen 3 (text-to-image with product reference): generates a cinematic 9:16 first frame.\n"
-        "  Stage 2 — LTX Video 2.3 fast (image-to-video): animates that frame (~30s).\n\n"
-        "YOUR JOB: Write the scene prompt that drives BOTH stages.\n\n"
+        _LTX_PIPELINE_PREAMBLE
+        + "YOUR JOB: Write the scene prompt that drives BOTH stages.\n\n"
         "CRITICAL RULES:\n"
         "- DO NOT describe the product's appearance (colour, shape, material, logo).\n"
         "  Product PHOTOS are already provided as SUBJECT reference to Imagen 3.\n"
@@ -204,36 +257,16 @@ async def generate_prompt_from_template(
     )
 
     try:
-        client = _get_client()
-
-        def _generate():
-            imgs = product_images or []
-            if imgs:
-                # Multimodal: all product images first, then the text prompt
-                # Gemini sees every angle/view of the product for richer visual prompts
-                contents = [
-                    types.Part(
-                        inline_data=types.Blob(data=img_bytes, mime_type=img_mime)
-                    )
-                    for img_bytes, img_mime in imgs
-                ] + [types.Part(text=system_prompt + "\n\n" + user_content)]
-            else:
-                contents = system_prompt + "\n\n" + user_content
-
-            return client.models.generate_content(
-                model="gemini-3.5-flash",
-                contents=contents,
-            ).text.strip()
-
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, _generate)
-        result = result[:500]
+        contents = _build_gemini_contents(
+            system_prompt + "\n\n" + user_content,
+            product_images,
+        )
+        result = (await _run_gemini(contents))[:500]
         logger.info(
             f"Template prompt generated ({template_type}, {len(result)} chars, "
             f"{len(product_images or [])} image(s))"
         )
         return result
-
     except Exception as e:
         logger.error(f"Error generating template prompt: {e}")
         return fallback
@@ -279,10 +312,8 @@ async def enhance_prompt(
     # Imagen 3 (first frame) → LTX Video 2.3 (animation).
     # LTX works best with short, motion-first prompts ending with a camera instruction.
     system_prompt = (
-        "You are an expert prompt engineer for a two-stage AI video pipeline:\n"
-        "  Stage 1 — Imagen 3 (text-to-image with product reference): generates a cinematic 9:16 first frame.\n"
-        "  Stage 2 — LTX Video 2.3 fast (image-to-video): animates that frame (~30s).\n\n"
-        "YOUR JOB: Rewrite the user's prompt while keeping their core idea.\n\n"
+        _LTX_PIPELINE_PREAMBLE
+        + "YOUR JOB: Rewrite the user's prompt while keeping their core idea.\n\n"
         "CRITICAL RULES:\n"
         "- DO NOT describe the product's appearance (colour, material, shape, logo).\n"
         "  Product photos are already provided as SUBJECT reference to Imagen 3.\n"
@@ -315,34 +346,16 @@ async def enhance_prompt(
     )
 
     try:
-        client = _get_client()
-
-        def _generate():
-            imgs = product_images or []
-            if imgs:
-                contents = [
-                    types.Part(
-                        inline_data=types.Blob(data=img_bytes, mime_type=img_mime)
-                    )
-                    for img_bytes, img_mime in imgs
-                ] + [types.Part(text=system_prompt + "\n\n" + user_content)]
-            else:
-                contents = system_prompt + "\n\n" + user_content
-
-            return client.models.generate_content(
-                model="gemini-3.5-flash",
-                contents=contents,
-            ).text.strip()
-
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, _generate)
-        result = result[:500]
+        contents = _build_gemini_contents(
+            system_prompt + "\n\n" + user_content,
+            product_images,
+        )
+        result = (await _run_gemini(contents))[:500]
         logger.info(
             f"Prompt improved: {len(prompt_text)} → {len(result)} chars, "
             f"{len(product_images or [])} image(s)"
         )
         return result
-
     except Exception as e:
         logger.error(f"Error improving prompt: {e}")
         return prompt_text  # Return original if improvement fails
@@ -386,7 +399,6 @@ async def generate_guided_prompt(
 
     Falls back to a locally-assembled prompt if Gemini is unavailable.
     """
-    # Build the creative-direction selections the user picked
     selections = []
     if mood:          selections.append(f"Mood/Vibe: {mood}")
     if style:         selections.append(f"Visual Style: {style}")
@@ -395,7 +407,6 @@ async def generate_guided_prompt(
     if lighting:      selections.append(f"Lighting & Environment: {lighting}")
     if camera_motion: selections.append(f"Camera Motion: {camera_motion}")
 
-    # Local fallback: build prompt without Gemini
     def _local_fallback() -> str:
         parts = ", ".join(s.split(": ", 1)[-1] for s in selections) if selections else "dynamic and engaging"
         return (
@@ -403,8 +414,6 @@ async def generate_guided_prompt(
             f"Style: {parts}. Highlight the product's best features with premium lighting, "
             "smooth transitions, and a strong call-to-action."
         )[:500]
-
-    imgs = product_images or []
 
     if not GOOGLE_AI_API_KEY:
         logger.warning("GOOGLE_AI_API_KEY not set — returning locally-assembled guided prompt")
@@ -414,10 +423,8 @@ async def generate_guided_prompt(
     # LTX works best with short, motion-first prompts ending with a camera instruction.
     # Camera Motion chip (if selected) must appear verbatim at the end of the prompt.
     system_prompt = (
-        "You are an expert prompt engineer for a two-stage AI video pipeline:\n"
-        "  Stage 1 — Imagen 3 (text-to-image with product reference): generates a cinematic 9:16 first frame.\n"
-        "  Stage 2 — LTX Video 2.3 fast (image-to-video): animates that frame (~30s).\n\n"
-        "YOUR JOB: Translate the creative chips below into a concrete scene prompt.\n\n"
+        _LTX_PIPELINE_PREAMBLE
+        + "YOUR JOB: Translate the creative chips below into a concrete scene prompt.\n\n"
         "CRITICAL RULES:\n"
         "- DO NOT describe the product's appearance (colour, material, shape, logo).\n"
         "  Product photos are provided as SUBJECT reference to Imagen 3.\n"
@@ -452,35 +459,15 @@ async def generate_guided_prompt(
     if product_name:        context_parts.append(f"Product name: {product_name}")
     if product_description: context_parts.append(f"Product details: {product_description}")
     context_parts.extend(selections)
-    user_content = system_prompt + "\n\n" + "\n".join(context_parts)
 
     try:
-        client = _get_client()
-
-        def _generate():
-            if imgs:
-                # Multimodal: all product images first, then the creative brief
-                # Gemini sees every angle/view for richer, more visually specific prompts
-                contents = [
-                    types.Part(
-                        inline_data=types.Blob(data=img_bytes, mime_type=img_mime)
-                    )
-                    for img_bytes, img_mime in imgs
-                ] + [types.Part(text=user_content)]
-            else:
-                contents = user_content
-
-            return client.models.generate_content(
-                model="gemini-3.5-flash",
-                contents=contents,
-            ).text.strip()
-
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, _generate)
-        result = result[:500]
-        logger.info(f"Guided prompt generated ({len(result)} chars, {len(imgs)} image(s))")
+        contents = _build_gemini_contents(
+            system_prompt + "\n\n" + "\n".join(context_parts),
+            product_images,
+        )
+        result = (await _run_gemini(contents))[:500]
+        logger.info(f"Guided prompt generated ({len(result)} chars, {len(product_images or [])} image(s))")
         return result
-
     except Exception as e:
         logger.error(f"Error generating guided prompt: {e}")
         return _local_fallback()
@@ -522,7 +509,6 @@ async def generate_first_frame_prompt(
         Static first-frame description (120–220 chars) for Imagen 3.
         Falls back to a simple product-focused description on any error.
     """
-    # Fallback: use product name + video scene if Gemini is unavailable
     fallback = (
         f"{product_name or 'product'} as the main subject, "
         f"product in sharp focus, cinematic scene, 9:16 portrait"
@@ -531,13 +517,9 @@ async def generate_first_frame_prompt(
     if not GOOGLE_AI_API_KEY:
         return fallback
 
-    # Send all product images so Gemini sees every angle/view of the product.
-    # More images = more visual context = more accurate first-frame descriptions.
     imgs = product_images or []
 
-    # Adjust system prompt based on whether we have actual product photos.
-    # When Gemini CAN see the product, it should describe visual details from the photos.
-    # When it CANNOT see the product, it must rely on the name + description text.
+    # Adjust instruction based on whether Gemini can actually see the product.
     if imgs:
         visual_instruction = (
             "IMPORTANT: Product photos are attached. Study them carefully.\n"
@@ -585,38 +567,16 @@ async def generate_first_frame_prompt(
     )
 
     try:
-        client = _get_client()
-
-        def _generate():
-            if imgs:
-                # Multimodal: send product photos first so Gemini sees exact product appearance,
-                # then the text prompt. This produces descriptions with specific visual details
-                # (exact colour, character face, texture) rather than generic descriptions.
-                contents = [
-                    types.Part(
-                        inline_data=types.Blob(data=img_bytes, mime_type=img_mime)
-                    )
-                    for img_bytes, img_mime in imgs
-                ] + [types.Part(text=system_prompt + "\n\n" + user_content)]
-            else:
-                contents = system_prompt + "\n\n" + user_content
-
-            return client.models.generate_content(
-                model="gemini-3.5-flash",
-                contents=contents,
-            ).text.strip()
-
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, _generate)
-        result = result[:220]
+        contents = _build_gemini_contents(
+            system_prompt + "\n\n" + user_content,
+            product_images,
+        )
+        result = (await _run_gemini(contents))[:220]
         logger.info(
             f"[FirstFramePrompt] Generated ({len(result)} chars, {len(imgs)} image(s)): "
             f"{result[:80]}..."
         )
         return result
-
     except Exception as e:
         logger.warning(f"[FirstFramePrompt] Failed, using fallback: {e}")
         return fallback
-
-
