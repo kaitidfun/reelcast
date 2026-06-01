@@ -122,7 +122,7 @@ async def _async_process_reel_generation(
         3. Apply FFmpeg overlay (product image + brand logo) (F2-URS05-SRS01)
            with_audio controls whether the overlay pass preserves the audio track.
            For AI videos: audio was already set at LTX generation time (generate_audio).
-           For uploads: strip_audio fallback runs if overlay was skipped.
+           For uploads: the original audio is always preserved.
         4. Generate captions + hashtags with Gemini (F2-URS03)
         5. Persist all outputs to DB and mark reel Complete
     """
