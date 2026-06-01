@@ -17,11 +17,11 @@ Usage:
 
 import os
 import asyncio
+import subprocess
 import tempfile
 import logging
 from typing import Optional
 
-import ffmpeg
 import httpx
 import imageio_ffmpeg
 
@@ -110,19 +110,18 @@ async def overlay_watermark(
     with_audio: bool = True,
 ) -> str:
     """
-    Composite an overlay image onto a video using FFmpeg.
+    Composite an overlay image onto a video using FFmpeg via subprocess.
 
-    Overlay image is scaled to max 150px width to prevent
-    covering video content while maintaining logo visibility.
+    Uses -map 0:a? (optional audio) to preserve audio when present without
+    requiring a separate ffprobe check — ffprobe is not bundled by imageio_ffmpeg.
 
     Args:
         video_path: Local path to input video file
-        overlay_path: Local path to overlay image (PNG/JPG)
+        overlay_path: Local path to overlay image (PNG/JPG/WEBP)
         position: Placement option - 'top-left', 'top-right', 'bottom-left',
                  'bottom-right', or 'center'
         output_path: Local path for output MP4 file
-        with_audio: If True, preserve original audio track. If False, strip
-                   audio entirely (-an) — used when user selects "No Audio".
+        with_audio: If True, preserve original audio track. If False, strip audio.
 
     Returns:
         Path to output MP4 file
@@ -130,78 +129,41 @@ async def overlay_watermark(
     Raises:
         RuntimeError: If FFmpeg compositing fails
     """
-    # Resolve position coordinates (or default to bottom-right)
     overlay_x, overlay_y = POSITION_COORDS.get(position, POSITION_COORDS['bottom-right'])
-
     logger.info(f"Compositing overlay at position '{position}': {overlay_path} (audio={'on' if with_audio else 'stripped'})")
 
     def _process():
+        # Scale overlay to max width then composite onto video
+        filtergraph = (
+            f"[1:v]scale={OVERLAY_MAX_WIDTH}:-1[logo];"
+            f"[0:v][logo]overlay=x={overlay_x}:y={overlay_y}[out]"
+        )
+        cmd = [
+            _FFMPEG_EXE,
+            "-i", video_path,
+            "-i", overlay_path,
+            "-filter_complex", filtergraph,
+            "-map", "[out]",
+        ]
+        if with_audio:
+            # -map 0:a? : include audio stream from input 0 if it exists;
+            # silently skipped when the clip has no audio track (no ffprobe needed).
+            cmd += ["-map", "0:a?", "-c:a", "aac", "-strict", "experimental"]
+        else:
+            cmd += ["-an"]
+        cmd += ["-c:v", "libx264", "-y", output_path]
+
         try:
-            input_file    = ffmpeg.input(video_path)
-            input_overlay = ffmpeg.input(overlay_path)
-
-            # ── Explicit stream splitting ─────────────────────────────────────
-            # Always use input_file.video (not the full input object) for the
-            # overlay filter chain.  This prevents the audio stream from ever
-            # entering the filter graph — a more reliable approach than relying
-            # on the -an flag to remove it at the output stage.
-            video_stream = input_file.video
-
-            # Scale overlay to max width while preserving aspect ratio
-            input_overlay = ffmpeg.filter(input_overlay, 'scale', OVERLAY_MAX_WIDTH, -1)
-
-            # Composite: video_stream has NO audio reference → overlaid is video-only
-            overlaid = ffmpeg.overlay(video_stream, input_overlay, x=overlay_x, y=overlay_y)
-
-            # ── Audio availability check ──────────────────────────────────────
-            # Static images (PNG/JPEG from SKIP_LTX mode) and some generated
-            # clips have no audio track.  Attempting -map 0:a on a no-audio
-            # input causes FFmpeg to exit with INVALID_ARGUMENT.
-            # Probe first; only include audio stream when it actually exists.
-            _has_audio = False
-            if with_audio:
-                try:
-                    probe = ffmpeg.probe(video_path, cmd=_FFMPEG_EXE)
-                    _has_audio = any(
-                        s.get("codec_type") == "audio"
-                        for s in probe.get("streams", [])
-                    )
-                except Exception:
-                    _has_audio = False  # probe failed — play it safe, no audio
-
-            if _has_audio:
-                # Re-attach audio from original input for the WITH-AUDIO path.
-                # Audio is only added back explicitly here — never leaks into
-                # the no-audio path.
-                out = ffmpeg.output(
-                    overlaid,
-                    input_file.audio,
-                    output_path,
-                    vcodec='libx264',
-                    acodec='aac',
-                    strict='experimental',
-                )
-            else:
-                # No audio: static image input, audio-less clip, or with_audio=False.
-                # Explicit -an prevents FFmpeg from auto-including audio from input 0
-                # when running with a complex filtergraph (behaviour varies by version).
-                out = ffmpeg.output(
-                    overlaid,
-                    output_path,
-                    vcodec='libx264',
-                    an=None,  # -an: hard-strip any audio passthrough
-                )
-
-            ffmpeg.run(out, overwrite_output=True, quiet=True, cmd=_FFMPEG_EXE)
+            result = subprocess.run(cmd, capture_output=True, timeout=120)
+            if result.returncode != 0:
+                stderr_msg = result.stderr.decode("utf-8", errors="replace")
+                logger.error(f"FFmpeg error during compositing: {stderr_msg}")
+                raise RuntimeError(f"FFmpeg overlay failed: {stderr_msg}")
             logger.info(f"FFmpeg compositing complete: {output_path}")
             return output_path
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError("FFmpeg overlay timed out after 120s") from e
 
-        except ffmpeg.Error as e:
-            stderr_msg = e.stderr.decode('utf8') if e.stderr else str(e)
-            logger.error(f"FFmpeg error during compositing: {stderr_msg}")
-            raise RuntimeError(f"FFmpeg overlay failed: {stderr_msg}") from e
-
-    # Run FFmpeg in executor to avoid blocking async event loop
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _process)
     return output_path
