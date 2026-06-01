@@ -62,7 +62,7 @@ from app.services.video_generation_service import (
     generate_video,
     generate_with_ltx,
     generate_extended_ltx,
-    generate_first_frame_with_imagen,
+    generate_first_frame_with_gemini,
     LTX_MAX_CLIP_DURATION,
 )
 from app.services.overlay_service import apply_overlay
@@ -200,51 +200,48 @@ async def _async_process_reel_generation(
 
         # ── Step 1: Determine video source ──────────────────────────────────
         if target in ["all", "video"]:
-            # Pipeline: Imagen 3 (first frame) → LTX Video 2.3 (animation)
+            # Pipeline: Gemini 3 Pro Image (first frame) → LTX Video 2.3 (animation)
             #
-            # Two prompts are generated for the two stages:
-            #   imagen_prompt — static scene description, product-focused (for first frame)
+            # Two prompts for two stages:
+            #   scene_prompt  — static scene/environment description (for first frame)
             #   video_prompt  — motion description, action-forward (for LTX animation)
             #
             # WHY different: LTX works best with motion prompts ("A hand clips...").
-            # Imagen 3 needs a static scene description describing the product's visual
-            # features so it can generate an accurate, product-faithful first frame.
-            # The product photo is also sent as a SUBJECT reference for semantic fidelity.
-            imagen_prompt: str | None = None
+            # Gemini 3 Pro Image sees product photos directly — scene_prompt only needs
+            # to describe environment/style/mood, not the product itself.
+            scene_prompt: str | None = None
             product_image_bytes: list[tuple[bytes, str]] = []
 
             if product and product_image_urls:
                 try:
-                    # Fetch ALL product images as bytes for both Gemini (prompt generation)
-                    # and Imagen 3 (SUBJECT reference). More angles = better fidelity.
                     product_image_bytes = await _fetch_product_image_bytes(
                         product_image_urls
                     )
-                    imagen_prompt = await generate_first_frame_prompt(
+                    scene_prompt = await generate_first_frame_prompt(
                         video_prompt=video_prompt,
                         product_name=product.product_name or "",
                         product_description=product.description or "",
                         product_images=product_image_bytes or None,
                     )
                     logger.info(
-                        f"[Worker] Imagen 3 first-frame prompt "
-                        f"({len(product_image_bytes)} image(s) sent to Gemini): "
-                        f"{imagen_prompt[:80]}..."
+                        f"[Worker] Gemini 3 Pro first-frame scene prompt "
+                        f"({len(product_image_bytes)} image(s)): "
+                        f"{scene_prompt[:80]}..."
                     )
                 except Exception as ffp_err:
                     logger.warning(
                         f"[Worker] First-frame prompt generation failed, "
-                        f"using video prompt for Imagen 3: {ffp_err}"
+                        f"using video prompt as scene prompt: {ffp_err}"
                     )
 
             final_video_url = await _run_ltx_generation(
                 prompt=video_prompt,
                 image_url=product_image_url,              # Primary product image URL (LTX fallback)
-                product_image_bytes=product_image_bytes,  # All images as bytes — Imagen 3 SUBJECT ref
+                product_image_bytes=product_image_bytes,  # All images as bytes — Gemini 3 Pro refs
                 duration=duration,
                 with_audio=with_audio,
                 reel_id=reel_id,
-                imagen_prompt=imagen_prompt,              # Static first-frame prompt for Imagen 3
+                imagen_prompt=scene_prompt,               # Scene prompt for Gemini 3 Pro Image
             )
         elif target == "upload":
             # User-uploaded video — apply overlay + captions, skip AI generation
@@ -357,22 +354,22 @@ async def _run_ltx_generation(
     imagen_prompt: str | None = None,
 ) -> str:
     """
-    Generate a product reel using Imagen 3 (first frame) → LTX Video 2.3 (animation).
+    Generate a product reel using Gemini 3 Pro Image (first frame) → LTX Video 2.3 (animation).
 
     Full pipeline:
-        1. Imagen 3 + SUBJECT reference → cinematic 9:16 first frame (product-accurate)
-        2. LTX Video 2.3 image-to-video → animate the Imagen 3 first frame (~30s fast)
+        1. Gemini 3 Pro Image → cinematic 9:16 first frame (product-accurate, up to 6 refs)
+        2. LTX Video 2.3 image-to-video → animate the first frame (~30s fast)
 
     Two-prompt strategy:
-        imagen_prompt (static): "Tiny green plankton keychain on dark zipper, close-up, bokeh"
-            → Imagen 3 generates a product-faithful first frame using semantic understanding
-        prompt (motion):        "A hand clips the keychain onto a zipper. Camera pushes in."
+        imagen_prompt (scene): "On dark marble surface, dramatic chiaroscuro lighting"
+            → Gemini 3 Pro sees product photos directly + scene prompt → generates first frame
+        prompt (motion):       "A hand clips the keychain onto a zipper. Camera pushes in."
             → LTX animates the first frame into a cinematic scene
 
-    Imagen 3 skipped when:
+    First frame skipped when:
         - No product images available      → LTX text-to-video directly
         - GOOGLE_AI_API_KEY not set        → LTX uses raw product image URL
-        - Imagen 3 API fails               → graceful degradation to raw product image
+        - Gemini 3 Pro fails               → graceful degradation to raw product image
         - FAL_KEY not set                  → generate_video() facade (sample fallback)
 
     Duration routing:
@@ -381,15 +378,12 @@ async def _run_ltx_generation(
 
     Args:
         prompt:               LTX motion prompt (200–350 chars, action-first, camera at end)
-        image_url:            Primary product image URL — LTX fallback if Imagen fails
+        image_url:            Primary product image URL — LTX fallback if first frame fails
         duration:             Requested seconds (6, 10, 15, 30, 60)
         with_audio:           True = LTX generates native audio; False = silent video
         reel_id:              Reel UUID for R2 key naming in multi-clip concat
-        product_image_bytes:  ALL product images as (bytes, mime_type) tuples —
-                              first image used as Imagen 3 SUBJECT reference
-        imagen_prompt:        Static first-frame description (product-focused, no motion).
-                              Generated by generate_first_frame_prompt(). Falls back to
-                              `prompt` if None.
+        product_image_bytes:  ALL product images as (bytes, mime_type) tuples (up to 6 used)
+        imagen_prompt:        Scene/environment description. Falls back to `prompt` if None.
 
     Returns:
         fal.media CDN URL  (single clip ≤ 20s)
@@ -402,44 +396,40 @@ async def _run_ltx_generation(
         logger.info("[LTX] No FAL_KEY, delegating to generate_video() facade")
         return await generate_video(prompt=prompt, image_url=image_url, duration=duration)
 
-    # ── Step 1: Imagen 3 first frame ──────────────────────────────────────────
-    # imagen_prompt (static, product-focused) describes the product and scene accurately.
-    # The product photos are also provided as SUBJECT reference for semantic fidelity.
-    # Falls back to the LTX motion prompt if imagen_prompt was not generated.
+    # ── Step 1: Gemini 3 Pro Image first frame ────────────────────────────────
+    # Product photos are sent directly as visual context — the model sees and reasons
+    # about the product holistically. Falls back to raw product image URL on failure.
     ltx_image_url = image_url  # Default fallback = primary product image URL
 
     if product_image_bytes:
-        effective_imagen_prompt = imagen_prompt or prompt
+        effective_scene_prompt = imagen_prompt or prompt
         logger.info(
-            f"[Worker] Imagen 3 prompt: '{effective_imagen_prompt[:80]}...' "
+            f"[Worker] Gemini 3 Pro scene prompt: '{effective_scene_prompt[:80]}...' "
             f"({'dedicated' if imagen_prompt else 'fallback=video prompt'})"
         )
         try:
-            ltx_image_url = await generate_first_frame_with_imagen(
-                prompt=effective_imagen_prompt,
+            ltx_image_url = await generate_first_frame_with_gemini(
+                prompt=effective_scene_prompt,
                 product_images=product_image_bytes,
             )
             logger.info(
-                f"[Worker] ✅ Imagen 3 first frame ready "
+                f"[Worker] ✅ Gemini 3 Pro first frame ready "
                 f"({len(product_image_bytes)} reference(s)) → passing to LTX"
             )
-        except Exception as imagen_err:
-            # Graceful degradation: Imagen 3 failed → LTX uses raw product image URL
+        except Exception as gen_err:
+            # Graceful degradation: first frame failed → LTX uses raw product image URL
             logger.warning(
-                f"[Worker] Imagen 3 first frame failed, falling back to product image: {imagen_err}"
+                f"[Worker] Gemini 3 Pro first frame failed, falling back to product image: {gen_err}"
             )
             ltx_image_url = image_url
 
     mode = "image-to-video" if ltx_image_url else "text-to-video"
 
-    # ── SKIP_LTX dev flag — bypass LTX entirely to test Imagen 3 only ─────────
+    # ── SKIP_LTX dev flag — bypass LTX to test first-frame generation only ────
     # Set SKIP_LTX=true in .env to stop after first-frame generation.
-    # Returns the Imagen 3 PNG URL directly as the "video" so the rest of the
-    # pipeline (overlay, captions, DB persist) still runs and you can verify
-    # the first frame in the UI without paying for LTX generation.
     if os.getenv("SKIP_LTX", "").lower() == "true":
         logger.warning(
-            f"[Worker] SKIP_LTX=true — returning Imagen 3 frame as video: {ltx_image_url}"
+            f"[Worker] SKIP_LTX=true — returning first frame as video: {ltx_image_url}"
         )
         return ltx_image_url or ""
 

@@ -260,62 +260,6 @@ async def _concat_clips(clip_urls: list[str], reel_id: str) -> str:
         _cleanup_temp(*clip_paths, list_path, output_path)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Vertex AI Client Cache (Imagen 3)
-# ─────────────────────────────────────────────────────────────────────────────
-
-_vertex_client = None
-_vertex_client_key: tuple | None = None  # (project, location, cred_path) — invalidate if env changes
-
-
-def _get_vertex_client():
-    """
-    Return a cached Vertex AI genai.Client for Imagen 3.
-
-    WHY cached: Loading service account credentials from disk + creating the
-    client takes ~200ms per call. Since generate_first_frame_with_imagen() is
-    called once per reel generation, caching avoids re-reading the JSON on every
-    generation without changing observable behaviour.
-    """
-    global _vertex_client, _vertex_client_key
-
-    from google import genai
-    from google.oauth2 import service_account as _sa
-
-    project  = os.getenv("GOOGLE_CLOUD_PROJECT")
-    location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
-    cred_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
-
-    if not project or not cred_env:
-        raise RuntimeError(
-            "GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS not configured "
-            "— Vertex AI (Imagen 3) unavailable"
-        )
-
-    _backend_dir = os.path.normpath(
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-    )
-    cred_path = cred_env if os.path.isabs(cred_env) else os.path.join(_backend_dir, cred_env)
-    if not os.path.exists(cred_path):
-        raise RuntimeError(f"Service account JSON not found: {cred_path}")
-
-    cache_key = (project, location, cred_path)
-    if _vertex_client is not None and _vertex_client_key == cache_key:
-        return _vertex_client
-
-    creds = _sa.Credentials.from_service_account_file(
-        cred_path,
-        scopes=["https://www.googleapis.com/auth/cloud-platform"],
-    )
-    _vertex_client = genai.Client(
-        vertexai=True,
-        project=project,
-        location=location,
-        credentials=creds,
-    )
-    _vertex_client_key = cache_key
-    logger.info(f"[Imagen3] Vertex AI client initialized (project={project}, location={location})")
-    return _vertex_client
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -353,149 +297,100 @@ async def _upload_image_to_fal(image_bytes: bytes, suffix: str = ".png") -> str:
             return fal_client.upload_file(tmp_path)
 
         url: str = await loop.run_in_executor(None, _upload)
-        logger.info(f"[Imagen3] Frame uploaded to fal.ai storage: {url[:80]}")
+        logger.info(f"[Gemini3Pro] Frame uploaded to fal.ai storage: {url[:80]}")
         return url
     finally:
         _cleanup_temp(tmp_path)
 
 
-async def generate_first_frame_with_imagen(
+# ─────────────────────────────────────────────────────────────────────────────
+# Gemini 3 Pro Image — First Frame Generator
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def generate_first_frame_with_gemini(
     prompt: str,
     product_images: list[tuple[bytes, str]],
     aspect_ratio: str = "9:16",
+    resolution: str = "1K",
 ) -> str:
     """
-    Generate a cinematic first frame using Google Imagen 3 with product reference images.
+    Generate a cinematic first frame using Gemini 3 Pro Image (Nano Banana Pro).
 
-    Imagen 3 uses semantic scene understanding + SUBJECT reference images to produce
-    a new scene in which the product appears faithfully — preserving specific character
-    details (eye shape, tooth pattern, colour gradients) that CLIP-based IP-Adapters
-    cannot replicate at any scale.
+    Unlike Imagen 3's SUBJECT reference approach, Gemini 3 Pro Image receives
+    product photos directly in the conversation context — the model sees and
+    reasons about the product holistically before generating, preserving material
+    type, distinguishing features, and product identity without a separate text
+    description step.
 
-    Pipeline:
-        Primary:  edit_image() with SubjectReferenceImage — each product photo becomes a
-                  separate SUBJECT reference (up to 4) so Imagen 3 sees multiple angles
-                  and understands the product's shape, colours, and distinguishing details.
-                  Uses EDIT_MODE_PRODUCT_IMAGE which is optimised for product lifestyle shots.
-                  Model: imagen-3.0-capability-001 (the capability/editing model)
-        Fallback: generate_images() text-only — if the reference call fails, the
-                  Gemini-crafted prompt still describes the product accurately via
-                  generate_first_frame_prompt() so text-only still produces a product-aware frame.
-                  Model: imagen-3.0-generate-002 (the standard generation model)
-        Then:     Upload PNG bytes to fal.ai storage → return public CDN URL for LTX
+    Supports up to 6 high-fidelity object references (vs Imagen 3's 2 for 9:16).
+    Uses built-in Thinking mode to reason through composition before generating.
+    Runs on GOOGLE_AI_API_KEY — no Vertex AI service account required.
 
     Args:
-        prompt:         Static first-frame scene description from generate_first_frame_prompt().
-                        Describes the product, scene, environment, and composition in detail.
-        product_images: List of (bytes, mime_type) tuples downloaded from R2.
-                        All images (up to 4) are sent as SUBJECT references so Imagen 3
-                        sees multiple angles/views of the product for better fidelity.
-        aspect_ratio:   Output aspect ratio — "9:16" for social reels (vertical portrait)
+        prompt:         Scene description (environment, lighting, style, mood).
+                        Does NOT need to describe the product — model sees it directly.
+        product_images: List of (bytes, mime_type) tuples. Up to 6 used as object
+                        references; extras are silently dropped.
+        aspect_ratio:   Output aspect ratio (e.g. "9:16" for portrait Reels)
+        resolution:     Output resolution ("1K", "2K", "4K") — 1K for cost efficiency
 
     Returns:
-        fal.media CDN URL of the Imagen-generated first frame image
+        fal.media CDN URL of the generated first frame image
 
     Raises:
-        RuntimeError: If Vertex AI credentials are missing or all generation attempts fail
+        RuntimeError: If GOOGLE_AI_API_KEY is missing or generation fails
     """
+    import io
+    from google import genai
     from google.genai import types as genai_types
+    from PIL import Image as PilImage
 
-    loop = asyncio.get_running_loop()
-    client = _get_vertex_client()
+    api_key = os.getenv("GOOGLE_AI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GOOGLE_AI_API_KEY not set — Gemini 3 Pro Image unavailable")
 
-    # Imagen 3 SUBJECT reference limit (Preview, as of 2025-05):
-    #   • Non-square aspect ratios (9:16, 16:9, …): max 2 reference images
-    #   • Square (1:1): up to 4 reference images
-    # Sending more than 2 for non-square returns INVALID_ARGUMENT 400.
-    _MAX_SUBJECT_REFS = 2 if aspect_ratio != "1:1" else 4
-    ref_images = product_images[:_MAX_SUBJECT_REFS]
+    client = genai.Client(api_key=api_key)
 
-    # ── Primary: Imagen 3 edit_image() with SUBJECT references ───────────────
-    # Uses client.models.edit_image() (not generate_images) because only the
-    # capability model supports reference images — generate_images() is text-only.
-    #
-    # Each product photo becomes a SubjectReferenceImage with SUBJECT_TYPE_PRODUCT.
-    # Multiple views help Imagen 3 understand depth, colour on different sides,
-    # and distinguishing details (e.g. a character face on the front vs plain back).
-    if ref_images:
-        try:
-            def _gen_with_references():
-                subject_refs = [
-                    genai_types.SubjectReferenceImage(
-                        reference_id=idx + 1,  # 1-indexed, must be unique per reference
-                        reference_image=genai_types.Image(image_bytes=img_bytes),
-                        config=genai_types.SubjectReferenceConfig(
-                            # SUBJECT_TYPE_PRODUCT tells Imagen 3 to recognise and
-                            # faithfully reproduce the product's specific visual identity
-                            subject_type=genai_types.SubjectReferenceType.SUBJECT_TYPE_PRODUCT,
-                        ),
-                    )
-                    for idx, (img_bytes, _mime) in enumerate(ref_images)
-                ]
+    # gemini-3-pro-image supports up to 6 high-fidelity object references
+    _MAX_REFS = 6
+    pil_images = [
+        PilImage.open(io.BytesIO(img_bytes))
+        for img_bytes, _mime in product_images[:_MAX_REFS]
+    ]
 
-                # EDIT_MODE_PRODUCT_IMAGE is not yet supported on the Preview model.
-                # EDIT_MODE_DEFAULT lets Imagen pick the best editing strategy given
-                # the SubjectReferenceImage inputs — works on the current Preview version.
-                response = client.models.edit_image(
-                    model="imagen-3.0-capability-001",  # capability model supports references
-                    prompt=prompt,
-                    reference_images=subject_refs,
-                    config=genai_types.EditImageConfig(
-                        edit_mode=genai_types.EditMode.EDIT_MODE_DEFAULT,
-                        number_of_images=1,
-                        aspect_ratio=aspect_ratio,
-                    ),
-                )
-                generated = response.generated_images
-                if not generated:
-                    raise RuntimeError("Imagen 3 returned no images (SUBJECT references)")
-                result_bytes = generated[0].image.image_bytes
-                if not result_bytes:
-                    raise RuntimeError("Imagen 3 image has no bytes (SUBJECT references)")
-                return result_bytes
+    contents = [prompt] + pil_images
 
-            result_bytes = await loop.run_in_executor(None, _gen_with_references)
-            logger.info(
-                f"[Imagen3] ✅ First frame with {len(ref_images)} SUBJECT reference(s): "
-                f"{len(result_bytes):,} bytes"
-            )
-            return await _upload_image_to_fal(result_bytes)
-
-        except Exception as ref_err:
-            logger.warning(
-                f"[Imagen3] ⚠️ SUBJECT reference ({len(ref_images)} image(s)) failed "
-                f"— falling back to text-only. Reason: {ref_err}"
-            )
-
-    # ── Fallback: Imagen 3 text-only ──────────────────────────────────────────
-    # Gemini-crafted prompt describes the product visually in detail (see
-    # generate_first_frame_prompt()) so text-only still produces a product-aware frame.
-    logger.warning(f"[Imagen3] Text-only fallback: {prompt[:80]}...")
-
-    def _gen_text_only():
-        response = client.models.generate_images(
-            model="imagen-3.0-generate-002",
-            prompt=prompt,
-            config=genai_types.GenerateImagesConfig(
-                number_of_images=1,
-                aspect_ratio=aspect_ratio,
+    def _gen():
+        response = client.models.generate_content(
+            model="gemini-3-pro-image",
+            contents=contents,
+            config=genai_types.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+                response_format={
+                    "image": {
+                        "aspect_ratio": aspect_ratio,
+                        "image_size": resolution,
+                    }
+                },
             ),
         )
-        generated = response.generated_images
-        if not generated:
-            raise RuntimeError("Imagen 3 returned no images (text-only)")
-        result_bytes = generated[0].image.image_bytes
-        if not result_bytes:
-            raise RuntimeError("Imagen 3 image has no bytes (text-only)")
-        return result_bytes
+        for part in response.parts:
+            if getattr(part, "thought", False):
+                continue  # skip thinking steps
+            if part.inline_data is not None:
+                img = part.as_image()
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                return buf.getvalue()
+        raise RuntimeError("Gemini 3 Pro Image returned no image in response")
 
-    try:
-        result_bytes = await loop.run_in_executor(None, _gen_text_only)
-        logger.warning(f"[Imagen3] ⚠️ Text-only first frame: {len(result_bytes):,} bytes")
-        return await _upload_image_to_fal(result_bytes)
-    except Exception as e:
-        logger.error(f"[Imagen3] Both generation attempts failed: {e}")
-        raise RuntimeError(f"Imagen 3 first frame generation failed: {e}") from e
+    loop = asyncio.get_running_loop()
+    result_bytes = await loop.run_in_executor(None, _gen)
+    logger.info(
+        f"[Gemini3Pro] ✅ First frame generated ({len(pil_images)} ref(s)): "
+        f"{len(result_bytes):,} bytes"
+    )
+    return await _upload_image_to_fal(result_bytes)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
