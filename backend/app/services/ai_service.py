@@ -524,10 +524,13 @@ async def generate_first_frame_prompt(
         visual_instruction = (
             "IMPORTANT: Product photos are attached. Study them carefully.\n"
             "Describe the product's EXACT appearance from the photos:\n"
+            "  - Material/type FIRST (e.g. 'plush soft toy', 'plastic figure', 'metal charm',\n"
+            "    'rubber figurine') — this is the most important detail for faithful rendering\n"
             "  - Precise colours (e.g. 'matte olive green', 'translucent pink')\n"
             "  - Shape and form (e.g. 'round with protruding teeth', 'tall cylinder')\n"
-            "  - Distinguishing details (e.g. 'one large eye, white pupils', 'embossed logo')\n"
-            "This level of detail helps Imagen 3 generate a product-accurate first frame.\n"
+            "  - Distinguishing details (e.g. 'sewn circular eyes', 'embossed logo')\n"
+            "CRITICAL: If it is a plush/soft toy, always include the words 'plush soft toy' or\n"
+            "'stuffed character' — never describe toy features as 'realistic'.\n"
         )
     else:
         visual_instruction = (
@@ -544,20 +547,21 @@ async def generate_first_frame_prompt(
         + visual_instruction + "\n"
         "RULES:\n"
         "1. Product MUST be the clear focal point — clearly visible, recognisable\n"
-        "2. Describe the product's specific visual appearance (colour, shape, character details)\n"
-        "3. Set the scene / environment to match the video prompt\n"
-        "4. NO motion words — this is a STILL IMAGE (no 'bounces', 'walks', 'clips')\n"
-        "5. Portrait 9:16 vertical composition, product in foreground\n"
-        "6. 120–220 characters — concise and visual\n"
-        "7. Return ONLY the scene description — no quotes, no explanation\n\n"
+        "2. State the product MATERIAL/TYPE first (plush soft toy / plastic figure / metal charm)\n"
+        "3. Describe specific visual appearance (colour, shape, character details)\n"
+        "4. Set the scene / environment to match the video prompt\n"
+        "5. NO motion words — this is a STILL IMAGE (no 'bounces', 'walks', 'clips')\n"
+        "6. Portrait 9:16 vertical composition, product in foreground\n"
+        "7. 120–220 characters — concise and visual\n"
+        "8. Return ONLY the scene description — no quotes, no explanation\n\n"
         "GOOD example:\n"
         "  Product: green plankton keychain, cute oversized teeth, Spongebob show\n"
         "  Video: 'A hand clips the keychain onto a school bag zipper'\n"
-        "  → 'Tiny green plankton character keychain resting on a dark zipper pull, "
-        "close-up, blurred school corridor, warm afternoon light'\n\n"
+        "  → 'Plush soft toy plankton keychain, pink circular eyes, oversized teeth, "
+        "resting on a dark zipper pull, close-up, blurred school corridor'\n\n"
         "BAD example:\n"
-        "  → 'A keychain on a bag' ← too vague, product not described\n"
-        "  → 'A hand clips the keychain' ← motion word, not a still image"
+        "  → 'A keychain on a bag' ← too vague, material not stated\n"
+        "  → 'Realistic green creature on a bag' ← 'realistic' is wrong for a plush toy"
     )
 
     user_content = (
