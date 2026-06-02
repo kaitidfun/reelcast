@@ -6,7 +6,7 @@ Handles AI-powered generation via Google Gemini:
   - Prompt generation from template + product context (generate_prompt_from_template)
   - Prompt enhancement from existing draft (enhance_prompt)
   - Guided prompt generation from chip selections + product image (generate_guided_prompt)
-  - First-frame description for Imagen 3 (generate_first_frame_prompt)
+  - First-frame scene description for Gemini 3 Pro Image (generate_first_frame_prompt)
 
 Note: Video generation is in video_generation_service.py.
 """
@@ -53,7 +53,7 @@ def _get_client() -> genai.Client:
 # generation functions so Gemini understands the output will drive two models.
 _LTX_PIPELINE_PREAMBLE = (
     "You are an expert prompt engineer for a two-stage AI video pipeline:\n"
-    "  Stage 1 — Imagen 3 (text-to-image with product reference): generates a cinematic 9:16 first frame.\n"
+    "  Stage 1 — Gemini 3 Pro Image (receives product photos directly): generates a cinematic 9:16 first frame.\n"
     "  Stage 2 — LTX Video 2.3 fast (image-to-video): animates that frame (~30s).\n\n"
 )
 
@@ -228,7 +228,7 @@ async def generate_prompt_from_template(
         + "YOUR JOB: Write the scene prompt that drives BOTH stages.\n\n"
         "CRITICAL RULES:\n"
         "- DO NOT describe the product's appearance (colour, shape, material, logo).\n"
-        "  Product PHOTOS are already provided as SUBJECT reference to Imagen 3.\n"
+        "  Product PHOTOS are sent directly to Gemini 3 Pro Image — it sees the product.\n"
         "- DO describe: ACTION, SCENE, ENVIRONMENT, PEOPLE, ATMOSPHERE, LIGHTING\n"
         "- MOTION FIRST: start with the main action, then describe the setting\n"
         "- ALWAYS end with an explicit camera instruction:\n"
@@ -316,7 +316,7 @@ async def enhance_prompt(
         + "YOUR JOB: Rewrite the user's prompt while keeping their core idea.\n\n"
         "CRITICAL RULES:\n"
         "- DO NOT describe the product's appearance (colour, material, shape, logo).\n"
-        "  Product photos are already provided as SUBJECT reference to Imagen 3.\n"
+        "  Product photos are sent directly to Gemini 3 Pro Image — it sees the product.\n"
         "- DO describe: ACTION, SCENE, ENVIRONMENT, PEOPLE, ATMOSPHERE, LIGHTING\n"
         "- MOTION FIRST: lead with the main action, then describe the setting\n"
         "- ALWAYS end with an explicit camera instruction:\n"
@@ -427,7 +427,7 @@ async def generate_guided_prompt(
         + "YOUR JOB: Translate the creative chips below into a concrete scene prompt.\n\n"
         "CRITICAL RULES:\n"
         "- DO NOT describe the product's appearance (colour, material, shape, logo).\n"
-        "  Product photos are provided as SUBJECT reference to Imagen 3.\n"
+        "  Product photos are sent directly to Gemini 3 Pro Image — it sees the product.\n"
         "- DO describe: ACTION, SCENE, ENVIRONMENT, PEOPLE, ATMOSPHERE, LIGHTING\n"
         "- MOTION FIRST: start with the main action, then describe the setting\n"
         "- ALWAYS end with an explicit camera instruction matching the Camera Motion chip.\n"
@@ -494,8 +494,9 @@ async def generate_first_frame_prompt(
         video_prompt:        LTX motion prompt
         product_name:        Product name (for fallback)
         product_description: Product description (for fallback)
-        product_images:      Unused here — included for API compatibility.
-                             Product images are sent directly to Gemini 3 Pro Image.
+        product_images:      Sent to Gemini Flash so it can write a scene description
+                             that suits the product's context. The same images are also
+                             sent directly to Gemini 3 Pro Image for first frame generation.
 
     Returns:
         Scene description (120–220 chars) focused on environment, lighting, and style.

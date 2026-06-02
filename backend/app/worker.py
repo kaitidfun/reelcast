@@ -116,7 +116,7 @@ async def _async_process_reel_generation(
 
     Workflow:
         1. Load reel + product from DB; enrich prompt with product metadata (F2-URS02-SRS01)
-        2. Generate video via Imagen 3 (first frame) + LTX Video 2.3 (animation):
+        2. Generate video via Gemini 3 Pro Image (first frame) + LTX Video 2.3 (animation):
              ≤ 20s → single LTX clip
              > 20s → multi-clip extend chain (clips chained via last-frame extraction)
            OR use uploaded video (target="upload")
@@ -241,7 +241,7 @@ async def _async_process_reel_generation(
                 duration=duration,
                 with_audio=with_audio,
                 reel_id=reel_id,
-                imagen_prompt=scene_prompt,               # Scene prompt for Gemini 3 Pro Image
+                scene_prompt=scene_prompt,                # Scene prompt for Gemini 3 Pro Image
             )
         elif target == "upload":
             # User-uploaded video — apply overlay + captions, skip AI generation
@@ -351,7 +351,7 @@ async def _run_ltx_generation(
     with_audio: bool = False,
     reel_id: str = "unknown",
     product_image_bytes: list[tuple[bytes, str]] | None = None,
-    imagen_prompt: str | None = None,
+    scene_prompt: str | None = None,
 ) -> str:
     """
     Generate a product reel using Gemini 3 Pro Image (first frame) → LTX Video 2.3 (animation).
@@ -361,9 +361,9 @@ async def _run_ltx_generation(
         2. LTX Video 2.3 image-to-video → animate the first frame (~30s fast)
 
     Two-prompt strategy:
-        imagen_prompt (scene): "On dark marble surface, dramatic chiaroscuro lighting"
-            → Gemini 3 Pro sees product photos directly + scene prompt → generates first frame
-        prompt (motion):       "A hand clips the keychain onto a zipper. Camera pushes in."
+        scene_prompt (scene): "On dark marble surface, dramatic chiaroscuro lighting"
+            → Gemini 3 Pro Image sees product photos directly + scene prompt → generates first frame
+        prompt (motion):      "A hand clips the keychain onto a zipper. Camera pushes in."
             → LTX animates the first frame into a cinematic scene
 
     First frame skipped when:
@@ -383,7 +383,7 @@ async def _run_ltx_generation(
         with_audio:           True = LTX generates native audio; False = silent video
         reel_id:              Reel UUID for R2 key naming in multi-clip concat
         product_image_bytes:  ALL product images as (bytes, mime_type) tuples (up to 6 used)
-        imagen_prompt:        Scene/environment description. Falls back to `prompt` if None.
+        scene_prompt:         Scene/environment description. Falls back to `prompt` if None.
 
     Returns:
         fal.media CDN URL  (single clip ≤ 20s)
@@ -402,10 +402,10 @@ async def _run_ltx_generation(
     ltx_image_url = image_url  # Default fallback = primary product image URL
 
     if product_image_bytes:
-        effective_scene_prompt = imagen_prompt or prompt
+        effective_scene_prompt = scene_prompt or prompt
         logger.info(
             f"[Worker] Gemini 3 Pro scene prompt: '{effective_scene_prompt[:80]}...' "
-            f"({'dedicated' if imagen_prompt else 'fallback=video prompt'})"
+            f"({'dedicated' if scene_prompt else 'fallback=video prompt'})"
         )
         try:
             ltx_image_url = await generate_first_frame_with_gemini(
@@ -472,15 +472,15 @@ async def _fetch_product_image_bytes(
     """
     Download product images from presigned R2 URLs and return as (bytes, mime_type) tuples.
 
-    WHY: generate_first_frame_prompt() sends product photos to Gemini so it can SEE the
+    WHY: generate_first_frame_prompt() sends product photos to Gemini Flash so it can SEE the
     actual product appearance (exact colour, shape, character details) rather than
-    relying only on the text description.  This produces far more accurate first-frame
-    descriptions for Imagen 3, and the same bytes are also used as the Imagen 3 SUBJECT
-    reference for semantic product fidelity in the generated scene.
+    relying only on the text description.  The same bytes are also sent directly to
+    Gemini 3 Pro Image which reasons about the product holistically before generating
+    the first frame — no text translation step needed.
 
     Args:
         image_urls: List of presigned R2 URLs (already resolved by get_presigned_url()).
-                    All URLs are fetched — more images give Gemini and Imagen 3 more
+                    All URLs are fetched — more images give Gemini Flash and Gemini 3 Pro Image more
                     visual context for accurate product representation.
 
     Returns:

@@ -1,27 +1,29 @@
 """
 Video Generation Service
 ========================
-Handles AI video generation via Imagen 3 (first frame) + LTX Video 2.3 fast (animation).
+Handles AI video generation via Gemini 3 Pro Image (first frame) + LTX Video 2.3 fast (animation).
 
 Primary Pipeline (when product image is available):
-    1. Google Imagen 3 → generates a product-accurate cinematic 9:16 first frame
+    1. Gemini 3 Pro Image → generates a product-accurate cinematic 9:16 first frame
     2. LTX Video 2.3 fast image-to-video → animate that frame (~30s)
 
     WHY two-step:
     - Raw product photos (plain white background) produce boring animations
-    - Imagen 3 uses semantic scene understanding with SUBJECT reference images:
-      the product's specific visual features (character details, colour gradients,
-      logo markings) are faithfully reproduced in a new cinematic scene
+    - Gemini 3 Pro Image receives product photos directly in context — the model
+      sees and reasons about the product holistically (colour, shape, character details,
+      logo markings) before generating, preserving product identity without a separate
+      text description step.
     - LTX then animates that scene → fast, cinematic product reel
 
-    WHY Imagen 3 over Flux + IP-Adapter:
+    WHY Gemini 3 Pro Image over Imagen 3 / Flux + IP-Adapter:
     - CLIP-based IP-Adapters capture only statistical colour/shape patterns — they
       cannot reproduce specific character details (one eye, particular teeth, tiny logo)
-    - Imagen 3 uses semantic understanding + SUBJECT reference: it actually recognises
-      the product and recreates it faithfully in a new environment and lighting context
+    - Imagen 3 translates product photos → text description → image (information loss)
+    - Gemini 3 Pro Image receives up to 6 product photos directly, uses Thinking mode
+      to reason about the product, and generates without the text translation step
 
-Fallback Pipeline (when no product image / Imagen unavailable):
-    LTX Video 2.3 fast text-to-video → scene from Gemini-crafted prompt only
+Fallback Pipeline (when no product image / Gemini unavailable):
+    LTX Video 2.3 fast text-to-video → scene from Gemini Flash-crafted prompt only
 
 Audio:
     LTX 2.3 generates native audio alongside video (ambient / sound-effects).
@@ -263,7 +265,7 @@ async def _concat_clips(clip_urls: list[str], reel_id: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Imagen 3 — First Frame Generator
+# First Frame Upload Helper (fal.ai storage)
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def _upload_image_to_fal(image_bytes: bytes, suffix: str = ".png") -> str:
@@ -275,7 +277,7 @@ async def _upload_image_to_fal(image_bytes: bytes, suffix: str = ".png") -> str:
     URL (~24h TTL) that LTX fetches during generation.
 
     Args:
-        image_bytes: Raw image data (PNG from Imagen 3, or JPEG from last-frame extract)
+        image_bytes: Raw image data (PNG/JPEG from Gemini 3 Pro Image, or JPEG from last-frame extract)
         suffix:      File extension hint for MIME detection (".png" default)
 
     Returns:
@@ -378,10 +380,7 @@ async def generate_first_frame_with_gemini(
             if getattr(part, "thought", False):
                 continue  # skip thinking steps
             if part.inline_data is not None:
-                img = part.as_image()
-                buf = io.BytesIO()
-                img.save(buf, format="PNG")
-                return buf.getvalue()
+                return part.inline_data.data  # raw bytes — no PIL conversion needed
         raise RuntimeError("Gemini 3 Pro Image returned no image in response")
 
     loop = asyncio.get_running_loop()
@@ -410,7 +409,7 @@ async def generate_with_ltx(
     generate_extended_ltx() which chains clips via last-frame extraction.
 
     Mode selection:
-        With image_url  → LTX_IMAGE_MODEL (image-to-video): Imagen 3 first frame anchors
+        With image_url  → LTX_IMAGE_MODEL (image-to-video): Gemini 3 Pro Image first frame anchors
                           the animation for visual consistency.
         Without image   → LTX_TEXT_MODEL (text-to-video): pure text prompt.
 
@@ -493,7 +492,7 @@ async def generate_extended_ltx(
     extracted with FFmpeg and uploaded to fal.ai — so the scene flows seamlessly.
 
     Example for 60s (3 × 20s clips):
-        Clip 1 (20s): imagen3_first_frame → LTX 2.3
+        Clip 1 (20s): gemini3pro_first_frame → LTX 2.3
         Clip 2 (20s): last_frame(clip1) → LTX 2.3
         Clip 3 (20s): last_frame(clip2) → LTX 2.3
         ↓ FFmpeg concat → 60s video → R2 upload → object key returned
@@ -509,7 +508,7 @@ async def generate_extended_ltx(
 
     Args:
         prompt:         LTX-optimised scene description (motion-first, 200–350 chars)
-        image_url:      Imagen 3 first frame for clip 1 (None → text-to-video)
+        image_url:      Gemini 3 Pro Image first frame for clip 1 (None → text-to-video)
         total_duration: Target duration in seconds (must exceed LTX_MAX_CLIP_DURATION)
         reel_id:        Reel UUID — used for R2 key naming of the concatenated output
         with_audio:     True to generate native audio for all clips
@@ -528,7 +527,7 @@ async def generate_extended_ltx(
     )
 
     clip_urls: list[str] = []
-    current_image_url = image_url  # Clip 1 uses Imagen 3 first frame; subsequent = last frame
+    current_image_url = image_url  # Clip 1 uses Gemini 3 Pro Image first frame; subsequent = last frame
 
     for i in range(num_clips):
         remaining = total_duration - i * LTX_MAX_CLIP_DURATION
@@ -579,7 +578,7 @@ async def generate_video(
 
     Used by the worker when FAL_KEY is not configured (fallback path).
     For the primary worker flow see _run_ltx_generation() in worker.py which
-    uses Imagen 3 → LTX Video 2.3 for product-accurate generation.
+    uses Gemini 3 Pro Image → LTX Video 2.3 for product-accurate generation.
 
     Args:
         prompt:     Creative brief (enriched with product metadata by worker)
