@@ -520,7 +520,7 @@ async def generate_first_frame_prompt(
         "RULES:\n"
         "1. Describe SCENE and ENVIRONMENT (surface, background, location)\n"
         "2. Describe LIGHTING and MOOD (from the video prompt style)\n"
-        "3. Describe COMPOSITION (e.g. close-up, low angle, portrait 9:16)\n"
+        "3. ALWAYS end with 'portrait 9:16 vertical frame' — this is REQUIRED for framing\n"
         "4. NO motion words — this is a STILL IMAGE\n"
         "5. 120–220 characters — concise\n"
         "6. Return ONLY the scene description — no quotes, no explanation\n\n"

@@ -368,12 +368,8 @@ async def generate_first_frame_with_gemini(
             contents=contents,
             config=genai_types.GenerateContentConfig(
                 response_modalities=["IMAGE"],
-                response_format={
-                    "image": {
-                        "aspect_ratio": aspect_ratio,
-                        "image_size": resolution,
-                    }
-                },
+                # response_format not supported in current SDK — aspect_ratio/image_size
+                # are controlled via the scene prompt text instead ("portrait 9:16")
             ),
         )
         for part in response.parts:
