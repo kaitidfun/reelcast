@@ -353,8 +353,8 @@ async def generate_first_frame_with_gemini(
 
     client = genai.Client(api_key=api_key)
 
-    # gemini-3-pro-image supports up to 6 high-fidelity object references
-    _MAX_REFS = 6
+    # gemini-3-pro-image supports up to 10 object + 4 character = 14 reference images
+    _MAX_REFS = 14
     pil_images = [
         PilImage.open(io.BytesIO(img_bytes))
         for img_bytes, _mime in product_images[:_MAX_REFS]
@@ -368,8 +368,10 @@ async def generate_first_frame_with_gemini(
             contents=contents,
             config=genai_types.GenerateContentConfig(
                 response_modalities=["IMAGE"],
-                # response_format not supported in current SDK — aspect_ratio/image_size
-                # are controlled via the scene prompt text instead ("portrait 9:16")
+                image_config=genai_types.ImageConfig(
+                    aspect_ratio=aspect_ratio,  # "9:16" for portrait Reels
+                    image_size=resolution,       # "1K" default — "2K"/"4K" for higher quality
+                ),
             ),
         )
         for part in response.parts:
