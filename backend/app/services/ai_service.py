@@ -203,7 +203,7 @@ async def generate_prompt_from_template(
         product_description:  Product highlights/description from the library
         duration:             Requested video length in seconds
         product_images:  List of (bytes, mime_type) tuples for ALL product images,
-                         sorted primary-first (up to 4). Gemini receives every image
+                         sorted primary-first (all images). Gemini receives every image
                          so it can reference multiple angles and views of the product.
                          Empty list = text-only fallback.
 
@@ -303,7 +303,7 @@ async def enhance_prompt(
         product_description:  Product highlights for additional context (optional)
         duration:             Requested video length in seconds
         product_images:  List of (bytes, mime_type) tuples for ALL product images,
-                         sorted primary-first (up to 4). Gemini sees every image
+                         sorted primary-first (all images). Gemini sees every image
                          for richer visual context. Empty list = text-only.
 
     Returns:
@@ -400,7 +400,7 @@ async def generate_guided_prompt(
         product_name:         Product name from the library
         product_description:  Product description/highlights
         product_images:  List of (bytes, mime_type) tuples for ALL product images,
-                         sorted primary-first (up to 4 images)
+                         sorted primary-first (all images)
         duration:             Requested video length in seconds
 
     Returns:

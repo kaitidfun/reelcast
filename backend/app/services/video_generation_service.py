@@ -19,7 +19,7 @@ Primary Pipeline (when product image is available):
     - CLIP-based IP-Adapters capture only statistical colour/shape patterns — they
       cannot reproduce specific character details (one eye, particular teeth, tiny logo)
     - Imagen 3 translates product photos → text description → image (information loss)
-    - Gemini 3 Pro Image receives up to 6 product photos directly, uses Thinking mode
+    - Gemini 3 Pro Image receives up to 14 product photos directly, uses Thinking mode
       to reason about the product, and generates without the text translation step
 
 Fallback Pipeline (when no product image / Gemini unavailable):
@@ -324,7 +324,7 @@ async def generate_first_frame_with_gemini(
     type, distinguishing features, and product identity without a separate text
     description step.
 
-    Supports up to 6 high-fidelity object references (vs Imagen 3's 2 for 9:16).
+    Supports up to 14 high-fidelity object references (10 object + 4 character).
     Uses built-in Thinking mode to reason through composition before generating.
     Runs on GOOGLE_AI_API_KEY — no Vertex AI service account required.
 

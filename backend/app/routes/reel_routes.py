@@ -30,8 +30,8 @@ def _load_product_context(product_id: Optional[UUID], user_id, db: Session):
 
     Fetches ALL product images from R2 (not just the primary) so Gemini can see
     every angle and view of the product, producing more accurate and visually
-    specific prompts.  Images are sorted primary-first and capped at 4 to keep
-    the Gemini request size reasonable.
+    specific prompts.  Images are sorted primary-first with no hard cap —
+    Gemini Flash has a 1M token context window and benefits from full visual context.
 
     Returns:
         (product_name, product_description, images)
@@ -421,7 +421,7 @@ async def generate_guided_prompt_endpoint(
     creative chip selections + full product context using Gemini (multimodal).
 
     Sends all chip selections, product name, description, and ALL product images
-    (up to 4, sorted primary-first) so Gemini can reference the product's actual
+    (all images, sorted primary-first) so Gemini can reference the product's actual
     visual appearance from multiple angles.
 
     Request body:

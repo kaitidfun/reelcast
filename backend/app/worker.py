@@ -345,7 +345,7 @@ async def _async_process_reel_generation(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LTX Video 2.3 Generation (Imagen 3 first frame → LTX animation)
+# LTX Video 2.3 Generation (Gemini 3 Pro Image first frame → LTX animation)
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def _run_ltx_generation(
@@ -361,7 +361,7 @@ async def _run_ltx_generation(
     Generate a product reel using Gemini 3 Pro Image (first frame) → LTX Video 2.3 (animation).
 
     Full pipeline:
-        1. Gemini 3 Pro Image → cinematic 9:16 first frame (product-accurate, up to 6 refs)
+        1. Gemini 3 Pro Image → cinematic 9:16 first frame (product-accurate, up to 14 refs)
         2. LTX Video 2.3 image-to-video → animate the first frame (~30s fast)
 
     Two-prompt strategy:
@@ -386,7 +386,7 @@ async def _run_ltx_generation(
         duration:             Requested seconds (6, 10, 15, 30, 60)
         with_audio:           True = LTX generates native audio; False = silent video
         reel_id:              Reel UUID for R2 key naming in multi-clip concat
-        product_image_bytes:  ALL product images as (bytes, mime_type) tuples (up to 6 used)
+        product_image_bytes:  ALL product images as (bytes, mime_type) tuples (up to 14 used)
         scene_prompt:         Scene/environment description. Falls back to `prompt` if None.
 
     Returns:
