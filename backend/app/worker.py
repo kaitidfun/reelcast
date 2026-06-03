@@ -195,8 +195,12 @@ async def _async_process_reel_generation(
             name_lower = product.product_name.lower()
             prompt_lower = reel.prompt_text.lower()
             if name_lower not in prompt_lower:
-                # Append product name so both Imagen 3 and LTX know the subject (F2-URS02-SRS01)
-                video_prompt = f"{reel.prompt_text.rstrip('.')}. Product: {product.product_name}."
+                # Append product name + short description so LTX and Gemini Flash know the
+                # subject and its character type (F2-URS02-SRS01).
+                # Description capped at 80 chars to keep the LTX motion prompt concise.
+                desc = product.description or ""
+                desc_suffix = f" — {desc[:80]}" if desc else ""
+                video_prompt = f"{reel.prompt_text.rstrip('.')}. Product: {product.product_name}{desc_suffix}."
 
         # ── Step 1: Determine video source ──────────────────────────────────
         if target in ["all", "video"]:

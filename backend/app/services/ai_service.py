@@ -83,6 +83,7 @@ async def _run_gemini(
     *,
     model: str = "gemini-3.5-flash",
     response_mime_type: str | None = None,
+    thinking_level: str | None = None,
 ) -> str:
     """
     Run a synchronous Gemini generate_content call in a thread executor.
@@ -90,13 +91,21 @@ async def _run_gemini(
     WHY executor: google-genai uses blocking HTTP — calling it directly in
     an async function stalls the event loop for the full API round-trip
     (~0.5–3s), blocking all other concurrent tasks in the Celery worker.
+
+    Args:
+        thinking_level: Optional Gemini 3.5 thinking effort — "minimal", "low",
+                        "medium", or "high". None = thinking disabled (default).
+                        Use "low" for scene prompts to improve accuracy at low cost.
     """
     client = _get_client()
-    config = (
-        types.GenerateContentConfig(response_mime_type=response_mime_type)
-        if response_mime_type
-        else None
-    )
+
+    # Build config only when at least one option is set
+    config_kwargs: dict = {}
+    if response_mime_type:
+        config_kwargs["response_mime_type"] = response_mime_type
+    if thinking_level:
+        config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_level=thinking_level)
+    config = types.GenerateContentConfig(**config_kwargs) if config_kwargs else None
 
     def _call() -> str:
         kwargs: dict = {"model": model, "contents": contents}
@@ -518,18 +527,25 @@ async def generate_first_frame_prompt(
         "Your job is ONLY to describe: WHERE the product is, the ENVIRONMENT, LIGHTING, and STYLE.\n"
         "Do NOT describe the product's appearance — the model already knows what it looks like.\n\n"
         "RULES:\n"
-        "1. Describe SCENE and ENVIRONMENT (surface, background, location)\n"
-        "2. Describe LIGHTING and MOOD (from the video prompt style)\n"
-        "3. ALWAYS end with 'portrait 9:16 vertical frame' — this is REQUIRED for framing\n"
-        "4. NO motion words — this is a STILL IMAGE\n"
+        "1. ⭐ HIGHEST PRIORITY: If the video prompt explicitly names a LOCATION, SURFACE, or PROP "
+        "(e.g. 'brown bag', 'marble table', 'car seat', 'coffee shop'), USE IT EXACTLY.\n"
+        "   Do NOT substitute or invent a different scene — respect what the user specified.\n"
+        "2. Describe LIGHTING and MOOD (extract from the video prompt tone/style)\n"
+        "3. ALWAYS end with 'portrait 9:16 vertical frame' — REQUIRED for correct framing\n"
+        "4. NO motion words — this is a STILL IMAGE, not a description of movement\n"
         "5. 120–220 characters — concise\n"
         "6. Return ONLY the scene description — no quotes, no explanation\n\n"
-        "GOOD example:\n"
+        "GOOD examples:\n"
+        "  Video: 'make it stay at the brown bag, woman grabs it, high contrast shadow'\n"
+        "  → 'Resting against textured brown canvas bag on rustic wood, "
+        "dramatic high-contrast rim light, deep shadows, portrait 9:16 vertical frame'\n"
+        "  ↑ Used 'brown bag' exactly as user said ✓\n\n"
         "  Video: 'Dark dramatic luxury scene, slow zoom in'\n"
-        "  → 'On polished black marble surface, dramatic chiaroscuro spotlight, "
-        "deep shadows, close-up portrait 9:16'\n\n"
-        "BAD example:\n"
-        "  → 'Pink monster keychain on marble' ← describes product (model already knows)\n"
+        "  → 'On polished black marble surface, chiaroscuro spotlight, "
+        "deep shadows, portrait 9:16 vertical frame'\n\n"
+        "BAD examples:\n"
+        "  User said 'brown bag' → you wrote 'on white studio surface' ← WRONG, ignores user\n"
+        "  → 'Pink monster keychain on marble' ← describes product appearance\n"
         "  → 'A hand holds the product' ← motion word"
     )
 
@@ -544,7 +560,10 @@ async def generate_first_frame_prompt(
             system_prompt + "\n\n" + user_content,
             product_images,
         )
-        result = (await _run_gemini(contents))[:220]
+        # thinking_level="low" — light reasoning pass before answering.
+        # Helps Gemini correctly identify user-specified locations (e.g. "brown bag")
+        # vs. inventing a new scene. Low cost increase, meaningful accuracy gain.
+        result = (await _run_gemini(contents, thinking_level="low"))[:220]
         logger.info(
             f"[FirstFramePrompt] Generated ({len(result)} chars, {len(imgs)} image(s)): "
             f"{result[:80]}..."

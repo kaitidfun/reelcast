@@ -61,8 +61,10 @@ def _load_product_context(product_id: Optional[UUID], user_id, db: Session):
     if not product.images:
         return product_name, product_description, images
 
-    # Sort: primary image first, then the rest; cap at 4 to keep request size reasonable
-    sorted_imgs = sorted(product.images, key=lambda img: (0 if img.is_primary else 1))[:4]
+    # Sort: primary image first, then the rest.
+    # No hard cap — Gemini Flash has a 1M token context window and benefits from seeing
+    # all product angles. Worker caps at _MAX_REFS=14 for Gemini 3 Pro Image separately.
+    sorted_imgs = sorted(product.images, key=lambda img: (0 if img.is_primary else 1))
 
     from app.services.storage_service import get_file
     for img in sorted_imgs:
