@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
-  Sparkles, Video, Wand2, Send, Check, Loader2, Film, RefreshCw,
+  Sparkles, Video, Wand2, Check, Loader2, Film, RefreshCw,
   Play, Pause, Volume2, VolumeX, ShoppingBag, FolderOpen,
   ChevronRight, X, Expand, Download, Clock, Upload, Lightbulb,
 } from "lucide-react";
@@ -402,15 +402,18 @@ const CreateReel = () => {
       });
       if (!res.ok) {
         let msg = "Failed to start generation";
-        try { msg = (await res.json()).detail || msg; } catch {}
+        try { msg = (await res.json()).detail || msg; } catch {
+          // ignore JSON parsing failures
+        }
         throw new Error(msg);
       }
       const data = await res.json();
       setReelId(data.reel_id);
       startGeneration(data.reel_id, selectedProduct.name);
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed to start generation";
       setGenerationStatus("idle");
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Error", description: message, variant: "destructive" });
     }
   };
 
@@ -447,13 +450,16 @@ const CreateReel = () => {
       });
       if (!res.ok) {
         let msg = "Failed to start regeneration";
-        try { msg = (await res.json()).detail || msg; } catch {}
+        try { msg = (await res.json()).detail || msg; } catch {
+          // ignore JSON parsing failures
+        }
         throw new Error(msg);
       }
       toast({ title: "Regenerating...", description: `Regenerating ${target} now.` });
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed to start regeneration";
       setGenerationStatus("idle");
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Error", description: message, variant: "destructive" });
     }
   };
 
@@ -513,7 +519,9 @@ const CreateReel = () => {
       } else {
         setUploadStatus("error");
         let msg = "Upload failed.";
-        try { msg = JSON.parse(xhr.responseText).detail; } catch {}
+        try { msg = JSON.parse(xhr.responseText).detail; } catch {
+          // ignore JSON parsing failures
+        }
         toast({ title: "Upload failed", description: msg, variant: "destructive" });
       }
     };
@@ -571,8 +579,9 @@ const CreateReel = () => {
         document.body.removeChild(a);
         URL.revokeObjectURL(blobUrl);
       }
-    } catch (err: any) {
-      toast({ title: "Download failed", description: err.message || "Could not download the video.", variant: "destructive" });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Could not download the video.";
+      toast({ title: "Download failed", description: message, variant: "destructive" });
     }
   };
 
