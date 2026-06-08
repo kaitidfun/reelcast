@@ -9,6 +9,11 @@
     "test:headed": "npx playwright test --headed",
     "test:debug": "npx playwright test --debug",
     "test:auth": "npx playwright test auth.spec.ts",
+    "test:account": "npx playwright test account.spec.ts",
+    "test:library": "npx playwright test library.spec.ts",
+    "test:create": "npx playwright test create-reel.spec.ts",
+    "test:upload": "npx playwright test upload-reel.spec.ts",
+    "test:reel": "npx playwright test create-reel.spec.ts upload-reel.spec.ts",
     "report": "npx playwright show-report"
   },
   "devDependencies": {

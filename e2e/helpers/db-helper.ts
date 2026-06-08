@@ -85,6 +85,7 @@ export async function query<T extends Record<string, unknown> = Record<string, u
 
 /** Shape of a row returned by the `users` table. */
 export interface UserRow {
+  [key: string]: unknown;
   user_id: string;
   email: string;
   display_name: string | null;
@@ -135,4 +136,105 @@ export async function countUsersByEmail(email: string): Promise<number> {
     [email]
   );
   return parseInt(rows[0].count, 10);
+}
+
+// ─── Campaign Helpers ───────────────────────────────────────────────
+
+/** Shape of a row returned by the `campaigns` table. */
+export interface CampaignRow {
+  [key: string]: unknown;
+  campaign_id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  banner_color: string | null;
+  banner_image_url: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * Fetch a campaign by name (scoped to a user).
+ */
+export async function findCampaignByName(
+  name: string,
+  userId?: string
+): Promise<CampaignRow | null> {
+  const sql = userId
+    ? "SELECT * FROM campaigns WHERE name = $1 AND user_id = $2 LIMIT 1"
+    : "SELECT * FROM campaigns WHERE name = $1 LIMIT 1";
+  const params = userId ? [name, userId] : [name];
+  const { rows } = await query<CampaignRow>(sql, params);
+  return rows[0] ?? null;
+}
+
+/**
+ * Delete all campaigns belonging to a user.
+ * Useful for cleanup since campaigns cascade to products.
+ */
+export async function deleteCampaignsByUserId(userId: string): Promise<void> {
+  await query("DELETE FROM campaigns WHERE user_id = $1", [userId]);
+}
+
+// ─── Product Helpers ────────────────────────────────────────────────
+
+/** Shape of a row returned by the `products` table. */
+export interface ProductRow {
+  [key: string]: unknown;
+  product_id: string;
+  user_id: string;
+  campaign_id: string;
+  product_name: string;
+  description: string | null;
+  affiliate_link: string | null;
+  brand_logo_url: string | null;
+  status: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * Fetch a product by name.
+ */
+export async function findProductByName(name: string): Promise<ProductRow | null> {
+  const { rows } = await query<ProductRow>(
+    "SELECT * FROM products WHERE product_name = $1 LIMIT 1",
+    [name]
+  );
+  return rows[0] ?? null;
+}
+
+// ─── Reel Helpers ───────────────────────────────────────────────────
+
+/** Shape of a row returned by the `reels` table. */
+export interface ReelRow {
+  [key: string]: unknown;
+  reel_id: string;
+  user_id: string;
+  product_id: string | null;
+  prompt_text: string;
+  status: string;
+  final_commercial_video_url: string | null;
+  raw_video_url: string | null;
+  caption_and_hashtags: Record<string, unknown> | null;
+  error_message: string | null;
+  created_at: Date;
+}
+
+/**
+ * Fetch a reel by ID.
+ */
+export async function findReelById(reelId: string): Promise<ReelRow | null> {
+  const { rows } = await query<ReelRow>(
+    "SELECT * FROM reels WHERE reel_id = $1 LIMIT 1",
+    [reelId]
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Delete all reels belonging to a user.
+ */
+export async function deleteReelsByUserId(userId: string): Promise<void> {
+  await query("DELETE FROM reels WHERE user_id = $1", [userId]);
 }
