@@ -6,7 +6,7 @@ from app.core.config import ALLOWED_ORIGINS, SESSION_SECRET_KEY
 from sqlalchemy import text as sa_text
 from app.database import engine, Base, SessionLocal
 import app.models.models  # Import models so Base knows about them
-from app.routes import auth_routes, twofa_routes, oauth_routes, upload_routes, product_routes, campaign_routes, reel_routes
+from app.routes import auth_routes, twofa_routes, oauth_routes, upload_routes, product_routes, campaign_routes, reel_routes, test_routes
 
 # Create all database tables (no-op for existing tables — safe on every restart)
 Base.metadata.create_all(bind=engine)
@@ -48,6 +48,7 @@ app.include_router(upload_routes.router)
 app.include_router(campaign_routes.router)
 app.include_router(product_routes.router)
 app.include_router(reel_routes.router)
+app.include_router(test_routes.router)
 
 
 @app.get("/api/health")
