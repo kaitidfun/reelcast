@@ -254,9 +254,7 @@ test.describe("F2-UTC01: Validate input prompt and product selection", () => {
     // ──────────────────────────────────────────────────────────────
     // STEP 2 — Enter a valid prompt (under 500 characters)
     // ──────────────────────────────────────────────────────────────
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(VALID_PROMPT);
 
     // ──────────────────────────────────────────────────────────────
@@ -311,9 +309,7 @@ test.describe("F2-UTC01: Validate input prompt and product selection", () => {
     // ──────────────────────────────────────────────────────────────
     // STEP 2 — Enter a prompt exceeding 500 characters
     // ──────────────────────────────────────────────────────────────
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(OVER_500_PROMPT);
 
     // ──────────────────────────────────────────────────────────────
@@ -373,9 +369,7 @@ test.describe("F2-UTC01: Validate input prompt and product selection", () => {
     // ──────────────────────────────────────────────────────────────
     // STEP 1 — Enter a valid prompt
     // ──────────────────────────────────────────────────────────────
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(VALID_PROMPT);
 
     // ──────────────────────────────────────────────────────────────
@@ -462,9 +456,7 @@ test.describe("F2-UTC02: Generate Reels via LTX Video 2.0 API", () => {
     // STEP 1 — Select product and enter prompt
     // ──────────────────────────────────────────────────────────────
     await selectProduct(page);
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(VALID_PROMPT);
 
     // ──────────────────────────────────────────────────────────────
@@ -529,9 +521,7 @@ test.describe("F2-UTC02: Generate Reels via LTX Video 2.0 API", () => {
     // STEP 1 — Select product and enter prompt
     // ──────────────────────────────────────────────────────────────
     await selectProduct(page);
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(VALID_PROMPT);
 
     // ──────────────────────────────────────────────────────────────
@@ -585,9 +575,7 @@ test.describe("F2-UTC02: Generate Reels via LTX Video 2.0 API", () => {
     // STEP 1 — Select product and enter prompt
     // ──────────────────────────────────────────────────────────────
     await selectProduct(page);
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(VALID_PROMPT);
 
     // ──────────────────────────────────────────────────────────────
@@ -669,9 +657,7 @@ test.describe("F2-UTC03: Generate Captions and Hashtags", () => {
     // STEP 1 — Select product and enter a valid prompt
     // ──────────────────────────────────────────────────────────────
     await selectProduct(page);
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(VALID_PROMPT);
 
     // ──────────────────────────────────────────────────────────────
@@ -734,9 +720,7 @@ test.describe("F2-UTC03: Generate Captions and Hashtags", () => {
     // STEP 1 — Select product and enter prompt
     // ──────────────────────────────────────────────────────────────
     await selectProduct(page);
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(VALID_PROMPT);
 
     // ──────────────────────────────────────────────────────────────
@@ -790,9 +774,7 @@ test.describe("F2-UTC03: Generate Captions and Hashtags", () => {
     //          Using F2-UTC03-TD02 test data
     // ──────────────────────────────────────────────────────────────
     await selectProduct(page);
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(GARBAGE_TEXT);
 
     // ──────────────────────────────────────────────────────────────
@@ -874,9 +856,7 @@ test.describe("F2-UTC05: Overlay Images and Logo", () => {
     // STEP 1 — Generate a video first (mocked completion)
     // ──────────────────────────────────────────────────────────────
     await selectProduct(page);
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(VALID_PROMPT);
 
     await mockStatusPollingCompleted(page);
@@ -932,9 +912,7 @@ test.describe("F2-UTC05: Overlay Images and Logo", () => {
     // STEP 1 — Select product and enter prompt
     // ──────────────────────────────────────────────────────────────
     await selectProduct(page);
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(VALID_PROMPT);
 
     // ──────────────────────────────────────────────────────────────
@@ -985,9 +963,7 @@ test.describe("F2-UTC05: Overlay Images and Logo", () => {
     // STEP 1 — Select product and enter prompt
     // ──────────────────────────────────────────────────────────────
     await selectProduct(page);
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(VALID_PROMPT);
 
     // ──────────────────────────────────────────────────────────────
@@ -1064,9 +1040,7 @@ test.describe("F2-UTC06: Preview and Approve Content", () => {
    */
   async function generateAndWaitForReady(page: Page): Promise<string> {
     await selectProduct(page);
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(VALID_PROMPT);
 
     await mockStatusPollingCompleted(page);
@@ -1181,9 +1155,7 @@ test.describe("F2-UTC06: Preview and Approve Content", () => {
     // STEP 1 — Select product and enter prompt
     // ──────────────────────────────────────────────────────────────
     await selectProduct(page);
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(VALID_PROMPT);
 
     // ──────────────────────────────────────────────────────────────
@@ -1268,9 +1240,7 @@ test.describe("F2-UTC07: Regenerate Content", () => {
    */
   async function generateInitialReel(page: Page): Promise<string> {
     await selectProduct(page);
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     await promptTextarea.fill(VALID_PROMPT);
 
     await mockStatusPollingCompleted(page);
@@ -1485,9 +1455,7 @@ test.describe("F2-UTC07: Regenerate Content", () => {
     // ──────────────────────────────────────────────────────────────
     // STEP 3 — Modify the prompt to unsafe content before regenerating
     // ──────────────────────────────────────────────────────────────
-    const promptTextarea = page.getByPlaceholder(
-      "Describe the Reel you want to create..."
-    );
+    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
     // Clear existing prompt and enter garbage/unsafe text
     await promptTextarea.fill(GARBAGE_TEXT);
 

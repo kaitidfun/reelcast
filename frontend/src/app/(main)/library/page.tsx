@@ -507,34 +507,50 @@ const ContentLibrary = () => {
     const token = localStorage.getItem("rf_token");
     const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
-    if (editingCampaignId) {
-      await fetch(`http://localhost:8000/api/campaigns/${editingCampaignId}`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({
-          name: cName.trim(),
-          description: cDescription.trim(),
-          banner_color: cBanner,
-          banner_image_url: cBannerImage
-        })
+    try {
+      if (editingCampaignId) {
+        const res = await fetch(`http://localhost:8000/api/campaigns/${editingCampaignId}`, {
+          method: "PUT",
+          headers,
+          body: JSON.stringify({
+            name: cName.trim(),
+            description: cDescription.trim(),
+            banner_color: cBanner,
+            banner_image_url: cBannerImage
+          })
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Failed to update campaign");
+        }
+        toast({ title: "Campaign updated" });
+      } else {
+        const res = await fetch(`http://localhost:8000/api/campaigns`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            name: cName.trim(),
+            description: cDescription.trim(),
+            banner_color: cBanner,
+            banner_image_url: cBannerImage
+          })
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Failed to create campaign");
+        }
+        toast({ title: "Campaign created" });
+      }
+      await fetchLibrary();
+      resetCampaignForm();
+      setIsCampaignDialogOpen(false);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Something went wrong",
+        variant: "destructive"
       });
-      toast({ title: "Campaign updated" });
-    } else {
-      await fetch(`http://localhost:8000/api/campaigns`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          name: cName.trim(),
-          description: cDescription.trim(),
-          banner_color: cBanner,
-          banner_image_url: cBannerImage
-        })
-      });
-      toast({ title: "Campaign created" });
     }
-    await fetchLibrary();
-    resetCampaignForm();
-    setIsCampaignDialogOpen(false);
   };
 
   // ============ Campaign Dialog (shared between views) ============

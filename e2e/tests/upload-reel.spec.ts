@@ -213,7 +213,7 @@ test.describe("F2-UTC04: Upload Own Reel", () => {
 
     // Wait for the status polling to resolve to Completed
     // The UI should transition from rendering/processing to Ready
-    await expect(page.locator("text=Ready")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("Ready", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
 
     // Verify the video preview or player is shown after completion
     // The final_commercial_video_url should result in a video player
@@ -286,7 +286,7 @@ test.describe("F2-UTC04: Upload Own Reel", () => {
     ).toBeVisible({ timeout: 10_000 });
 
     // Verify the preview panel stays in Standby — no processing started
-    await expect(page.locator("text=Ready")).not.toBeVisible();
+    await expect(page.getByText("Ready", { exact: true })).not.toBeVisible();
   });
 
   // ─────────────────────────────────────────────────────────────────
@@ -350,6 +350,6 @@ test.describe("F2-UTC04: Upload Own Reel", () => {
     ).toBeVisible({ timeout: 10_000 });
 
     // Verify the preview panel stays in Standby — no processing started
-    await expect(page.locator("text=Ready")).not.toBeVisible();
+    await expect(page.getByText("Ready", { exact: true })).not.toBeVisible();
   });
 });
