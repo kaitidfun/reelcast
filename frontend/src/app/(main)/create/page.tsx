@@ -400,7 +400,11 @@ const CreateReel = () => {
           with_audio: withAudio,
         }),
       });
-      if (!res.ok) throw new Error("Failed to start generation");
+      if (!res.ok) {
+        let msg = "Failed to start generation";
+        try { msg = (await res.json()).detail || msg; } catch {}
+        throw new Error(msg);
+      }
       const data = await res.json();
       setReelId(data.reel_id);
       startGeneration(data.reel_id, selectedProduct.name);
@@ -441,7 +445,11 @@ const CreateReel = () => {
           prompt_text: target !== "caption" ? promptText : undefined,
         }),
       });
-      if (!res.ok) throw new Error("Failed to start regeneration");
+      if (!res.ok) {
+        let msg = "Failed to start regeneration";
+        try { msg = (await res.json()).detail || msg; } catch {}
+        throw new Error(msg);
+      }
       toast({ title: "Regenerating...", description: `Regenerating ${target} now.` });
     } catch (e: any) {
       setGenerationStatus("idle");
@@ -816,11 +824,10 @@ const CreateReel = () => {
                   ref={promptTextareaRef}
                   value={promptText}
                   onChange={(e) => {
-                    setPromptText(e.target.value.slice(0, 500));
+                    setPromptText(e.target.value);
                     e.target.style.height = "auto";
                     e.target.style.height = `${e.target.scrollHeight}px`;
                   }}
-                  maxLength={500}
                   placeholder={guidedMode ? "Prompt will be auto-built above, or type your own here…" : "Describe the Reel you want to create — scene, mood, motion, style, product details…"}
                   className="min-h-[80px] w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0 overflow-hidden"
                 />
@@ -876,7 +883,7 @@ const CreateReel = () => {
                 </Button>
                 <Button
                   onClick={generationStatus === "done" ? () => handleRegenerate("all") : handleGenerate}
-                  disabled={generationStatus === "generating" || !selectedProduct || !promptText.trim()}
+                  disabled={generationStatus === "generating" || !selectedProduct || !promptText.trim() || promptText.length > 500}
                   className="gradient-primary h-9 gap-2 px-4 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
                 >
                   {generationStatus === "generating" ? (<><Loader2 className="h-4 w-4 animate-spin" />Generating…</>)
@@ -1072,7 +1079,7 @@ const CreateReel = () => {
             <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="shrink-0">
               <Button variant="outline" onClick={() => handleRegenerate("video")} size="sm" className="w-full gap-1.5 h-9 text-xs">
                 <RefreshCw className="h-3.5 w-3.5" />
-                Regenerate Video
+                Retry Video
               </Button>
             </motion.div>
           )}

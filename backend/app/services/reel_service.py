@@ -22,6 +22,7 @@ def create_reel(
         user_id=user_id,
         product_id=product_id,
         prompt_text=prompt_text,
+        caption_and_hashtags={"caption": "", "hashtags": []}
     )
     db.add(reel)
     db.commit()

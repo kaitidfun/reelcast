@@ -122,8 +122,8 @@ export function CaptionBlock({
 
       <div className="grid grid-cols-2 gap-2">
         <Button variant="outline" onClick={onRegenCaption} size="sm" className="gap-1.5 h-9 text-xs">
-          <RefreshCw className="h-3.5 w-3.5" />
-          Regen Caption
+          <RefreshCw className="h-3 w-3" />
+          Retry AI Text
         </Button>
         {!isApproved ? (
           <Button onClick={onApprove} size="sm" className="gradient-primary text-primary-foreground shadow-glow h-9 text-xs">
