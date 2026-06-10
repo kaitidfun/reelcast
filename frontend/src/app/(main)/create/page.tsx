@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Sparkles, Video, Wand2, Check, Loader2, Film, RefreshCw,
@@ -85,7 +86,8 @@ const CAMERA_OPTIONS: GuideOption[] = [
 ];
 
 
-const CreateReel = () => {
+const CreateReelContent = () => {
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const { startGeneration } = useGenerationQueue();
 
@@ -147,6 +149,22 @@ const CreateReel = () => {
   // Product picker
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<LibraryProduct | null>(null);
+  const hasPreselectedRef = useRef(false);
+
+  // Pre-select product from URL params
+  useEffect(() => {
+    const productId = searchParams?.get("productId");
+    if (productId && productLibrary.length > 0 && !hasPreselectedRef.current) {
+      for (const campaign of productLibrary) {
+        const prod = campaign.products.find(p => p.id === productId);
+        if (prod) {
+          setSelectedProduct(prod);
+          hasPreselectedRef.current = true;
+          break;
+        }
+      }
+    }
+  }, [searchParams, productLibrary]);
 
   // Guided prompt
   const [guidedMode, setGuidedMode] = useState(false);
@@ -1141,4 +1159,10 @@ const CreateReel = () => {
   );
 };
 
-export default CreateReel;
+export default function CreateReel() {
+  return (
+    <Suspense fallback={<div className="p-12 text-center text-muted-foreground">Loading...</div>}>
+      <CreateReelContent />
+    </Suspense>
+  );
+}
