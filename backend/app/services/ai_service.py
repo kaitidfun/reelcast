@@ -409,11 +409,11 @@ async def generate_guided_prompt(
     Falls back to a locally-assembled prompt if Gemini is unavailable.
     """
     selections = []
-    if mood:          selections.append(f"Mood/Vibe: {mood}")
-    if style:         selections.append(f"Visual Style: {style}")
     if focus:         selections.append(f"Scene Focus: {focus}")
     if target:        selections.append(f"Target Audience: {target}")
+    if mood:          selections.append(f"Mood/Vibe: {mood}")
     if lighting:      selections.append(f"Lighting & Environment: {lighting}")
+    if style:         selections.append(f"Visual Style: {style}")
     if camera_motion: selections.append(f"Camera Motion: {camera_motion}")
 
     def _local_fallback() -> str:

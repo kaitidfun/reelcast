@@ -766,7 +766,7 @@ const CreateReelContent = () => {
                   </div>
                 )}
               </div>
-              <div className="border-t border-border bg-background/40 px-3 py-2.5">
+              <div className="border-t border-border bg-background/40 px-3 py-2.5 rounded-b-[15px]">
                 <Button onClick={handleUpload} disabled={!selectedProduct || !uploadFile || uploadStatus === "uploading" || uploadStatus === "done"} className="gradient-primary w-full gap-2 h-9 text-sm text-primary-foreground shadow-glow">
                   {uploadStatus === "uploading" ? (<><Loader2 className="h-4 w-4 animate-spin" />Uploading…</>)
                     : uploadStatus === "done" ? (<><Check className="h-4 w-4" />Uploaded — select a new file to re-upload</>)
@@ -828,21 +828,13 @@ const CreateReelContent = () => {
                     )}
                   </div>
 
+                  <GuideChipRow label="Scene Focus"            options={FOCUS_OPTIONS}   selected={selectedFocus}        onSelect={setSelectedFocus}        onHover={handleChipHover} />
+                  <GuideChipRow label="Target Audience"        options={TARGET_OPTIONS}  selected={selectedTarget}       onSelect={setSelectedTarget}       onHover={handleChipHover} />
                   <GuideChipRow label="Mood / Vibe"            options={MOOD_OPTIONS}    selected={selectedMood}         onSelect={setSelectedMood}         onHover={handleChipHover} />
                   <GuideChipRow label="Lighting & Environment" options={LIGHTING_OPTIONS} selected={selectedLighting}     onSelect={setSelectedLighting}     onHover={handleChipHover} />
                   <GuideChipRow label="Visual Style"           options={STYLE_OPTIONS}   selected={selectedStyle}        onSelect={setSelectedStyle}        onHover={handleChipHover} />
-                  <GuideChipRow label="Scene Focus"            options={FOCUS_OPTIONS}   selected={selectedFocus}        onSelect={setSelectedFocus}        onHover={handleChipHover} />
-                  <GuideChipRow label="Target Audience"        options={TARGET_OPTIONS}  selected={selectedTarget}       onSelect={setSelectedTarget}       onHover={handleChipHover} />
                   <GuideChipRow label="Camera Motion"          options={CAMERA_OPTIONS}  selected={selectedCameraMotion} onSelect={setSelectedCameraMotion} onHover={handleChipHover} />
 
-                  <button type="button" onClick={handleBuildGuidedPrompt}
-                    disabled={guidedLoading || !selectedProduct || (!selectedMood && !selectedTarget && !selectedStyle && !selectedFocus && !selectedLighting && !selectedCameraMotion)}
-                    className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-sm disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5">
-                    {guidedLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                    {guidedLoading ? "Building with AI…" : "Auto-Build Prompt"}
-                    {!guidedLoading && !selectedProduct && <span className="opacity-60 ml-1">(select product first)</span>}
-                    {!guidedLoading && selectedProduct && !selectedMood && !selectedTarget && !selectedStyle && !selectedFocus && !selectedLighting && !selectedCameraMotion && <span className="opacity-60 ml-1">(pick options above)</span>}
-                  </button>
                 </div>
               )}
 
@@ -855,11 +847,24 @@ const CreateReelContent = () => {
                     e.target.style.height = "auto";
                     e.target.style.height = `${e.target.scrollHeight}px`;
                   }}
-                  placeholder={guidedMode ? "Prompt will be auto-built above, or type your own here…" : "Describe the Reel you want to create — scene, mood, motion, style, product details…"}
+                  placeholder={guidedMode ? "Prompt will be auto-built into this box, or type your own here…" : "Describe the Reel you want to create — scene, mood, motion, style, product details…"}
                   className="min-h-[80px] w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0 overflow-hidden"
                 />
                 <div className="absolute bottom-2 right-5 text-[10px] text-muted-foreground">{promptText.length}/500</div>
               </div>
+
+              {guidedMode && (
+                <div className="px-5 pb-3">
+                  <button type="button" onClick={handleBuildGuidedPrompt}
+                    disabled={guidedLoading || !selectedProduct || (!selectedMood && !selectedTarget && !selectedStyle && !selectedFocus && !selectedLighting && !selectedCameraMotion)}
+                    className="w-full rounded-lg bg-primary/10 text-primary px-3 py-2 text-xs font-semibold shadow-sm ring-1 ring-primary/20 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/20 transition-all flex items-center justify-center gap-1.5">
+                    {guidedLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                    {guidedLoading ? "Building with AI…" : "Auto-Build Prompt"}
+                    {!guidedLoading && !selectedProduct && <span className="opacity-60 ml-1">(select product first)</span>}
+                    {!guidedLoading && selectedProduct && !selectedMood && !selectedTarget && !selectedStyle && !selectedFocus && !selectedLighting && !selectedCameraMotion && <span className="opacity-60 ml-1">(pick options above)</span>}
+                  </button>
+                </div>
+              )}
 
               {/* Duration + Audio dropdowns */}
               <div className="px-4 pb-3 flex flex-wrap items-center gap-1.5">
@@ -903,18 +908,17 @@ const CreateReelContent = () => {
               </div>
 
               {/* Generate / Re-generate button */}
-              <div className="flex items-center justify-between gap-2 border-t border-border bg-background/40 px-3 py-2.5 backdrop-blur">
+              <div className="flex items-center justify-between gap-2 border-t border-border bg-background/40 px-3 py-2.5 backdrop-blur rounded-b-[23px]">
                 <Button type="button" variant="ghost" size="sm" onClick={handleEnhancePrompt} disabled={enhancing} className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-primary hover:bg-primary/5">
                   {enhancing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
                   {enhancing ? "Enhancing…" : "Enhance"}
                 </Button>
                 <Button
-                  onClick={generationStatus === "done" ? () => handleRegenerate("all") : handleGenerate}
+                  onClick={handleGenerate}
                   disabled={generationStatus === "generating" || !selectedProduct || !promptText.trim() || promptText.length > 500}
                   className="gradient-primary h-9 gap-2 px-4 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
                 >
                   {generationStatus === "generating" ? (<><Loader2 className="h-4 w-4 animate-spin" />Generating…</>)
-                    : generationStatus === "done" ? (<><RefreshCw className="h-4 w-4" />Re-generate</>)
                     : (<><Sparkles className="h-4 w-4" />Generate Video</>)}
                 </Button>
               </div>
@@ -958,6 +962,32 @@ const CreateReelContent = () => {
               onApprove={handleApprove}
               onPublish={handlePublish}
             />
+          )}
+
+          {completedMode === "generate" && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-3 shadow-card">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  onClick={() => handleRegenerate("all")}
+                  disabled={generationStatus === "generating" || !selectedProduct || !promptText.trim() || promptText.length > 500}
+                  className="gradient-primary h-10 flex-1 gap-2 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Re-generate Entire Reel
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleRegenerate("video")}
+                  disabled={generationStatus === "generating" || !selectedProduct || !promptText.trim() || promptText.length > 500}
+                  className="h-10 flex-1 gap-2 text-sm sm:flex-none sm:px-4"
+                >
+                  <Video className="h-4 w-4" />
+                  Retry Video Only
+                </Button>
+              </div>
+            </motion.div>
           )}
         </div>
 
@@ -1102,14 +1132,7 @@ const CreateReelContent = () => {
             </motion.div>
           )}
 
-          {completedMode === "generate" && (
-            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="shrink-0">
-              <Button variant="outline" onClick={() => handleRegenerate("video")} size="sm" className="w-full gap-1.5 h-9 text-xs">
-                <RefreshCw className="h-3.5 w-3.5" />
-                Retry Video
-              </Button>
-            </motion.div>
-          )}
+
         </div>
       </div>
 
