@@ -22,7 +22,7 @@ import {
   findUserByEmail,
   deleteUserByEmail,
   verifyUserEmail,
-} from "../helpers/db-helper";
+} from "../../helpers/db-helper";
 
 // ─── Test Data ──────────────────────────────────────────────────────
 

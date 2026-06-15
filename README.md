@@ -140,13 +140,26 @@ End-to-End testing is handled using Playwright in the `e2e` directory. Ensure No
 ```bash
 cd e2e
 npm install
-npx playwright test
 ```
 
-To run tests with a UI for debugging:
+#### Run Test Suites
+Tests are organized into UTC (Unit Test Cases) and STC (System Test Cases):
+- Run all tests: `npm test`
+- Run all UTC tests: `npm run test:utc`
+- Run all STC tests: `npm run test:stc`
 
+#### Run Specific Tests
+You can run specific test files via npm:
+- Authentication: `npm run test:auth`
+- Account Profile: `npm run test:account`
+- Library: `npm run test:library`
+- Create Reel: `npm run test:create`
+- Upload Reel: `npm run test:upload`
+
+#### Debugging
+To run tests with a UI for debugging:
 ```bash
-npx playwright test --ui
+npm run test:ui
 ```
 
 ---
@@ -219,6 +232,10 @@ reelcastcast/
 │   ├── requirements.txt
 │   └── .env.example
 ├── e2e/                      # Playwright End-to-End Testing
+│   ├── helpers/              # Database test helpers
+│   └── tests/                # Test specifications
+│       ├── UTC/              # Unit Test Cases (Feature-focused specs)
+│       └── STC/              # System Test Cases (Scenario-focused flows)
 ├── frontend/                 # Next.js 14 App Router
 │   └── src/app/(main)/
 │       └── create/page.tsx   # Reel creation page (Feature 2)

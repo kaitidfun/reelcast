@@ -4,7 +4,7 @@ import {
   disconnectDB,
   deleteUserByEmail,
   verifyUserEmail,
-} from "../helpers/db-helper";
+} from "../../helpers/db-helper";
 
 // ─── Constants ──────────────────────────────────────────────────────
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
@@ -634,5 +634,146 @@ test.describe("Library Management", () => {
     await expect(
       page.locator("text=Campaign name is required").first()
     ).toBeVisible();
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// F4-UTC03: Test to browse Campaign and Product Library
+//
+// Test Method: browseLibrary
+// Description: Retrieves, filters, and sorts campaigns and associated
+//   products for the authenticated member to display on the Library
+//   dashboard. Supports search queries, sorting options, and view toggles.
+// Prerequisite data: Authenticated member account
+// Input: String (searchKeyword), Enum (sortOption, viewMode, statusFilter)
+// Output: Object (List of campaigns and products, or empty state message)
+// ═════════════════════════════════════════════════════════════════════
+test.describe("F4-UTC03 – Browse Campaign and Product Library", () => {
+  test.beforeEach(async ({ page, request }) => {
+    await registerAndLogin(page, request);
+  });
+
+  test.afterEach(async () => {
+    await deleteUserByEmail(TEST_USER.email);
+  });
+
+  // ── TC01: Successful retrieval with valid search and sort parameters ──
+  test("TC01 – Successful retrieval of campaigns and products with valid search and sort parameters", async ({
+    page,
+  }) => {
+    // Navigate to the library page
+    await navigateToLibrary(page);
+
+    // --- Create prerequisite campaigns and a product ---
+    // Create first campaign: "Cold Brew Summer"
+    await page.click('button:has-text("New Campaign")');
+    const campaignName1 = `Cold Brew Summer ${Date.now()}`;
+    await page.fill("input#campaign-name", campaignName1);
+    await page.fill("textarea#campaign-desc", "Summer cold brew promo");
+
+    let createPromise = page.waitForResponse(
+      (res) =>
+        res.url().includes("/api/campaigns") &&
+        res.request().method() === "POST"
+    );
+    await page.click('button:has-text("Create Campaign")');
+    let createRes = await createPromise;
+    expect(createRes.status()).toBe(201);
+    await expect(page.locator(`h3:has-text("${campaignName1}")`)).toBeVisible();
+
+    // Create second campaign: "Winter Hot Cocoa"
+    await page.click('button:has-text("New Campaign")');
+    const campaignName2 = `Winter Hot Cocoa ${Date.now()}`;
+    await page.fill("input#campaign-name", campaignName2);
+    await page.fill("textarea#campaign-desc", "Winter cocoa promo");
+
+    createPromise = page.waitForResponse(
+      (res) =>
+        res.url().includes("/api/campaigns") &&
+        res.request().method() === "POST"
+    );
+    await page.click('button:has-text("Create Campaign")');
+    createRes = await createPromise;
+    expect(createRes.status()).toBe(201);
+    await expect(page.locator(`h3:has-text("${campaignName2}")`)).toBeVisible();
+
+    // --- Test search filtering (F4-UTC03-TD01: keyword = "Cold Brew") ---
+    const searchInput = page.locator('input[placeholder="Search campaigns…"]');
+    await searchInput.fill("Cold Brew");
+
+    // Only the matching campaign should be visible
+    await expect(page.locator(`h3:has-text("${campaignName1}")`)).toBeVisible();
+    await expect(page.locator(`h3:has-text("${campaignName2}")`)).toBeHidden();
+
+    // --- Test view toggle (F4-UTC03-TD02: viewMode = "Grid" / "List") ---
+    // Switch to list view
+    await searchInput.fill(""); // Clear search first
+    const listViewButton = page.locator('button[aria-label="List view"]');
+    await listViewButton.click();
+    await page.waitForTimeout(300);
+
+    // Both campaigns should be visible in list view
+    await expect(page.locator(`text=${campaignName1}`).first()).toBeVisible();
+    await expect(page.locator(`text=${campaignName2}`).first()).toBeVisible();
+
+    // Switch back to grid view
+    const gridViewButton = page.locator('button[aria-label="Grid view"]');
+    await gridViewButton.click();
+    await page.waitForTimeout(300);
+
+    // Both campaigns should still be visible in grid view
+    await expect(page.locator(`h3:has-text("${campaignName1}")`)).toBeVisible();
+    await expect(page.locator(`h3:has-text("${campaignName2}")`)).toBeVisible();
+  });
+
+  // ── TC02: Empty state when no campaigns exist ────────────────────────
+  test("TC02 – Empty state when authenticated member has no campaigns", async ({
+    page,
+  }) => {
+    // Navigate to the library (fresh user has no campaigns)
+    await navigateToLibrary(page);
+
+    // Verify the page header is shown
+    await expect(
+      page.locator("text=Campaigns & Products").first()
+    ).toBeVisible();
+
+    // Verify the "New Campaign" button is available (empty state prompt)
+    await expect(
+      page.locator('button:has-text("New Campaign")')
+    ).toBeVisible();
+
+    // Verify no campaign cards are present (empty state)
+    const campaignCards = page.locator("h3").filter({ hasText: /Campaign/ });
+    await expect(campaignCards).toHaveCount(0);
+  });
+
+  // ── TC03: Database failure returns DatabaseRetrieveException ─────────
+  test("TC03 – Database failure returns DatabaseRetrieveException", async ({
+    page,
+  }) => {
+    // Mock GET /api/campaigns → 500 to simulate a database query error
+    await page.route("**/api/campaigns", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: JSON.stringify({
+            detail:
+              "DatabaseRetrieveException: Failed to retrieve campaigns from database",
+          }),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    // Navigate to the library page — the GET request will be intercepted
+    await navigateToLibrary(page);
+
+    // Assert the error is shown in the UI
+    await expect(
+      page.locator("text=/Failed to retrieve|error|something went wrong/i").first()
+    ).toBeVisible({ timeout: 10000 });
   });
 });

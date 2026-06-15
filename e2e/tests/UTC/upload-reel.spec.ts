@@ -4,7 +4,7 @@ import {
   disconnectDB,
   deleteUserByEmail,
   verifyUserEmail,
-} from "../helpers/db-helper";
+} from "../../helpers/db-helper";
 
 // ─── Constants ──────────────────────────────────────────────────────
 

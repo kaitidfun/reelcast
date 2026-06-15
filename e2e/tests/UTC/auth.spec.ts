@@ -31,7 +31,7 @@ import {
   deleteUserByEmail,
   verifyUserEmail,
   countUsersByEmail,
-} from "../helpers/db-helper";
+} from "../../helpers/db-helper";
 
 // ─── Test Data ──────────────────────────────────────────────────────
 

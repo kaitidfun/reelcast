@@ -39,7 +39,7 @@ import {
   findProductByName,
   deleteCampaignsByUserId,
   deleteReelsByUserId,
-} from "../helpers/db-helper";
+} from "../../helpers/db-helper";
 
 // ─── Test Data ──────────────────────────────────────────────────────
 
