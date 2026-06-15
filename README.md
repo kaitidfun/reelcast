@@ -96,7 +96,7 @@ venv\Scripts\celery -A app.worker.celery_app worker --loglevel=info --pool=solo 
 
 Verify: Seeing `celery@... ready.` = Success
 
----
+---cd
 
 ### STEP 4 — Frontend (Next.js / bun)
 
@@ -143,13 +143,17 @@ npm install
 ```
 
 #### Run Test Suites
+
 Tests are organized into UTC (Unit Test Cases) and STC (System Test Cases):
+
 - Run all tests: `npm test`
 - Run all UTC tests: `npm run test:utc`
 - Run all STC tests: `npm run test:stc`
 
 #### Run Specific Tests
+
 You can run specific test files via npm:
+
 - Authentication: `npm run test:auth`
 - Account Profile: `npm run test:account`
 - Library: `npm run test:library`
@@ -157,7 +161,9 @@ You can run specific test files via npm:
 - Upload Reel: `npm run test:upload`
 
 #### Debugging
+
 To run tests with a UI for debugging:
+
 ```bash
 npm run test:ui
 ```
