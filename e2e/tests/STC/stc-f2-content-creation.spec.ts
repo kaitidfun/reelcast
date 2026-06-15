@@ -185,8 +185,8 @@ async function selectProduct(page: Page): Promise<void> {
 // Helper: Mock reel generation APIs for happy path
 // ═════════════════════════════════════════════════════════════════════
 async function mockReelGenerationAPIs(page: Page): Promise<void> {
-  // Mock POST /api/reels → 200 (create reel)
-  await page.route("**/api/reels", async (route) => {
+  // Mock POST /api/reels/generate → 200 (create reel)
+  await page.route("**/api/reels/generate", async (route) => {
     if (route.request().method() === "POST") {
       await route.fulfill({
         status: 200,
@@ -295,13 +295,13 @@ test.describe("STC-F2-01 – End-to-End AI Video Generation Pipeline", () => {
 
     // Click Generate Reel
     const generateButton = page.getByRole("button", {
-      name: /generate reel/i,
+      name: /generate video/i,
     });
     await expect(generateButton).toBeVisible();
 
     const generatePromise = page.waitForResponse(
       (res) =>
-        res.url().includes("/api/reels") &&
+        res.url().includes("/api/reels/generate") &&
         res.request().method() === "POST",
       { timeout: 15_000 }
     );
@@ -330,28 +330,25 @@ test.describe("STC-F2-01 – End-to-End AI Video Generation Pipeline", () => {
     await expect(page.locator("text=Caption")).toBeVisible();
 
     // ──────────────────────────────────────────────────────────────
-    // STEP 5 — Approve content (F2-UTC06)
+    // STEP 5 — Approve and Publish content (F2-UTC06)
     // ──────────────────────────────────────────────────────────────
-    const approveButton = page.getByRole("button", {
-      name: /approve|publish/i,
-    });
+    const approveButton = page.getByRole("button", { name: /^Approve$/i });
+    await expect(approveButton).toBeVisible();
+    await approveButton.click();
 
-    if (await approveButton.isVisible().catch(() => false)) {
-      const approvePromise = page.waitForResponse(
-        (res) =>
-          res.url().includes("/api/reels/") &&
-          res.url().includes("/approve") &&
-          res.request().method() === "POST",
-        { timeout: 15_000 }
-      ).catch(() => null);
+    // Verify UI updates
+    await expect(page.getByText("Approved & Saved!").first()).toBeVisible();
 
-      await approveButton.click();
-      const approveRes = await approvePromise;
+    // Select a platform (e.g., TikTok)
+    await page.getByText("TikTok").click();
 
-      if (approveRes) {
-        expect(approveRes.status()).toBe(200);
-      }
-    }
+    // Now click Publish
+    const publishButton = page.getByRole("button", { name: /Publish/i });
+    await expect(publishButton).toBeVisible();
+    await publishButton.click();
+
+    // Verify publish toast
+    await expect(page.locator("text=/Published!/i").first()).toBeVisible();
   });
 
   /**
@@ -362,8 +359,8 @@ test.describe("STC-F2-01 – End-to-End AI Video Generation Pipeline", () => {
     // Select product
     await selectProduct(page);
 
-    // Mock POST /api/reels → 422 for validation error
-    await page.route("**/api/reels", async (route) => {
+    // Mock POST /api/reels/generate → 422 for validation error
+    await page.route("**/api/reels/generate", async (route) => {
       if (route.request().method() === "POST") {
         await route.fulfill({
           status: 422,
@@ -384,13 +381,13 @@ test.describe("STC-F2-01 – End-to-End AI Video Generation Pipeline", () => {
 
     // Click Generate Reel
     const generateButton = page.getByRole("button", {
-      name: /generate reel/i,
+      name: /generate video/i,
     });
 
     if (await generateButton.isVisible().catch(() => false)) {
       const generatePromise = page.waitForResponse(
         (res) =>
-          res.url().includes("/api/reels") &&
+          res.url().includes("/api/reels/generate") &&
           res.request().method() === "POST",
         { timeout: 15_000 }
       ).catch(() => null);
@@ -698,7 +695,7 @@ test.describe("STC-F2-03 – Content Regeneration and Revision Workflow", () => 
     await mockReelGenerationAPIs(page);
 
     const generateButton = page.getByRole("button", {
-      name: /generate reel/i,
+      name: /generate video/i,
     });
     await expect(generateButton).toBeVisible();
     await generateButton.click();
@@ -720,7 +717,7 @@ test.describe("STC-F2-03 – Content Regeneration and Revision Workflow", () => 
     // Update the mock to return a new reel on regeneration
     await page.unrouteAll({ behavior: "wait" });
 
-    await page.route("**/api/reels", async (route) => {
+    await page.route("**/api/reels/*/regenerate", async (route) => {
       if (route.request().method() === "POST") {
         await route.fulfill({
           status: 200,
@@ -762,7 +759,7 @@ test.describe("STC-F2-03 – Content Regeneration and Revision Workflow", () => 
 
     // Click Re-generate
     const regenerateButton = page.getByRole("button", {
-      name: /re-?generate/i,
+      name: /re-generate entire reel/i,
     });
     await expect(regenerateButton).toBeVisible({ timeout: 10_000 });
 
@@ -806,7 +803,7 @@ test.describe("STC-F2-03 – Content Regeneration and Revision Workflow", () => 
     await mockReelGenerationAPIs(page);
 
     const generateButton = page.getByRole("button", {
-      name: /generate reel/i,
+      name: /generate video/i,
     });
     await expect(generateButton).toBeVisible();
     await generateButton.click();
@@ -823,7 +820,7 @@ test.describe("STC-F2-03 – Content Regeneration and Revision Workflow", () => 
     // Update mock to return validation error
     await page.unrouteAll({ behavior: "wait" });
 
-    await page.route("**/api/reels", async (route) => {
+    await page.route("**/api/reels/*/regenerate", async (route) => {
       if (route.request().method() === "POST") {
         await route.fulfill({
           status: 422,
@@ -852,7 +849,7 @@ test.describe("STC-F2-03 – Content Regeneration and Revision Workflow", () => 
 
     // Click Re-generate
     const regenerateButton = page.getByRole("button", {
-      name: /re-?generate/i,
+      name: /re-generate entire reel/i,
     });
     await expect(regenerateButton).toBeVisible({ timeout: 10_000 });
 

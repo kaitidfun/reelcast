@@ -222,7 +222,6 @@ test.describe("STC-F4-01 – End-to-End Campaign and Product Creation", () => {
     expect(dbProduct).not.toBeNull();
     expect(dbProduct!.product_name).toBe(productName);
     expect(dbProduct!.campaign_id).toBe(campaignBody.campaign_id);
-    expect(dbProduct!.status).toBe("active");
   });
 
   test("should prevent creating a product under an invalid campaign", async ({

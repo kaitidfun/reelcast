@@ -201,9 +201,13 @@ const ContentLibrary = () => {
         }));
 
         setCampaigns(mappedCampaigns);
+      } else {
+        const errData = await campRes.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to retrieve campaigns from database");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      toast({ title: "Error", description: e.message || "Failed to retrieve campaigns", variant: "destructive" });
     } finally {
       setLoading(false);
     }
