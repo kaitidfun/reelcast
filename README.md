@@ -52,6 +52,32 @@ cp backend/.env.example backend/.env
 
 ---
 
+## ⚡ Quick Start (One Command)
+
+> **Start all services with a single command** — Docker, Backend, Celery, and Frontend will all launch automatically.
+
+### Prerequisites
+- Docker Desktop must be **running** before executing the script.
+- All dependencies must be installed (see [Installing Dependencies](#installing-dependencies-first-time)).
+
+```powershell
+# Start everything
+.\scripts\start.ps1
+
+# Stop everything
+.\scripts\stop.ps1
+```
+
+The start script will:
+1. Start **Redis** via Docker (`docker compose up -d`)
+2. Open a new terminal → activate venv → start **FastAPI** on port 8000
+3. Open a new terminal → activate venv → start **Celery Worker**
+4. Open a new terminal → start **Next.js Frontend** on port 3000
+
+> **Note:** If Docker Desktop is not open, Redis will be skipped with a warning — the other services will still start.
+
+---
+
 ## Running the Project (Step-by-Step)
 
 ### ⚠️ Before running — Always start Docker Desktop first!
@@ -96,7 +122,7 @@ venv\Scripts\celery -A app.worker.celery_app worker --loglevel=info --pool=solo 
 
 Verify: Seeing `celery@... ready.` = Success
 
----cd
+---
 
 ### STEP 4 — Frontend (Next.js / bun)
 
@@ -245,6 +271,10 @@ reelcastcast/
 ├── frontend/                 # Next.js 14 App Router
 │   └── src/app/(main)/
 │       └── create/page.tsx   # Reel creation page (Feature 2)
+├── scripts/                  # Dev helper scripts (PowerShell)
+│   ├── start.ps1             # One-click: start all services
+│   └── stop.ps1              # One-click: stop all services
+├── docs/                     # Project documentation & SRS
 ├── docker-compose.yml        # Redis container
 └── README.md
 ```
