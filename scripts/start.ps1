@@ -1,6 +1,6 @@
 # ============================================================
 #  ReelCast — One-Click Start Script
-#  รันทุก Service พร้อมกันในหน้าต่าง Terminal แยกกัน
+#  Run all services simultaneously in separate Terminal windows
 #  Usage: .\scripts\start.ps1
 # ============================================================
 

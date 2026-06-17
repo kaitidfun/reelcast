@@ -1,6 +1,6 @@
 # ============================================================
 #  ReelCast — One-Click Stop Script
-#  หยุดทุก Service ที่รันอยู่
+#  Stop all running services
 #  Usage: .\scripts\stop.ps1
 # ============================================================
 
