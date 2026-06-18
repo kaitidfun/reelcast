@@ -21,29 +21,26 @@ export function useProductLibrary() {
   const [productLibrary, setProductLibrary] = useState<LibraryCampaign[]>([]);
 
   useEffect(() => {
-    const fetchLibrary = async () => {
+    const browseLibrary = async () => {
       try {
         const token = localStorage.getItem("rf_token");
         if (!token) return;
         const headers = { Authorization: `Bearer ${token}` };
 
-        const [campRes, prodRes] = await Promise.all([
-          fetch("http://localhost:8000/api/campaigns", { headers }),
-          fetch("http://localhost:8000/api/products",  { headers }),
-        ]);
+        const libraryRes = await fetch("http://localhost:8000/api/library", {
+          headers,
+        });
+        if (!libraryRes.ok) return;
 
-        if (!campRes.ok || !prodRes.ok) return;
+        const libraryData = await libraryRes.json();
 
-        const campData = await campRes.json();
-        const prodData = await prodRes.json();
-
-        const mapped: LibraryCampaign[] = campData.campaigns.map((c: any) => ({
+        const mapped: LibraryCampaign[] = libraryData.campaigns.map((c: any) => ({
           id: c.campaign_id,
           name: c.name,
           bannerColor: c.banner_color || "Twilight",
           bannerUrl: c.banner_url ?? null,
           emoji: c.name.charAt(0).toUpperCase() || "📦",
-          products: prodData.products
+          products: libraryData.products
             .filter((p: any) => p.campaign_id === c.campaign_id)
             .map((p: any) => {
               const rawImageKey =
@@ -71,7 +68,7 @@ export function useProductLibrary() {
       }
     };
 
-    fetchLibrary();
+    browseLibrary();
   }, []);
 
   return productLibrary;

@@ -6,6 +6,7 @@ from authlib.integrations.starlette_client import OAuth, OAuthError
 from datetime import timedelta
 
 from app.dependencies import get_db
+from app.exceptions import OAuthProviderException
 from app.models.models import User
 from app.services.auth_service import create_access_token
 from app.core.config import (
@@ -49,16 +50,18 @@ async def login_via_social(provider: str, request: Request):
 
 
 @router.get("/{provider}/callback")
-async def auth_callback(
+async def authenticateMemberWithOAuth(
     provider: str,
     request: Request,
     db: Session = Depends(get_db),
 ):
     client = oauth.create_client(provider)
+    if client is None:
+        raise OAuthProviderException(f"Unsupported OAuth provider: {provider}")
     try:
         token = await client.authorize_access_token(request)
-    except OAuthError:
-        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=OAuthError")
+    except OAuthError as exc:
+        raise OAuthProviderException() from exc
 
     if provider == "google":
         user_info = token.get("userinfo")
@@ -72,10 +75,10 @@ async def auth_callback(
         email = f"{user_info.get('id')}@facebook.com"
         display_name = user_info.get("name", "Facebook User")
     else:
-        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=InvalidProvider")
+        raise OAuthProviderException(f"Unsupported OAuth provider: {provider}")
 
     if not email:
-        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=NoEmail")
+        raise OAuthProviderException("OAuth provider did not return an email address")
 
     user = db.query(User).filter(User.email == email).first()
     if not user:

@@ -18,11 +18,11 @@ interface AuthContextType {
   user: MockUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ ok: boolean; requires2fa?: boolean; tempToken?: string }>;
-  verify2faLogin: (tempToken: string, code: string) => Promise<boolean>;
-  register: (email: string, password: string, displayName: string) => Promise<{ ok: boolean; error?: string }>;
+  authenticateMember: (email: string, password: string) => Promise<{ ok: boolean; requires2fa?: boolean; tempToken?: string }>;
+  manage2FA: (tempToken: string, code: string) => Promise<boolean>;
+  registerGuest: (email: string, password: string, displayName: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
-  updateProfile: (updates: Partial<MockUser>) => void;
+  updateAccountProfile: (updates: Partial<MockUser>) => void;
   refreshUser: () => Promise<void>;
 }
 
@@ -87,7 +87,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [fetchUser]);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const authenticateMember = useCallback(async (email: string, password: string) => {
     try {
       const formData = new URLSearchParams();
       formData.append("username", email);
@@ -134,7 +134,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, []);
 
-  const verify2faLogin = useCallback(async (tempToken: string, code: string) => {
+  const manage2FA = useCallback(async (tempToken: string, code: string) => {
     try {
       const res = await fetch(`${API_URL}/api/2fa/verify`, {
         method: "POST",
@@ -167,7 +167,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return false;
   }, []);
 
-  const register = useCallback(async (email: string, password: string, displayName: string) => {
+  const registerGuest = useCallback(async (email: string, password: string, displayName: string) => {
     try {
       const res = await fetch(`${API_URL}/register`, {
         method: "POST",
@@ -194,7 +194,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     localStorage.removeItem("rf_token");
   }, []);
 
-  const updateProfile = useCallback((updates: Partial<MockUser>) => {
+  const updateAccountProfile = useCallback((updates: Partial<MockUser>) => {
     setUser((prev) => {
       if (!prev) return prev;
       const updated = { ...prev, ...updates };
@@ -203,7 +203,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, verify2faLogin, register, logout, updateProfile, refreshUser }}>
+    <AuthContext.Provider value={{
+      user,
+      isAuthenticated: !!user,
+      isLoading,
+      authenticateMember,
+      manage2FA,
+      registerGuest,
+      logout,
+      updateAccountProfile,
+      refreshUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );

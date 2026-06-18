@@ -7,46 +7,80 @@ from uuid import UUID, uuid4
 from typing import Optional, List
 
 from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.models import Product, ProductImage
+from app.exceptions import (
+    CampaignNotFoundException,
+    DatabaseInsertException,
+    InvalidImageFormatException,
+    MaxImagesExceededException,
+)
+from app.models.models import Campaign, Product, ProductImage
 from app.schemas.product import ProductImageCreate
 
 
-def create_product(
+def createProduct(
     db: Session,
     *,
-    user_id: UUID,
-    campaign_id: UUID,
-    product_name: str,
+    userId: UUID,
+    campaignId: UUID,
+    productName: str,
     description: Optional[str] = None,
-    affiliate_link: Optional[str] = None,
-    brand_logo_url: Optional[str] = None,
-    images: Optional[List[ProductImageCreate]] = None,
+    affiliateLinks: Optional[str] = None,
+    brandLogoUrl: Optional[str] = None,
+    productImages: Optional[List[ProductImageCreate]] = None,
 ) -> Product:
-    product = Product(
-        user_id=user_id,
-        campaign_id=campaign_id,
-        product_name=product_name,
-        description=description,
-        affiliate_link=affiliate_link,
-        brand_logo_url=brand_logo_url,
+    campaign = (
+        db.query(Campaign)
+        .filter(
+            Campaign.campaign_id == campaignId,
+            Campaign.user_id == userId,
+            Campaign.deleted_at.is_(None),
+        )
+        .first()
     )
-    db.add(product)
-    db.flush()  # Get the product_id before inserting images
+    if not campaign:
+        raise CampaignNotFoundException()
 
-    if images:
-        for img in images:
+    images = productImages or []
+    if len(images) > 5:
+        raise MaxImagesExceededException()
+
+    supported_extensions = {".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp"}
+    for image in images:
+        path = image.image_url.split("?", 1)[0].lower()
+        if not any(path.endswith(extension) for extension in supported_extensions):
+            raise InvalidImageFormatException(
+                "Product images must use JPG, PNG, GIF, SVG, or WEBP format"
+            )
+
+    product = Product(
+        user_id=userId,
+        campaign_id=campaignId,
+        product_name=productName.strip(),
+        description=description,
+        affiliate_link=affiliateLinks,
+        brand_logo_url=brandLogoUrl,
+    )
+    try:
+        db.add(product)
+        db.flush()  # Get the product_id before inserting images
+
+        for image in images:
             db_image = ProductImage(
                 image_id=uuid4(),
                 product_id=product.product_id,
-                image_url=img.image_url,
-                is_primary=img.is_primary,
+                image_url=image.image_url,
+                is_primary=image.is_primary,
             )
             db.add(db_image)
 
-    db.commit()
-    db.refresh(product)
+        db.commit()
+        db.refresh(product)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise DatabaseInsertException() from exc
     return product
 
 

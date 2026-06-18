@@ -5,9 +5,9 @@ Handles video overlay operations with product images, logos, and watermarks.
 Supports configurable positioning and graceful fallback on errors.
 
 Usage:
-    from app.services.overlay_service import apply_overlay
+    from app.services.overlay_service import overlayImagesAndLogos
 
-    new_url = await apply_overlay(
+    new_url = await overlayImagesAndLogos(
         video_url="https://...",
         overlay_url="https://...",
         position="bottom-right",
@@ -26,6 +26,7 @@ import httpx
 import imageio_ffmpeg
 
 from app.services.storage_service import upload_raw_bytes_to_r2
+from app.exceptions import FFmpegProcessingException, InvalidCoordinateException
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,11 @@ async def overlay_watermark(
     Raises:
         RuntimeError: If FFmpeg compositing fails
     """
-    overlay_x, overlay_y = POSITION_COORDS.get(position, POSITION_COORDS['bottom-right'])
+    if position not in POSITION_COORDS:
+        raise InvalidCoordinateException(
+            f"Unsupported overlay position '{position}'"
+        )
+    overlay_x, overlay_y = POSITION_COORDS[position]
     logger.info(f"Compositing overlay at position '{position}': {overlay_path} (audio={'on' if with_audio else 'stripped'})")
 
     def _process():
@@ -158,11 +163,13 @@ async def overlay_watermark(
             if result.returncode != 0:
                 stderr_msg = result.stderr.decode("utf-8", errors="replace")
                 logger.error(f"FFmpeg error during compositing: {stderr_msg}")
-                raise RuntimeError(f"FFmpeg overlay failed: {stderr_msg}")
+                raise FFmpegProcessingException(stderr_msg)
             logger.info(f"FFmpeg compositing complete: {output_path}")
             return output_path
         except subprocess.TimeoutExpired as e:
-            raise RuntimeError("FFmpeg overlay timed out after 120s") from e
+            raise FFmpegProcessingException(
+                "FFmpeg overlay timed out after 120 seconds"
+            ) from e
 
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _process)
@@ -173,7 +180,7 @@ async def overlay_watermark(
 # Main Overlay Operation (with Download + Upload + Error Handling)
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def apply_overlay(
+async def overlayImagesAndLogos(
     video_url: str,
     overlay_url: str,
     position: str,

@@ -157,29 +157,27 @@ const ContentLibrary = () => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchLibrary = useCallback(async () => {
+  const browseLibrary = useCallback(async () => {
     try {
       const token = localStorage.getItem("rf_token");
       if (!token) return;
       const headers = { Authorization: `Bearer ${token}` };
 
-      const [campRes, prodRes] = await Promise.all([
-        fetch("http://localhost:8000/api/campaigns", { headers }),
-        fetch("http://localhost:8000/api/products", { headers })
-      ]);
+      const libraryRes = await fetch("http://localhost:8000/api/library", {
+        headers,
+      });
 
-      if (campRes.ok && prodRes.ok) {
-        const campData = await campRes.json();
-        const prodData = await prodRes.json();
+      if (libraryRes.ok) {
+        const libraryData = await libraryRes.json();
 
-        const mappedCampaigns: Campaign[] = campData.campaigns.map((c: any) => ({
+        const mappedCampaigns: Campaign[] = libraryData.campaigns.map((c: any) => ({
           id: c.campaign_id,
           name: c.name,
           description: c.description || "",
           reelsCount: 0,
           bannerColor: c.banner_color || "Twilight",
           bannerImage: c.banner_image_url || undefined,
-          products: prodData.products.filter((p: any) => p.campaign_id === c.campaign_id).map((p: any) => {
+          products: libraryData.products.filter((p: any) => p.campaign_id === c.campaign_id).map((p: any) => {
             const primaryImage = p.images?.find((img: any) => img.is_primary)?.image_url || p.images?.[0]?.image_url;
             const isActive = Boolean(p.product_name?.trim() && p.description?.trim() && p.affiliate_link?.trim() && p.images?.length > 0);
             return {
@@ -202,7 +200,7 @@ const ContentLibrary = () => {
 
         setCampaigns(mappedCampaigns);
       } else {
-        const errData = await campRes.json().catch(() => ({}));
+        const errData = await libraryRes.json().catch(() => ({}));
         throw new Error(errData.detail || "Failed to retrieve campaigns from database");
       }
     } catch (e: any) {
@@ -214,8 +212,8 @@ const ContentLibrary = () => {
   }, []);
 
   useEffect(() => {
-    fetchLibrary();
-  }, [fetchLibrary]);
+    browseLibrary();
+  }, [browseLibrary]);
 
   const openCampaignId = searchParams.get("campaign");
   const setOpenCampaignId = (id: string | null) => {
@@ -327,7 +325,7 @@ const ContentLibrary = () => {
     setIsProductDialogOpen(true);
   };
 
-  const handleSaveProduct = async () => {
+  const createProduct = async () => {
     if (!pName.trim() || !currentCampaign) {
       toast({ title: "Product name is required", variant: "destructive" });
       return;
@@ -412,7 +410,7 @@ const ContentLibrary = () => {
         }
       }
 
-      await fetchLibrary();
+      await browseLibrary();
       resetForm();
       setIsProductDialogOpen(false);
     } catch (error: any) {
@@ -437,7 +435,7 @@ const ContentLibrary = () => {
       headers: { Authorization: `Bearer ${token}` }
     });
     toast({ title: "Product deleted", description: `${productName} removed.`, variant: "destructive" });
-    await fetchLibrary();
+    await browseLibrary();
   };
 
   const handleDeleteProductFromDialog = () => {
@@ -457,7 +455,7 @@ const ContentLibrary = () => {
       headers: { Authorization: `Bearer ${token}` }
     });
     toast({ title: "Campaign deleted", variant: "destructive" });
-    await fetchLibrary();
+    await browseLibrary();
     resetCampaignForm();
     setIsCampaignDialogOpen(false);
   };
@@ -503,7 +501,7 @@ const ContentLibrary = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleSaveCampaign = async () => {
+  const createCampaign = async () => {
     if (!cName.trim()) {
       toast({ title: "Campaign name is required", variant: "destructive" });
       return;
@@ -545,7 +543,7 @@ const ContentLibrary = () => {
         }
         toast({ title: "Campaign created" });
       }
-      await fetchLibrary();
+      await browseLibrary();
       resetCampaignForm();
       setIsCampaignDialogOpen(false);
     } catch (error: any) {
@@ -700,7 +698,7 @@ const ContentLibrary = () => {
                 Cancel
               </Button>
               <Button
-                onClick={handleSaveCampaign}
+                onClick={createCampaign}
                 className="gradient-primary text-primary-foreground shadow-glow hover:shadow-glow-lg"
               >
                 {editingCampaignId ? "Save Changes" : "Create Campaign"}
@@ -1369,7 +1367,7 @@ const ContentLibrary = () => {
                   Cancel
                 </Button>
                 <Button
-                  onClick={handleSaveProduct}
+                  onClick={createProduct}
                   className="gradient-primary text-primary-foreground shadow-glow hover:shadow-glow-lg"
                 >
                   {editingProductId ? "Save Changes" : "Save Product"}

@@ -6,31 +6,51 @@ All queries are scoped to the authenticated user to enforce ownership.
 from uuid import UUID
 from typing import Optional
 
-from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.exceptions import (
+    DatabaseInsertException,
+    DuplicateCampaignNameException,
+)
 from app.models.models import Campaign
 
 
-def create_campaign(
+def createCampaign(
     db: Session,
     *,
-    user_id: UUID,
-    name: str,
+    userId: UUID,
+    campaignName: str,
     description: Optional[str] = None,
-    banner_color: Optional[str] = None,
-    banner_image_url: Optional[str] = None,
+    bannerColor: Optional[str] = None,
+    coverImage: Optional[str] = None,
 ) -> Campaign:
-    campaign = Campaign(
-        user_id=user_id,
-        name=name,
-        description=description,
-        banner_color=banner_color or "Twilight",
-        banner_image_url=banner_image_url,
+    duplicate = (
+        db.query(Campaign)
+        .filter(
+            Campaign.user_id == userId,
+            Campaign.name == campaignName.strip(),
+            Campaign.deleted_at.is_(None),
+        )
+        .first()
     )
-    db.add(campaign)
-    db.commit()
-    db.refresh(campaign)
+    if duplicate:
+        raise DuplicateCampaignNameException()
+
+    campaign = Campaign(
+        user_id=userId,
+        name=campaignName.strip(),
+        description=description,
+        banner_color=bannerColor or "Twilight",
+        banner_image_url=coverImage,
+    )
+    try:
+        db.add(campaign)
+        db.commit()
+        db.refresh(campaign)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise DatabaseInsertException() from exc
     return campaign
 
 

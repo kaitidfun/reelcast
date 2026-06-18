@@ -1,9 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from datetime import timedelta
+import re
 
 from app.dependencies import get_db, get_current_user
+from app.exceptions import (
+    AccountNotVerifiedException,
+    DatabaseInsertException,
+    DatabaseUpdateException,
+    EmailAlreadyExistsException,
+    InvalidCredentialsException,
+    WeakPasswordException,
+)
 from app.models.models import User
 from app.schemas.user import (
     UserCreate,
@@ -39,13 +49,23 @@ router = APIRouter()
 # ==================== Registration ====================
 
 @router.post("/register", response_model=Token)
-def register(
+def registerGuest(
     user: UserCreate,
     db: Session = Depends(get_db),
 ):
     db_user = db.query(User).filter(User.email == user.email).first()
     if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise EmailAlreadyExistsException()
+
+    password_checks = (
+        len(user.password) >= 6,
+        bool(re.search(r"[A-Z]", user.password)),
+        bool(re.search(r"[a-z]", user.password)),
+        bool(re.search(r"\d", user.password)),
+        bool(re.search(r"[^A-Za-z0-9]", user.password)),
+    )
+    if not all(password_checks):
+        raise WeakPasswordException()
 
     hashed_password = get_password_hash(user.password)
     new_user = User(
@@ -54,9 +74,13 @@ def register(
         hashed_password=hashed_password,
         is_email_verified=False,
     )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    try:
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise DatabaseInsertException() from exc
 
     # Generate an email verification token
     verification_token = create_access_token(
@@ -123,22 +147,19 @@ def verify_email_api(payload: VerifyEmailRequest, db: Session = Depends(get_db))
 # ==================== Login ====================
 
 @router.post("/login", response_model=LoginResponse)
-def login(
+def authenticateMember(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
     user = db.query(User).filter(User.email == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    if (
+        not user
+        or not user.hashed_password
+        or not verify_password(form_data.password, user.hashed_password)
+    ):
+        raise InvalidCredentialsException()
     if not user.is_email_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email before logging in",
-        )
+        raise AccountNotVerifiedException()
 
     # If 2FA is enabled, return a temporary token instead of a full access token
     if user.is_2fa_enabled:
@@ -170,15 +191,19 @@ def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 @router.put("/me", response_model=UserResponse)
-def update_user_me(
+def updateAccountProfile(
     user_update: UserUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     if user_update.display_name is not None:
         current_user.display_name = user_update.display_name
-        db.commit()
-        db.refresh(current_user)
+        try:
+            db.commit()
+            db.refresh(current_user)
+        except SQLAlchemyError as exc:
+            db.rollback()
+            raise DatabaseUpdateException() from exc
     return current_user
 
 # ==================== Password Management ====================

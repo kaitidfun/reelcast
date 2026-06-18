@@ -75,6 +75,7 @@ def update_reel(
     b_roll_url: Optional[str] = None,
     clear_b_roll: bool = False,
     raw_video_url: Optional[str] = None,
+    first_frame_url: Optional[str] = None,
     final_commercial_video_url: Optional[str] = None,
     status: Optional[str] = None,
     error_message: Optional[str] = None,
@@ -102,6 +103,8 @@ def update_reel(
     if raw_video_url is not None:
         # Pre-overlay video URL — stored before logo is baked so Option B download works
         reel.raw_video_url = raw_video_url
+    if first_frame_url is not None:
+        reel.first_frame_url = first_frame_url
     if final_commercial_video_url is not None:
         reel.final_commercial_video_url = final_commercial_video_url
     if status is not None:

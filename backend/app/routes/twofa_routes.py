@@ -70,7 +70,7 @@ def enable_2fa(
 
 
 @router.post("/verify-setup")
-def verify_2fa_setup(
+def manage2FA(
     body: TwoFactorVerifyRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

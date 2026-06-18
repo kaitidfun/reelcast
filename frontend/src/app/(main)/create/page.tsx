@@ -386,7 +386,7 @@ const CreateReelContent = () => {
     }
   };
 
-  const handleGenerate = async () => {
+  const inputPromptAndSelectProduct = async () => {
     if (!selectedProduct) {
       toast({ title: "Select a product", description: "Pick a product from your library — required to generate a Reel." });
       return;
@@ -435,7 +435,7 @@ const CreateReelContent = () => {
     }
   };
 
-  const handleRegenerate = async (target: "video" | "caption" | "all") => {
+  const regenerateContent = async (target: "video" | "caption" | "all") => {
     if (!reelId) return;
     completedModeRef.current = completedMode ?? "generate";
     captionOnlyRegenRef.current = target === "caption";
@@ -481,7 +481,7 @@ const CreateReelContent = () => {
     }
   };
 
-  const handleUpload = () => {
+  const uploadOwnReel = () => {
     if (!selectedProduct) {
       toast({ title: "Select a product", description: "Pick a product before uploading." });
       return;
@@ -500,12 +500,15 @@ const CreateReelContent = () => {
         toast({ title: "Video too long", description: `Duration ${Math.round(videoEl.duration)}s exceeds the 60s limit.`, variant: "destructive" });
         return;
       }
-      doUpload();
+      uploadOwnReelFile();
     };
-    videoEl.onerror = () => { URL.revokeObjectURL(objectUrl); doUpload(); };
+    videoEl.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      uploadOwnReelFile();
+    };
   };
 
-  const doUpload = () => {
+  const uploadOwnReelFile = () => {
     setUploadStatus("uploading");
     setUploadProgress(0);
     const form = new FormData();
@@ -552,10 +555,37 @@ const CreateReelContent = () => {
     xhr.send(form);
   };
 
-  // NOTE: Approve is UI-only — library persistence requires coordination with library teammate.
-  const handleApprove = () => {
-    setIsApproved(true);
-    toast({ title: "Approved & Saved!", description: "Reel saved to your library 🎉" });
+  const previewAndApproveContent = async () => {
+    if (!reelId) return;
+    try {
+      const token = localStorage.getItem("rf_token");
+      const response = await fetch(
+        `http://localhost:8000/api/reels/${reelId}/approve`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ decision: true }),
+        },
+      );
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        throw new Error(error?.detail || "Could not approve Reel");
+      }
+      setIsApproved(true);
+      toast({
+        title: "Approved & Saved!",
+        description: "Reel queued for distribution.",
+      });
+    } catch (error) {
+      toast({
+        title: "Approval failed",
+        description: error instanceof Error ? error.message : "Could not approve Reel",
+        variant: "destructive",
+      });
+    }
   };
 
   const handlePublish = () => {
@@ -767,7 +797,7 @@ const CreateReelContent = () => {
                 )}
               </div>
               <div className="border-t border-border bg-background/40 px-3 py-2.5 rounded-b-[15px]">
-                <Button onClick={handleUpload} disabled={!selectedProduct || !uploadFile || uploadStatus === "uploading" || uploadStatus === "done"} className="gradient-primary w-full gap-2 h-9 text-sm text-primary-foreground shadow-glow">
+                <Button onClick={uploadOwnReel} disabled={!selectedProduct || !uploadFile || uploadStatus === "uploading" || uploadStatus === "done"} className="gradient-primary w-full gap-2 h-9 text-sm text-primary-foreground shadow-glow">
                   {uploadStatus === "uploading" ? (<><Loader2 className="h-4 w-4 animate-spin" />Uploading…</>)
                     : uploadStatus === "done" ? (<><Check className="h-4 w-4" />Uploaded — select a new file to re-upload</>)
                     : (<><Upload className="h-4 w-4" />Upload &amp; Process</>)}
@@ -914,7 +944,7 @@ const CreateReelContent = () => {
                   {enhancing ? "Enhancing…" : "Enhance"}
                 </Button>
                 <Button
-                  onClick={handleGenerate}
+                  onClick={inputPromptAndSelectProduct}
                   disabled={generationStatus === "generating" || !selectedProduct || !promptText.trim() || promptText.length > 500}
                   className="gradient-primary h-9 gap-2 px-4 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
                 >
@@ -958,8 +988,8 @@ const CreateReelContent = () => {
               isApproved={isApproved}
               selectedPlatforms={selectedPlatforms}
               onTogglePlatform={togglePlatform}
-              onRegenCaption={() => handleRegenerate("caption")}
-              onApprove={handleApprove}
+              onRegenCaption={() => regenerateContent("caption")}
+              onApprove={previewAndApproveContent}
               onPublish={handlePublish}
             />
           )}
@@ -969,7 +999,7 @@ const CreateReelContent = () => {
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Button
                   type="button"
-                  onClick={() => handleRegenerate("all")}
+                  onClick={() => regenerateContent("all")}
                   disabled={generationStatus === "generating" || !selectedProduct || !promptText.trim() || promptText.length > 500}
                   className="gradient-primary h-10 flex-1 gap-2 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
                 >
@@ -979,7 +1009,7 @@ const CreateReelContent = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => handleRegenerate("video")}
+                  onClick={() => regenerateContent("video")}
                   disabled={generationStatus === "generating" || !selectedProduct || !promptText.trim() || promptText.length > 500}
                   className="h-10 flex-1 gap-2 text-sm sm:flex-none sm:px-4"
                 >

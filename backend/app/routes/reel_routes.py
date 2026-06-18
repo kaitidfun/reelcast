@@ -10,16 +10,32 @@ from pydantic import BaseModel, Field
 
 from sqlalchemy.orm import joinedload
 from app.dependencies import get_db, get_current_user
+from app.exceptions import (
+    InvalidPromptLengthException,
+    MediaNotFoundException,
+    ProductNotFoundException,
+    PromptValidationException,
+    RateLimitExceededException,
+    UnsupportedVideoFormatException,
+    VideoSizeLimitExceededException,
+)
 from app.models.models import User, Reel, Product
-from app.services.reel_service import create_reel, get_reel, update_reel
+from app.services.reel_service import (
+    create_reel,
+    get_reel,
+    increment_retry,
+    update_reel,
+)
 from app.services.upload_service import (
+    ALLOWED_VIDEO_FORMATS,
+    MAX_VIDEO_SIZE_BYTES,
     validate_video_file,
     probe_video_duration,
     upload_video_to_r2,
 )
 from app.services.storage_service import get_video_download_url
 from app.services.ai_service import generate_prompt_from_template, enhance_prompt, generate_guided_prompt
-from app.worker import process_reel_generation
+from app.worker import generateReels
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +149,11 @@ class ReelRegenerateRequest(BaseModel):
     # If provided, overwrites the reel's stored prompt_text before queuing the worker.
     prompt_text: Optional[str] = Field(None, max_length=500)
 
+
+class PreviewDecisionRequest(BaseModel):
+    decision: bool
+
+
 class ReelResponse(BaseModel):
     reel_id: UUID
     status: str
@@ -142,12 +163,13 @@ class ReelResponse(BaseModel):
     # raw_video_url: pre-overlay video (no logo) — used by frontend for
     # Option B logo toggle: download without logo uses this URL instead.
     raw_video_url: Optional[str] = None
+    first_frame_url: Optional[str] = None
     caption_and_hashtags: Optional[dict] = None
     class Config:
         from_attributes = True
 
 @router.post("/generate", response_model=ReelResponse)
-def trigger_generation(
+def inputPromptAndSelectProduct(
     req: ReelGenerateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -169,16 +191,31 @@ def trigger_generation(
     Returns:
         Reel object with status "Pending" → "Generating" → "Completed"
     """
-    # Create reel
-    reel = create_reel(
-        db=db, 
-        user_id=current_user.user_id, 
-        prompt_text=req.prompt_text, 
-        product_id=req.product_id
+    final_prompt = req.prompt_text.strip()
+    if not final_prompt or len(final_prompt) > 500:
+        raise InvalidPromptLengthException()
+
+    product = (
+        db.query(Product)
+        .filter(
+            Product.product_id == req.product_id,
+            Product.user_id == current_user.user_id,
+            Product.deleted_at.is_(None),
+        )
+        .first()
     )
-    
+    if not product:
+        raise ProductNotFoundException()
+
+    reel = create_reel(
+        db=db,
+        user_id=current_user.user_id,
+        prompt_text=final_prompt,
+        product_id=req.product_id,
+    )
+
     # Send task to Celery
-    process_reel_generation.delay(
+    generateReels.delay(
         str(reel.reel_id), req.platform, req.overlay_position,
         duration=req.duration,
         with_audio=req.with_audio,
@@ -210,7 +247,7 @@ def get_generation_status(
     return reel
 
 @router.post("/{reel_id}/regenerate", response_model=ReelResponse)
-def trigger_regeneration(
+def regenerateContent(
     reel_id: UUID,
     req: ReelRegenerateRequest,
     db: Session = Depends(get_db),
@@ -231,6 +268,21 @@ def trigger_regeneration(
     if not reel:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reel not found")
 
+    if (reel.retry_count or 0) >= 5:
+        raise RateLimitExceededException(
+            "A Reel can be regenerated at most 5 times"
+        )
+
+    revised_prompt = (
+        req.prompt_text.strip()
+        if req.prompt_text is not None
+        else reel.prompt_text.strip()
+    )
+    if req.target in ["video", "all"] and (
+        not revised_prompt or len(revised_prompt) > 500
+    ):
+        raise PromptValidationException()
+
     # If user edited the prompt before re-generating, persist the updated text.
     # Worker reads reel.prompt_text from DB, so we must save it before queuing.
     if req.prompt_text and req.target in ["video", "all"]:
@@ -248,7 +300,8 @@ def trigger_regeneration(
     logger.info(f"Reel {reel_id} status reset to Generating for regen target='{req.target}'")
 
     # Send task to Celery — pass with_audio for regen consistency
-    process_reel_generation.delay(
+    increment_retry(db, reel=reel)
+    generateReels.delay(
         str(reel.reel_id), req.platform, req.overlay_position, req.target,
         duration=req.duration,
         with_audio=req.with_audio,
@@ -258,7 +311,7 @@ def trigger_regeneration(
 
 
 @router.post("/upload-video", response_model=ReelResponse)
-async def upload_reel_video(
+async def uploadOwnReel(
     file: UploadFile = File(...),
     product_id: Optional[str] = Form(None),
     platform: str = Form("ig"),
@@ -284,6 +337,12 @@ async def upload_reel_video(
 
     # Step 1-3: Validate file format, size, and duration (consolidated in upload_service)
     file_data = await file.read()
+
+    extension = os.path.splitext(filename)[1].lower()
+    if extension not in ALLOWED_VIDEO_FORMATS:
+        raise UnsupportedVideoFormatException()
+    if len(file_data) > MAX_VIDEO_SIZE_BYTES:
+        raise VideoSizeLimitExceededException()
 
     # Quick validation: format + size only (fail-fast before reading large file)
     errors = validate_video_file(filename, len(file_data))
@@ -326,13 +385,35 @@ async def upload_reel_video(
     # Step 6: Queue caption generation + overlay (target="upload" for worker).
     # Audio is always preserved for uploads — FFmpeg probes the file and keeps
     # whatever audio track exists (with_audio=True).
-    process_reel_generation.delay(
+    generateReels.delay(
         str(reel.reel_id), platform, overlay_position, "upload",
         with_audio=True,
     )
 
     logger.info(f"Video upload completed for reel {reel.reel_id}, user {current_user.user_id}")
     return reel
+
+
+@router.post("/{reel_id}/approve")
+def previewAndApproveContent(
+    reel_id: UUID,
+    request: PreviewDecisionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    reel = get_reel(db=db, reel_id=reel_id, user_id=current_user.user_id)
+    if not reel or not (
+        reel.final_commercial_video_url
+        or reel.raw_video_url
+        or reel.uploaded_video_url
+    ):
+        raise MediaNotFoundException()
+
+    return {
+        "approved": request.decision,
+        "queued_for_distribution": request.decision,
+        "reel_id": reel.reel_id,
+    }
 
 
 @router.post("/generate-prompt", response_model=PromptResponse)

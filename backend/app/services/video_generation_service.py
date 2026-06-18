@@ -53,6 +53,12 @@ from typing import Optional
 import ffmpeg
 import httpx
 
+from app.exceptions import (
+    GeminiAPIException,
+    GenerationTimeoutException,
+    LTXVideoAPIException,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -349,7 +355,9 @@ async def generate_first_frame_with_gemini(
 
     api_key = os.getenv("GOOGLE_AI_API_KEY")
     if not api_key:
-        raise RuntimeError("GOOGLE_AI_API_KEY not set — Gemini 3 Pro Image unavailable")
+        raise GeminiAPIException(
+            "GOOGLE_AI_API_KEY is not set for first-frame generation"
+        )
 
     client = genai.Client(api_key=api_key)
 
@@ -379,10 +387,17 @@ async def generate_first_frame_with_gemini(
                 continue  # skip thinking steps
             if part.inline_data is not None:
                 return part.inline_data.data  # raw bytes — no PIL conversion needed
-        raise RuntimeError("Gemini 3 Pro Image returned no image in response")
+        raise GeminiAPIException(
+            "Gemini 3 Pro Image returned no image in response"
+        )
 
     loop = asyncio.get_running_loop()
-    result_bytes = await loop.run_in_executor(None, _gen)
+    try:
+        result_bytes = await loop.run_in_executor(None, _gen)
+    except GeminiAPIException:
+        raise
+    except Exception as exc:
+        raise GeminiAPIException(str(exc)) from exc
     logger.info(
         f"[Gemini3Pro] ✅ First frame generated ({len(pil_images)} ref(s)): "
         f"{len(result_bytes):,} bytes"
@@ -471,9 +486,14 @@ async def generate_with_ltx(
         logger.info(f"[LTX] Done: {url}")
         return url
 
-    except Exception as e:
-        logger.error(f"[LTX] Failed: {e}")
-        raise RuntimeError(f"LTX Video 2.3 generation failed: {e}") from e
+    except (asyncio.TimeoutError, TimeoutError) as exc:
+        logger.error(f"[LTX] Timed out: {exc}")
+        raise GenerationTimeoutException() from exc
+    except (GenerationTimeoutException, LTXVideoAPIException):
+        raise
+    except Exception as exc:
+        logger.error(f"[LTX] Failed: {exc}")
+        raise LTXVideoAPIException(str(exc)) from exc
 
 
 async def generate_extended_ltx(

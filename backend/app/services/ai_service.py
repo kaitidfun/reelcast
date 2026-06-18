@@ -2,7 +2,7 @@
 AI Service
 ==========
 Handles AI-powered generation via Google Gemini:
-  - Caption & hashtag generation (generate_captions)
+  - Caption & hashtag generation (generateCaptionsAndHashtags)
   - Prompt generation from template + product context (generate_prompt_from_template)
   - Prompt enhancement from existing draft (enhance_prompt)
   - Guided prompt generation from chip selections + product image (generate_guided_prompt)
@@ -19,6 +19,8 @@ from typing import Any, Dict, Optional
 
 from google import genai
 from google.genai import types
+
+from app.exceptions import ContentModerationException, GeminiAPIException
 
 # generate_video re-exported so existing callers that imported from here still work
 from app.services.video_generation_service import generate_video  # noqa: F401
@@ -111,17 +113,29 @@ async def _run_gemini(
         kwargs: dict = {"model": model, "contents": contents}
         if config:
             kwargs["config"] = config
-        return client.models.generate_content(**kwargs).text  # type: ignore[return-value]
+        response = client.models.generate_content(**kwargs)
+        if not response.text:
+            raise ContentModerationException()
+        return response.text
 
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _call)
+    try:
+        return await loop.run_in_executor(None, _call)
+    except ContentModerationException:
+        raise
+    except Exception as exc:
+        raise GeminiAPIException(str(exc)) from exc
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def generate_captions(prompt: str, product_info: str, platform: str) -> Dict[str, Any]:
+async def generateCaptionsAndHashtags(
+    prompt: str,
+    productDetails: str,
+    targetPlatform: str,
+) -> Dict[str, Any]:
     """
     Generate platform-optimized captions and hashtags using Google Gemini.
 
@@ -133,8 +147,8 @@ async def generate_captions(prompt: str, product_info: str, platform: str) -> Di
 
     Args:
         prompt: User's text prompt for the reel (max 500 chars)
-        product_info: Product description/metadata to include in context
-        platform: Target platform (ig/fb/tt/yt) for optimization
+        productDetails: Product description/metadata to include in context
+        targetPlatform: Target platform (ig/fb/tt/yt) for optimization
 
     Returns:
         Dict with keys:
@@ -153,7 +167,7 @@ async def generate_captions(prompt: str, product_info: str, platform: str) -> Di
         }
 
     system_prompt = f"""You are an expert social media marketer. Generate a caption and hashtags based on the user's prompt and product details.
-Target Platform: {platform}
+Target Platform: {targetPlatform}
 
 Rules:
 - If platform is Instagram (ig), the caption must be strictly under 1600 characters.
@@ -163,23 +177,25 @@ Rules:
 - Provide exactly 4 relevant hashtags (include the # sign).
 - Return ONLY strict JSON with keys: "caption" (string) and "hashtags" (list of strings). No extra text.
 """
-    full_prompt = system_prompt + "\n\n" + f"User Prompt: {prompt}\nProduct Details: {product_info}"
+    full_prompt = (
+        system_prompt
+        + "\n\n"
+        + f"User Prompt: {prompt}\nProduct Details: {productDetails}"
+    )
 
     try:
-        logger.info(f"Generating captions for platform: {platform}")
+        logger.info(f"Generating captions for platform: {targetPlatform}")
         result_text = await _run_gemini(full_prompt, response_mime_type="application/json")
         result = json.loads(result_text)
         logger.info(
-            f"Captions generated for {platform}: "
+            f"Captions generated for {targetPlatform}: "
             f"{len(result.get('caption', ''))} chars, {len(result.get('hashtags', []))} hashtags"
         )
         return result
-    except Exception as e:
-        logger.error(f"Error generating caption: {e}")
-        return {
-            "caption": f"Check out this amazing product! {prompt[:50]}...",
-            "hashtags": ["#trending", "#musthave", "#reelcast", "#shopnow"]
-        }
+    except (ContentModerationException, GeminiAPIException):
+        raise
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise GeminiAPIException("Gemini returned invalid caption JSON") from exc
 
 
 async def generate_prompt_from_template(
@@ -276,6 +292,8 @@ async def generate_prompt_from_template(
             f"{len(product_images or [])} image(s))"
         )
         return result
+    except (ContentModerationException, GeminiAPIException):
+        raise
     except Exception as e:
         logger.error(f"Error generating template prompt: {e}")
         return fallback
@@ -365,6 +383,8 @@ async def enhance_prompt(
             f"{len(product_images or [])} image(s)"
         )
         return result
+    except (ContentModerationException, GeminiAPIException):
+        raise
     except Exception as e:
         logger.error(f"Error improving prompt: {e}")
         return prompt_text  # Return original if improvement fails
@@ -477,6 +497,8 @@ async def generate_guided_prompt(
         result = (await _run_gemini(contents))[:500]
         logger.info(f"Guided prompt generated ({len(result)} chars, {len(product_images or [])} image(s))")
         return result
+    except (ContentModerationException, GeminiAPIException):
+        raise
     except Exception as e:
         logger.error(f"Error generating guided prompt: {e}")
         return _local_fallback()
@@ -569,6 +591,8 @@ async def generate_first_frame_prompt(
             f"{result[:80]}..."
         )
         return result
+    except (ContentModerationException, GeminiAPIException):
+        raise
     except Exception as e:
         logger.warning(f"[FirstFramePrompt] Failed, using fallback: {e}")
         return fallback

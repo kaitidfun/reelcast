@@ -1,10 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from uuid import UUID
-from typing import List
 
 from app.dependencies import get_db, get_current_user
+from app.exceptions import (
+    CampaignNotFoundException,
+    DatabaseRetrieveException,
+    DatabaseUpdateException,
+)
 from app.models.models import User, Campaign
+from app.services import campaign_service
 from app.schemas.campaign import (
     CampaignCreate,
     CampaignUpdate,
@@ -16,7 +22,7 @@ router = APIRouter(prefix="/api/campaigns", tags=["campaigns"])
 
 
 @router.post("", response_model=CampaignResponse, status_code=status.HTTP_201_CREATED)
-def create_campaign(
+def createCampaign(
     campaign_in: CampaignCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -24,21 +30,22 @@ def create_campaign(
     """
     Create a new campaign (collection) for the authenticated user.
     """
-    new_campaign = Campaign(
-        user_id=current_user.user_id,
-        name=campaign_in.name,
+    return campaign_service.createCampaign(
+        db,
+        userId=current_user.user_id,
+        campaignName=campaign_in.name,
         description=campaign_in.description,
-        banner_color=campaign_in.banner_color,
-        banner_image_url=None if campaign_in.banner_image_url == "" else campaign_in.banner_image_url,
+        bannerColor=campaign_in.banner_color,
+        coverImage=(
+            None
+            if campaign_in.banner_image_url == ""
+            else campaign_in.banner_image_url
+        ),
     )
-    db.add(new_campaign)
-    db.commit()
-    db.refresh(new_campaign)
-    return new_campaign
 
 
 @router.get("", response_model=CampaignListResponse)
-def list_campaigns(
+def browseCampaigns(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     skip: int = 0,
@@ -47,9 +54,15 @@ def list_campaigns(
     """
     List all campaigns for the authenticated user.
     """
-    query = db.query(Campaign).filter(Campaign.user_id == current_user.user_id)
-    total = query.count()
-    campaigns = query.offset(skip).limit(limit).all()
+    try:
+        query = db.query(Campaign).filter(
+            Campaign.user_id == current_user.user_id,
+            Campaign.deleted_at.is_(None),
+        )
+        total = query.count()
+        campaigns = query.offset(skip).limit(limit).all()
+    except SQLAlchemyError as exc:
+        raise DatabaseRetrieveException() from exc
     
     return {
         "campaigns": campaigns,
@@ -72,7 +85,7 @@ def get_campaign(
     ).first()
     
     if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
+        raise CampaignNotFoundException()
         
     return campaign
 
@@ -93,7 +106,7 @@ def update_campaign(
     ).first()
     
     if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
+        raise CampaignNotFoundException()
         
     if campaign_in.name is not None:
         campaign.name = campaign_in.name
@@ -104,8 +117,12 @@ def update_campaign(
     if campaign_in.banner_image_url is not None:
         campaign.banner_image_url = None if campaign_in.banner_image_url == "" else campaign_in.banner_image_url
         
-    db.commit()
-    db.refresh(campaign)
+    try:
+        db.commit()
+        db.refresh(campaign)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise DatabaseUpdateException() from exc
     return campaign
 
 
@@ -124,8 +141,12 @@ def delete_campaign(
     ).first()
     
     if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
+        raise CampaignNotFoundException()
         
-    db.delete(campaign)
-    db.commit()
+    try:
+        db.delete(campaign)
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise DatabaseUpdateException() from exc
     return None

@@ -225,8 +225,9 @@ class Reel(Base):
     uploaded_video_url = Column(String, nullable=True)
     b_roll_url = Column(String, nullable=True)
     # raw_video_url: pre-overlay video (no logo baked). Populated by worker before
-    # apply_overlay() so Option B logo-at-download works without re-generation.
+    # overlayImagesAndLogos() so Option B logo-at-download works without re-generation.
     raw_video_url = Column(String, nullable=True)
+    first_frame_url = Column(String, nullable=True)
     final_commercial_video_url = Column(String, nullable=True)
     status = Column(
         Enum(

@@ -1,9 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from botocore.exceptions import BotoCoreError, ClientError
+from sqlalchemy.exc import SQLAlchemyError
+import os
 
 from app.dependencies import get_db, get_current_user
+from app.exceptions import (
+    DatabaseUpdateException,
+    FileSizeLimitExceededException,
+    InvalidImageFormatException,
+)
 from app.models.models import User
 from app.services.storage_service import (
     upload_image,
@@ -16,7 +22,7 @@ router = APIRouter(prefix="/api/upload", tags=["upload"])
 
 
 @router.post("/profile-image")
-async def upload_profile_image(
+async def updateAccountProfileImage(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -26,6 +32,18 @@ async def upload_profile_image(
     Stores the file in R2 under  images/users/{user_id}/avatar/
     and saves the R2 object KEY (not URL) in users.profile_image.
     """
+    filename = file.filename or ""
+    extension = os.path.splitext(filename)[1].lower()
+    if extension not in {".jpg", ".jpeg", ".png"}:
+        raise InvalidImageFormatException(
+            "Profile image must use JPG or PNG format"
+        )
+
+    file_bytes = await file.read()
+    await file.seek(0)
+    if len(file_bytes) > 2 * 1024 * 1024:
+        raise FileSizeLimitExceededException()
+
     try:
         result = await upload_image(
             file,
@@ -34,7 +52,7 @@ async def upload_profile_image(
             prefix="images",
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise InvalidImageFormatException(str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -48,8 +66,12 @@ async def upload_profile_image(
 
     # Persist the R2 object KEY (not the URL) to the database
     current_user.profile_image = result["key"]
-    db.commit()
-    db.refresh(current_user)
+    try:
+        db.commit()
+        db.refresh(current_user)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise DatabaseUpdateException() from exc
 
     return {
         "message": "Profile image updated successfully",

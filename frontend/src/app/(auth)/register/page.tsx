@@ -52,7 +52,7 @@ const Register = () => {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
+  const { registerGuest } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -78,7 +78,7 @@ const Register = () => {
       return;
     }
     setLoading(true);
-    const result = await register(email, password, displayName);
+    const result = await registerGuest(email, password, displayName);
     setLoading(false);
     if (result.ok) {
       toast({

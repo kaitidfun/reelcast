@@ -1,11 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from uuid import UUID
 import uuid
-from typing import List
+import os
 
 from app.dependencies import get_db, get_current_user
+from app.exceptions import (
+    CampaignNotFoundException,
+    DatabaseRetrieveException,
+    DatabaseUpdateException,
+    InvalidImageFormatException,
+    MaxImagesExceededException,
+    ProductNotFoundException,
+)
 from app.models.models import User, Product, ProductImage
+from app.services import product_service
 from app.schemas.product import (
     ProductCreate,
     ProductUpdate,
@@ -19,7 +29,7 @@ router = APIRouter(prefix="/api/products", tags=["products"])
 
 
 @router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
-def create_product(
+def createProduct(
     product_in: ProductCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -27,44 +37,20 @@ def create_product(
     """
     Create a new product.
     """
-    # Verify campaign belongs to user
-    from app.models.models import Campaign
-    campaign = db.query(Campaign).filter(
-        Campaign.campaign_id == product_in.campaign_id,
-        Campaign.user_id == current_user.user_id
-    ).first()
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-
-    new_product = Product(
-        user_id=current_user.user_id,
-        campaign_id=product_in.campaign_id,
-        product_name=product_in.product_name,
+    return product_service.createProduct(
+        db,
+        userId=current_user.user_id,
+        campaignId=product_in.campaign_id,
+        productName=product_in.product_name,
         description=product_in.description,
-        affiliate_link=product_in.affiliate_link,
-        brand_logo_url=product_in.brand_logo_url,
+        affiliateLinks=product_in.affiliate_link,
+        brandLogoUrl=product_in.brand_logo_url,
+        productImages=product_in.images,
     )
-    db.add(new_product)
-    db.commit()
-    db.refresh(new_product)
-    
-    if product_in.images:
-        for img_data in product_in.images:
-            new_img = ProductImage(
-                image_id=uuid.uuid4(),
-                product_id=new_product.product_id,
-                image_url=img_data.image_url,
-                is_primary=img_data.is_primary
-            )
-            db.add(new_img)
-        db.commit()
-        db.refresh(new_product)
-        
-    return new_product
 
 
 @router.get("", response_model=ProductListResponse)
-def list_products(
+def browseProducts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     campaign_id: UUID = None,
@@ -74,13 +60,19 @@ def list_products(
     """
     List all products for the authenticated user. Optionally filter by campaign_id.
     """
-    query = db.query(Product).filter(Product.user_id == current_user.user_id)
-    
-    if campaign_id:
-        query = query.filter(Product.campaign_id == campaign_id)
-        
-    total = query.count()
-    products = query.offset(skip).limit(limit).all()
+    try:
+        query = db.query(Product).filter(
+            Product.user_id == current_user.user_id,
+            Product.deleted_at.is_(None),
+        )
+
+        if campaign_id:
+            query = query.filter(Product.campaign_id == campaign_id)
+
+        total = query.count()
+        products = query.offset(skip).limit(limit).all()
+    except SQLAlchemyError as exc:
+        raise DatabaseRetrieveException() from exc
     
     return {
         "products": products,
@@ -103,7 +95,7 @@ def get_product(
     ).first()
     
     if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+        raise ProductNotFoundException()
         
     return product
 
@@ -124,7 +116,7 @@ def update_product(
     ).first()
     
     if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+        raise ProductNotFoundException()
         
     if product_in.campaign_id is not None:
         # Verify new campaign belongs to user
@@ -134,7 +126,7 @@ def update_product(
             Campaign.user_id == current_user.user_id
         ).first()
         if not campaign:
-            raise HTTPException(status_code=404, detail="Campaign not found")
+            raise CampaignNotFoundException()
         product.campaign_id = product_in.campaign_id
 
     if product_in.product_name is not None:
@@ -146,8 +138,12 @@ def update_product(
     if product_in.brand_logo_url is not None:
         product.brand_logo_url = product_in.brand_logo_url
         
-    db.commit()
-    db.refresh(product)
+    try:
+        db.commit()
+        db.refresh(product)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise DatabaseUpdateException() from exc
     return product
 
 
@@ -166,10 +162,14 @@ def delete_product(
     ).first()
     
     if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+        raise ProductNotFoundException()
         
-    db.delete(product)
-    db.commit()
+    try:
+        db.delete(product)
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise DatabaseUpdateException() from exc
     return None
 
 
@@ -189,7 +189,13 @@ async def upload_product_logo(
     ).first()
     
     if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+        raise ProductNotFoundException()
+
+    extension = os.path.splitext(file.filename or "")[1].lower()
+    if extension not in {".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp"}:
+        raise InvalidImageFormatException(
+            "Product logo must use JPG, PNG, GIF, SVG, or WEBP format"
+        )
         
     try:
         result = await upload_image(
@@ -199,7 +205,7 @@ async def upload_product_logo(
             prefix="products",
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise InvalidImageFormatException(str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
         
@@ -211,8 +217,12 @@ async def upload_product_logo(
             pass
             
     product.brand_logo_url = result["key"]
-    db.commit()
-    db.refresh(product)
+    try:
+        db.commit()
+        db.refresh(product)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise DatabaseUpdateException() from exc
     
     return product
 
@@ -234,7 +244,16 @@ async def upload_product_image(
     ).first()
     
     if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+        raise ProductNotFoundException()
+
+    if len(product.images) >= 5:
+        raise MaxImagesExceededException()
+
+    extension = os.path.splitext(file.filename or "")[1].lower()
+    if extension not in {".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp"}:
+        raise InvalidImageFormatException(
+            "Product images must use JPG, PNG, GIF, SVG, or WEBP format"
+        )
         
     try:
         result = await upload_image(
@@ -244,7 +263,7 @@ async def upload_product_image(
             prefix="products",
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise InvalidImageFormatException(str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
         
@@ -260,9 +279,13 @@ async def upload_product_image(
         image_url=result["key"],
         is_primary=is_primary
     )
-    db.add(new_image)
-    db.commit()
-    db.refresh(new_image)
+    try:
+        db.add(new_image)
+        db.commit()
+        db.refresh(new_image)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise DatabaseUpdateException() from exc
     
     return new_image
 
@@ -283,7 +306,7 @@ async def delete_product_image(
     ).first()
     
     if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+        raise ProductNotFoundException()
         
     image = db.query(ProductImage).filter(
         ProductImage.image_id == image_id,
@@ -300,6 +323,10 @@ async def delete_product_image(
         except Exception:
             pass
             
-    db.delete(image)
-    db.commit()
+    try:
+        db.delete(image)
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise DatabaseUpdateException() from exc
     return None

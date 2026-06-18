@@ -17,6 +17,8 @@ class ReelUpdate(BaseModel):
     caption_and_hashtags: Optional[dict] = None
     uploaded_video_url: Optional[str] = None
     b_roll_url: Optional[str] = None
+    raw_video_url: Optional[str] = None
+    first_frame_url: Optional[str] = None
     final_commercial_video_url: Optional[str] = None
     status: Optional[str] = None
     error_message: Optional[str] = None
@@ -32,6 +34,8 @@ class ReelResponse(BaseModel):
     caption_and_hashtags: Optional[dict] = None
     uploaded_video_url: Optional[str] = None
     b_roll_url: Optional[str] = None
+    raw_video_url: Optional[str] = None
+    first_frame_url: Optional[str] = None
     final_commercial_video_url: Optional[str] = None
     status: str
     error_message: Optional[str] = None

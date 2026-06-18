@@ -56,8 +56,16 @@ _setup_windows_ssl()
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import SessionLocal
+from app.exceptions import (
+    FFmpegProcessingException,
+    GeminiAPIException,
+    InvalidCoordinateException,
+)
 from app.models.models import Reel, Product
-from app.services.ai_service import generate_captions, generate_first_frame_prompt
+from app.services.ai_service import (
+    generateCaptionsAndHashtags,
+    generate_first_frame_prompt,
+)
 from app.services.video_generation_service import (
     generate_video,
     generate_with_ltx,
@@ -65,7 +73,7 @@ from app.services.video_generation_service import (
     generate_first_frame_with_gemini,
     LTX_MAX_CLIP_DURATION,
 )
-from app.services.overlay_service import apply_overlay
+from app.services.overlay_service import overlayImagesAndLogos
 from app.services.reel_service import update_reel
 from app.services.storage_service import get_presigned_url
 
@@ -78,12 +86,12 @@ celery_app = Celery(
 )
 
 celery_app.conf.task_routes = {
-    "app.worker.process_reel_generation": "main-queue"
+    "app.worker.generateReels": "main-queue"
 }
 
 
-@celery_app.task(name="app.worker.process_reel_generation")
-def process_reel_generation(
+@celery_app.task(name="app.worker.generateReels")
+def generateReels(
     reel_id: str, platform: str, overlay_position: str,
     target: str = "all", duration: int = 10, with_audio: bool = False,
 ):
@@ -102,12 +110,12 @@ def process_reel_generation(
         duration:         Video length in seconds — snapped to nearest valid LTX value (6–20s)
         with_audio:       True = LTX generates native audio; False = silent video
     """
-    asyncio.run(_async_process_reel_generation(
+    asyncio.run(_generateReels(
         reel_id, platform, overlay_position, target, duration, with_audio
     ))
 
 
-async def _async_process_reel_generation(
+async def _generateReels(
     reel_id: str, platform: str, overlay_position: str,
     target: str = "all", duration: int = 10, with_audio: bool = False,
 ):
@@ -232,13 +240,15 @@ async def _async_process_reel_generation(
                         f"({len(product_image_bytes)} image(s)): "
                         f"{scene_prompt[:80]}..."
                     )
+                except GeminiAPIException:
+                    raise
                 except Exception as ffp_err:
                     logger.warning(
                         f"[Worker] First-frame prompt generation failed, "
                         f"using video prompt as scene prompt: {ffp_err}"
                     )
 
-            final_video_url = await _run_ltx_generation(
+            final_video_url, first_frame_url = await _run_ltx_generation(
                 prompt=video_prompt,
                 image_url=product_image_url,              # Primary product image URL (LTX fallback)
                 product_image_bytes=product_image_bytes,  # All images as bytes — Gemini 3 Pro refs
@@ -250,9 +260,14 @@ async def _async_process_reel_generation(
         elif target == "upload":
             # User-uploaded video — apply overlay + captions, skip AI generation
             final_video_url = reel.uploaded_video_url
+            first_frame_url = reel.first_frame_url
         else:
             # Caption-only regeneration — retain existing video
             final_video_url = reel.final_commercial_video_url
+            first_frame_url = reel.first_frame_url
+
+        if first_frame_url:
+            update_reel(db, reel=reel, first_frame_url=first_frame_url)
 
         # ── Step 1b: Persist raw (pre-overlay) video URL ─────────────────────
         # Saved BEFORE overlay so Option B logo toggle works at download time:
@@ -297,9 +312,9 @@ async def _async_process_reel_generation(
 
             logger.info(f"[Worker] Applying overlay from: {overlay_url}")
             try:
-                # apply_overlay returns an R2 object key on success, raises on failure.
+                # overlayImagesAndLogos returns an R2 object key on success, raises on failure.
                 # When with_audio=False, FFmpeg uses -an to strip the audio track.
-                overlaid_key = await apply_overlay(
+                overlaid_key = await overlayImagesAndLogos(
                     video_url=video_for_download,
                     overlay_url=overlay_url,
                     position=overlay_position,
@@ -307,6 +322,8 @@ async def _async_process_reel_generation(
                     with_audio=with_audio,
                 )
                 final_video_url = overlaid_key  # R2 key — frontend proxies via /api/upload/videos/{key}
+            except (FFmpegProcessingException, InvalidCoordinateException):
+                raise
             except Exception as overlay_err:
                 # Graceful degradation: reel still works without overlay
                 # Keep final_video_url as the original R2 key or fal.ai CDN URL
@@ -317,10 +334,10 @@ async def _async_process_reel_generation(
             # Use the enriched video_prompt (includes product metadata) for richer captions.
             # Falls back to reel.prompt_text for upload/caption-only flows.
             caption_prompt = video_prompt if target in ["all", "video"] else reel.prompt_text
-            ai_response = await generate_captions(
+            ai_response = await generateCaptionsAndHashtags(
                 prompt=caption_prompt,
-                product_info=product_info,
-                platform=platform,
+                productDetails=product_info,
+                targetPlatform=platform,
             )
         else:
             ai_response = reel.caption_and_hashtags
@@ -356,7 +373,7 @@ async def _run_ltx_generation(
     reel_id: str = "unknown",
     product_image_bytes: list[tuple[bytes, str]] | None = None,
     scene_prompt: str | None = None,
-) -> str:
+) -> tuple[str, str | None]:
     """
     Generate a product reel using Gemini 3 Pro Image (first frame) → LTX Video 2.3 (animation).
 
@@ -398,12 +415,18 @@ async def _run_ltx_generation(
     # ── Fallback: no fal.ai key → use simple facade (sample video) ──────────
     if not fal_key:
         logger.info("[LTX] No FAL_KEY, delegating to generate_video() facade")
-        return await generate_video(prompt=prompt, image_url=image_url, duration=duration)
+        video_url = await generate_video(
+            prompt=prompt,
+            image_url=image_url,
+            duration=duration,
+        )
+        return video_url, None
 
     # ── Step 1: Gemini 3 Pro Image first frame ────────────────────────────────
     # Product photos are sent directly as visual context — the model sees and reasons
     # about the product holistically. Falls back to raw product image URL on failure.
     ltx_image_url = image_url  # Default fallback = primary product image URL
+    first_frame_url: str | None = None
 
     if product_image_bytes:
         effective_scene_prompt = scene_prompt or prompt
@@ -416,10 +439,13 @@ async def _run_ltx_generation(
                 prompt=effective_scene_prompt,
                 product_images=product_image_bytes,
             )
+            first_frame_url = ltx_image_url
             logger.info(
                 f"[Worker] ✅ Gemini 3 Pro first frame ready "
                 f"({len(product_image_bytes)} reference(s)) → passing to LTX"
             )
+        except GeminiAPIException:
+            raise
         except Exception as gen_err:
             # Graceful degradation: first frame failed → LTX uses raw product image URL
             logger.warning(
@@ -435,7 +461,7 @@ async def _run_ltx_generation(
         logger.warning(
             f"[Worker] SKIP_LTX=true — returning first frame as video: {ltx_image_url}"
         )
-        return ltx_image_url or ""
+        return ltx_image_url or "", first_frame_url
 
     # ── Step 2: LTX Video 2.3 animation ──────────────────────────────────────
     # LTX 2.3 natively supports up to 20s per call — extend chain only for > 20s.
@@ -463,7 +489,7 @@ async def _run_ltx_generation(
         )
 
     logger.info(f"[LTX] Done: {video_url}")
-    return video_url
+    return video_url, first_frame_url
 
 
 # ─────────────────────────────────────────────────────────────────────────────

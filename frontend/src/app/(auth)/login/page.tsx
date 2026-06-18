@@ -30,7 +30,7 @@ const Login = () => {
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login, verify2faLogin } = useAuth();
+  const { authenticateMember, manage2FA } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -86,7 +86,7 @@ const Login = () => {
       return;
     }
     setLoading(true);
-    const result = await login(email, password);
+    const result = await authenticateMember(email, password);
     setLoading(false);
 
     if (result.ok) {
@@ -111,7 +111,7 @@ const Login = () => {
     }
     setError("");
     setVerifying2fa(true);
-    const ok = await verify2faLogin(tempToken, otpCode);
+    const ok = await manage2FA(tempToken, otpCode);
     setVerifying2fa(false);
     if (ok) {
       router.replace("/");

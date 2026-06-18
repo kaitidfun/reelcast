@@ -25,7 +25,12 @@ interface PlatformToggle {
 }
 
 const Account = () => {
-  const { user, updateProfile, logout, refreshUser } = useAuth();
+  const {
+    user,
+    updateAccountProfile: syncAccountProfile,
+    logout,
+    refreshUser,
+  } = useAuth();
   const router = useRouter();
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
@@ -78,7 +83,7 @@ const Account = () => {
 
   const getToken = () => localStorage.getItem("rf_token") || "";
 
-  const handleSave = async () => {
+  const updateAccountProfile = async () => {
     try {
       const res = await fetch(`${API_URL}/me`, {
         method: "PUT",
@@ -89,7 +94,7 @@ const Account = () => {
         body: JSON.stringify({ display_name: displayName }),
       });
       if (res.ok) {
-        updateProfile({ displayName });
+        syncAccountProfile({ displayName });
         await refreshUser();
         toast.success("Profile saved successfully");
       } else {
@@ -102,7 +107,7 @@ const Account = () => {
   };
   const handleLogout = () => { logout(); router.replace("/login"); };
 
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const updateAccountProfileImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -186,7 +191,7 @@ const Account = () => {
     }
   };
 
-  const verifySetup = async () => {
+  const manage2FA = async () => {
     if (otpCode.length !== 6) return;
     setVerifying(true);
     try {
@@ -328,7 +333,7 @@ const Account = () => {
                 type="file"
                 accept="image/jpeg,image/png,image/gif,image/webp"
                 className="hidden"
-                onChange={handleAvatarUpload}
+                onChange={updateAccountProfileImage}
                 id="avatar-upload"
               />
               <button
@@ -377,7 +382,7 @@ const Account = () => {
           <CardContent className="space-y-4">
             <div className="space-y-2"><Label htmlFor="name">Display Name</Label><Input id="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></div>
             <div className="space-y-2"><Label htmlFor="acc-email">Email</Label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input id="acc-email" value={email} disabled className="pl-10" /></div></div>
-            <Button onClick={handleSave} className="gradient-primary text-primary-foreground shadow-glow"><Save className="h-4 w-4" /> Save</Button>
+            <Button onClick={updateAccountProfile} className="gradient-primary text-primary-foreground shadow-glow"><Save className="h-4 w-4" /> Save</Button>
           </CardContent>
         </Card>
       </motion.div>
@@ -485,7 +490,7 @@ const Account = () => {
             <div className="space-y-5">
               <p className="text-sm text-muted-foreground text-center">Enter the 6-digit code shown in your authenticator app to verify setup.</p>
               <div className="flex justify-center">
-                <InputOTP maxLength={6} value={otpCode} onChange={(val) => { setOtpCode(val); if (val.length === 6) setTimeout(() => verifySetup(), 100); }} disabled={verifying}>
+                <InputOTP maxLength={6} value={otpCode} onChange={(val) => { setOtpCode(val); if (val.length === 6) setTimeout(() => manage2FA(), 100); }} disabled={verifying}>
                   <InputOTPGroup>
                     <InputOTPSlot index={0} className="h-12 w-12 text-lg font-semibold" />
                     <InputOTPSlot index={1} className="h-12 w-12 text-lg font-semibold" />
@@ -499,7 +504,7 @@ const Account = () => {
                   </InputOTPGroup>
                 </InputOTP>
               </div>
-              <Button className="w-full gradient-primary text-primary-foreground shadow-glow" onClick={verifySetup} disabled={verifying || otpCode.length !== 6}>
+              <Button className="w-full gradient-primary text-primary-foreground shadow-glow" onClick={manage2FA} disabled={verifying || otpCode.length !== 6}>
                 {verifying ? <><Loader2 className="h-4 w-4 animate-spin" /> Verifying...</> : "Verify & Enable 2FA"}
               </Button>
               <button type="button" onClick={() => { setSetupStep("qr"); setOtpCode(""); }} className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center">
