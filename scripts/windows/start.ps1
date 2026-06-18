@@ -1,13 +1,15 @@
 # ============================================================
 #  ReelCast — One-Click Start Script
 #  Run all services simultaneously in separate Terminal windows
-#  Usage: .\scripts\start.ps1
+#  Usage: .\scripts\windows\start.ps1
 # ============================================================
 
-# $PSScriptRoot = .../reelcastcast/scripts  →  parent = project root
-$ROOT     = Split-Path $PSScriptRoot -Parent
+# $PSScriptRoot = .../reelcastcast/scripts/windows  ->  parent of scripts = project root
+$ROOT     = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $BACKEND  = Join-Path $ROOT "backend"
 $FRONTEND = Join-Path $ROOT "frontend"
+$VENV_PY  = Join-Path $BACKEND "venv\Scripts\python.exe"
+$VENV_ACTIVATE = Join-Path $BACKEND "venv\Scripts\Activate.ps1"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -15,8 +17,42 @@ Write-Host "   ReelCast — Starting All Services    " -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ── 1. Redis via Docker ────────────────────────────────────
-Write-Host "[1/4] Starting Redis (Docker)..." -ForegroundColor Yellow
+# ── 1. Backend Dependencies ────────────────────────────────
+Write-Host "[1/6] Installing/updating Backend dependencies..." -ForegroundColor Yellow
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    Write-Host "  ERROR: Python is not installed or is not available on PATH." -ForegroundColor Red
+    exit 1
+}
+
+if (-not (Test-Path $VENV_PY)) {
+    Write-Host "  Creating backend virtual environment..." -ForegroundColor DarkGray
+    Push-Location $BACKEND
+    python -m venv venv
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Pop-Location
+}
+
+& $VENV_PY -m pip install --upgrade pip
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& $VENV_PY -m pip install --upgrade -r (Join-Path $BACKEND "requirements.txt")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Write-Host "  Backend dependencies are ready." -ForegroundColor Green
+
+# ── 2. Frontend Dependencies ───────────────────────────────
+Write-Host "[2/6] Installing/updating Frontend dependencies..." -ForegroundColor Yellow
+if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
+    Write-Host "  ERROR: Bun is not installed or is not available on PATH." -ForegroundColor Red
+    exit 1
+}
+
+Push-Location $FRONTEND
+bun install
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Pop-Location
+Write-Host "  Frontend dependencies are ready." -ForegroundColor Green
+
+# ── 3. Redis via Docker ────────────────────────────────────
+Write-Host "[3/6] Starting Redis (Docker)..." -ForegroundColor Yellow
 $dockerRunning = docker info 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  WARNING: Docker Desktop is not running." -ForegroundColor Red
@@ -27,14 +63,14 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "  Redis started (or already running)." -ForegroundColor Green
 }
 
-# ── 2. Backend (FastAPI / uvicorn) ────────────────────────
-Write-Host "[2/4] Starting Backend (FastAPI)..." -ForegroundColor Yellow
+# ── 4. Backend (FastAPI / uvicorn) ────────────────────────
+Write-Host "[4/6] Starting Backend (FastAPI)..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",
     "cd '$BACKEND'; " +
     "Write-Host '=== ReelCast: Backend (FastAPI) ===' -ForegroundColor Cyan; " +
-    "& '.\venv\Scripts\Activate.ps1'; " +
+    "& '$VENV_ACTIVATE'; " +
     "uvicorn app.main:app --reload --port 8000"
 ) -WindowStyle Normal
 Write-Host "  Backend window opened." -ForegroundColor Green
@@ -42,20 +78,20 @@ Write-Host "  Backend window opened." -ForegroundColor Green
 # Brief pause so Backend gets a head start before Celery
 Start-Sleep -Seconds 2
 
-# ── 3. Celery Worker ──────────────────────────────────────
-Write-Host "[3/4] Starting Celery Worker..." -ForegroundColor Yellow
+# ── 5. Celery Worker ──────────────────────────────────────
+Write-Host "[5/6] Starting Celery Worker..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",
     "cd '$BACKEND'; " +
     "Write-Host '=== ReelCast: Celery Worker ===' -ForegroundColor Cyan; " +
-    "& '.\venv\Scripts\Activate.ps1'; " +
+    "& '$VENV_ACTIVATE'; " +
     ".\venv\Scripts\celery -A app.worker.celery_app worker --loglevel=info --pool=solo -Q main-queue"
 ) -WindowStyle Normal
 Write-Host "  Celery window opened." -ForegroundColor Green
 
-# ── 4. Frontend (Next.js / bun) ───────────────────────────
-Write-Host "[4/4] Starting Frontend (Next.js)..." -ForegroundColor Yellow
+# ── 6. Frontend (Next.js / bun) ───────────────────────────
+Write-Host "[6/6] Starting Frontend (Next.js)..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",
@@ -76,5 +112,5 @@ Write-Host "  Backend   ->  http://localhost:8000     " -ForegroundColor White
 Write-Host "  API Docs  ->  http://localhost:8000/docs" -ForegroundColor White
 Write-Host "  Redis     ->  localhost:6379            " -ForegroundColor White
 Write-Host ""
-Write-Host "  To stop all services, run: .\scripts\stop.ps1" -ForegroundColor DarkGray
+Write-Host "  To stop all services, run: .\scripts\windows\stop.ps1" -ForegroundColor DarkGray
 Write-Host ""

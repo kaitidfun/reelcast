@@ -5,9 +5,12 @@
 #  Usage: ./scripts/mac-linux/start.sh
 # ============================================================
 
+set -e
+
 ROOT_DIR=$(cd "$(dirname "$0")/../.." && pwd)
 BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
+VENV_PY="$BACKEND_DIR/venv/bin/python"
 
 echo ""
 echo -e "\033[0;36m========================================\033[0m"
@@ -15,8 +18,39 @@ echo -e "\033[0;36m   ReelCast — Starting All Services    \033[0m"
 echo -e "\033[0;36m========================================\033[0m"
 echo ""
 
-# ── 1. Redis via Docker ────────────────────────────────────
-echo -e "\033[0;33m[1/4] Starting Redis (Docker)...\033[0m"
+# ── 1. Backend Dependencies ────────────────────────────────
+echo -e "\033[0;33m[1/6] Installing/updating Backend dependencies...\033[0m"
+if ! command -v python3 > /dev/null 2>&1 && ! command -v python > /dev/null 2>&1; then
+    echo -e "\033[0;31m  ERROR: Python is not installed or is not available on PATH.\033[0m"
+    exit 1
+fi
+
+if [ ! -x "$VENV_PY" ]; then
+    echo -e "\033[1;30m  Creating backend virtual environment...\033[0m"
+    if command -v python3 > /dev/null 2>&1; then
+        python3 -m venv "$BACKEND_DIR/venv"
+    else
+        python -m venv "$BACKEND_DIR/venv"
+    fi
+fi
+
+"$VENV_PY" -m pip install --upgrade pip
+"$VENV_PY" -m pip install --upgrade -r "$BACKEND_DIR/requirements.txt"
+echo -e "\033[0;32m  Backend dependencies are ready.\033[0m"
+
+# ── 2. Frontend Dependencies ───────────────────────────────
+echo -e "\033[0;33m[2/6] Installing/updating Frontend dependencies...\033[0m"
+if ! command -v bun > /dev/null 2>&1; then
+    echo -e "\033[0;31m  ERROR: Bun is not installed or is not available on PATH.\033[0m"
+    exit 1
+fi
+
+cd "$FRONTEND_DIR"
+bun install
+echo -e "\033[0;32m  Frontend dependencies are ready.\033[0m"
+
+# ── 3. Redis via Docker ────────────────────────────────────
+echo -e "\033[0;33m[3/6] Starting Redis (Docker)...\033[0m"
 if ! docker info > /dev/null 2>&1; then
     echo -e "\033[0;31m  WARNING: Docker Desktop is not running.\033[0m"
     echo -e "\033[0;31m  -> Please open Docker manually, then re-run this script.\033[0m"
@@ -26,8 +60,8 @@ else
     echo -e "\033[0;32m  Redis started (or already running).\033[0m"
 fi
 
-# ── 2. Backend (FastAPI / uvicorn) ────────────────────────
-echo -e "\033[0;33m[2/4] Starting Backend (FastAPI)...\033[0m"
+# ── 4. Backend (FastAPI / uvicorn) ────────────────────────
+echo -e "\033[0;33m[4/6] Starting Backend (FastAPI)...\033[0m"
 cd "$BACKEND_DIR"
 source venv/bin/activate
 uvicorn app.main:app --reload --port 8000 > backend.log 2>&1 &
@@ -36,14 +70,14 @@ echo -e "\033[0;32m  Backend started in background (PID: $BACKEND_PID).\033[0m"
 
 sleep 2
 
-# ── 3. Celery Worker ──────────────────────────────────────
-echo -e "\033[0;33m[3/4] Starting Celery Worker...\033[0m"
+# ── 5. Celery Worker ──────────────────────────────────────
+echo -e "\033[0;33m[5/6] Starting Celery Worker...\033[0m"
 venv/bin/celery -A app.worker.celery_app worker --loglevel=info -Q main-queue > celery.log 2>&1 &
 CELERY_PID=$!
 echo -e "\033[0;32m  Celery Worker started in background (PID: $CELERY_PID).\033[0m"
 
-# ── 4. Frontend (Next.js / bun) ───────────────────────────
-echo -e "\033[0;33m[4/4] Starting Frontend (Next.js)...\033[0m"
+# ── 6. Frontend (Next.js / bun) ───────────────────────────
+echo -e "\033[0;33m[6/6] Starting Frontend (Next.js)...\033[0m"
 cd "$FRONTEND_DIR"
 bun run dev > frontend.log 2>&1 &
 FRONTEND_PID=$!

@@ -77,7 +77,9 @@ cp e2e/.env.test.example e2e/.env.test
 ### Prerequisites
 
 - Docker Desktop must be **running** before executing the script.
-- All dependencies must be installed (see [Installing Dependencies](#installing-dependencies-first-time)).
+- Python must be installed and available on `PATH` for backend dependency setup.
+- Bun must be installed and available on `PATH` for frontend dependency setup.
+- Node.js/npm must be installed and available on `PATH` when using `start-and-test`.
 
 ```bash
 # ===== WINDOWS (PowerShell) =====
@@ -99,10 +101,14 @@ cp e2e/.env.test.example e2e/.env.test
 
 The start script will:
 
-1. Start **Redis** via Docker (`docker compose up -d`)
-2. Open a new terminal → activate venv → start **FastAPI** on port 8000
-3. Open a new terminal → activate venv → start **Celery Worker**
-4. Open a new terminal → start **Next.js Frontend** on port 3000
+1. Create the backend virtual environment if needed, then install/update backend dependencies from `backend/requirements.txt`
+2. Install/update frontend dependencies with `bun install`
+3. Start **Redis** via Docker (`docker compose up -d`)
+4. Open a new terminal → activate venv → start **FastAPI** on port 8000
+5. Open a new terminal → activate venv → start **Celery Worker**
+6. Open a new terminal → start **Next.js Frontend** on port 3000
+
+The start-and-test script will first install/update E2E dependencies in `e2e` with `npm install` and install Playwright browsers with `npx playwright install`, then start the services and run the Playwright suite.
 
 > **Note:** If Docker Desktop is not open, Redis will be skipped with a warning — the other services will still start.
 
@@ -191,11 +197,14 @@ We have a diagnostic endpoint to verify if all external APIs and services in you
 
 ### E2E Testing (Playwright)
 
-End-to-End testing is handled using Playwright in the `e2e` directory. Ensure Node.js is installed.
+End-to-End testing is handled using Playwright in the `e2e` directory. Ensure Node.js/npm is installed.
+
+The `start-and-test` scripts install/update E2E dependencies automatically before starting services. To install them manually:
 
 ```bash
 cd e2e
 npm install
+npx playwright install
 ```
 
 #### Run Test Suites
@@ -226,7 +235,9 @@ npm run test:ui
 
 ---
 
-## Installing Dependencies (First Time)
+## Installing Dependencies Manually
+
+The start scripts install/update backend and frontend dependencies automatically before launching services. Use these commands only when you want to prepare dependencies manually.
 
 ### Backend
 
