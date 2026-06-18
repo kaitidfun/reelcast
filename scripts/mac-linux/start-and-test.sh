@@ -30,22 +30,7 @@ npm install
 echo -e "\033[1;30mInstalling Playwright browsers (if needed)...\033[0m"
 npx playwright install
 
-# 2. Install/update backend and frontend dependencies
-echo -e "\033[0;33mInstalling/updating backend and frontend dependencies...\033[0m"
-
-cd "$BACKEND_DIR"
-if [ ! -d "venv" ]; then
-    python -m venv venv
-fi
-
-source venv/bin/activate
-python -m pip install --upgrade -r requirements.txt
-deactivate
-
-cd "$FRONTEND_DIR"
-bun install
-
-# 3. Start all services
+# 2. Start all services
 bash "$ROOT_DIR/scripts/mac-linux/start.sh"
 
 # 3. Wait for services to be ready
