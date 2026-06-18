@@ -57,22 +57,30 @@ cp backend/.env.example backend/.env
 > **Start all services with a single command** — Docker, Backend, Celery, and Frontend will all launch automatically.
 
 ### Prerequisites
+
 - Docker Desktop must be **running** before executing the script.
 - All dependencies must be installed (see [Installing Dependencies](#installing-dependencies-first-time)).
 
 ```bash
 # ===== WINDOWS (PowerShell) =====
+# Start all services.
 .\scripts\windows\start.ps1
+# Start all services and run tests.
 .\scripts\windows\start-and-test.ps1
+# Stop all running services.
 .\scripts\windows\stop.ps1
 
 # ===== macOS / Linux (Bash) =====
+# Start all services.
 ./scripts/mac-linux/start.sh
+# Start all services and run tests.
 ./scripts/mac-linux/start-and-test.sh
+# Stop all running services.
 ./scripts/mac-linux/stop.sh
 ```
 
 The start script will:
+
 1. Start **Redis** via Docker (`docker compose up -d`)
 2. Open a new terminal → activate venv → start **FastAPI** on port 8000
 3. Open a new terminal → activate venv → start **Celery Worker**
