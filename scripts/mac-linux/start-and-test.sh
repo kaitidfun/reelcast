@@ -8,6 +8,8 @@ set -e
 
 ROOT_DIR=$(cd "$(dirname "$0")/../.." && pwd)
 E2E_DIR="$ROOT_DIR/e2e"
+BACKEND_DIR="$ROOT_DIR/backend"
+VENV_PY="$BACKEND_DIR/venv/bin/python"
 
 echo ""
 echo -e "\033[0;36m========================================\033[0m"
@@ -38,7 +40,22 @@ echo ""
 echo -e "\033[0;33mWaiting 15 seconds for Backend and Frontend to be fully ready...\033[0m"
 sleep 15
 
-# 4. Run E2E Tests
+# 4. Run Backend Unit Tests
+echo ""
+echo -e "\033[0;36m========================================\033[0m"
+echo -e "\033[0;36m   Running Backend Unit Tests           \033[0m"
+echo -e "\033[0;36m========================================\033[0m"
+
+cd "$BACKEND_DIR"
+
+echo -e "\033[0;33mExecuting backend_unit_test.py...\033[0m"
+"$VENV_PY" -m unittest tests.backend_unit_test
+if [ $? -ne 0 ]; then
+    echo -e "\033[0;31m  ERROR: Backend Unit Tests failed!\033[0m"
+    exit 1
+fi
+
+# 5. Run E2E Tests
 echo ""
 echo -e "\033[0;36m========================================\033[0m"
 echo -e "\033[0;36m   Running Playwright E2E Tests         \033[0m"
@@ -49,7 +66,7 @@ cd "$E2E_DIR"
 echo -e "\033[0;33mExecuting tests...\033[0m"
 npm test
 
-# 5. Summary
+# 6. Summary
 echo ""
 echo -e "\033[0;32m========================================\033[0m"
 echo -e "\033[0;32m   Test Pipeline Finished!              \033[0m"

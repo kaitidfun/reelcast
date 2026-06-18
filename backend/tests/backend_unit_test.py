@@ -296,7 +296,7 @@ class DocumentAlignmentTests(unittest.TestCase):
             if api_key and api_key != "your_google_ai_api_key":
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
-                        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}",
+                        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}",
                         json={"contents": [{"parts": [{"text": "hi"}]}]},
                         timeout=5,
                     )

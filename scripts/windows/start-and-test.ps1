@@ -6,6 +6,8 @@
 
 $ROOT = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $E2E  = Join-Path $ROOT "e2e"
+$BACKEND = Join-Path $ROOT "backend"
+$VENV_PY = Join-Path $BACKEND "venv\Scripts\python.exe"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -40,7 +42,24 @@ Write-Host ""
 Write-Host "Waiting 15 seconds for Backend and Frontend to be fully ready..." -ForegroundColor Yellow
 Start-Sleep -Seconds 15
 
-# 4. Run E2E Tests
+# 4. Run Backend Unit Tests
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "   Running Backend Unit Tests           " -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+
+Push-Location -Path $BACKEND
+
+Write-Host "Executing backend_unit_test.py..." -ForegroundColor Yellow
+& $VENV_PY -m unittest tests.backend_unit_test
+if ($LASTEXITCODE -ne 0) { 
+    Write-Host "  ERROR: Backend Unit Tests failed!" -ForegroundColor Red
+    exit $LASTEXITCODE 
+}
+
+Pop-Location
+
+# 5. Run E2E Tests
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "   Running Playwright E2E Tests         " -ForegroundColor Cyan
@@ -51,7 +70,7 @@ Set-Location -Path $E2E
 Write-Host "Executing tests..." -ForegroundColor Yellow
 npm test
 
-# 5. Summary
+# 6. Summary
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "   Test Pipeline Finished!              " -ForegroundColor Green

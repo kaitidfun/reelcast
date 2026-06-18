@@ -108,7 +108,7 @@ The start script will:
 5. Open a new terminal → activate venv → start **Celery Worker**
 6. Open a new terminal → start **Next.js Frontend** on port 3000
 
-The start-and-test script will first install/update E2E dependencies in `e2e` with `npm install` and install Playwright browsers with `npx playwright install`, then start the services and run the Playwright suite.
+The start-and-test script will first install/update E2E dependencies in `e2e` with `npm install` and install Playwright browsers with `npx playwright install`, then start the services, run backend unit tests, and finally run the Playwright suite.
 
 > **Note:** If Docker Desktop is not open, Redis will be skipped with a warning — the other services will still start.
 
@@ -192,7 +192,7 @@ Backend unit tests include document-alignment checks for business method names, 
 
 ```bash
 cd backend
-venv\Scripts\python -m unittest discover -s tests -p "test*.py"
+venv\Scripts\python -m unittest discover -s tests -p "*_test.py"
 ```
 
 ### Backend API Connection Test
