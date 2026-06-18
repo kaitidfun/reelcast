@@ -32,33 +32,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Pop-Location
 
-# 2. Install/update backend and frontend dependencies
-Write-Host "Installing/updating backend and frontend dependencies..." -ForegroundColor Yellow
-
-Push-Location -Path $BACKEND
-
-if (-not (Test-Path ".\venv")) {
-    Write-Host "  Creating backend Python virtual environment..." -ForegroundColor DarkGray
-    python -m venv .\venv
-    if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }
-}
-
-Write-Host "  Activating backend virtual environment and installing requirements..." -ForegroundColor DarkGray
-& ".\venv\Scripts\Activate.ps1"
-pip install --upgrade -r requirements.txt
-if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }
-
-Pop-Location
-
-Push-Location -Path $FRONTEND
-
-Write-Host "  Installing frontend dependencies with bun..." -ForegroundColor DarkGray
-bun install
-if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }
-
-Pop-Location
-
-# 3. Start all services
+# 2. Start all services
 & "$PSScriptRoot\start.ps1"
 
 # 3. Wait for services to be ready
