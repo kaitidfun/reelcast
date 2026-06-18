@@ -50,6 +50,24 @@ cp backend/.env.example backend/.env
 > **Note:** `GOOGLE_AI_API_KEY` must be from a Google Cloud Project with Billing enabled.  
 > Free Tier will result in Error 429 RESOURCE_EXHAUSTED.
 
+### E2E Testing — Create `e2e/.env.test`
+
+Copy from `e2e/.env.test.example` and fill in the values:
+
+```bash
+cp e2e/.env.test.example e2e/.env.test
+```
+
+| Variable       | Description                                 |
+| -------------- | ------------------------------------------- |
+| `FRONTEND_URL` | Frontend URL used by Playwright tests       |
+| `BACKEND_URL`  | Backend URL used by Playwright tests        |
+| `PG_HOST`      | PostgreSQL host matching backend connection |
+| `PG_PORT`      | PostgreSQL port matching backend connection |
+| `PG_DATABASE`  | PostgreSQL database name                    |
+| `PG_USER`      | PostgreSQL user                             |
+| `PG_PASSWORD`  | PostgreSQL password                         |
+
 ---
 
 ## ⚡ Quick Start (One Command)
