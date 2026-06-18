@@ -1,7 +1,7 @@
 # ReelCast — Setup and Run Guide
 
 > **Senior Project** — AI-Powered Social Media Reel Generator  
-> Stack: FastAPI · Celery · Redis · Next.js (Bun) · Cloudflare R2 · LTX Video 2.0 · Google Gemini
+> Stack: FastAPI · Celery · Redis · Next.js (Bun) · Cloudflare R2 · LTX Video 2.3 · Google Gemini
 
 ---
 
@@ -44,7 +44,7 @@ cp backend/.env.example backend/.env
 | `R2_BUCKET_NAME`         | Cloudflare R2 bucket name                         |
 | `R2_PUBLIC_URL`          | (Optional) Custom domain for R2 bucket            |
 | `GOOGLE_AI_API_KEY`      | Google AI API key (Requires Billing enabled)      |
-| `FAL_KEY`                | fal.ai API key for LTX Video 2.0 video generation |
+| `FAL_KEY`                | fal.ai API key for LTX Video 2.3 video generation |
 | `DATABASE_URL`           | PostgreSQL connection string                      |
 
 > **Note:** `GOOGLE_AI_API_KEY` must be from a Google Cloud Project with Billing enabled.  
@@ -186,6 +186,15 @@ Verify: Open [http://localhost:3000](http://localhost:3000)
 
 ## Testing
 
+### Backend Unit Tests
+
+Backend unit tests include document-alignment checks for business method names, domain exception names, and SQLAlchemy database schema metadata.
+
+```bash
+cd backend
+venv\Scripts\python -m unittest discover -s tests -p "test*.py"
+```
+
 ### Backend API Connection Test
 
 We have a diagnostic endpoint to verify if all external APIs and services in your `.env` are configured correctly and reachable.
@@ -267,11 +276,44 @@ netstat -ano | findstr "8000 3000 6379"
 docker ps
 
 # Update backend dependencies
-venv\Scripts\pip install -r requirements.txt
+cd backend
+venv\Scripts\python -m pip install --upgrade -r requirements.txt
 
 # Install google-genai (if missing)
-venv\Scripts\pip install google-genai --upgrade
+venv\Scripts\python -m pip install google-genai --upgrade
 ```
+
+---
+
+## Database Schema Notes
+
+The backend expects the PostgreSQL schema to already contain the columns defined in `backend/app/models/models.py`. Startup no longer runs automatic `ALTER TABLE` migrations.
+
+Important Reel storage fields:
+
+- `raw_video_url` stores the original video before overlays/logos.
+- `first_frame_url` stores the Gemini-generated first-frame image URL.
+- `final_commercial_video_url` stores the finalized MP4 with overlays.
+
+---
+
+## Core API Surface
+
+The route URLs stay stable for the frontend, while the internal handler names follow the software design document:
+
+| Method description     | Method name                   | Endpoint                               |
+| ---------------------- | ----------------------------- | -------------------------------------- |
+| Registration           | `registerGuest`               | `POST /register`                       |
+| Login                  | `authenticateMember`          | `POST /login`                          |
+| Account profile        | `updateAccountProfile`        | `PUT /me`                              |
+| 2FA setup verification | `manage2FA`                   | `POST /api/2fa/verify-setup`           |
+| Generate Reel          | `inputPromptAndSelectProduct` | `POST /api/reels/generate`             |
+| Regenerate content     | `regenerateContent`           | `POST /api/reels/{reel_id}/regenerate` |
+| Upload own Reel        | `uploadOwnReel`               | `POST /api/reels/upload-video`         |
+| Approve preview        | `previewAndApproveContent`    | `POST /api/reels/{reel_id}/approve`    |
+| Browse library         | `browseLibrary`               | `GET /api/library`                     |
+| Create campaign        | `createCampaign`              | `POST /api/campaigns`                  |
+| Create product         | `createProduct`               | `POST /api/products`                   |
 
 ---
 
@@ -294,6 +336,7 @@ reelcastcast/
 │   ├── app/
 │   │   ├── main.py           # FastAPI app entry point
 │   │   ├── worker.py         # Celery task (video generation pipeline)
+│   │   ├── exceptions.py     # Domain exceptions from the design document
 │   │   ├── models/           # SQLAlchemy ORM models
 │   │   ├── routes/           # API route handlers
 │   │   └── services/
@@ -330,9 +373,9 @@ reelcastcast/
 
 ## AI Services Used
 
-| Service       | Model                | Purpose                                               |
-| ------------- | -------------------- | ----------------------------------------------------- |
-| fal.ai        | LTX Video 2.0        | Video generation from product images (image-to-video) |
-| Google Gemini | gemini-2.5-flash     | Captions + hashtags generation                        |
-| Google Veo    | veo-2.0-generate-001 | Fallback video generation                             |
-| Cloudflare R2 | —                    | Storing video files + product images                  |
+| Service       | Model              | Purpose                                               |
+| ------------- | ------------------ | ----------------------------------------------------- |
+| fal.ai        | LTX Video 2.3 fast | Video generation from first frames or text prompts    |
+| Google Gemini | gemini-3.5-flash   | Prompt building, captions, and hashtags generation    |
+| Google Gemini | gemini-3-pro-image | Product-aware cinematic first-frame generation        |
+| Cloudflare R2 | —                  | Storing video files, first frames, and product images |

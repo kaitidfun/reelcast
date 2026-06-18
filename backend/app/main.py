@@ -10,7 +10,6 @@ from app.exceptions import (
     InvalidPromptLengthException,
     ReelCastException,
 )
-from sqlalchemy import text as sa_text
 from app.database import engine, Base, SessionLocal
 import app.models.models  # Import models so Base knows about them
 from app.routes import (
@@ -27,17 +26,6 @@ from app.routes import (
 
 # Create all database tables (no-op for existing tables — safe on every restart)
 Base.metadata.create_all(bind=engine)
-
-# Safe incremental migrations — ADD COLUMN IF NOT EXISTS is idempotent on PostgreSQL.
-# These run on every startup and are skipped automatically if the column already exists.
-with engine.connect() as _conn:
-    _conn.execute(sa_text(
-        "ALTER TABLE reels ADD COLUMN IF NOT EXISTS raw_video_url TEXT"
-    ))
-    _conn.execute(sa_text(
-        "ALTER TABLE reels ADD COLUMN IF NOT EXISTS first_frame_url VARCHAR"
-    ))
-    _conn.commit()
 
 def get_db():
     """Dependency to yield database session."""
