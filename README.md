@@ -60,12 +60,16 @@ cp backend/.env.example backend/.env
 - Docker Desktop must be **running** before executing the script.
 - All dependencies must be installed (see [Installing Dependencies](#installing-dependencies-first-time)).
 
-```powershell
-# Start everything
-.\scripts\start.ps1
+```bash
+# ===== WINDOWS (PowerShell) =====
+.\scripts\windows\start.ps1
+.\scripts\windows\start-and-test.ps1
+.\scripts\windows\stop.ps1
 
-# Stop everything
-.\scripts\stop.ps1
+# ===== macOS / Linux (Bash) =====
+./scripts/mac-linux/start.sh
+./scripts/mac-linux/start-and-test.sh
+./scripts/mac-linux/stop.sh
 ```
 
 The start script will:
@@ -271,9 +275,15 @@ reelcastcast/
 ├── frontend/                 # Next.js 14 App Router
 │   └── src/app/(main)/
 │       └── create/page.tsx   # Reel creation page (Feature 2)
-├── scripts/                  # Dev helper scripts (PowerShell)
-│   ├── start.ps1             # One-click: start all services
-│   └── stop.ps1              # One-click: stop all services
+├── scripts/                  # Dev helper scripts
+│   ├── windows/              # Scripts for Windows (PowerShell)
+│   │   ├── start.ps1
+│   │   ├── start-and-test.ps1
+│   │   └── stop.ps1
+│   └── mac-linux/            # Scripts for macOS & Linux (Bash)
+│       ├── start.sh
+│       ├── start-and-test.sh
+│       └── stop.sh
 ├── docs/                     # Project documentation & SRS
 ├── docker-compose.yml        # Redis container
 └── README.md
