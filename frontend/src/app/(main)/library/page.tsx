@@ -58,9 +58,14 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/hooks/use-toast";
+import {
+  getProductStatus,
+  sortLibraryItems,
+  type SortKey,
+  validateProductImages,
+} from "@/lib/test-plan";
 
 type ProductStatus = "Active" | "Draft";
-type SortKey = "newest" | "oldest" | "updated" | "name";
 
 interface Product {
   id: string;
@@ -133,23 +138,6 @@ const formatDateTime = (iso: string) => {
   }
 };
 
-const sortItems = <T extends { name: string; createdAt: string; updatedAt: string }>(
-  items: T[],
-  key: SortKey,
-): T[] => {
-  const arr = [...items];
-  switch (key) {
-    case "newest":
-      return arr.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-    case "oldest":
-      return arr.sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
-    case "updated":
-      return arr.sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt));
-    case "name":
-      return arr.sort((a, b) => a.name.localeCompare(b.name));
-  }
-};
-
 const ContentLibrary = () => {
   const { toast } = useToast();
   const router = useRouter();
@@ -179,13 +167,17 @@ const ContentLibrary = () => {
           bannerImage: c.banner_image_url || undefined,
           products: libraryData.products.filter((p: any) => p.campaign_id === c.campaign_id).map((p: any) => {
             const primaryImage = p.images?.find((img: any) => img.is_primary)?.image_url || p.images?.[0]?.image_url;
-            const isActive = Boolean(p.product_name?.trim() && p.description?.trim() && p.affiliate_link?.trim() && p.images?.length > 0);
             return {
               id: p.product_id,
               name: p.product_name,
               keyPoints: p.description || "",
               affiliateLink: p.affiliate_link || "",
-              status: isActive ? "Active" : "Draft",
+              status: p.status ?? getProductStatus({
+                productName: p.product_name || "",
+                description: p.description,
+                affiliateLink: p.affiliate_link,
+                imageCount: p.images?.length || 0,
+              }),
               thumbnail: primaryImage ? `http://localhost:8000/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : null),
               reelsGenerated: 0,
               createdAt: p.created_at || new Date().toISOString(),
@@ -204,7 +196,6 @@ const ContentLibrary = () => {
         throw new Error(errData.detail || "Failed to retrieve campaigns from database");
       }
     } catch (e: any) {
-      console.error(e);
       toast({ title: "Error", description: e.message || "Failed to retrieve campaigns", variant: "destructive" });
     } finally {
       setLoading(false);
@@ -257,11 +248,22 @@ const ContentLibrary = () => {
   const handleMultipleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const filesArray = Array.from(e.target.files);
+      const validationError = validateProductImages([
+        ...pImages
+          .filter((image) => image.file)
+          .map((image) => image.file!),
+        ...filesArray,
+      ]);
+      if (validationError) {
+        toast({ title: validationError, variant: "destructive" });
+        e.target.value = "";
+        return;
+      }
       const newImages = filesArray.map(file => ({
         url: URL.createObjectURL(file),
         file
       }));
-      setPImages(prev => [...prev, ...newImages].slice(0, 5)); // Limit to 5
+      setPImages(prev => [...prev, ...newImages]);
     }
   };
 
@@ -272,7 +274,7 @@ const ContentLibrary = () => {
 
   const currentCampaign = campaigns.find((c) => c.id === openCampaignId) ?? null;
 
-  const filteredCampaigns = sortItems(
+  const filteredCampaigns = sortLibraryItems(
     campaigns.filter((c) => {
       const q = campaignSearch.toLowerCase();
       return (
@@ -285,7 +287,7 @@ const ContentLibrary = () => {
   );
 
   const filteredProducts = currentCampaign
-    ? sortItems(
+    ? sortLibraryItems(
       currentCampaign.products.filter((p) => {
         const q = search.toLowerCase();
         const matchesSearch =
@@ -1273,7 +1275,7 @@ const ContentLibrary = () => {
                       {pImages.length < 5 && (
                         <label className="relative flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl text-center hover:border-primary/40 hover:bg-muted/30 cursor-pointer transition-all aspect-square bg-card">
                           <Plus className="h-6 w-6 text-muted-foreground" />
-                          <input type="file" accept="image/*" multiple className="hidden" onChange={handleMultipleImageUpload} />
+                          <input type="file" accept=".jpg,.jpeg,.png,.webp" multiple className="hidden" onChange={handleMultipleImageUpload} />
                         </label>
                       )}
                     </div>
@@ -1282,7 +1284,7 @@ const ContentLibrary = () => {
                       <UploadCloud className="h-8 w-8 text-muted-foreground mb-2" />
                       <p className="text-sm text-foreground">Drag & drop or click to upload</p>
                       <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
-                      <input type="file" accept="image/*" multiple className="hidden" onChange={handleMultipleImageUpload} />
+                      <input type="file" accept=".jpg,.jpeg,.png,.webp" multiple className="hidden" onChange={handleMultipleImageUpload} />
                     </label>
                   )}
                 </div>

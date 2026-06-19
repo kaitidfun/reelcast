@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import authHero from "@/assets/auth-hero-register.jpg";
+import { validateRegistrationForm } from "@/lib/test-plan";
 
 
 function getStrength(pw: string) {
@@ -61,20 +62,15 @@ const Register = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!displayName || !email || !password) {
-      setError("Please fill in all fields");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
-    if (!acceptTerms) {
-      setError("Please accept the Terms and Privacy Policy");
+    const validationError = validateRegistrationForm({
+      displayName,
+      email,
+      password,
+      confirmPassword,
+      acceptTerms,
+    });
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setLoading(true);

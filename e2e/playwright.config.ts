@@ -9,15 +9,15 @@ const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./tests",
-  fullyParallel: false,          // Run sequentially — tests share DB state
+  fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: 1,                    // Single worker to avoid race conditions on shared DB
+  workers: process.env.CI ? 2 : undefined,
   reporter: [
     ["list"],
     ["html", { open: "never" }],
   ],
-  timeout: 60_000,               // 60 s per test (registration sends email)
+  timeout: 60_000,
   expect: {
     timeout: 10_000,
   },
@@ -32,7 +32,13 @@ export default defineConfig({
 
   projects: [
     {
-      name: "chromium",
+      name: "ui-unit",
+      testMatch: /ui-unit\/.*\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "system",
+      testMatch: /system\/.*\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
   ],

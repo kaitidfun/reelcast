@@ -20,7 +20,8 @@ from typing import Any, Dict, Optional
 from google import genai
 from google.genai import types
 
-from app.exceptions import GeminiAPIException
+from app.core.config import REELCAST_TEST_MODE
+from app.exceptions import GeminiAPIException, InvalidPromptLengthException
 
 # generate_video re-exported so existing callers that imported from here still work
 from app.services.video_generation_service import generate_video  # noqa: F401
@@ -158,11 +159,15 @@ async def generateCaptionsAndHashtags(
     Raises:
         Returns fallback mock response if GOOGLE_AI_API_KEY not configured
     """
+    normalized_prompt = prompt.strip()
+    if not normalized_prompt or len(normalized_prompt) > 500:
+        raise InvalidPromptLengthException()
+
     if not GOOGLE_AI_API_KEY:
         logger.warning("GOOGLE_AI_API_KEY not set, using mock caption response")
         await asyncio.sleep(1)
         return {
-            "caption": f"Check out this amazing product! {prompt[:50]}...",
+            "caption": f"Check out this amazing product! {normalized_prompt[:50]}...",
             "hashtags": ["#trending", "#musthave", "#reelcast", "#shopnow"]
         }
 
@@ -180,7 +185,7 @@ Rules:
     full_prompt = (
         system_prompt
         + "\n\n"
-        + f"User Prompt: {prompt}\nProduct Details: {productDetails}"
+        + f"User Prompt: {normalized_prompt}\nProduct Details: {productDetails}"
     )
 
     try:
@@ -232,8 +237,8 @@ async def generate_prompt_from_template(
         f"{template_desc}. Use dynamic transitions, premium lighting, and a compelling call-to-action."
     )
 
-    if not GOOGLE_AI_API_KEY:
-        logger.warning("GOOGLE_AI_API_KEY not set — returning static fallback prompt")
+    if REELCAST_TEST_MODE or not GOOGLE_AI_API_KEY:
+        logger.warning("AI call disabled — returning static fallback prompt")
         return fallback
 
     # Generate a SCENE + MOTION DESCRIPTION optimised for LTX Video 2.3.
@@ -327,8 +332,8 @@ async def enhance_prompt(
     Returns:
         Improved prompt string (≤ 500 chars). Returns original prompt on error.
     """
-    if not GOOGLE_AI_API_KEY:
-        logger.warning("GOOGLE_AI_API_KEY not set — returning locally enhanced prompt")
+    if REELCAST_TEST_MODE or not GOOGLE_AI_API_KEY:
+        logger.warning("AI call disabled — returning locally enhanced prompt")
         return (
             f"Create a cinematic {duration}-second vertical Reel: {prompt_text.strip()}. "
             "Use dynamic camera moves, premium lighting, hero product close-ups, "
@@ -444,8 +449,8 @@ async def generate_guided_prompt(
             "smooth transitions, and a strong call-to-action."
         )[:500]
 
-    if not GOOGLE_AI_API_KEY:
-        logger.warning("GOOGLE_AI_API_KEY not set — returning locally-assembled guided prompt")
+    if REELCAST_TEST_MODE or not GOOGLE_AI_API_KEY:
+        logger.warning("AI call disabled — returning locally-assembled guided prompt")
         return _local_fallback()
 
     # Generate a LTX Video 2.3 optimised scene + motion prompt from the creative chips.

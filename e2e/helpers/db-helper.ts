@@ -126,6 +126,19 @@ export async function verifyUserEmail(email: string): Promise<void> {
   await query("UPDATE users SET is_email_verified = true WHERE email = $1", [email]);
 }
 
+export async function configureUser2FA(
+  email: string,
+  secret: string,
+  enabled = true,
+): Promise<void> {
+  await query(
+    `UPDATE users
+     SET two_factor_secret = $2, is_2fa_enabled = $3
+     WHERE email = $1`,
+    [email, secret, enabled],
+  );
+}
+
 /**
  * Count all users with a given email.
  * Handy to assert exactly 1 record was inserted.

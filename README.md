@@ -108,7 +108,7 @@ The start script will:
 5. Open a new terminal → activate venv → start **Celery Worker**
 6. Open a new terminal → start **Next.js Frontend** on port 3000
 
-The start-and-test script will first install/update E2E dependencies in `e2e` with `npm install` and install Playwright browsers with `npx playwright install`, then start the services, run backend unit tests, and finally run the Playwright suite.
+The start-and-test script installs E2E dependencies and Playwright browsers, starts the services in deterministic test mode, then runs backend unit, frontend unit, UI unit E2E, and non-external system E2E suites.
 
 > **Note:** If Docker Desktop is not open, Redis will be skipped with a warning — the other services will still start.
 
@@ -188,21 +188,19 @@ Verify: Open [http://localhost:3000](http://localhost:3000)
 
 ### Backend Unit Tests
 
-Backend unit tests include document-alignment checks for business method names, domain exception names, and SQLAlchemy database schema metadata.
+Backend unit tests cover service and route behavior from the test plan.
 
 ```bash
 cd backend
-venv\Scripts\python -m unittest discover -s tests -p "*_test.py"
+venv\Scripts\python -m unittest discover -s tests\unit -p "test_*.py" -v
 ```
 
-### Backend API Connection Test
+### Frontend Unit Tests
 
-We have a diagnostic endpoint to verify if all external APIs and services in your `.env` are configured correctly and reachable.
-
-1. Ensure your backend is running (`uvicorn app.main:app --reload --port 8000`).
-2. Open your browser or use Postman/cURL to make a GET request to:
-   👉 **[http://localhost:8000/test/connections](http://localhost:8000/test/connections)**
-3. The response will return a JSON indicating the status (`success`, `error`, or `skipped`) for each service (Database, SMTP, R2, Google AI, fal.ai, OAuth).
+```bash
+cd frontend
+bun run test
+```
 
 ### E2E Testing (Playwright)
 
@@ -218,21 +216,14 @@ npx playwright install
 
 #### Run Test Suites
 
-Tests are organized into UTC (Unit Test Cases) and STC (System Test Cases):
+Playwright contains two projects:
 
-- Run all tests: `npm test`
-- Run all UTC tests: `npm run test:utc`
-- Run all STC tests: `npm run test:stc`
+- UI unit tests with mocked backend routes: `npm run test:ui-unit`
+- System E2E tests against frontend, backend, and PostgreSQL: `npm run test:system`
+- Provider/infrastructure-dependent system tests: `npm run test:system:external`
+- All Playwright tests including external: `npm run test:all`
 
-#### Run Specific Tests
-
-You can run specific test files via npm:
-
-- Authentication: `npm run test:auth`
-- Account Profile: `npm run test:account`
-- Library: `npm run test:library`
-- Create Reel: `npm run test:create`
-- Upload Reel: `npm run test:upload`
+For the non-external system suite, start the backend with `REELCAST_TEST_MODE=true`. See `docs/testing/TEST_STRATEGY.md` and `docs/testing/TRACEABILITY.md`.
 
 #### Debugging
 
@@ -347,11 +338,11 @@ reelcastcast/
 │   │       └── upload_service.py        # User video validation
 │   ├── requirements.txt
 │   └── .env.example
-├── e2e/                      # Playwright End-to-End Testing
-│   ├── helpers/              # Database test helpers
+├── e2e/                      # Playwright UI unit and system E2E testing
+│   ├── helpers/              # UI mocks and system/database fixtures
 │   └── tests/                # Test specifications
-│       ├── UTC/              # Unit Test Cases (Feature-focused specs)
-│       └── STC/              # System Test Cases (Scenario-focused flows)
+│       ├── ui-unit/          # Browser unit scope with mocked APIs
+│       └── system/           # Full-stack E2E scenarios
 ├── frontend/                 # Next.js 14 App Router
 │   └── src/app/(main)/
 │       └── create/page.tsx   # Reel creation page (Feature 2)

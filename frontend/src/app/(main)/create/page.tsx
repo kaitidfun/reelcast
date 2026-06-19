@@ -21,6 +21,11 @@ import { GuideChipRow } from "./_components/GuideChipRow";
 import { ProductPickerDialog } from "./_components/ProductPickerDialog";
 import { FullscreenVideoDialog } from "./_components/FullscreenVideoDialog";
 import { CaptionBlock } from "./_components/CaptionBlock";
+import {
+  buildGuidedPromptPayload,
+  hasGuidedSelection,
+  validatePrompt,
+} from "@/lib/test-plan";
 
 // ─── Quick-prompt chips ───────────────────────────────────────────────────────
 const promptTemplates = [
@@ -352,8 +357,15 @@ const CreateReelContent = () => {
       toast({ title: "Select a product first", description: "Auto-Build uses your product details to personalise the prompt." });
       return;
     }
-    const hasSelection = selectedMood || selectedTarget || selectedStyle || selectedFocus || selectedLighting || selectedCameraMotion;
-    if (!hasSelection) {
+    const selections = {
+      mood: selectedMood,
+      target: selectedTarget,
+      style: selectedStyle,
+      focus: selectedFocus,
+      lighting: selectedLighting,
+      cameraMotion: selectedCameraMotion,
+    };
+    if (!hasGuidedSelection(selections)) {
       toast({ title: "Pick at least one option", description: "Select any card from the rows below to build a prompt." });
       return;
     }
@@ -363,23 +375,15 @@ const CreateReelContent = () => {
       const res = await fetch("http://localhost:8000/api/reels/generate-guided-prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({
-          mood:          selectedMood         ?? undefined,
-          target:        selectedTarget       ?? undefined,
-          style:         selectedStyle        ?? undefined,
-          focus:         selectedFocus        ?? undefined,
-          lighting:      selectedLighting     ?? undefined,
-          camera_motion: selectedCameraMotion ?? undefined,
-          product_id:    selectedProduct?.id  ?? undefined,
-          duration,
-        }),
+        body: JSON.stringify(
+          buildGuidedPromptPayload(selections, selectedProduct.id, duration),
+        ),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setPromptText((data.prompt as string).slice(0, 500));
       toast({ title: "Prompt built ✨", description: "Ready to generate — feel free to edit it first." });
     } catch (err) {
-      console.error("Guided prompt generation failed:", err);
       toast({ title: "Could not build prompt", description: "Something went wrong — please try again.", variant: "destructive" });
     } finally {
       setGuidedLoading(false);
@@ -391,8 +395,9 @@ const CreateReelContent = () => {
       toast({ title: "Select a product", description: "Pick a product from your library — required to generate a Reel." });
       return;
     }
-    if (!promptText.trim()) {
-      toast({ title: "Describe your Reel", description: "Write a prompt describing the Reel you want." });
+    const promptError = validatePrompt(promptText);
+    if (promptError) {
+      toast({ title: "Describe your Reel", description: promptError });
       return;
     }
     completedModeRef.current = "generate";

@@ -192,9 +192,9 @@ async def upload_product_logo(
         raise ProductNotFoundException()
 
     extension = os.path.splitext(file.filename or "")[1].lower()
-    if extension not in {".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp"}:
+    if extension not in {".jpg", ".jpeg", ".png", ".webp"}:
         raise InvalidImageFormatException(
-            "Product logo must use JPG, PNG, GIF, SVG, or WEBP format"
+            "Product logo must use JPG, PNG, or WEBP format"
         )
         
     try:
@@ -250,9 +250,9 @@ async def upload_product_image(
         raise MaxImagesExceededException()
 
     extension = os.path.splitext(file.filename or "")[1].lower()
-    if extension not in {".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp"}:
+    if extension not in {".jpg", ".jpeg", ".png", ".webp"}:
         raise InvalidImageFormatException(
-            "Product images must use JPG, PNG, GIF, SVG, or WEBP format"
+            "Product images must use JPG, PNG, or WEBP format"
         )
         
     try:

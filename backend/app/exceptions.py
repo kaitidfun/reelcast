@@ -82,6 +82,10 @@ class InvalidPromptLengthException(ReelCastException):
     default_message = "Prompt must contain between 1 and 500 characters"
 
 
+class InvalidPromptException(ReelCastException):
+    default_message = "Prompt text cannot be empty"
+
+
 class ProductNotFoundException(ReelCastException):
     status_code = 404
     default_message = "The selected product was not found"
@@ -162,6 +166,7 @@ __all__ = [
     "InvalidCredentialsException",
     "InvalidEmailFormatException",
     "InvalidImageFormatException",
+    "InvalidPromptException",
     "InvalidPromptLengthException",
     "InvalidVerificationCodeException",
     "LTXVideoAPIException",

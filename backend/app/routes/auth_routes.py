@@ -3,7 +3,6 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import timedelta
-import re
 
 from app.dependencies import get_db, get_current_user
 from app.exceptions import (
@@ -30,6 +29,7 @@ from app.services.auth_service import (
     verify_password,
     get_password_hash,
     create_access_token,
+    validate_registration_input,
 )
 from app.services.email_service import (
     send_verification_email,
@@ -57,15 +57,7 @@ def registerGuest(
     if db_user:
         raise EmailAlreadyExistsException()
 
-    password_checks = (
-        len(user.password) >= 6,
-        bool(re.search(r"[A-Z]", user.password)),
-        bool(re.search(r"[a-z]", user.password)),
-        bool(re.search(r"\d", user.password)),
-        bool(re.search(r"[^A-Za-z0-9]", user.password)),
-    )
-    if not all(password_checks):
-        raise WeakPasswordException()
+    validate_registration_input(str(user.email), user.password)
 
     hashed_password = get_password_hash(user.password)
     new_user = User(

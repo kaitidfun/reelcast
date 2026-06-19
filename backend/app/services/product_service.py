@@ -47,12 +47,12 @@ def createProduct(
     if len(images) > 5:
         raise MaxImagesExceededException()
 
-    supported_extensions = {".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp"}
+    supported_extensions = {".jpg", ".jpeg", ".png", ".webp"}
     for image in images:
         path = image.image_url.split("?", 1)[0].lower()
         if not any(path.endswith(extension) for extension in supported_extensions):
             raise InvalidImageFormatException(
-                "Product images must use JPG, PNG, GIF, SVG, or WEBP format"
+                "Product images must use JPG, PNG, or WEBP format"
             )
 
     product = Product(

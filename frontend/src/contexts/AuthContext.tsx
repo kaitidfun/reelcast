@@ -18,7 +18,12 @@ interface AuthContextType {
   user: MockUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  authenticateMember: (email: string, password: string) => Promise<{ ok: boolean; requires2fa?: boolean; tempToken?: string }>;
+  authenticateMember: (email: string, password: string) => Promise<{
+    ok: boolean;
+    error?: string;
+    requires2fa?: boolean;
+    tempToken?: string;
+  }>;
   manage2FA: (tempToken: string, code: string) => Promise<boolean>;
   registerGuest: (email: string, password: string, displayName: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;

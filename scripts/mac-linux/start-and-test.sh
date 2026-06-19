@@ -9,6 +9,7 @@ set -e
 ROOT_DIR=$(cd "$(dirname "$0")/../.." && pwd)
 E2E_DIR="$ROOT_DIR/e2e"
 BACKEND_DIR="$ROOT_DIR/backend"
+FRONTEND_DIR="$ROOT_DIR/frontend"
 VENV_PY="$BACKEND_DIR/venv/bin/python"
 
 echo ""
@@ -32,7 +33,8 @@ npm install
 echo -e "\033[1;30mInstalling Playwright browsers (if needed)...\033[0m"
 npx playwright install
 
-# 2. Start all services
+# 2. Start all services in deterministic test mode.
+export REELCAST_TEST_MODE=true
 bash "$ROOT_DIR/scripts/mac-linux/start.sh"
 
 # 3. Wait for services to be ready
@@ -48,25 +50,37 @@ echo -e "\033[0;36m========================================\033[0m"
 
 cd "$BACKEND_DIR"
 
-echo -e "\033[0;33mExecuting backend_unit_test.py...\033[0m"
-"$VENV_PY" -m unittest tests.backend_unit_test
+echo -e "\033[0;33mExecuting backend unit suite...\033[0m"
+"$VENV_PY" -m unittest discover -s tests/unit -p "test_*.py" -v
 if [ $? -ne 0 ]; then
     echo -e "\033[0;31m  ERROR: Backend Unit Tests failed!\033[0m"
     exit 1
 fi
 
-# 5. Run E2E Tests
+# 5. Run Frontend Unit Tests
 echo ""
 echo -e "\033[0;36m========================================\033[0m"
-echo -e "\033[0;36m   Running Playwright E2E Tests         \033[0m"
+echo -e "\033[0;36m   Running Frontend Unit Tests          \033[0m"
+echo -e "\033[0;36m========================================\033[0m"
+
+cd "$FRONTEND_DIR"
+bun run test
+
+# 6. Run UI Unit E2E and System E2E Tests
+echo ""
+echo -e "\033[0;36m========================================\033[0m"
+echo -e "\033[0;36m   Running Playwright Test Suites       \033[0m"
 echo -e "\033[0;36m========================================\033[0m"
 
 cd "$E2E_DIR"
 
-echo -e "\033[0;33mExecuting tests...\033[0m"
-npm test
+echo -e "\033[0;33mExecuting UI unit E2E tests...\033[0m"
+npm run test:ui-unit
 
-# 6. Summary
+echo -e "\033[0;33mExecuting System E2E tests...\033[0m"
+npm run test:system
+
+# 7. Summary
 echo ""
 echo -e "\033[0;32m========================================\033[0m"
 echo -e "\033[0;32m   Test Pipeline Finished!              \033[0m"

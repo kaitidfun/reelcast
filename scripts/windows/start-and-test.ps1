@@ -7,6 +7,7 @@
 $ROOT = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $E2E  = Join-Path $ROOT "e2e"
 $BACKEND = Join-Path $ROOT "backend"
+$FRONTEND = Join-Path $ROOT "frontend"
 $VENV_PY = Join-Path $BACKEND "venv\Scripts\python.exe"
 
 Write-Host ""
@@ -34,7 +35,8 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Pop-Location
 
-# 2. Start all services
+# 2. Start all services in deterministic test mode.
+$env:REELCAST_TEST_MODE = "true"
 & "$PSScriptRoot\start.ps1"
 
 # 3. Wait for services to be ready
@@ -50,8 +52,8 @@ Write-Host "========================================" -ForegroundColor Cyan
 
 Push-Location -Path $BACKEND
 
-Write-Host "Executing backend_unit_test.py..." -ForegroundColor Yellow
-& $VENV_PY -m unittest tests.backend_unit_test
+Write-Host "Executing backend unit suite..." -ForegroundColor Yellow
+& $VENV_PY -m unittest discover -s tests\unit -p "test_*.py" -v
 if ($LASTEXITCODE -ne 0) { 
     Write-Host "  ERROR: Backend Unit Tests failed!" -ForegroundColor Red
     exit $LASTEXITCODE 
@@ -59,18 +61,37 @@ if ($LASTEXITCODE -ne 0) {
 
 Pop-Location
 
-# 5. Run E2E Tests
+# 5. Run Frontend Unit Tests
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "   Running Playwright E2E Tests         " -ForegroundColor Cyan
+Write-Host "   Running Frontend Unit Tests          " -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+
+Push-Location -Path $FRONTEND
+bun run test
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  ERROR: Frontend Unit Tests failed!" -ForegroundColor Red
+    exit $LASTEXITCODE
+}
+Pop-Location
+
+# 6. Run UI Unit E2E and System E2E Tests
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "   Running Playwright Test Suites       " -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
 Set-Location -Path $E2E
 
-Write-Host "Executing tests..." -ForegroundColor Yellow
-npm test
+Write-Host "Executing UI unit E2E tests..." -ForegroundColor Yellow
+npm run test:ui-unit
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-# 6. Summary
+Write-Host "Executing System E2E tests..." -ForegroundColor Yellow
+npm run test:system
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+# 7. Summary
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "   Test Pipeline Finished!              " -ForegroundColor Green

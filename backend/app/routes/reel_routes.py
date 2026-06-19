@@ -12,6 +12,7 @@ from sqlalchemy.orm import joinedload
 from app.dependencies import get_db, get_current_user
 from app.exceptions import (
     DurationExceededException,
+    InvalidPromptException,
     InvalidPromptLengthException,
     MediaNotFoundException,
     ProductNotFoundException,
@@ -41,7 +42,13 @@ from app.worker import generateReels
 logger = logging.getLogger(__name__)
 
 
-def _load_product_context(product_id: Optional[UUID], user_id, db: Session):
+def _load_product_context(
+    product_id: Optional[UUID],
+    user_id,
+    db: Session,
+    *,
+    require_product: bool = False,
+):
     """
     Shared helper: load full product context for multimodal Gemini prompt calls.
 
@@ -70,6 +77,8 @@ def _load_product_context(product_id: Optional[UUID], user_id, db: Session):
         .first()
     )
     if not product:
+        if require_product:
+            raise ProductNotFoundException()
         return product_name, product_description, images
 
     product_name = product.product_name or ""
@@ -443,7 +452,10 @@ async def generate_prompt_endpoint(
         { prompt: str } — ready to fill into the prompt textarea
     """
     product_name, product_description, product_images = _load_product_context(
-        req.product_id, current_user.user_id, db
+        req.product_id,
+        current_user.user_id,
+        db,
+        require_product=req.product_id is not None,
     )
 
     prompt = await generate_prompt_from_template(
@@ -479,10 +491,13 @@ async def enhance_prompt_endpoint(
         { prompt: str } — the improved version, ready to replace the textarea content
     """
     if not req.prompt_text.strip():
-        raise HTTPException(status_code=400, detail="prompt_text cannot be empty")
+        raise InvalidPromptException()
 
     product_name, product_description, product_images = _load_product_context(
-        req.product_id, current_user.user_id, db
+        req.product_id,
+        current_user.user_id,
+        db,
+        require_product=req.product_id is not None,
     )
 
     enhanced = await enhance_prompt(
@@ -521,7 +536,10 @@ async def generate_guided_prompt_endpoint(
         { prompt: str } — ready to fill into the prompt textarea
     """
     product_name, product_description, product_images = _load_product_context(
-        req.product_id, current_user.user_id, db
+        req.product_id,
+        current_user.user_id,
+        db,
+        require_product=req.product_id is not None,
     )
 
     prompt = await generate_guided_prompt(

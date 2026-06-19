@@ -6,11 +6,15 @@ from app.core.config import (
     SMTP_USERNAME,
     SMTP_PASSWORD,
     FRONTEND_URL,
+    REELCAST_TEST_MODE,
 )
 
 
 def send_verification_email(email_to: str, token: str):
     """Send an email-verification link to the given address."""
+    if REELCAST_TEST_MODE:
+        print(f"[TEST MODE] Verification email suppressed for {email_to}.")
+        return
     if not SMTP_USERNAME or not SMTP_PASSWORD:
         print("SMTP_USERNAME or SMTP_PASSWORD not set. Email will only be printed to console.")
         return
@@ -40,6 +44,9 @@ def send_verification_email(email_to: str, token: str):
 
 def send_password_reset_email(email_to: str, token: str):
     """Send a password-reset link to the given address."""
+    if REELCAST_TEST_MODE:
+        print(f"[TEST MODE] Password reset email suppressed for {email_to}.")
+        return
     if not SMTP_USERNAME or not SMTP_PASSWORD:
         print("SMTP_USERNAME or SMTP_PASSWORD not set. Password reset email will only be printed to console.")
         return

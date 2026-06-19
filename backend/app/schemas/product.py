@@ -58,6 +58,19 @@ class ProductResponse(BaseModel):
 
     @computed_field
     @property
+    def status(self) -> str:
+        is_complete = all(
+            (
+                bool(self.product_name and self.product_name.strip()),
+                bool(self.description and self.description.strip()),
+                bool(self.affiliate_link and self.affiliate_link.strip()),
+                bool(self.images),
+            )
+        )
+        return "Active" if is_complete else "Draft"
+
+    @computed_field
+    @property
     def primary_image_url(self) -> Optional[str]:
         """
         Resolve the primary product image to an accessible URL for the frontend.

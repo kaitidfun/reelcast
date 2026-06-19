@@ -5,6 +5,13 @@ from dotenv import load_dotenv
 load_dotenv(".env.local")
 load_dotenv()
 
+# Test execution
+REELCAST_TEST_MODE = os.getenv("REELCAST_TEST_MODE", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+
 # Security
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
 ALGORITHM = "HS256"

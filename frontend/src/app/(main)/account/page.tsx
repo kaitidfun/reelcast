@@ -17,6 +17,7 @@ import { User, Mail, Shield, Calendar, LogOut, Save, ToggleLeft, ToggleRight, Sh
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { validateProfileImage } from "@/lib/test-plan";
 
 const API_URL = "http://localhost:8000";
 
@@ -111,17 +112,9 @@ const Account = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
-    const allowed = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
-    const ext = "." + file.name.split(".").pop()?.toLowerCase();
-    if (!allowed.includes(ext)) {
-      toast.error("Invalid file type. Allowed: JPG, PNG, GIF, WebP");
-      return;
-    }
-
-    // Validate file size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File is too large. Maximum size is 5MB.");
+    const validationError = validateProfileImage(file);
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
@@ -191,14 +184,14 @@ const Account = () => {
     }
   };
 
-  const manage2FA = async () => {
-    if (otpCode.length !== 6) return;
+  const manage2FA = async (code = otpCode) => {
+    if (code.length !== 6) return;
     setVerifying(true);
     try {
       const res = await fetch(`${API_URL}/api/2fa/verify-setup`, {
         method: "POST",
         headers: { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ code: otpCode }),
+        body: JSON.stringify({ code }),
       });
       if (res.ok) {
         setSetupStep("done");
@@ -331,7 +324,7 @@ const Account = () => {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/gif,image/webp"
+                accept="image/jpeg,image/png"
                 className="hidden"
                 onChange={updateAccountProfileImage}
                 id="avatar-upload"
@@ -490,7 +483,7 @@ const Account = () => {
             <div className="space-y-5">
               <p className="text-sm text-muted-foreground text-center">Enter the 6-digit code shown in your authenticator app to verify setup.</p>
               <div className="flex justify-center">
-                <InputOTP maxLength={6} value={otpCode} onChange={(val) => { setOtpCode(val); if (val.length === 6) setTimeout(() => manage2FA(), 100); }} disabled={verifying}>
+                <InputOTP maxLength={6} value={otpCode} onChange={(val) => { setOtpCode(val); if (val.length === 6) setTimeout(() => manage2FA(val), 100); }} disabled={verifying}>
                   <InputOTPGroup>
                     <InputOTPSlot index={0} className="h-12 w-12 text-lg font-semibold" />
                     <InputOTPSlot index={1} className="h-12 w-12 text-lg font-semibold" />
@@ -504,7 +497,7 @@ const Account = () => {
                   </InputOTPGroup>
                 </InputOTP>
               </div>
-              <Button className="w-full gradient-primary text-primary-foreground shadow-glow" onClick={manage2FA} disabled={verifying || otpCode.length !== 6}>
+              <Button className="w-full gradient-primary text-primary-foreground shadow-glow" onClick={() => manage2FA()} disabled={verifying || otpCode.length !== 6}>
                 {verifying ? <><Loader2 className="h-4 w-4 animate-spin" /> Verifying...</> : "Verify & Enable 2FA"}
               </Button>
               <button type="button" onClick={() => { setSetupStep("qr"); setOtpCode(""); }} className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center">

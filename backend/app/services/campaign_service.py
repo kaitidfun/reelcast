@@ -6,6 +6,7 @@ All queries are scoped to the authenticated user to enforce ownership.
 from uuid import UUID
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 

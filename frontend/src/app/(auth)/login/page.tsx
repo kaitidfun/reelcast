@@ -22,6 +22,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from "@/components/ui/input-otp";
 import authHero from "@/assets/auth-hero-login.jpg";
+import { validateLoginForm, validateOtpCode } from "@/lib/test-plan";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -81,8 +82,9 @@ const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!email || !password) {
-      setError("Please fill in all fields");
+    const validationError = validateLoginForm(email, password);
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setLoading(true);
@@ -100,13 +102,14 @@ const Login = () => {
         router.replace("/");
       }
     } else {
-      setError("Login failed. Check your email and password.");
+      setError(result.error || "Login failed. Check your email and password.");
     }
   };
 
   const handle2faVerify = async () => {
-    if (otpCode.length !== 6) {
-      setError("Please enter a 6-digit code");
+    const validationError = validateOtpCode(otpCode);
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setError("");
