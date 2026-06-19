@@ -1,14 +1,16 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+import urllib.parse
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.core.config import ALLOWED_ORIGINS, SESSION_SECRET_KEY
+from app.core.config import ALLOWED_ORIGINS, SESSION_SECRET_KEY, FRONTEND_URL
 from app.exceptions import (
     InvalidEmailFormatException,
     InvalidPromptLengthException,
     ReelCastException,
+    OAuthProviderException,
 )
 from app.database import engine, Base, SessionLocal
 import app.models.models  # Import models so Base knows about them
@@ -36,6 +38,15 @@ def get_db():
 
 # App setup
 app = FastAPI(title="ReelCast Auth API")
+
+
+@app.exception_handler(OAuthProviderException)
+async def handle_oauth_provider_exception(
+    _request: Request,
+    exc: OAuthProviderException,
+) -> RedirectResponse:
+    error_msg = urllib.parse.quote(str(exc.message))
+    return RedirectResponse(url=f"{FRONTEND_URL}/login?error={error_msg}")
 
 
 @app.exception_handler(ReelCastException)

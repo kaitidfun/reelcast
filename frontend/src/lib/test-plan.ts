@@ -1,5 +1,5 @@
 export const MAX_PROMPT_LENGTH = 500;
-export const MAX_PROFILE_IMAGE_BYTES = 2 * 1024 * 1024;
+export const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
 export const MAX_VIDEO_DURATION_SECONDS = 60;
 
@@ -98,7 +98,7 @@ export function validateProfileImage(file: FileDescriptor): string | null {
     return "Invalid file type. Allowed: JPG, PNG";
   }
   if (file.size > MAX_PROFILE_IMAGE_BYTES) {
-    return "File is too large. Maximum size is 2MB.";
+    return "File is too large. Maximum size is 5MB.";
   }
   return null;
 }

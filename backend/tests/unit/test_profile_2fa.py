@@ -73,7 +73,7 @@ class ProfileImageTests(unittest.IsolatedAsyncioTestCase):
     )
     async def test_F1_UTC03_TC01_accepts_valid_jpg(self, _upload_image) -> None:
         result = await updateAccountProfileImage(
-            self.upload("profile_valid.jpg", b"jpg-data"),
+            self.upload("profile_valid.jpg", b"x" * (3 * 1024 * 1024)),
             self.user,
             self.db,
         )
@@ -89,10 +89,10 @@ class ProfileImageTests(unittest.IsolatedAsyncioTestCase):
                 self.db,
             )
 
-    async def test_F1_UTC03_TC03_rejects_image_over_2mb(self) -> None:
+    async def test_F1_UTC03_TC03_rejects_image_over_5mb(self) -> None:
         with self.assertRaises(FileSizeLimitExceededException):
             await updateAccountProfileImage(
-                self.upload("profile_oversize.png", b"x" * (2 * 1024 * 1024 + 1)),
+                self.upload("profile_oversize.png", b"x" * (5 * 1024 * 1024 + 1)),
                 self.user,
                 self.db,
             )

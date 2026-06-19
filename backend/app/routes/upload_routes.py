@@ -20,6 +20,8 @@ from app.services.storage_service import (
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
 
+MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
+
 
 @router.post("/profile-image")
 async def updateAccountProfileImage(
@@ -41,7 +43,7 @@ async def updateAccountProfileImage(
 
     file_bytes = await file.read()
     await file.seek(0)
-    if len(file_bytes) > 2 * 1024 * 1024:
+    if len(file_bytes) > MAX_PROFILE_IMAGE_BYTES:
         raise FileSizeLimitExceededException()
 
     try:

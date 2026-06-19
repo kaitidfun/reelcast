@@ -58,7 +58,7 @@ class InvalidImageFormatException(ReelCastException):
 
 class FileSizeLimitExceededException(ReelCastException):
     status_code = 413
-    default_message = "The uploaded image exceeds the 2MB size limit"
+    default_message = "The uploaded image exceeds the 5MB size limit"
 
 
 class DatabaseUpdateException(ReelCastException):

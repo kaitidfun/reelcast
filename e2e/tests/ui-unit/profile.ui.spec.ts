@@ -43,9 +43,9 @@ test.describe("UI unit: F1 profile and 2FA", () => {
     await input.setInputFiles({
       name: "profile_oversize.png",
       mimeType: "image/png",
-      buffer: Buffer.alloc(2 * 1024 * 1024 + 1),
+      buffer: Buffer.alloc(5 * 1024 * 1024 + 1),
     });
-    await expect(page.getByText(/Maximum size is 2MB/).first()).toBeVisible();
+    await expect(page.getByText(/Maximum size is 5MB/).first()).toBeVisible();
   });
 
   test("F1-UTC04-TC01 enables 2FA with a valid code", async ({ page }) => {

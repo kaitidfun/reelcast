@@ -50,9 +50,9 @@ test.describe("STC-F1-02 and STC-F1-03 Security and profile", () => {
       await input.setInputFiles({
         name: "profile_oversize.png",
         mimeType: "image/png",
-        buffer: Buffer.alloc(2 * 1024 * 1024 + 1),
+        buffer: Buffer.alloc(5 * 1024 * 1024 + 1),
       });
-      await expect(page.getByText(/Maximum size is 2MB/).first()).toBeVisible();
+      await expect(page.getByText(/Maximum size is 5MB/).first()).toBeVisible();
     } finally {
       await deleteUserByEmail(user.email);
     }

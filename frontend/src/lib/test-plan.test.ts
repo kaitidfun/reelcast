@@ -64,16 +64,16 @@ describe("F1 frontend unit tests", () => {
     expect(validateOtpCode("")).toMatch(/6-digit/);
   });
 
-  it("F1-UTC03 accepts JPG/PNG under 2MB", () => {
+  it("F1-UTC03 accepts JPG/PNG under 5MB", () => {
     expect(
       validateProfileImage({
         name: "profile_valid.jpg",
-        size: 1.5 * 1024 * 1024,
+        size: 4 * 1024 * 1024,
       }),
     ).toBeNull();
   });
 
-  it("F1-UTC03 rejects GIF and files over 2MB", () => {
+  it("F1-UTC03 rejects GIF and files over 5MB", () => {
     expect(
       validateProfileImage({ name: "profile_invalid.gif", size: 100 }),
     ).toMatch(/Invalid file type/);
@@ -82,7 +82,7 @@ describe("F1 frontend unit tests", () => {
         name: "profile_oversize.png",
         size: MAX_PROFILE_IMAGE_BYTES + 1,
       }),
-    ).toMatch(/2MB/);
+    ).toMatch(/5MB/);
   });
 });
 

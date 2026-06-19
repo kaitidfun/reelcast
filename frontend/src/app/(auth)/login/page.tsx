@@ -44,6 +44,7 @@ const Login = () => {
   const searchParams = useSearchParams();
   const tokenFromUrl = searchParams.get("token");
   const verifyEmailSent = searchParams.get("verify_email_sent");
+  const errorFromUrl = searchParams.get("error");
 
   useEffect(() => {
     if (verifyEmailSent === "1") {
@@ -53,6 +54,18 @@ const Login = () => {
       });
     }
   }, [verifyEmailSent, toast]);
+
+  useEffect(() => {
+    if (errorFromUrl) {
+      toast({
+        variant: "destructive",
+        title: "Authentication Failed",
+        description: errorFromUrl,
+      });
+      // Optionally remove the error from the URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [errorFromUrl, toast]);
   useEffect(() => {
     if (tokenFromUrl) {
       setLoading(true);
