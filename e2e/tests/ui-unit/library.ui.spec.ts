@@ -45,7 +45,7 @@ test.describe("UI unit: F4 campaign and product library", () => {
     await page.getByRole("button", { name: /Create Campaign/i }).click();
     await expect(page.getByText("Winter Cocoa").first()).toBeVisible();
 
-    await page.getByPlaceholder("Search campaigns…").fill("Summer");
+    await page.getByPlaceholder("Search campaigns…").fill("Cold Brew");
     await expect(page.getByText("Summer 2026").first()).toBeVisible();
     await expect(page.getByText("Winter Cocoa").first()).toBeHidden();
   });
@@ -86,8 +86,12 @@ test.describe("UI unit: F4 campaign and product library", () => {
     });
 
     await page.goto("/library");
-    await expect(page.getByRole("button", { name: /New Campaign/i })).toBeVisible();
-    await expect(page.locator("h3")).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "Create your first campaign" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Create First Campaign/i }),
+    ).toBeVisible();
   });
 
   test("F4-UTC03-TC03 shows database retrieval failure", async ({ page }) => {

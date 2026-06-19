@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import asc, desc
+from sqlalchemy import and_, asc, desc, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
@@ -37,8 +37,24 @@ def browseLibrary(
             Campaign.deleted_at.is_(None),
         )
         if searchKeyword:
-            campaign_query = campaign_query.filter(
-                Campaign.name.ilike(f"%{searchKeyword.strip()}%")
+            search_pattern = f"%{searchKeyword.strip()}%"
+            campaign_query = (
+                campaign_query.outerjoin(
+                    Product,
+                    and_(
+                        Product.campaign_id == Campaign.campaign_id,
+                        Product.user_id == current_user.user_id,
+                        Product.deleted_at.is_(None),
+                    ),
+                )
+                .filter(
+                    or_(
+                        Campaign.name.ilike(search_pattern),
+                        Campaign.description.ilike(search_pattern),
+                        Product.product_name.ilike(search_pattern),
+                    )
+                )
+                .distinct()
             )
         if campaignNameFilter:
             campaign_query = campaign_query.filter(

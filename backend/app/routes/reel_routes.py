@@ -18,7 +18,7 @@ from app.exceptions import (
     ProductNotFoundException,
     RateLimitExceededException,
     UnsupportedVideoFormatException,
-    VideoSizeLimitExceededException,
+    VideoSizeExceededException,
 )
 from app.models.models import User, Reel, Product
 from app.services.reel_service import (
@@ -352,7 +352,7 @@ async def uploadOwnReel(
     if extension not in ALLOWED_VIDEO_FORMATS:
         raise UnsupportedVideoFormatException()
     if len(file_data) > MAX_VIDEO_SIZE_BYTES:
-        raise VideoSizeLimitExceededException()
+        raise VideoSizeExceededException()
 
     # Quick validation: format + size only (fail-fast before reading large file)
     errors = validate_video_file(filename, len(file_data))

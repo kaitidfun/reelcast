@@ -167,13 +167,14 @@ const ContentLibrary = () => {
           bannerImage: c.banner_image_url || undefined,
           products: libraryData.products.filter((p: any) => p.campaign_id === c.campaign_id).map((p: any) => {
             const primaryImage = p.images?.find((img: any) => img.is_primary)?.image_url || p.images?.[0]?.image_url;
+            const productName = p.product_name?.trim() || "";
             return {
               id: p.product_id,
-              name: p.product_name,
+              name: productName || "Untitled Product",
               keyPoints: p.description || "",
               affiliateLink: p.affiliate_link || "",
               status: p.status ?? getProductStatus({
-                productName: p.product_name || "",
+                productName,
                 description: p.description,
                 affiliateLink: p.affiliate_link,
                 imageCount: p.images?.length || 0,
@@ -280,7 +281,10 @@ const ContentLibrary = () => {
       return (
         !q ||
         c.name.toLowerCase().includes(q) ||
-        c.description.toLowerCase().includes(q)
+        c.description.toLowerCase().includes(q) ||
+        c.products.some((product) =>
+          product.name.toLowerCase().includes(q),
+        )
       );
     }),
     campaignSort,
@@ -328,10 +332,7 @@ const ContentLibrary = () => {
   };
 
   const createProduct = async () => {
-    if (!pName.trim() || !currentCampaign) {
-      toast({ title: "Product name is required", variant: "destructive" });
-      return;
-    }
+    if (!currentCampaign) return;
     const token = localStorage.getItem("rf_token");
     const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
     let productId = editingProductId;
@@ -371,7 +372,9 @@ const ContentLibrary = () => {
         }
         const data = await res.json();
         productId = data.product_id;
-        toast({ title: "Product added" });
+        toast({
+          title: pName.trim() ? "Product added" : "Product saved as draft",
+        });
       }
 
       if (productId && (pImages.some(img => img.file) || pLogoFile)) {
@@ -772,7 +775,25 @@ const ContentLibrary = () => {
             </ToggleGroup>
           </div>
 
-          {filteredCampaigns.length === 0 ? (
+          {campaigns.length === 0 && !campaignSearch.trim() ? (
+            <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
+              <Package className="mx-auto h-10 w-10 text-muted-foreground/50" />
+              <h2 className="mt-4 font-display text-xl font-semibold text-foreground">
+                Create your first campaign
+              </h2>
+              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                You do not have any campaigns yet. Create your first campaign
+                to organize products and start producing Reels.
+              </p>
+              <Button
+                onClick={openNewCampaignDialog}
+                className="mt-5 gradient-primary gap-2 text-primary-foreground"
+              >
+                <Plus className="h-4 w-4" />
+                Create First Campaign
+              </Button>
+            </div>
+          ) : filteredCampaigns.length === 0 ? (
             <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
               No campaigns match your search.
             </div>

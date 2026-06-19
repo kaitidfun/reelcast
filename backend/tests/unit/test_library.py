@@ -10,11 +10,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.exceptions import (
     CampaignNotFoundException,
     DatabaseInsertException,
+    DatabaseRetrieveException,
     DuplicateCampaignNameException,
     InvalidImageFormatException,
     MaxImagesExceededException,
 )
-from app.routes.library_routes import _product_status
+from app.models.models import BannerColor, Campaign, Product, ProductImage
+from app.routes.library_routes import _product_status, browseLibrary
 from app.schemas.product import ProductImageCreate, ProductResponse
 from app.services.campaign_service import createCampaign
 from app.services.product_service import createProduct
@@ -172,3 +174,114 @@ class ProductTests(unittest.TestCase):
         )
 
         self.assertEqual("Draft", response.status)
+
+
+class LibraryBrowseTests(unittest.TestCase):
+    """F4-UTC03 campaign and product retrieval."""
+
+    def setUp(self) -> None:
+        self.user_id = uuid4()
+        self.campaign_id = uuid4()
+        self.product_id = uuid4()
+        self.campaign = Campaign(
+            campaign_id=self.campaign_id,
+            user_id=self.user_id,
+            name="Summer 2026",
+            description="Promo",
+            banner_color=BannerColor.Twilight,
+            banner_image_url="summer_banner.jpg",
+        )
+        self.product = Product(
+            product_id=self.product_id,
+            campaign_id=self.campaign_id,
+            user_id=self.user_id,
+            product_name="Cold Brew Coffee",
+            description="Cold Brew Kit",
+            affiliate_link="https://example.com/products/cold-brew",
+            images=[
+                ProductImage(
+                    image_id=uuid4(),
+                    product_id=self.product_id,
+                    image_url="products/cold-brew.jpg",
+                    is_primary=True,
+                )
+            ],
+        )
+
+    @patch(
+        "app.services.storage_service.get_presigned_url",
+        side_effect=lambda value: value,
+    )
+    def test_F4_UTC03_TC01_retrieves_by_product_keyword(
+        self,
+        _get_url,
+    ) -> None:
+        db = MagicMock()
+        campaign_query = MagicMock()
+        product_query = MagicMock()
+        for method in ("filter", "outerjoin", "distinct", "order_by"):
+            getattr(campaign_query, method).return_value = campaign_query
+        campaign_query.all.return_value = [self.campaign]
+        product_query.options.return_value = product_query
+        product_query.filter.return_value = product_query
+        product_query.all.return_value = [self.product]
+        db.query.side_effect = (
+            lambda model: campaign_query
+            if model is Campaign
+            else product_query
+        )
+
+        result = browseLibrary(
+            searchKeyword="Cold Brew",
+            sortOption="Newest",
+            viewMode="Grid",
+            statusFilter="Active",
+            campaignNameFilter=None,
+            db=db,
+            current_user=SimpleNamespace(user_id=self.user_id),
+        )
+
+        self.assertEqual("Summer 2026", result["campaigns"][0].name)
+        self.assertEqual(
+            "Cold Brew Coffee",
+            result["products"][0].product_name,
+        )
+        self.assertEqual("Active", result["products"][0].status)
+        campaign_query.outerjoin.assert_called_once()
+
+    def test_F4_UTC03_TC02_returns_empty_library(self) -> None:
+        db = MagicMock()
+        campaign_query = MagicMock()
+        campaign_query.filter.return_value = campaign_query
+        campaign_query.order_by.return_value = campaign_query
+        campaign_query.all.return_value = []
+        db.query.return_value = campaign_query
+
+        result = browseLibrary(
+            searchKeyword=None,
+            sortOption="Newest",
+            viewMode="Grid",
+            statusFilter=None,
+            campaignNameFilter=None,
+            db=db,
+            current_user=SimpleNamespace(user_id=self.user_id),
+        )
+
+        self.assertEqual([], result["campaigns"])
+        self.assertEqual([], result["products"])
+        self.assertEqual(0, result["total"])
+
+    def test_F4_UTC03_TC03_maps_database_failure(self) -> None:
+        db = MagicMock()
+        db.query.side_effect = SQLAlchemyError("query failed")
+
+        with self.assertRaises(DatabaseRetrieveException):
+            browseLibrary(
+                searchKeyword="Cold Brew",
+                sortOption="Newest",
+                viewMode="Grid",
+                statusFilter="Active",
+                campaignNameFilter=None,
+                db=db,
+                current_user=SimpleNamespace(user_id=self.user_id),
+            )

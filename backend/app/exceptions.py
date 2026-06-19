@@ -70,8 +70,12 @@ class UnsupportedVideoFormatException(ReelCastException):
     default_message = "Unsupported video format. Allowed: mp4, mov, avi"
 
 
-class VideoSizeLimitExceededException(ReelCastException):
+class VideoSizeExceededException(ReelCastException):
     default_message = "Video file size exceeds the 500MB limit"
+
+
+# Backward-compatible alias for code that used the earlier class name.
+VideoSizeLimitExceededException = VideoSizeExceededException
 
 
 class DurationExceededException(ReelCastException):
@@ -177,6 +181,7 @@ __all__ = [
     "RateLimitExceededException",
     "ReelCastException",
     "UnsupportedVideoFormatException",
+    "VideoSizeExceededException",
     "VideoSizeLimitExceededException",
     "WeakPasswordException",
 ]

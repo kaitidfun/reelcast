@@ -196,9 +196,9 @@ describe("F4 frontend unit tests", () => {
     expect(
       getProductStatus({
         productName: "",
-        description: "",
-        affiliateLink: "",
-        imageCount: 0,
+        description: "Description",
+        affiliateLink: "https://example.com",
+        imageCount: 1,
       }),
     ).toBe("Draft");
   });

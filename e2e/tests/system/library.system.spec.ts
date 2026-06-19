@@ -40,6 +40,73 @@ test.describe("STC-F4-01 Campaign and product library", () => {
 
       await expect(page.getByText(productName).first()).toBeVisible();
       await expect(page.getByText("Draft").first()).toBeVisible();
+
+      await page.getByText("Campaigns", { exact: true }).click();
+      await page.getByPlaceholder("Search campaigns…").fill("Cold Brew");
+      await expect(
+        page.getByRole("heading", { name: campaignName }),
+      ).toBeVisible();
+    } finally {
+      await deleteUserByEmail(user.email);
+    }
+  });
+
+  test("saves incomplete product particulars as Draft", async ({
+    page,
+    request,
+  }, testInfo) => {
+    const user = systemUser(testInfo, "stc-draft-product");
+    const campaignName = `Draft Campaign ${Date.now()}`;
+    try {
+      await registerAndLogin(page, request, user);
+      await page.goto("/library");
+      await page.getByRole("button", { name: /New Campaign/i }).click();
+      await page.locator("#campaign-name").fill(campaignName);
+      await page.getByRole("button", { name: /Create Campaign/i }).click();
+      await page.getByRole("heading", {
+        name: campaignName,
+        exact: true,
+      }).click();
+      await page.getByRole("button", { name: /Add Product/i }).click();
+      await page.getByRole("button", { name: /Save Product/i }).click();
+
+      await expect(page.getByText("Untitled Product").first()).toBeVisible();
+      await expect(page.getByText("Draft").first()).toBeVisible();
+    } finally {
+      await deleteUserByEmail(user.email);
+    }
+  });
+
+  test("rejects more than five product images", async ({
+    page,
+    request,
+  }, testInfo) => {
+    const user = systemUser(testInfo, "stc-max-images");
+    const campaignName = `Image Campaign ${Date.now()}`;
+    try {
+      await registerAndLogin(page, request, user);
+      await page.goto("/library");
+      await page.getByRole("button", { name: /New Campaign/i }).click();
+      await page.locator("#campaign-name").fill(campaignName);
+      await page.getByRole("button", { name: /Create Campaign/i }).click();
+      await page.getByRole("heading", {
+        name: campaignName,
+        exact: true,
+      }).click();
+      await page.getByRole("button", { name: /Add Product/i }).click();
+      await page
+        .locator('input[type="file"][multiple]')
+        .setInputFiles(
+          Array.from({ length: 6 }, (_, index) => ({
+            name: `photo${index + 1}.jpg`,
+            mimeType: "image/jpeg",
+            buffer: Buffer.from(`image-${index + 1}`),
+          })),
+        );
+
+      await expect(
+        page.getByText(/Maximum 5 images allowed per product/),
+      ).toBeVisible();
     } finally {
       await deleteUserByEmail(user.email);
     }
@@ -70,8 +137,12 @@ test.describe("STC-F4-01 Campaign and product library", () => {
     try {
       await registerAndLogin(page, request, user);
       await page.goto("/library");
-      await expect(page.getByRole("button", { name: /New Campaign/i })).toBeVisible();
-      await expect(page.locator("h3")).toHaveCount(0);
+      await expect(
+        page.getByRole("heading", { name: "Create your first campaign" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: /Create First Campaign/i }),
+      ).toBeVisible();
     } finally {
       await deleteUserByEmail(user.email);
     }

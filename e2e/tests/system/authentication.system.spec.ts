@@ -59,6 +59,29 @@ test.describe("STC-F1-01 Authentication", () => {
     await expect(page.getByText(/Password must include/i)).toBeVisible();
   });
 
+  test("rejects registration with an existing email", async ({
+    page,
+    request,
+  }, testInfo) => {
+    const user = systemUser(testInfo, "stc-existing-email");
+    try {
+      await registerByApi(request, user);
+      await page.goto("/register");
+      await page.locator("#name").fill(user.displayName);
+      await page.locator("#email").fill(user.email);
+      await page.locator("#password").fill(user.password);
+      await page.locator("#confirm").fill(user.password);
+      await page.getByRole("checkbox").click();
+      await page.getByRole("button", { name: /create account/i }).click();
+
+      await expect(
+        page.getByText(/EmailAlreadyExistsException/),
+      ).toBeVisible();
+    } finally {
+      await deleteUserByEmail(user.email);
+    }
+  });
+
   test("sends a password recovery request", async ({ page, request }, testInfo) => {
     const user = systemUser(testInfo, "stc-reset");
     try {

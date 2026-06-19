@@ -3,9 +3,10 @@ from __future__ import annotations
 import unittest
 from datetime import timedelta
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+from authlib.integrations.starlette_client import OAuthError
 from fastapi import HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -15,9 +16,11 @@ from app.exceptions import (
     EmailAlreadyExistsException,
     InvalidCredentialsException,
     InvalidEmailFormatException,
+    OAuthProviderException,
     WeakPasswordException,
 )
 from app.routes.auth_routes import authenticateMember, registerGuest
+from app.routes.oauth_routes import authenticateMemberWithOAuth
 from app.schemas.user import UserCreate
 from app.services.auth_service import (
     create_access_token,
@@ -198,6 +201,43 @@ class AuthenticationTests(unittest.TestCase):
 
         self.assertTrue(result["requires_2fa"])
         self.assertEqual("temp-token", result["temp_token"])
+
+
+class OAuthAuthenticationTests(unittest.IsolatedAsyncioTestCase):
+    """F1-UTC02-TC04 OAuth provider failures."""
+
+    @patch("app.routes.oauth_routes.oauth.create_client")
+    async def test_F1_UTC02_TC04_maps_invalid_oauth_token(
+        self,
+        create_client,
+    ) -> None:
+        client = MagicMock()
+        client.authorize_access_token = AsyncMock(
+            side_effect=OAuthError(error="invalid_token"),
+        )
+        create_client.return_value = client
+
+        with self.assertRaises(OAuthProviderException):
+            await authenticateMemberWithOAuth(
+                "google",
+                MagicMock(),
+                MagicMock(),
+            )
+
+    @patch(
+        "app.routes.oauth_routes.oauth.create_client",
+        return_value=None,
+    )
+    async def test_rejects_unsupported_oauth_provider(
+        self,
+        _create_client,
+    ) -> None:
+        with self.assertRaises(OAuthProviderException):
+            await authenticateMemberWithOAuth(
+                "unsupported",
+                MagicMock(),
+                MagicMock(),
+            )
 
 
 class AuthPrimitiveTests(unittest.TestCase):

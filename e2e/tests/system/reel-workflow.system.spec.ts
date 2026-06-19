@@ -36,7 +36,14 @@ test.describe("STC-F2-02 through STC-F2-05 Reel workflows", () => {
       });
       await page.getByRole("button", { name: /Upload & Process/i }).click();
 
-      await expect(page.getByText(/UnsupportedVideoFormatException|Unsupported video format/)).toBeVisible();
+      await expect(
+        page
+          .getByLabel("Notifications (F8)")
+          .getByText(
+            /UnsupportedVideoFormatException|Unsupported video format/,
+          )
+          .first(),
+      ).toBeVisible();
     } finally {
       await deleteUserByEmail(user.email);
     }
