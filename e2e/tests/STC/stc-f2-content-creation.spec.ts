@@ -367,7 +367,7 @@ test.describe("STC-F2-01 – End-to-End AI Video Generation Pipeline", () => {
           contentType: "application/json",
           body: JSON.stringify({
             detail:
-              "PromptValidationException: Prompt fails safety or length validation checks",
+              "InvalidPromptLengthException: Prompt must contain between 1 and 500 characters",
           }),
         });
       } else {
@@ -827,7 +827,7 @@ test.describe("STC-F2-03 – Content Regeneration and Revision Workflow", () => 
           contentType: "application/json",
           body: JSON.stringify({
             detail:
-              "PromptValidationException: Prompt fails safety or length validation checks",
+              "InvalidPromptLengthException: Prompt must contain between 1 and 500 characters",
           }),
         });
       } else {

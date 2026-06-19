@@ -20,7 +20,7 @@ from typing import Any, Dict, Optional
 from google import genai
 from google.genai import types
 
-from app.exceptions import ContentModerationException, GeminiAPIException
+from app.exceptions import GeminiAPIException
 
 # generate_video re-exported so existing callers that imported from here still work
 from app.services.video_generation_service import generate_video  # noqa: F401
@@ -115,13 +115,13 @@ async def _run_gemini(
             kwargs["config"] = config
         response = client.models.generate_content(**kwargs)
         if not response.text:
-            raise ContentModerationException()
+            raise GeminiAPIException("Gemini returned no content")
         return response.text
 
     loop = asyncio.get_running_loop()
     try:
         return await loop.run_in_executor(None, _call)
-    except ContentModerationException:
+    except GeminiAPIException:
         raise
     except Exception as exc:
         raise GeminiAPIException(str(exc)) from exc
@@ -192,7 +192,7 @@ Rules:
             f"{len(result.get('caption', ''))} chars, {len(result.get('hashtags', []))} hashtags"
         )
         return result
-    except (ContentModerationException, GeminiAPIException):
+    except GeminiAPIException:
         raise
     except (json.JSONDecodeError, TypeError) as exc:
         raise GeminiAPIException("Gemini returned invalid caption JSON") from exc
@@ -292,7 +292,7 @@ async def generate_prompt_from_template(
             f"{len(product_images or [])} image(s))"
         )
         return result
-    except (ContentModerationException, GeminiAPIException):
+    except GeminiAPIException:
         raise
     except Exception as e:
         logger.error(f"Error generating template prompt: {e}")
@@ -383,7 +383,7 @@ async def enhance_prompt(
             f"{len(product_images or [])} image(s)"
         )
         return result
-    except (ContentModerationException, GeminiAPIException):
+    except GeminiAPIException:
         raise
     except Exception as e:
         logger.error(f"Error improving prompt: {e}")
@@ -497,7 +497,7 @@ async def generate_guided_prompt(
         result = (await _run_gemini(contents))[:500]
         logger.info(f"Guided prompt generated ({len(result)} chars, {len(product_images or [])} image(s))")
         return result
-    except (ContentModerationException, GeminiAPIException):
+    except GeminiAPIException:
         raise
     except Exception as e:
         logger.error(f"Error generating guided prompt: {e}")
@@ -591,7 +591,7 @@ async def generate_first_frame_prompt(
             f"{result[:80]}..."
         )
         return result
-    except (ContentModerationException, GeminiAPIException):
+    except GeminiAPIException:
         raise
     except Exception as e:
         logger.warning(f"[FirstFramePrompt] Failed, using fallback: {e}")

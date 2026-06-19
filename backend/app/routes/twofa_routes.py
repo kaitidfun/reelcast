@@ -8,6 +8,7 @@ import io
 import base64
 
 from app.dependencies import get_db, get_current_user
+from app.exceptions import InvalidVerificationCodeException
 from app.models.models import User
 from app.schemas.user import TwoFactorVerifyRequest, TwoFactorLoginRequest, TwoFactorDisableRequest
 from app.services.auth_service import verify_password, create_access_token
@@ -86,10 +87,13 @@ def manage2FA(
         raise HTTPException(status_code=400, detail="Please initiate 2FA setup first")
 
     totp = pyotp.TOTP(current_user.two_factor_secret)
-    if not totp.verify(body.code, valid_window=1):
-        raise HTTPException(
-            status_code=400, detail="Invalid verification code. Please try again."
-        )
+    verification_code = body.code.strip()
+    if (
+        len(verification_code) != 6
+        or not verification_code.isdigit()
+        or not totp.verify(verification_code, valid_window=1)
+    ):
+        raise InvalidVerificationCodeException()
 
     # Enable 2FA
     current_user.is_2fa_enabled = True

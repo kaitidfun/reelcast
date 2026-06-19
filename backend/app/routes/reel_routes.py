@@ -11,10 +11,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import joinedload
 from app.dependencies import get_db, get_current_user
 from app.exceptions import (
+    DurationExceededException,
     InvalidPromptLengthException,
     MediaNotFoundException,
     ProductNotFoundException,
-    PromptValidationException,
     RateLimitExceededException,
     UnsupportedVideoFormatException,
     VideoSizeLimitExceededException,
@@ -28,6 +28,7 @@ from app.services.reel_service import (
 )
 from app.services.upload_service import (
     ALLOWED_VIDEO_FORMATS,
+    MAX_VIDEO_DURATION_SECONDS,
     MAX_VIDEO_SIZE_BYTES,
     validate_video_file,
     probe_video_duration,
@@ -281,7 +282,7 @@ def regenerateContent(
     if req.target in ["video", "all"] and (
         not revised_prompt or len(revised_prompt) > 500
     ):
-        raise PromptValidationException()
+        raise InvalidPromptLengthException()
 
     # If user edited the prompt before re-generating, persist the updated text.
     # Worker reads reel.prompt_text from DB, so we must save it before queuing.
@@ -352,8 +353,11 @@ async def uploadOwnReel(
     # Extended validation: duration check via ffprobe (runs after format/size pass)
     ext = os.path.splitext(filename)[1].lower()
     duration_sec = await probe_video_duration(file_data, ext)
-    if duration_sec is not None and duration_sec > 60:
-        raise HTTPException(status_code=400, detail=f"Video duration {duration_sec:.1f}s exceeds 60s limit")
+    if (
+        duration_sec is not None
+        and duration_sec > MAX_VIDEO_DURATION_SECONDS
+    ):
+        raise DurationExceededException()
 
     # Step 4: Upload to Cloudflare R2 (delegated to upload_service)
     try:

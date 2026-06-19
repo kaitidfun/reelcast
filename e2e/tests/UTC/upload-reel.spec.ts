@@ -352,4 +352,54 @@ test.describe("F2-UTC04: Upload Own Reel", () => {
     // Verify the preview panel stays in Standby — no processing started
     await expect(page.getByText("Ready", { exact: true })).not.toBeVisible();
   });
+
+  // ─────────────────────────────────────────────────────────────────
+  // TC04: Video exceeding 60-second duration → DurationExceededException
+  // ─────────────────────────────────────────────────────────────────
+
+  test("F2-UTC04-TC04: Video exceeding 60 seconds returns DurationExceededException", async ({
+    page,
+  }) => {
+    await page.route("**/api/reels/upload-video", async (route) => {
+      if (route.request().method() === "POST") {
+        await route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({
+            detail:
+              "DurationExceededException: Video duration exceeds the 60-second limit",
+            exception: "DurationExceededException",
+          }),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    const fileInput = page.locator('input[type="file"][accept*=".mp4"]');
+    await fileInput.setInputFiles({
+      name: "commercial_over_60_seconds.mp4",
+      mimeType: "video/mp4",
+      buffer: Buffer.from("fake-long-mp4-video-content-for-e2e-testing"),
+    });
+
+    const uploadResponsePromise = page.waitForResponse(
+      (res) =>
+        res.url().includes("/api/reels/upload-video") &&
+        res.request().method() === "POST"
+    );
+
+    await page.click('button:has-text("Upload & Process")');
+    const uploadResponse = await uploadResponsePromise;
+
+    expect(uploadResponse.status()).toBe(400);
+    const errorBody = await uploadResponse.json();
+    expect(errorBody.exception).toBe("DurationExceededException");
+    expect(errorBody.detail).toContain("60-second limit");
+
+    await expect(
+      page.locator("text=Video duration exceeds").first()
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Ready", { exact: true })).not.toBeVisible();
+  });
 });

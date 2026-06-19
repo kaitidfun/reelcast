@@ -48,6 +48,10 @@ class OAuthProviderException(ReelCastException):
     default_message = "Third-party authentication failed or timed out"
 
 
+class InvalidVerificationCodeException(ReelCastException):
+    default_message = "The 6-digit TOTP verification code is invalid"
+
+
 class InvalidImageFormatException(ReelCastException):
     default_message = "The uploaded image format is not supported"
 
@@ -68,6 +72,10 @@ class UnsupportedVideoFormatException(ReelCastException):
 
 class VideoSizeLimitExceededException(ReelCastException):
     default_message = "Video file size exceeds the 500MB limit"
+
+
+class DurationExceededException(ReelCastException):
+    default_message = "Video duration exceeds the 60-second limit"
 
 
 class InvalidPromptLengthException(ReelCastException):
@@ -94,11 +102,6 @@ class GenerationTimeoutException(ReelCastException):
     default_message = "Video generation exceeded the maximum allowed time"
 
 
-class ContentModerationException(ReelCastException):
-    status_code = 422
-    default_message = "The prompt or generated content violates safety policies"
-
-
 class FFmpegProcessingException(ReelCastException):
     status_code = 500
     default_message = "FFmpeg failed to render the final video"
@@ -116,10 +119,6 @@ class MediaNotFoundException(ReelCastException):
 class RateLimitExceededException(ReelCastException):
     status_code = 429
     default_message = "Too many regeneration requests were submitted"
-
-
-class PromptValidationException(ReelCastException):
-    default_message = "The revised prompt failed safety or length validation"
 
 
 class DuplicateCampaignNameException(ReelCastException):
@@ -149,11 +148,11 @@ class DatabaseRetrieveException(ReelCastException):
 __all__ = [
     "AccountNotVerifiedException",
     "CampaignNotFoundException",
-    "ContentModerationException",
     "DatabaseInsertException",
     "DatabaseRetrieveException",
     "DatabaseUpdateException",
     "DuplicateCampaignNameException",
+    "DurationExceededException",
     "EmailAlreadyExistsException",
     "FFmpegProcessingException",
     "FileSizeLimitExceededException",
@@ -164,12 +163,12 @@ __all__ = [
     "InvalidEmailFormatException",
     "InvalidImageFormatException",
     "InvalidPromptLengthException",
+    "InvalidVerificationCodeException",
     "LTXVideoAPIException",
     "MaxImagesExceededException",
     "MediaNotFoundException",
     "OAuthProviderException",
     "ProductNotFoundException",
-    "PromptValidationException",
     "RateLimitExceededException",
     "ReelCastException",
     "UnsupportedVideoFormatException",

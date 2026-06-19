@@ -766,60 +766,6 @@ test.describe("F2-UTC03: Generate Captions and Hashtags", () => {
     ).toBeVisible({ timeout: 30_000 });
   });
 
-  test("TC03: Safety policy violation in prompt → ContentModerationException", async ({
-    page,
-  }) => {
-    // ──────────────────────────────────────────────────────────────
-    // STEP 1 — Select product and enter garbage/unsafe prompt text
-    //          Using F2-UTC03-TD02 test data
-    // ──────────────────────────────────────────────────────────────
-    await selectProduct(page);
-    const promptTextarea = page.getByPlaceholder(/Describe the Reel/i);
-    await promptTextarea.fill(GARBAGE_TEXT);
-
-    // ──────────────────────────────────────────────────────────────
-    // STEP 2 — Mock the generate endpoint to return content moderation error
-    // ──────────────────────────────────────────────────────────────
-    await page.route("**/api/reels/generate", (route) => {
-      route.fulfill({
-        status: 422,
-        contentType: "application/json",
-        body: JSON.stringify({
-          detail:
-            "ContentModerationException: Prompt violates safety policy",
-        }),
-      });
-    });
-
-    // ──────────────────────────────────────────────────────────────
-    // STEP 3 — Click "Generate Video"
-    // ──────────────────────────────────────────────────────────────
-    const generatePromise = page.waitForResponse(
-      (res) =>
-        res.url().includes("/api/reels/generate") &&
-        res.request().method() === "POST",
-      { timeout: 15_000 }
-    );
-
-    await page.getByRole("button", { name: /generate video/i }).click();
-    const generateResponse = await generatePromise;
-
-    // ──────────────────────────────────────────────────────────────
-    // STEP 4 — API Layer: Should return 422 for safety violation
-    // ──────────────────────────────────────────────────────────────
-    expect(generateResponse.status()).toBe(422);
-
-    const errorBody = await generateResponse.json();
-    expect(errorBody).toHaveProperty("detail");
-    expect(errorBody.detail).toMatch(/safety|moderation|violat/i);
-
-    // ──────────────────────────────────────────────────────────────
-    // STEP 5 — UI Layer: Error should be shown
-    // ──────────────────────────────────────────────────────────────
-    await expect(
-      page.locator("text=/safety|moderation|violation|error|failed/i").first()
-    ).toBeVisible({ timeout: 10_000 });
-  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1418,7 +1364,7 @@ test.describe("F2-UTC07: Regenerate Content", () => {
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test("TC03: Prompt failing safety/length checks → PromptValidationException", async ({
+  test("TC03: Prompt failing length checks → InvalidPromptLengthException", async ({
     page,
   }) => {
     // ──────────────────────────────────────────────────────────────
@@ -1436,7 +1382,7 @@ test.describe("F2-UTC07: Regenerate Content", () => {
         contentType: "application/json",
         body: JSON.stringify({
           detail:
-            "PromptValidationException: Prompt fails safety or length validation checks",
+            "InvalidPromptLengthException: Prompt must contain between 1 and 500 characters",
         }),
       });
     });
@@ -1447,7 +1393,7 @@ test.describe("F2-UTC07: Regenerate Content", () => {
         contentType: "application/json",
         body: JSON.stringify({
           detail:
-            "PromptValidationException: Prompt fails safety or length validation checks",
+            "InvalidPromptLengthException: Prompt must contain between 1 and 500 characters",
         }),
       });
     });
