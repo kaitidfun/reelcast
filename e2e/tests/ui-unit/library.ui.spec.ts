@@ -73,7 +73,11 @@ test.describe("UI unit: F4 campaign and product library", () => {
     await page.locator("#campaign-name").fill("Summer 2026");
     await page.getByRole("button", { name: /Create Campaign/i }).click();
 
-    await expect(page.getByText(/DuplicateCampaignNameException/)).toBeVisible();
+    await expect(
+      page
+        .getByText(/DuplicateCampaignNameException/)
+        .first(),
+    ).toBeVisible();
   });
 
   test("F4-UTC03-TC02 shows the empty state", async ({ page }) => {

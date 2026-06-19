@@ -69,7 +69,9 @@ test.describe("UI unit: F1 authentication", () => {
     await page.getByRole("checkbox").click();
     await page.getByRole("button", { name: /create account/i }).click();
 
-    await expect(page.getByText(/EmailAlreadyExistsException/)).toBeVisible();
+    await expect(
+      page.getByText(/EmailAlreadyExistsException/).first(),
+    ).toBeVisible();
   });
 
   test("F1-UTC02-TC01 authenticates a verified member", async ({ page }) => {
@@ -118,13 +120,17 @@ test.describe("UI unit: F1 authentication", () => {
     await page.locator("#email").fill("user@domain.com");
     await page.locator("#password").fill("WrongPass");
     await page.getByRole("button", { name: /sign in/i }).click();
-    await expect(page.getByText(/InvalidCredentialsException/)).toBeVisible();
+    await expect(
+      page.getByText(/InvalidCredentialsException/).first(),
+    ).toBeVisible();
 
     status = 403;
     detail = "AccountNotVerifiedException: Please verify your email";
     await page.locator("#password").fill("ValidPass123!");
     await page.getByRole("button", { name: /sign in/i }).click();
-    await expect(page.getByText(/AccountNotVerifiedException/)).toBeVisible();
+    await expect(
+      page.getByText(/AccountNotVerifiedException/).first(),
+    ).toBeVisible();
   });
 
   test("F1-UTC04 completes the login 2FA challenge", async ({ page }) => {

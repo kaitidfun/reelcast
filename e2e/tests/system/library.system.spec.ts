@@ -105,7 +105,11 @@ test.describe("STC-F4-01 Campaign and product library", () => {
         );
 
       await expect(
-        page.getByText(/Maximum 5 images allowed per product/),
+        page
+          .getByText("Maximum 5 images allowed per product", {
+            exact: true,
+          })
+          .first(),
       ).toBeVisible();
     } finally {
       await deleteUserByEmail(user.email);
@@ -126,7 +130,11 @@ test.describe("STC-F4-01 Campaign and product library", () => {
           await expect(page.getByText(campaignName).first()).toBeVisible();
         }
       }
-      await expect(page.getByText(/DuplicateCampaignNameException/)).toBeVisible();
+      await expect(
+        page
+          .getByText(/DuplicateCampaignNameException/)
+          .first(),
+      ).toBeVisible();
     } finally {
       await deleteUserByEmail(user.email);
     }

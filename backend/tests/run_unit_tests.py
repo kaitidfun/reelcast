@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import logging
 import re
 import sys
@@ -97,45 +98,82 @@ class ReadableTestResult(unittest.TextTestResult):
         self._write_result("XPASS", test)
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run readable backend unit tests.")
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Run the full discovered suite this many times (default: 1).",
+    )
+    args = parser.parse_args()
+    if args.repeat < 1:
+        parser.error("--repeat must be at least 1")
+    return args
+
+
 def main() -> int:
+    args = _parse_args()
     print("ReelCast Backend Unit Tests")
     print("===========================", flush=True)
 
-    suite = unittest.defaultTestLoader.discover(
-        start_dir=str(UNIT_DIR),
-        pattern="test_*.py",
-        top_level_dir=str(TESTS_DIR),
-    )
-
     previous_logging_level = logging.root.manager.disable
     logging.disable(logging.CRITICAL)
+    all_successful = True
+    total_run = 0
+    total_failed = 0
+    total_errors = 0
+    total_skipped = 0
     try:
-        result = unittest.TextTestRunner(
-            stream=sys.stdout,
-            verbosity=0,
-            resultclass=ReadableTestResult,
-            buffer=True,
-        ).run(suite)
+        for round_number in range(1, args.repeat + 1):
+            if args.repeat > 1:
+                print(f"\n[ROUND {round_number}/{args.repeat}]")
+
+            suite = unittest.defaultTestLoader.discover(
+                start_dir=str(UNIT_DIR),
+                pattern="test_*.py",
+                top_level_dir=str(TESTS_DIR),
+            )
+            result = unittest.TextTestRunner(
+                stream=sys.stdout,
+                verbosity=0,
+                resultclass=ReadableTestResult,
+                buffer=True,
+            ).run(suite)
+
+            failed = len(result.failures)
+            errors = len(result.errors)
+            skipped = len(result.skipped)
+            passed = (
+                result.testsRun
+                - failed
+                - errors
+                - skipped
+                - len(result.expectedFailures)
+                - len(result.unexpectedSuccesses)
+            )
+            state = "PASS" if result.wasSuccessful() else "FAIL"
+            print(
+                f"\n[RESULT] {state} | {passed} passed | {failed} failed | "
+                f"{errors} errors | {skipped} skipped"
+            )
+
+            all_successful = all_successful and result.wasSuccessful()
+            total_run += result.testsRun
+            total_failed += failed
+            total_errors += errors
+            total_skipped += skipped
     finally:
         logging.disable(previous_logging_level)
 
-    failed = len(result.failures)
-    errors = len(result.errors)
-    skipped = len(result.skipped)
-    passed = (
-        result.testsRun
-        - failed
-        - errors
-        - skipped
-        - len(result.expectedFailures)
-        - len(result.unexpectedSuccesses)
-    )
-    state = "PASS" if result.wasSuccessful() else "FAIL"
-    print(
-        f"\n[RESULT] {state} | {passed} passed | {failed} failed | "
-        f"{errors} errors | {skipped} skipped"
-    )
-    return 0 if result.wasSuccessful() else 1
+    if args.repeat > 1:
+        total_passed = total_run - total_failed - total_errors - total_skipped
+        state = "PASS" if all_successful else "FAIL"
+        print(
+            f"\n[STABILITY] {state} | {args.repeat} rounds | "
+            f"{total_passed}/{total_run} passed"
+        )
+    return 0 if all_successful else 1
 
 
 if __name__ == "__main__":

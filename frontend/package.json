@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
+    "test:stability": "vitest run && vitest run && vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {

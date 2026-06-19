@@ -22,7 +22,9 @@ test.describe("UI unit: F1 profile and 2FA", () => {
     await page.locator("#name").fill("New Name");
     await page.getByRole("button", { name: /^save$/i }).click();
 
-    await expect(page.getByText("Profile saved successfully")).toBeVisible();
+    await expect(
+      page.getByText("Profile saved successfully", { exact: true }).first(),
+    ).toBeVisible();
     await expect(page.locator("#name")).toHaveValue("New Name");
   });
 
@@ -36,14 +38,14 @@ test.describe("UI unit: F1 profile and 2FA", () => {
       mimeType: "image/gif",
       buffer: Buffer.from("gif"),
     });
-    await expect(page.getByText(/Invalid file type/)).toBeVisible();
+    await expect(page.getByText(/Invalid file type/).first()).toBeVisible();
 
     await input.setInputFiles({
       name: "profile_oversize.png",
       mimeType: "image/png",
       buffer: Buffer.alloc(2 * 1024 * 1024 + 1),
     });
-    await expect(page.getByText(/Maximum size is 2MB/)).toBeVisible();
+    await expect(page.getByText(/Maximum size is 2MB/).first()).toBeVisible();
   });
 
   test("F1-UTC04-TC01 enables 2FA with a valid code", async ({ page }) => {
@@ -72,7 +74,9 @@ test.describe("UI unit: F1 profile and 2FA", () => {
     await page.getByRole("button", { name: /I've scanned/i }).click();
     await page.locator("input[data-input-otp]").fill("123456");
 
-    await expect(page.getByText("2FA Enabled!")).toBeVisible();
+    await expect(
+      page.getByText("2FA Enabled!", { exact: true }).first(),
+    ).toBeVisible();
   });
 
   test("F1-UTC04-TC02 and TC03 show invalid-code feedback", async ({ page }) => {
@@ -105,6 +109,10 @@ test.describe("UI unit: F1 profile and 2FA", () => {
     ).toBeDisabled();
     await page.locator("input[data-input-otp]").fill("000000");
 
-    await expect(page.getByText(/InvalidVerificationCodeException/)).toBeVisible();
+    await expect(
+      page
+        .getByText(/InvalidVerificationCodeException/)
+        .first(),
+    ).toBeVisible();
   });
 });

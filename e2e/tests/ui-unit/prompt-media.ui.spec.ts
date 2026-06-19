@@ -77,7 +77,9 @@ test.describe("UI unit: F2 prompt assembly and media", () => {
 
   test("F2-UTC09-TC02 rejects empty prompt before API call", async ({ page }) => {
     await page.getByRole("button", { name: /^enhance$/i }).click();
-    await expect(page.getByText("Add a prompt first", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Add a prompt first", { exact: true }).first(),
+    ).toBeVisible();
   });
 
   test("F2-UTC10-TC01 applies a prompt template", async ({ page }) => {
@@ -151,6 +153,8 @@ test.describe("UI unit: F2 prompt assembly and media", () => {
     await page.getByPlaceholder(/Describe the Reel/i).fill("A cinematic video");
     await page.getByRole("button", { name: /Generate Video/i }).click();
 
-    await expect(page.getByText(/LTXVideoAPIException/)).toBeVisible();
+    await expect(
+      page.getByText(/LTXVideoAPIException/).first(),
+    ).toBeVisible();
   });
 });

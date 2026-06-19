@@ -23,7 +23,9 @@ test.describe("STC-F1-02 and STC-F1-03 Security and profile", () => {
       await page.goto("/account");
       await page.locator("#name").fill("New Name");
       await page.getByRole("button", { name: /^save$/i }).click();
-      await expect(page.getByText("Profile saved successfully")).toBeVisible();
+      await expect(
+        page.getByText("Profile saved successfully", { exact: true }).first(),
+      ).toBeVisible();
 
       const stored = await findUserByEmail(user.email);
       expect(stored?.display_name).toBe("New Name");
@@ -43,14 +45,14 @@ test.describe("STC-F1-02 and STC-F1-03 Security and profile", () => {
         mimeType: "image/gif",
         buffer: Buffer.from("gif"),
       });
-      await expect(page.getByText(/Invalid file type/)).toBeVisible();
+      await expect(page.getByText(/Invalid file type/).first()).toBeVisible();
 
       await input.setInputFiles({
         name: "profile_oversize.png",
         mimeType: "image/png",
         buffer: Buffer.alloc(2 * 1024 * 1024 + 1),
       });
-      await expect(page.getByText(/Maximum size is 2MB/)).toBeVisible();
+      await expect(page.getByText(/Maximum size is 2MB/).first()).toBeVisible();
     } finally {
       await deleteUserByEmail(user.email);
     }
@@ -66,8 +68,9 @@ test.describe("STC-F1-02 and STC-F1-03 Security and profile", () => {
       expect(secret).toBeTruthy();
       await page.getByRole("button", { name: /I've scanned/i }).click();
       await page.locator("input[data-input-otp]").fill(totp(secret!));
-      await page.getByRole("button", { name: /verify & enable 2fa/i }).click();
-      await expect(page.getByText("2FA Enabled!")).toBeVisible();
+      await expect(
+        page.getByText("2FA Enabled!", { exact: true }).first(),
+      ).toBeVisible();
 
       const stored = await findUserByEmail(user.email);
       expect(stored?.is_2fa_enabled).toBe(true);

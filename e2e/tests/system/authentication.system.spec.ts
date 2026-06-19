@@ -75,7 +75,7 @@ test.describe("STC-F1-01 Authentication", () => {
       await page.getByRole("button", { name: /create account/i }).click();
 
       await expect(
-        page.getByText(/EmailAlreadyExistsException/),
+        page.getByText(/EmailAlreadyExistsException/).first(),
       ).toBeVisible();
     } finally {
       await deleteUserByEmail(user.email);
