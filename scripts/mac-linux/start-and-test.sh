@@ -51,7 +51,7 @@ echo -e "\033[0;36m========================================\033[0m"
 cd "$BACKEND_DIR"
 
 echo -e "\033[0;33mExecuting backend unit suite...\033[0m"
-"$VENV_PY" -m unittest discover -s tests/unit -p "test_*.py" -v
+"$VENV_PY" tests/run_unit_tests.py
 if [ $? -ne 0 ]; then
     echo -e "\033[0;31m  ERROR: Backend Unit Tests failed!\033[0m"
     exit 1

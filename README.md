@@ -192,7 +192,7 @@ Backend unit tests cover service and route behavior from the test plan.
 
 ```bash
 cd backend
-venv\Scripts\python -m unittest discover -s tests\unit -p "test_*.py" -v
+venv\Scripts\python tests\run_unit_tests.py
 ```
 
 ### Frontend Unit Tests

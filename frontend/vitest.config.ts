@@ -9,6 +9,7 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     clearMocks: true,
+    reporters: ["verbose"],
   },
   resolve: {
     alias: { "@": path.resolve(process.cwd(), "./src") },
