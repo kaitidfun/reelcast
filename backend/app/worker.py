@@ -90,6 +90,24 @@ celery_app.conf.task_routes = {
 }
 
 
+def _build_caption_prompt(
+    prompt: str | None,
+    product_name: str | None = None,
+) -> str:
+    """Return valid caption context for generated and uploaded reels."""
+    normalized_prompt = (prompt or "").strip()
+    if normalized_prompt:
+        return normalized_prompt[:500]
+
+    normalized_product_name = (product_name or "").strip()
+    if normalized_product_name:
+        return (
+            f"An uploaded product video featuring {normalized_product_name}."
+        )[:500]
+
+    return "An uploaded product video for social media."
+
+
 @celery_app.task(name="app.worker.generateReels")
 def generateReels(
     reel_id: str, platform: str, overlay_position: str,
@@ -332,8 +350,15 @@ async def _generateReels(
         # ── Step 3: Generate Captions & Hashtags ─────────────────────────────
         if target in ["all", "caption", "upload"]:
             # Use the enriched video_prompt (includes product metadata) for richer captions.
-            # Falls back to reel.prompt_text for upload/caption-only flows.
-            caption_prompt = video_prompt if target in ["all", "video"] else reel.prompt_text
+            # Uploaded reels intentionally have no user prompt, so build a meaningful
+            # fallback instead of sending an empty string to the caption service.
+            caption_source = (
+                video_prompt if target in ["all", "video"] else reel.prompt_text
+            )
+            caption_prompt = _build_caption_prompt(
+                caption_source,
+                product.product_name if product else None,
+            )
             ai_response = await generateCaptionsAndHashtags(
                 prompt=caption_prompt,
                 productDetails=product_info,

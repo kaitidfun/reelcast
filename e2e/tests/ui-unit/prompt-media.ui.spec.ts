@@ -157,4 +157,45 @@ test.describe("UI unit: F2 prompt assembly and media", () => {
       page.getByText(/LTXVideoAPIException/).first(),
     ).toBeVisible();
   });
+
+  test("uploaded Reel can be retried when server processing fails", async ({ page }) => {
+    await page.route("**/api/reels/upload-video", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          reel_id: "66666666-6666-4666-8666-666666666666",
+          status: "Pending",
+          prompt_text: "",
+        }),
+      });
+    });
+    await page.route("**/api/reels/*/status", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          reel_id: "66666666-6666-4666-8666-666666666666",
+          status: "Failed",
+          prompt_text: "",
+          error_message: "Processing failed",
+        }),
+      });
+    });
+
+    await page.getByRole("button", { name: "Upload Video" }).click();
+    await page.locator('input[type="file"][accept*=".mp4"]').setInputFiles({
+      name: "commercial.mp4",
+      mimeType: "video/mp4",
+      buffer: Buffer.from("invalid-video"),
+    });
+    await page.getByRole("button", { name: /Upload & Process/i }).click();
+
+    await expect(
+      page.getByText("Generation Failed", { exact: true }).first(),
+    ).toBeVisible({ timeout: 20_000 });
+    await expect(
+      page.getByRole("button", { name: /Upload & Process/i }),
+    ).toBeEnabled();
+  });
 });

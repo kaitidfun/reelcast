@@ -33,6 +33,7 @@ from app.routes.reel_routes import (
 )
 from app.services import ai_service
 from app.services.video_generation_service import generate_with_ltx
+from app.worker import _build_caption_prompt
 
 
 class ReelGenerationTests(unittest.TestCase):
@@ -414,6 +415,31 @@ class CaptionGenerationTests(unittest.IsolatedAsyncioTestCase):
                 "Cold brew kit",
                 "TikTok",
             )
+
+
+class CaptionPromptContextTests(unittest.TestCase):
+    """Caption context stays valid for generated and user-uploaded reels."""
+
+    def test_preserves_existing_prompt(self) -> None:
+        self.assertEqual(
+            "A cinematic product video",
+            _build_caption_prompt("  A cinematic product video  ", "Cold Brew"),
+        )
+
+    def test_builds_product_context_for_uploaded_reel(self) -> None:
+        self.assertEqual(
+            "An uploaded product video featuring Cold Brew.",
+            _build_caption_prompt("", "Cold Brew"),
+        )
+
+    def test_builds_generic_context_when_product_is_missing(self) -> None:
+        self.assertEqual(
+            "An uploaded product video for social media.",
+            _build_caption_prompt(None),
+        )
+
+    def test_caps_enriched_prompt_at_service_limit(self) -> None:
+        self.assertEqual(500, len(_build_caption_prompt("x" * 501)))
 
 
 class VideoProviderTests(unittest.IsolatedAsyncioTestCase):

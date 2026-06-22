@@ -206,6 +206,9 @@ const CreateReelContent = () => {
     onFailed: (_, gt) => {
       setGenerationStatus("idle");
       setGenerationTime(gt);
+      if (completedModeRef.current === "upload") {
+        setUploadStatus("error");
+      }
     },
   });
 
