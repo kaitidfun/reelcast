@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import pyotp
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.datastructures import UploadFile
 
@@ -126,12 +127,13 @@ class TwoFactorTests(unittest.TestCase):
             two_factor_secret="secret",
         )
 
-    @patch("app.routes.twofa_routes.pyotp.TOTP")
-    def test_F1_UTC04_TC01_enables_2fa_for_valid_totp(self, totp_cls) -> None:
-        totp_cls.return_value.verify.return_value = True
+    def test_F1_UTC04_TC01_enables_2fa_for_valid_totp(self) -> None:
+        secret = pyotp.random_base32()
+        self.user.two_factor_secret = secret
+        valid_code = pyotp.TOTP(secret).now()
 
         result = manage2FA(
-            TwoFactorVerifyRequest(code="123456"),
+            TwoFactorVerifyRequest(code=valid_code),
             self.user,
             self.db,
         )
