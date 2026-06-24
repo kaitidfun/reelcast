@@ -37,7 +37,7 @@ from app.services.email_service import (
 class RegistrationValidationTests(unittest.TestCase):
     """F1-UTC01 registration validation."""
 
-    def test_F1_UTC01_TC01_accepts_valid_registration_data(self) -> None:
+    def test_F1_UTC01_validates_accepted_data(self) -> None:
         validate_registration_input(
             "johndoe@example.com",
             "StrongPassword123!",

@@ -25,7 +25,7 @@ from app.schemas.user import TwoFactorVerifyRequest, UserUpdate
 class ProfileUpdateTests(unittest.TestCase):
     """F1-UTC03 display-name behavior."""
 
-    def test_F1_UTC03_TC01_updates_display_name(self) -> None:
+    def test_F1_UTC03_updates_display_name(self) -> None:
         db = MagicMock()
         user = SimpleNamespace(display_name="Old Name")
 
@@ -40,7 +40,7 @@ class ProfileUpdateTests(unittest.TestCase):
         db.commit.assert_called_once()
         db.refresh.assert_called_once_with(user)
 
-    def test_F1_UTC03_TC04_maps_database_failure(self) -> None:
+    def test_F1_UTC03_maps_display_name_db_failure(self) -> None:
         db = MagicMock()
         db.commit.side_effect = SQLAlchemyError("update failed")
         user = SimpleNamespace(display_name="Old Name")

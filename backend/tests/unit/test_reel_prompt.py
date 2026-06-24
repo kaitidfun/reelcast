@@ -106,7 +106,7 @@ class ReelGenerationTests(unittest.TestCase):
             )
 
     @patch("app.routes.reel_routes.get_reel")
-    def test_F2_UTC06_TC01_and_TC02_return_decision(self, get_reel) -> None:
+    def test_F2_UTC06_TC01_approves_content(self, get_reel) -> None:
         get_reel.return_value = SimpleNamespace(
             reel_id=uuid4(),
             final_commercial_video_url="video.mp4",
@@ -114,16 +114,32 @@ class ReelGenerationTests(unittest.TestCase):
             uploaded_video_url=None,
         )
 
-        for decision in (True, False):
-            with self.subTest(decision=decision):
-                result = previewAndApproveContent(
-                    get_reel.return_value.reel_id,
-                    PreviewDecisionRequest(decision=decision),
-                    self.db,
-                    self.user,
-                )
-                self.assertEqual(decision, result["approved"])
-                self.assertEqual(decision, result["queued_for_distribution"])
+        result = previewAndApproveContent(
+            get_reel.return_value.reel_id,
+            PreviewDecisionRequest(decision=True),
+            self.db,
+            self.user,
+        )
+        self.assertTrue(result["approved"])
+        self.assertTrue(result["queued_for_distribution"])
+
+    @patch("app.routes.reel_routes.get_reel")
+    def test_F2_UTC06_TC02_rejects_content(self, get_reel) -> None:
+        get_reel.return_value = SimpleNamespace(
+            reel_id=uuid4(),
+            final_commercial_video_url="video.mp4",
+            raw_video_url=None,
+            uploaded_video_url=None,
+        )
+
+        result = previewAndApproveContent(
+            get_reel.return_value.reel_id,
+            PreviewDecisionRequest(decision=False),
+            self.db,
+            self.user,
+        )
+        self.assertFalse(result["approved"])
+        self.assertFalse(result["queued_for_distribution"])
 
     @patch("app.routes.reel_routes.get_reel", return_value=None)
     def test_F2_UTC06_TC03_rejects_missing_media(self, _get_reel) -> None:
@@ -206,11 +222,11 @@ class PromptEndpointTests(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
         return_value="Assembled guided prompt",
     )
-    async def test_F2_UTC08_TC01_and_TC02_build_guided_prompt(
+    async def test_F2_UTC08_TC01_builds_prompt_with_all_options(
         self,
         generate_guided_prompt,
     ) -> None:
-        requests = (
+        result = await generate_guided_prompt_endpoint(
             GuidedPromptRequest(
                 product_id=self.product_id,
                 focus="Cafe morning",
@@ -220,24 +236,33 @@ class PromptEndpointTests(unittest.IsolatedAsyncioTestCase):
                 style="Cinematic",
                 camera_motion="Slow pan",
             ),
+            self.db,
+            self.user,
+        )
+        self.assertEqual("Assembled guided prompt", result["prompt"])
+        generate_guided_prompt.assert_awaited_once()
+
+    @patch(
+        "app.routes.reel_routes.generate_guided_prompt",
+        new_callable=AsyncMock,
+        return_value="Assembled guided prompt",
+    )
+    async def test_F2_UTC08_TC02_builds_prompt_with_partial_options(
+        self,
+        generate_guided_prompt,
+    ) -> None:
+        result = await generate_guided_prompt_endpoint(
             GuidedPromptRequest(
                 product_id=self.product_id,
                 focus="Cafe morning",
                 target="Coffee lovers",
                 mood="Calm",
             ),
+            self.db,
+            self.user,
         )
-
-        for request in requests:
-            with self.subTest(request=request):
-                result = await generate_guided_prompt_endpoint(
-                    request,
-                    self.db,
-                    self.user,
-                )
-                self.assertEqual("Assembled guided prompt", result["prompt"])
-
-        self.assertEqual(2, generate_guided_prompt.await_count)
+        self.assertEqual("Assembled guided prompt", result["prompt"])
+        generate_guided_prompt.assert_awaited_once()
 
     async def test_F2_UTC08_TC03_rejects_missing_product(self) -> None:
         self.db.query.return_value.options.return_value.filter.return_value.first.return_value = None
@@ -443,7 +468,15 @@ class CaptionPromptContextTests(unittest.TestCase):
 
 
 class VideoProviderTests(unittest.IsolatedAsyncioTestCase):
-    """F2-UTC02 external video-provider errors."""
+    """F2-UTC02 video generation and F2-UTC07 regeneration provider errors."""
+
+    async def test_F2_UTC02_TC01_generates_video_url(self) -> None:
+        fal_client = SimpleNamespace(
+            run=MagicMock(return_value={"video": {"url": "https://fal.media/test-video.mp4"}})
+        )
+        with patch.dict(sys.modules, {"fal_client": fal_client}):
+            url = await generate_with_ltx("A cinematic cold brew video")
+        self.assertEqual("https://fal.media/test-video.mp4", url)
 
     async def test_F2_UTC02_TC02_maps_provider_failure(self) -> None:
         fal_client = SimpleNamespace(
@@ -460,3 +493,19 @@ class VideoProviderTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(sys.modules, {"fal_client": fal_client}):
             with self.assertRaises(GenerationTimeoutException):
                 await generate_with_ltx("Prompt")
+
+    async def test_F2_UTC07_TC03_maps_regeneration_timeout(self) -> None:
+        fal_client = SimpleNamespace(
+            run=MagicMock(side_effect=TimeoutError("regen timed out"))
+        )
+        with patch.dict(sys.modules, {"fal_client": fal_client}):
+            with self.assertRaises(GenerationTimeoutException):
+                await generate_with_ltx("Revised prompt")
+
+    async def test_F2_UTC07_TC04_maps_regeneration_api_failure(self) -> None:
+        fal_client = SimpleNamespace(
+            run=MagicMock(side_effect=RuntimeError("fal provider unavailable"))
+        )
+        with patch.dict(sys.modules, {"fal_client": fal_client}):
+            with self.assertRaises(LTXVideoAPIException):
+                await generate_with_ltx("Revised prompt")

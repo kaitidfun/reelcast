@@ -19,13 +19,14 @@ from app.services.upload_service import (
 class VideoValidationTests(unittest.TestCase):
     """F2-UTC04 upload format, size, and duration validation."""
 
-    def test_F2_UTC04_TC01_TC04_TC05_accept_supported_formats(self) -> None:
-        for filename in ("commercial_valid.mp4", "commercial.mov", "commercial.avi"):
-            with self.subTest(filename=filename):
-                self.assertEqual(
-                    [],
-                    validate_video_file(filename, 100 * 1024 * 1024, 45),
-                )
+    def test_F2_UTC04_TC01_accepts_mp4(self) -> None:
+        self.assertEqual([], validate_video_file("commercial_valid.mp4", 100 * 1024 * 1024, 45))
+
+    def test_F2_UTC04_TC04_accepts_mov(self) -> None:
+        self.assertEqual([], validate_video_file("commercial.mov", 100 * 1024 * 1024, 45))
+
+    def test_F2_UTC04_TC05_accepts_avi(self) -> None:
+        self.assertEqual([], validate_video_file("commercial.avi", 100 * 1024 * 1024, 45))
 
     def test_F2_UTC04_TC02_rejects_mkv(self) -> None:
         errors = validate_video_file(
