@@ -93,6 +93,10 @@ $RECYCLE.BIN/
 
 # Temporary files from deleted open files
 .fuse_hidden*
+.tmp
+tmp/
+.agents
+.artifacts
 
 # KDE directory preferences
 .directory
