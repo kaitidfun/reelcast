@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_, asc, desc, or_
+from sqlalchemy import and_, asc, desc, func, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
 from app.dependencies import get_current_user, get_db
 from app.exceptions import DatabaseRetrieveException
-from app.models.models import Campaign, Product, User
+from app.models.models import Campaign, Product, Reel, User
 from app.schemas.campaign import CampaignResponse
 from app.schemas.product import ProductResponse
 
@@ -93,6 +93,8 @@ def browseLibrary(
                 if _product_status(product) == statusFilter
             ]
 
+        _attach_reel_counts(db, products, user_id=current_user.user_id)
+
         return {
             "campaigns": [
                 CampaignResponse.model_validate(campaign)
@@ -106,6 +108,33 @@ def browseLibrary(
         }
     except SQLAlchemyError as exc:
         raise DatabaseRetrieveException() from exc
+
+
+def _attach_reel_counts(db: Session, products: list[Product], *, user_id) -> None:
+    """
+    Attach a `reel_count` attribute to each Product ORM instance in-place.
+
+    One grouped query for all products instead of a per-product COUNT, so
+    browsing a library with many products doesn't turn into an N+1 query.
+    ProductResponse.reel_count falls back to its default (0) for any product
+    with no matching row in the count map.
+    """
+    product_ids = [p.product_id for p in products]
+    if not product_ids:
+        return
+
+    counts = dict(
+        db.query(Reel.product_id, func.count(Reel.reel_id))
+        .filter(
+            Reel.user_id == user_id,
+            Reel.deleted_at.is_(None),
+            Reel.product_id.in_(product_ids),
+        )
+        .group_by(Reel.product_id)
+        .all()
+    )
+    for product in products:
+        product.reel_count = counts.get(product.product_id, 0)
 
 
 def _product_status(product: Product) -> str:

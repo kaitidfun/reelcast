@@ -225,10 +225,20 @@ class LibraryBrowseTests(unittest.TestCase):
         product_query.options.return_value = product_query
         product_query.filter.return_value = product_query
         product_query.all.return_value = [self.product]
+        # Third query shape: the grouped Reel-count lookup added for library
+        # reel badges — db.query(Reel.product_id, func.count(...)).filter(...)
+        # .group_by(...).all(). Empty result is fine; the test doesn't assert
+        # on reel_count, just that this new query doesn't blow up the mock.
+        reel_count_query = MagicMock()
+        reel_count_query.filter.return_value = reel_count_query
+        reel_count_query.group_by.return_value = reel_count_query
+        reel_count_query.all.return_value = []
         db.query.side_effect = (
-            lambda model: campaign_query
-            if model is Campaign
+            lambda *args: campaign_query
+            if args[0] is Campaign
             else product_query
+            if args[0] is Product
+            else reel_count_query
         )
 
         result = browseLibrary(

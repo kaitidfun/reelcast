@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Video, Eye, Link2, TrendingUp, Play, Clock, BarChart3, ArrowRight, Sparkles, Zap, ShoppingCart, DollarSign, MousePointerClick } from "lucide-react";
+import { Video, Eye, Link2, TrendingUp, Play, Clock, BarChart3, Sparkles, Zap, ShoppingCart, DollarSign, MousePointerClick } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StatCard from "@/components/StatCard";
 import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { useReels } from "@/hooks/useReels";
+import { ReelCard } from "@/components/ReelCard";
 
 const socialData = [
   { date: "Mar 3", views: 4200, clicks: 1800, conversions: 320 },
@@ -41,17 +43,11 @@ const socialMetrics = [
   { key: "conversions", label: "Conversions", color: "hsl(var(--success))" },
 ] as const;
 
-const recentReels = [
-  { id: 1, title: "Summer Collection Showcase", platform: "YouTube Shorts", status: "Published", views: "12.4K", date: "2 hours ago", emoji: "🏖️" },
-  { id: 2, title: "New Arrival — Minimal Watch", platform: "TikTok", status: "Processing", views: "—", date: "5 hours ago", emoji: "⌚" },
-  { id: 3, title: "Skincare Routine Bundle", platform: "Facebook", status: "Published", views: "8.2K", date: "1 day ago", emoji: "🧴" },
-  { id: 4, title: "Tech Gadget Review", platform: "Instagram", status: "Draft", views: "—", date: "2 days ago", emoji: "📱" },
-];
-
 const Dashboard = () => {
   const router = useRouter();
   const [activeMetrics, setActiveMetrics] = useState<string[]>(["views", "clicks", "conversions"]);
   const [chartTab, setChartTab] = useState<"social" | "ecommerce" | "platform">("social");
+  const { reels: recentReels, loading: reelsLoading } = useReels({ limit: 10 });
 
   return (
     <div className="space-y-8">
@@ -215,30 +211,29 @@ const Dashboard = () => {
             </div>
             <h2 className="font-display text-lg font-semibold text-foreground">Recent Reels</h2>
           </div>
-          <button className="flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors">
-            View All<ArrowRight className="h-3.5 w-3.5" />
-          </button>
+          {recentReels.length > 0 && (
+            <Link href="/reels" className="text-xs font-medium text-primary hover:text-primary/80 transition-colors">
+              View all
+            </Link>
+          )}
         </div>
-        <div className="divide-y divide-border">
-          {recentReels.map((reel, i) => (
-            <motion.div key={reel.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.45 + i * 0.05 }}
-              className="flex items-center gap-3 px-4 py-3.5 sm:gap-4 sm:px-6 sm:py-4 transition-all duration-200 hover:bg-muted/40 cursor-pointer group"
-            >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-lg ring-1 ring-border group-hover:ring-primary/20">{reel.emoji}</div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground group-hover:text-primary transition-colors">{reel.title}</p>
-                <p className="text-xs text-muted-foreground">{reel.platform}</p>
-              </div>
-              <span className={`hidden sm:inline-block rounded-full px-3 py-1 text-xs font-medium ${
-                reel.status === "Published" ? "bg-success/10 text-success ring-1 ring-success/20"
-                : reel.status === "Processing" ? "bg-warning/10 text-warning ring-1 ring-warning/20"
-                : "bg-muted text-muted-foreground ring-1 ring-border"
-              }`}>{reel.status}</span>
-              <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground"><Eye className="h-3.5 w-3.5" />{reel.views}</div>
-              <div className="hidden md:flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="h-3.5 w-3.5" />{reel.date}</div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block" />
-            </motion.div>
-          ))}
+        <div className="p-6">
+          {reelsLoading ? (
+            <div className="py-4 text-center text-sm text-muted-foreground">Loading…</div>
+          ) : recentReels.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-4 text-center">
+              <p className="text-sm text-muted-foreground">No reels yet — generate your first one to see it here.</p>
+              <Button onClick={() => router.push("/create")} size="sm" className="gradient-primary gap-2 text-primary-foreground">
+                <Sparkles className="h-4 w-4" />Create New Reel
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              {recentReels.map((reel) => (
+                <ReelCard key={reel.id} reel={reel} onClick={() => router.push(`/create?reelId=${encodeURIComponent(reel.id)}`)} />
+              ))}
+            </div>
+          )}
         </div>
       </motion.div>
     </div>

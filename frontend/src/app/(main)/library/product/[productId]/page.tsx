@@ -4,12 +4,12 @@ import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Sparkles,
-  Play,
   Package,
   Clock,
   Search,
   LayoutGrid,
   List,
+  Film,
 } from "lucide-react";
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
@@ -33,7 +33,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-const formatDate = (iso: string) => {
+import { useReels } from "@/hooks/useReels";
+import { ReelCard } from "@/components/ReelCard";
+import { REEL_STATUS_BADGE } from "@/lib/reel-status";
+
+const formatDate = (iso: string | null) => {
+  if (!iso) return "—";
   try {
     return new Date(iso).toLocaleDateString(undefined, {
       year: "numeric",
@@ -47,20 +52,20 @@ const formatDate = (iso: string) => {
 
 const ProductReels = () => {
   const { productId = "" } = useParams();
+  const id = Array.isArray(productId) ? productId[0] : productId;
   const router = useRouter();
 
   const [product, setProduct] = useState<any>(null);
-  const [reels, setReels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { reels, loading: reelsLoading } = useReels({ productId: id });
 
   const fetchProduct = useCallback(async () => {
     try {
       const token = localStorage.getItem("rf_token");
       if (!token) return;
-      const headers = { Authorization: `Bearer ${token}` };
-      const id = Array.isArray(productId) ? productId[0] : productId;
-      
-      const res = await fetch(`http://localhost:8000/api/products/${id}`, { headers });
+      const res = await fetch(`http://localhost:8000/api/products/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
         const p = await res.json();
         const primaryImage = p.images?.find((img: any) => img.is_primary)?.image_url || p.images?.[0]?.image_url;
@@ -71,26 +76,23 @@ const ProductReels = () => {
             affiliateLink: p.affiliate_link || "",
             status: "Active",
             thumbnail: primaryImage ? `http://localhost:8000/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : null),
-            reelsGenerated: 0,
+            reelsGenerated: p.reel_count ?? 0,
             campaignId: p.campaign_id,
             campaignName: "Campaign" // Could fetch campaign if needed
         });
-        // We'll leave reels empty since reels endpoint isn't fully connected here yet
-        setReels([]);
       }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, [productId]);
+  }, [id]);
 
   useEffect(() => {
     fetchProduct();
   }, [fetchProduct]);
 
   const [search, setSearch] = useState("");
-  const [platformFilter, setPlatformFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [view, setView] = useState<"grid" | "list">("grid");
 
@@ -98,11 +100,10 @@ const ProductReels = () => {
     const q = search.toLowerCase();
     return reels.filter((r) => {
       const matchesSearch = !q || r.title.toLowerCase().includes(q);
-      const matchesPlatform = platformFilter === "all" || r.platform === platformFilter;
       const matchesStatus = statusFilter === "all" || r.status === statusFilter;
-      return matchesSearch && matchesPlatform && matchesStatus;
+      return matchesSearch && matchesStatus;
     });
-  }, [reels, search, platformFilter, statusFilter]);
+  }, [reels, search, statusFilter]);
 
   if (loading) {
     return <div className="p-12 text-center text-muted-foreground">Loading...</div>;
@@ -122,7 +123,11 @@ const ProductReels = () => {
   }
 
   const handleCreateReel = () => {
-    router.push(`/create?productId=${encodeURIComponent(Array.isArray(productId) ? productId[0] : productId)}&productName=${encodeURIComponent(product.name)}&campaignId=${encodeURIComponent(product.campaignId || "")}`);
+    router.push(`/create?productId=${encodeURIComponent(id)}&productName=${encodeURIComponent(product.name)}&campaignId=${encodeURIComponent(product.campaignId || "")}`);
+  };
+
+  const handleOpenReel = (reelId: string) => {
+    router.push(`/create?reelId=${encodeURIComponent(reelId)}&productId=${encodeURIComponent(id)}&productName=${encodeURIComponent(product.name)}&campaignId=${encodeURIComponent(product.campaignId || "")}`);
   };
 
   return (
@@ -178,27 +183,16 @@ const ProductReels = () => {
             className="bg-card pl-10 border-border h-10"
           />
         </div>
-        <Select value={platformFilter} onValueChange={(v) => setPlatformFilter(v as typeof platformFilter)}>
-          <SelectTrigger className="w-full sm:w-[170px] bg-card h-10">
-            <SelectValue placeholder="Platform" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Platforms</SelectItem>
-            <SelectItem value="tiktok">TikTok</SelectItem>
-            <SelectItem value="instagram">Instagram</SelectItem>
-            <SelectItem value="youtube">YouTube Shorts</SelectItem>
-            <SelectItem value="facebook">Facebook</SelectItem>
-          </SelectContent>
-        </Select>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
           <SelectTrigger className="w-full sm:w-[160px] bg-card h-10">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="Published">Published</SelectItem>
-            <SelectItem value="Scheduled">Scheduled</SelectItem>
-            <SelectItem value="Draft">Draft</SelectItem>
+            <SelectItem value="Completed">Completed</SelectItem>
+            <SelectItem value="Generating">Generating</SelectItem>
+            <SelectItem value="Pending">Pending</SelectItem>
+            <SelectItem value="Failed">Failed</SelectItem>
           </SelectContent>
         </Select>
         <ToggleGroup
@@ -229,43 +223,8 @@ const ProductReels = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
-              className="group rounded-2xl border border-border bg-card overflow-hidden card-shine hover:border-primary/30 hover:shadow-elevated transition-all duration-300 cursor-pointer"
             >
-              <div
-                className={`relative aspect-[9/16] bg-gradient-to-br ${reel.gradient} flex items-center justify-center text-6xl`}
-              >
-                <span className="drop-shadow-lg">{reel.thumbnail}</span>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                <div className="absolute top-2 right-2">
-                  <Badge
-                    variant="outline"
-                    className={
-                      "text-[10px] " +
-                      (reel.status === "Published"
-                        ? "bg-success/15 text-success border-success/30"
-                        : reel.status === "Scheduled"
-                        ? "bg-primary/15 text-primary border-primary/30"
-                        : "bg-warning/15 text-warning border-warning/30")
-                    }
-                  >
-                    {reel.status}
-                  </Badge>
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="h-12 w-12 rounded-full bg-background/80 backdrop-blur flex items-center justify-center">
-                    <Play className="h-5 w-5 text-foreground fill-foreground ml-0.5" />
-                  </div>
-                </div>
-              </div>
-              <div className="p-3 space-y-1.5">
-                <h3 className="text-sm font-medium text-foreground line-clamp-2 min-h-[2.5rem]">
-                  {reel.title}
-                </h3>
-                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  {formatDate(reel.createdAt)}
-                </div>
-              </div>
+              <ReelCard reel={reel} onClick={() => handleOpenReel(reel.id)} />
             </motion.div>
           ))}
         </div>
@@ -277,13 +236,15 @@ const ProductReels = () => {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }}
+              onClick={() => handleOpenReel(reel.id)}
               className="flex items-center gap-4 p-4 hover:bg-muted/30 transition-colors cursor-pointer"
             >
-              <div
-                className={`relative h-16 w-12 shrink-0 rounded-lg bg-gradient-to-br ${reel.gradient} flex items-center justify-center text-2xl`}
-              >
-                {reel.thumbnail}
-                <div className="absolute inset-0 rounded-lg bg-gradient-to-t from-black/40 to-transparent" />
+              <div className="relative h-16 w-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
+                {reel.thumbnail ? (
+                  <img src={reel.thumbnail} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <Film className="h-5 w-5 text-muted-foreground/30" />
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-medium text-foreground truncate">{reel.title}</h3>
@@ -294,13 +255,7 @@ const ProductReels = () => {
               </div>
               <Badge
                 variant="outline"
-                className={
-                  reel.status === "Published"
-                    ? "bg-success/15 text-success border-success/30"
-                    : reel.status === "Scheduled"
-                    ? "bg-primary/15 text-primary border-primary/30"
-                    : "bg-warning/15 text-warning border-warning/30"
-                }
+                className={REEL_STATUS_BADGE[reel.status] ?? "bg-muted text-muted-foreground border-border"}
               >
                 {reel.status}
               </Badge>

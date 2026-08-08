@@ -5,6 +5,20 @@ import { useToast } from "@/hooks/use-toast";
 import { useGenerationQueue } from "@/contexts/GenerationQueueContext";
 import type { GenerationStatus } from "../_types";
 
+export const resolveVideoUrl = (url: string | null | undefined) => {
+  if (!url) return null;
+  return url.startsWith("http")
+    ? url
+    : `http://localhost:8000/api/upload/videos/${url}`;
+};
+
+export const formatCaptionAndHashtags = (
+  captionAndHashtags: { caption?: string; hashtags?: string[] } | null | undefined
+) =>
+  captionAndHashtags
+    ? captionAndHashtags.caption + "\n\n" + (captionAndHashtags.hashtags?.join(" ") || "")
+    : "";
+
 type Props = {
   generationStatus: GenerationStatus;
   isRegeneratingCaption: boolean;
@@ -73,18 +87,7 @@ export function useGenerationPolling({
             ? Math.floor((Date.now() - generationStartTime) / 1000)
             : 0;
 
-          const resolveVideoUrl = (url: string | null) => {
-            if (!url) return null;
-            return url.startsWith("http")
-              ? url
-              : `http://localhost:8000/api/upload/videos/${url}`;
-          };
-
-          const caption = data.caption_and_hashtags
-            ? data.caption_and_hashtags.caption +
-              "\n\n" +
-              (data.caption_and_hashtags.hashtags?.join(" ") || "")
-            : "";
+          const caption = formatCaptionAndHashtags(data.caption_and_hashtags);
 
           onCompleted({
             isCaptionRegen,

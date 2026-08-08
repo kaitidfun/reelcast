@@ -1,17 +1,12 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Search, Plus, Play, Folder, ChevronRight } from "lucide-react";
+import { Search, Plus, Folder, ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-
-const recentVideos = [
-  { title: "Summer Drop", tag: "Fashion" },
-  { title: "Watch Reveal", tag: "Lifestyle" },
-  { title: "Skin Routine", tag: "Beauty" },
-  { title: "Tech Review", tag: "Gadgets" },
-];
+import { useReels } from "@/hooks/useReels";
+import { ReelCard } from "@/components/ReelCard";
 
 const campaigns = [
   { name: "Summer Sale 2026", meta: "12 reels · 3 platforms" },
@@ -26,7 +21,9 @@ const fadeUp = {
 
 export default function Home() {
   const { user } = useAuth();
+  const router = useRouter();
   const firstName = user?.displayName?.split(" ")[0] ?? "Creator";
+  const { reels: recentReels, loading: reelsLoading } = useReels({ limit: 4 });
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -85,30 +82,27 @@ export default function Home() {
       <motion.section {...fadeUp} transition={{ duration: 0.4, delay: 0.2 }} className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold text-foreground">Recent Videos</h2>
-          <button className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
-            View all
-          </button>
+          {recentReels.length > 0 && (
+            <Link href="/reels" className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+              View all
+            </Link>
+          )}
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {recentVideos.map((v) => (
-            <div
-              key={v.title}
-              className="group cursor-pointer overflow-hidden rounded-2xl border border-border bg-card transition-all duration-300 hover:scale-[1.02] hover:ring-2 hover:ring-primary/40"
-            >
-              <AspectRatio ratio={9 / 16}>
-                <div className="relative h-full w-full bg-gradient-to-br from-muted to-card flex items-center justify-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-card/60 backdrop-blur transition-transform duration-300 group-hover:scale-110">
-                    <Play className="h-5 w-5 text-foreground fill-foreground" />
-                  </div>
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/90 to-transparent p-3">
-                    <p className="text-xs font-semibold text-foreground truncate">{v.title}</p>
-                    <p className="text-[10px] text-muted-foreground">{v.tag}</p>
-                  </div>
-                </div>
-              </AspectRatio>
-            </div>
-          ))}
-        </div>
+        {reelsLoading ? (
+          <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+            Loading…
+          </div>
+        ) : recentReels.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+            No reels yet — generate your first one with "Create new video" above.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {recentReels.map((reel) => (
+              <ReelCard key={reel.id} reel={reel} onClick={() => router.push(`/create?reelId=${encodeURIComponent(reel.id)}`)} />
+            ))}
+          </div>
+        )}
       </motion.section>
 
       {/* Campaigns */}

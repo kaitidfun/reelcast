@@ -1,7 +1,8 @@
 import os
 import logging
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
 from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy.orm import Session
 from uuid import UUID
@@ -24,6 +25,7 @@ from app.models.models import User, Reel, Product
 from app.services.reel_service import (
     create_reel,
     get_reel,
+    get_reels,
     increment_retry,
     update_reel,
 )
@@ -175,8 +177,42 @@ class ReelResponse(BaseModel):
     raw_video_url: Optional[str] = None
     first_frame_url: Optional[str] = None
     caption_and_hashtags: Optional[dict] = None
+    created_at: Optional[datetime] = None
     class Config:
         from_attributes = True
+
+
+class ReelListResponse(BaseModel):
+    reels: list[ReelResponse]
+    total: int
+
+
+@router.get("", response_model=ReelListResponse)
+def listReels(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    product_id: Optional[UUID] = None,
+    skip: int = 0,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List the current user's Reels, most recent first.
+
+    Backs the Dashboard's "Recent Reels" feed and (later) the Feature 3
+    distribution reel-picker — both need a way to browse past generations
+    instead of only fetching a single reel by ID.
+    """
+    items, total = get_reels(
+        db=db,
+        user_id=current_user.user_id,
+        product_id=product_id,
+        status=status_filter,
+        skip=skip,
+        limit=limit,
+    )
+    return ReelListResponse(reels=items, total=total)
+
 
 @router.post("/generate", response_model=ReelResponse)
 def inputPromptAndSelectProduct(

@@ -55,6 +55,7 @@ class ProductResponse(BaseModel):
     images: List[ProductImageResponse] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    reel_count: int = 0
 
     @computed_field
     @property

@@ -158,14 +158,8 @@ const ContentLibrary = () => {
       if (libraryRes.ok) {
         const libraryData = await libraryRes.json();
 
-        const mappedCampaigns: Campaign[] = libraryData.campaigns.map((c: any) => ({
-          id: c.campaign_id,
-          name: c.name,
-          description: c.description || "",
-          reelsCount: 0,
-          bannerColor: c.banner_color || "Twilight",
-          bannerImage: c.banner_image_url || undefined,
-          products: libraryData.products.filter((p: any) => p.campaign_id === c.campaign_id).map((p: any) => {
+        const mappedCampaigns: Campaign[] = libraryData.campaigns.map((c: any) => {
+          const products = libraryData.products.filter((p: any) => p.campaign_id === c.campaign_id).map((p: any) => {
             const primaryImage = p.images?.find((img: any) => img.is_primary)?.image_url || p.images?.[0]?.image_url;
             const productName = p.product_name?.trim() || "";
             return {
@@ -180,16 +174,25 @@ const ContentLibrary = () => {
                 imageCount: p.images?.length || 0,
               }),
               thumbnail: primaryImage ? `http://localhost:8000/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : null),
-              reelsGenerated: 0,
+              reelsGenerated: p.reel_count ?? 0,
               createdAt: p.created_at || new Date().toISOString(),
               updatedAt: p.updated_at || new Date().toISOString(),
               images: p.images?.map((img: any) => ({ url: `http://localhost:8000/api/upload/images/${img.image_url}`, isPrimary: img.is_primary })) || [],
               logo: p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : undefined
             };
-          }),
-          createdAt: c.created_at || new Date().toISOString(),
-          updatedAt: c.updated_at || new Date().toISOString()
-        }));
+          });
+          return {
+            id: c.campaign_id,
+            name: c.name,
+            description: c.description || "",
+            reelsCount: products.reduce((sum: number, p: any) => sum + (p.reelsGenerated || 0), 0),
+            bannerColor: c.banner_color || "Twilight",
+            bannerImage: c.banner_image_url || undefined,
+            products,
+            createdAt: c.created_at || new Date().toISOString(),
+            updatedAt: c.updated_at || new Date().toISOString()
+          };
+        });
 
         setCampaigns(mappedCampaigns);
       } else {

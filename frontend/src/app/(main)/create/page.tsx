@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 
 import type { LibraryProduct, GenerationStatus, GuideOption } from "./_types";
 import { useProductLibrary } from "./_hooks/useProductLibrary";
-import { useGenerationPolling } from "./_hooks/useGenerationPolling";
+import { useGenerationPolling, resolveVideoUrl, formatCaptionAndHashtags } from "./_hooks/useGenerationPolling";
 import { GuideChipRow } from "./_components/GuideChipRow";
 import { ProductPickerDialog } from "./_components/ProductPickerDialog";
 import { FullscreenVideoDialog } from "./_components/FullscreenVideoDialog";
@@ -170,6 +170,53 @@ const CreateReelContent = () => {
       }
     }
   }, [searchParams, productLibrary]);
+
+  // Resume an existing reel from ?reelId= (e.g. clicked from the product
+  // library's reel history) — reloads its prompt, caption, and video/generation
+  // state so the composer picks up exactly where that reel left off.
+  const hasResumedRef = useRef(false);
+  useEffect(() => {
+    const resumeReelId = searchParams?.get("reelId");
+    if (!resumeReelId || hasResumedRef.current) return;
+    hasResumedRef.current = true;
+
+    const resume = async () => {
+      try {
+        const token = localStorage.getItem("rf_token");
+        if (!token) return;
+        const res = await fetch(`http://localhost:8000/api/reels/${resumeReelId}/status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+
+        setReelId(data.reel_id);
+        setPromptText(data.prompt_text || "");
+        setCaption(formatCaptionAndHashtags(data.caption_and_hashtags));
+
+        if (data.status === "Completed") {
+          setCompletedMode("generate");
+          completedModeRef.current = "generate";
+          setGenerationStatus("done");
+          setVideoUrl(resolveVideoUrl(data.final_commercial_video_url));
+          setRawVideoUrl(resolveVideoUrl(data.raw_video_url));
+        } else if (data.status === "Pending" || data.status === "Generating") {
+          setGenerationStatus("generating");
+          setGenerationStartTime(Date.now());
+        } else if (data.status === "Failed") {
+          setGenerationStatus("idle");
+          if (data.error_message) {
+            toast({ title: "This reel failed to generate", description: data.error_message, variant: "destructive" });
+          }
+        }
+      } catch (e) {
+        console.error("Failed to resume reel:", e);
+      }
+    };
+
+    resume();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Guided prompt
   const [guidedMode, setGuidedMode] = useState(false);

@@ -14,7 +14,7 @@ from app.exceptions import (
     MaxImagesExceededException,
     ProductNotFoundException,
 )
-from app.models.models import User, Product, ProductImage
+from app.models.models import User, Product, ProductImage, Reel
 from app.services import product_service
 from app.schemas.product import (
     ProductCreate,
@@ -93,10 +93,20 @@ def get_product(
         Product.product_id == product_id,
         Product.user_id == current_user.user_id
     ).first()
-    
+
     if not product:
         raise ProductNotFoundException()
-        
+
+    product.reel_count = (
+        db.query(Reel)
+        .filter(
+            Reel.product_id == product_id,
+            Reel.user_id == current_user.user_id,
+            Reel.deleted_at.is_(None),
+        )
+        .count()
+    )
+
     return product
 
 
