@@ -18,6 +18,15 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours — long enough for a full dev/demo session
 SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "supersecret-session-key")
 
+# Encrypts SocialAccount.access_token / refresh_token at rest (Feature 3).
+# Must be a urlsafe-base64-encoded 32-byte key — generate one with:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# The fallback below is a fixed dev-only key so local setup works with zero
+# config; never rely on it outside a throwaway dev database.
+TOKEN_ENCRYPTION_KEY = os.getenv(
+    "TOKEN_ENCRYPTION_KEY", "JX4xHm2DITr8WXDbOxo6lAJ0fk7O4eU3_SY-pVEiQdk="
+)
+
 # Database
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:tonnoon2005@localhost:5432/reel_cast")
 

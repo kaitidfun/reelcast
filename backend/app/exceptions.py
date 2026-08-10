@@ -153,6 +153,14 @@ class DatabaseRetrieveException(ReelCastException):
     default_message = "The system failed to retrieve campaigns or products"
 
 
+class TokenDecryptionException(ReelCastException):
+    status_code = 500
+    default_message = (
+        "Stored token could not be decrypted — it may be corrupted or was "
+        "encrypted with a different TOKEN_ENCRYPTION_KEY"
+    )
+
+
 __all__ = [
     "AccountNotVerifiedException",
     "CampaignNotFoundException",
@@ -180,6 +188,7 @@ __all__ = [
     "ProductNotFoundException",
     "RateLimitExceededException",
     "ReelCastException",
+    "TokenDecryptionException",
     "UnsupportedVideoFormatException",
     "VideoSizeExceededException",
     "VideoSizeLimitExceededException",
