@@ -23,12 +23,14 @@ def create_social_account(
     platform_name: str,
     access_token: str,
     refresh_token: Optional[str] = None,
+    external_account_id: Optional[str] = None,
 ) -> SocialAccount:
     account = SocialAccount(
         user_id=user_id,
         platform_name=platform_name,
         access_token=encrypt_token(access_token),
         refresh_token=encrypt_token(refresh_token) if refresh_token else None,
+        external_account_id=external_account_id,
     )
     db.add(account)
     db.commit()
@@ -95,10 +97,13 @@ def update_social_account_tokens(
     account: SocialAccount,
     access_token: str,
     refresh_token: Optional[str] = None,
+    external_account_id: Optional[str] = None,
 ) -> SocialAccount:
     account.access_token = encrypt_token(access_token)
     if refresh_token is not None:
         account.refresh_token = encrypt_token(refresh_token)
+    if external_account_id is not None:
+        account.external_account_id = external_account_id
     db.commit()
     db.refresh(account)
     return account

@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import httpx
+
 from app.exceptions import OAuthProviderException
 from app.models.models import SocialAccount
 from app.routes.social_routes import (
@@ -16,7 +18,12 @@ from app.routes.social_routes import (
 from app.services import social_account_service
 from app.services.crypto_service import decrypt_token
 from app.services import oauth_platforms
-from app.services.oauth_platforms import build_authorize_url, exchange_code_for_token, is_configured
+from app.services.oauth_platforms import (
+    build_authorize_url,
+    exchange_code_for_token,
+    fetch_external_account_id,
+    is_configured,
+)
 
 
 class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
@@ -53,6 +60,29 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
 
             with self.assertRaises(OAuthProviderException):
                 await exchange_code_for_token("youtube", "some-code")
+
+    async def test_fetch_external_account_id_youtube_returns_channel_id(self) -> None:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"items": [{"id": "UC12345"}]}
+        mock_response.raise_for_status.return_value = None
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+
+        with patch("app.services.oauth_platforms.httpx.AsyncClient") as mock_client_cls:
+            mock_client_cls.return_value.__aenter__.return_value = mock_client
+            result = await fetch_external_account_id("youtube", "some-token")
+
+        self.assertEqual("UC12345", result)
+
+    async def test_fetch_external_account_id_swallows_http_errors(self) -> None:
+        mock_client = AsyncMock()
+        mock_client.get.side_effect = httpx.ConnectError("boom")
+
+        with patch("app.services.oauth_platforms.httpx.AsyncClient") as mock_client_cls:
+            mock_client_cls.return_value.__aenter__.return_value = mock_client
+            result = await fetch_external_account_id("youtube", "some-token")
+
+        self.assertIsNone(result)
 
 
 class SocialAccountEncryptionTests(unittest.TestCase):
@@ -145,6 +175,9 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "app.routes.social_routes.exchange_code_for_token",
             new=AsyncMock(return_value={"access_token": "tok", "refresh_token": None}),
+        ), patch(
+            "app.routes.social_routes.fetch_external_account_id",
+            new=AsyncMock(return_value="tiktok-open-id-123"),
         ):
             response = await social_account_callback(
                 "tiktok", request, code="abc", state="s1", error=None, db=self.db

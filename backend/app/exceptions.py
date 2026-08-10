@@ -161,12 +161,24 @@ class TokenDecryptionException(ReelCastException):
     )
 
 
+class DistributionPublishException(ReelCastException):
+    status_code = 502
+    default_message = "The platform rejected the publish request"
+
+
+class DistributionNotFoundException(ReelCastException):
+    status_code = 404
+    default_message = "The distribution was not found or does not belong to the user"
+
+
 __all__ = [
     "AccountNotVerifiedException",
     "CampaignNotFoundException",
     "DatabaseInsertException",
     "DatabaseRetrieveException",
     "DatabaseUpdateException",
+    "DistributionNotFoundException",
+    "DistributionPublishException",
     "DuplicateCampaignNameException",
     "DurationExceededException",
     "EmailAlreadyExistsException",

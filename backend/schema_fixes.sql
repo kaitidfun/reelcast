@@ -15,3 +15,9 @@
 -- "psycopg2.errors.UndefinedColumn: column reels.first_frame_url does not
 -- exist" until this runs.
 ALTER TABLE reels ADD COLUMN IF NOT EXISTS first_frame_url VARCHAR;
+
+-- 2026-08-08: social_accounts.external_account_id
+-- Publishing a Reel to a Facebook Page or Instagram Business account needs
+-- that Page/IG account's own id, not the OAuth user's id — the connect
+-- callback resolves and stores it here right after the token exchange.
+ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS external_account_id VARCHAR;

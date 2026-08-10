@@ -57,11 +57,12 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import SessionLocal
 from app.exceptions import (
+    DistributionPublishException,
     FFmpegProcessingException,
     GeminiAPIException,
     InvalidCoordinateException,
 )
-from app.models.models import Reel, Product
+from app.models.models import Distribution, Reel, Product
 from app.services.ai_service import (
     generateCaptionsAndHashtags,
     generate_first_frame_prompt,
@@ -76,6 +77,7 @@ from app.services.video_generation_service import (
 from app.services.overlay_service import overlayImagesAndLogos
 from app.services.reel_service import update_reel
 from app.services.storage_service import get_presigned_url
+from app.services import distribution_publish_service, distribution_service, social_account_service
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +88,9 @@ celery_app = Celery(
 )
 
 celery_app.conf.task_routes = {
-    "app.worker.generateReels": "main-queue"
+    "app.worker.generateReels": "main-queue",
+    "app.worker.publishDistribution": "main-queue",
+    "app.worker.checkScheduledDistributions": "main-queue",
 }
 
 
@@ -614,3 +618,91 @@ async def _upload_cdn_video_to_r2(cdn_url: str, reel_id: str) -> str:
         ),
     )
     return key
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Distribution Publishing (Feature 3)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _format_caption(caption_and_hashtags: dict | None) -> str:
+    if not caption_and_hashtags:
+        return ""
+    caption = caption_and_hashtags.get("caption", "") or ""
+    hashtags = caption_and_hashtags.get("hashtags") or []
+    return f"{caption}\n\n{' '.join(hashtags)}".strip()
+
+
+@celery_app.task(name="app.worker.publishDistribution")
+def publishDistribution(distribution_id: str):
+    """Celery task: publish one Distribution to its connected platform."""
+    asyncio.run(_publishDistribution(distribution_id))
+
+
+async def _publishDistribution(distribution_id: str) -> None:
+    """
+    Publish a Reel to the platform its Distribution targets.
+
+    Workflow:
+        1. Load Distribution + its Reel + its SocialAccount
+        2. Mark status "Uploading"
+        3. Resolve the Reel's video to a URL platforms can fetch directly
+           (get_presigned_url — works for both R2 keys and pass-through URLs)
+        4. Decrypt the connected account's token, dispatch to the matching
+           distribution_publish_service.publish_to_* function
+        5. Mark "Published" on success, or "Failed" + error_message + bump
+           retry_count on failure — same pattern as reel generation above
+    """
+    db = SessionLocal()
+    try:
+        distribution = (
+            db.query(Distribution)
+            .filter(Distribution.distribution_id == distribution_id)
+            .first()
+        )
+        if not distribution:
+            logger.error(f"[Distribution] {distribution_id} not found in database")
+            return
+
+        reel = db.query(Reel).filter(Reel.reel_id == distribution.reel_id).first()
+        account = social_account_service.get_social_account(
+            db, account_id=distribution.account_id, user_id=reel.user_id
+        ) if reel else None
+
+        if not reel or not reel.final_commercial_video_url:
+            distribution_service.update_distribution(
+                db, distribution=distribution, status="Failed",
+                error_message="Reel has no finished video to publish",
+            )
+            return
+        if not account:
+            distribution_service.update_distribution(
+                db, distribution=distribution, status="Failed",
+                error_message="Connected account not found — it may have been disconnected",
+            )
+            return
+
+        distribution_service.update_distribution(db, distribution=distribution, status="Uploading")
+
+        try:
+            video_url = get_presigned_url(reel.final_commercial_video_url)
+            access_token = social_account_service.get_decrypted_access_token(account)
+            caption = _format_caption(reel.caption_and_hashtags)
+
+            platform_post_id = await distribution_publish_service.publish(
+                account.platform_name,
+                access_token=access_token,
+                external_account_id=account.external_account_id,
+                video_url=video_url,
+                caption=caption,
+            )
+            logger.info(f"[Distribution] Published {distribution_id} → {account.platform_name}:{platform_post_id}")
+            distribution_service.update_distribution(db, distribution=distribution, status="Published")
+
+        except DistributionPublishException as exc:
+            logger.error(f"[Distribution] {distribution_id} failed: {exc}")
+            distribution_service.increment_retry(db, distribution=distribution)
+            distribution_service.update_distribution(
+                db, distribution=distribution, status="Failed", error_message=str(exc)
+            )
+    finally:
+        db.close()

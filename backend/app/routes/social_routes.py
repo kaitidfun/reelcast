@@ -20,7 +20,12 @@ from app.exceptions import OAuthProviderException
 from app.models.models import User
 from app.schemas.social import SocialAccountListResponse
 from app.services import social_account_service
-from app.services.oauth_platforms import PLATFORM_CONFIGS, build_authorize_url, exchange_code_for_token
+from app.services.oauth_platforms import (
+    PLATFORM_CONFIGS,
+    build_authorize_url,
+    exchange_code_for_token,
+    fetch_external_account_id,
+)
 
 router = APIRouter(prefix="/api/social", tags=["Social Accounts"])
 
@@ -93,6 +98,8 @@ async def social_account_callback(
     except OAuthProviderException as exc:
         return _error_redirect(str(exc))
 
+    external_account_id = await fetch_external_account_id(platform, tokens["access_token"])
+
     existing = social_account_service.get_social_account_by_platform(
         db, user_id=UUID(user_id), platform_name=platform
     )
@@ -102,6 +109,7 @@ async def social_account_callback(
             account=existing,
             access_token=tokens["access_token"],
             refresh_token=tokens.get("refresh_token"),
+            external_account_id=external_account_id,
         )
     else:
         social_account_service.create_social_account(
@@ -110,6 +118,7 @@ async def social_account_callback(
             platform_name=platform,
             access_token=tokens["access_token"],
             refresh_token=tokens.get("refresh_token"),
+            external_account_id=external_account_id,
         )
 
     return RedirectResponse(url=f"{FRONTEND_URL}/distribute?connected={platform}")

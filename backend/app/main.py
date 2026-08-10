@@ -17,6 +17,7 @@ import app.models.models  # Import models so Base knows about them
 from app.routes import (
     auth_routes,
     campaign_routes,
+    distribution_routes,
     library_routes,
     oauth_routes,
     product_routes,
@@ -111,6 +112,7 @@ app.include_router(product_routes.router)
 app.include_router(library_routes.router)
 app.include_router(reel_routes.router)
 app.include_router(social_routes.router)
+app.include_router(distribution_routes.router)
 
 
 @app.get("/api/health")

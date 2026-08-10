@@ -14,10 +14,13 @@ other two.
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 from urllib.parse import urlencode
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import (
     BACKEND_URL,
@@ -154,3 +157,65 @@ async def exchange_code_for_token(platform: str, code: str) -> dict[str, Optiona
         "access_token": access_token,
         "refresh_token": data.get("refresh_token"),
     }
+
+
+async def fetch_external_account_id(platform: str, access_token: str) -> Optional[str]:
+    """
+    Resolve the id to actually publish to — distinct from the OAuth user's
+    own identity. Facebook/Instagram content publishes under a Page/IG
+    Business account the user manages, not their personal profile; YouTube
+    and TikTok need the channel/open_id. Best-effort: returns None (rather
+    than raising) on any failure, since a missing id just means Step 4's
+    publish task fails clearly later — it shouldn't block the connection
+    itself from being saved.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            if platform == "facebook":
+                pages = await _list_facebook_pages(client, access_token)
+                return pages[0]["id"] if pages else None
+
+            if platform == "instagram":
+                pages = await _list_facebook_pages(client, access_token)
+                if not pages:
+                    return None
+                resp = await client.get(
+                    f"https://graph.facebook.com/v21.0/{pages[0]['id']}",
+                    params={"fields": "instagram_business_account", "access_token": access_token},
+                )
+                resp.raise_for_status()
+                ig_account = resp.json().get("instagram_business_account")
+                return ig_account["id"] if ig_account else None
+
+            if platform == "youtube":
+                resp = await client.get(
+                    "https://www.googleapis.com/youtube/v3/channels",
+                    params={"part": "id", "mine": "true"},
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+                resp.raise_for_status()
+                items = resp.json().get("items", [])
+                return items[0]["id"] if items else None
+
+            if platform == "tiktok":
+                resp = await client.get(
+                    "https://open.tiktokapis.com/v2/user/info/",
+                    params={"fields": "open_id"},
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+                resp.raise_for_status()
+                return resp.json().get("data", {}).get("user", {}).get("open_id")
+    except httpx.HTTPError as exc:
+        logger.warning(f"[OAuth] Could not resolve external_account_id for {platform}: {exc}")
+        return None
+
+    return None
+
+
+async def _list_facebook_pages(client: httpx.AsyncClient, access_token: str) -> list[dict]:
+    resp = await client.get(
+        "https://graph.facebook.com/v21.0/me/accounts",
+        params={"access_token": access_token},
+    )
+    resp.raise_for_status()
+    return resp.json().get("data", [])

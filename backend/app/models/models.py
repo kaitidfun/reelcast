@@ -78,6 +78,12 @@ class SocialAccount(Base):
     platform_name = Column(String, nullable=False)
     access_token = Column(String, nullable=False)
     refresh_token = Column(String, nullable=True)
+    # Platform-specific target id to publish to — Facebook Page id, Instagram
+    # Business account id, TikTok open_id, or YouTube channel id. Distinct
+    # from the OAuth user's own id: posting a Reel to Facebook/Instagram
+    # requires the Page/IG Business account id, which the connect callback
+    # resolves via a follow-up API call right after the token exchange.
+    external_account_id = Column(String, nullable=True)
     created_at = Column(
         TIMESTAMP(timezone=True),
         nullable=False,
