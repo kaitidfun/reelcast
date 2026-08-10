@@ -30,6 +30,12 @@ class DistributionResponse(BaseModel):
     error_message: Optional[str] = None
     retry_count: int = 0
     created_at: Optional[datetime] = None
+    # Display-only fields, not real Distribution columns — attached by
+    # distribution_routes.list_distributions() via a couple of grouped
+    # lookups so the frontend doesn't have to cross-reference reel_id and
+    # account_id against separate /api/reels and /api/social/accounts calls.
+    reel_prompt: Optional[str] = None
+    platform_name: Optional[str] = None
 
 
 class DistributionListResponse(BaseModel):

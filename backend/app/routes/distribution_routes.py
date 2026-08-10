@@ -27,6 +27,30 @@ from app.services import distribution_service
 router = APIRouter(prefix="/api/distributions", tags=["Distributions"])
 
 
+def _attach_display_fields(db: Session, items: list[Distribution]) -> None:
+    """
+    Attach reel_prompt/platform_name to each Distribution in-place — two
+    grouped lookups instead of N+1 queries, matching the pattern
+    library_routes._attach_reel_counts() uses for the same reason.
+    """
+    if not items:
+        return
+    reel_ids = {d.reel_id for d in items if d.reel_id}
+    account_ids = {d.account_id for d in items if d.account_id}
+
+    reel_prompts = (
+        dict(db.query(Reel.reel_id, Reel.prompt_text).filter(Reel.reel_id.in_(reel_ids)).all())
+        if reel_ids else {}
+    )
+    platform_names = (
+        dict(db.query(SocialAccount.account_id, SocialAccount.platform_name).filter(SocialAccount.account_id.in_(account_ids)).all())
+        if account_ids else {}
+    )
+    for d in items:
+        d.reel_prompt = reel_prompts.get(d.reel_id)
+        d.platform_name = platform_names.get(d.account_id)
+
+
 def _get_owned_distribution(db: Session, *, distribution_id: UUID, user_id: UUID) -> Distribution:
     distribution = (
         db.query(Distribution)
@@ -98,6 +122,7 @@ def list_distributions(
 
     total = query.count()
     items = query.order_by(Distribution.created_at.desc()).offset(skip).limit(limit).all()
+    _attach_display_fields(db, items)
     return DistributionListResponse(distributions=items, total=total)
 
 
