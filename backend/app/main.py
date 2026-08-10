@@ -21,6 +21,7 @@ from app.routes import (
     oauth_routes,
     product_routes,
     reel_routes,
+    social_routes,
     twofa_routes,
     upload_routes,
 )
@@ -109,6 +110,7 @@ app.include_router(campaign_routes.router)
 app.include_router(product_routes.router)
 app.include_router(library_routes.router)
 app.include_router(reel_routes.router)
+app.include_router(social_routes.router)
 
 
 @app.get("/api/health")

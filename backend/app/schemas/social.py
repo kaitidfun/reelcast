@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
 
@@ -14,10 +14,19 @@ class SocialAccountCreate(BaseModel):
 
 
 class SocialAccountResponse(BaseModel):
+    """
+    Never include access_token/refresh_token here, encrypted or not — the
+    frontend has no legitimate use for either, only the backend's own
+    publish tasks do (via social_account_service.get_decrypted_*).
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
     account_id: UUID
-    user_id: Optional[UUID] = None
     platform_name: str
-    refresh_token: Optional[str] = None
     created_at: Optional[datetime] = None
+
+
+class SocialAccountListResponse(BaseModel):
+    accounts: List[SocialAccountResponse]
+    total: int
