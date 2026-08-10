@@ -18,7 +18,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # ── 1. Backend Dependencies ────────────────────────────────
-Write-Host "[1/6] Installing/updating Backend dependencies..." -ForegroundColor Yellow
+Write-Host "[1/7] Installing/updating Backend dependencies..." -ForegroundColor Yellow
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     Write-Host "  ERROR: Python is not installed or is not available on PATH." -ForegroundColor Red
     exit 1
@@ -39,7 +39,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "  Backend dependencies are ready." -ForegroundColor Green
 
 # ── 2. Frontend Dependencies ───────────────────────────────
-Write-Host "[2/6] Installing/updating Frontend dependencies..." -ForegroundColor Yellow
+Write-Host "[2/7] Installing/updating Frontend dependencies..." -ForegroundColor Yellow
 if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
     Write-Host "  ERROR: Bun is not installed or is not available on PATH." -ForegroundColor Red
     exit 1
@@ -52,7 +52,7 @@ Pop-Location
 Write-Host "  Frontend dependencies are ready." -ForegroundColor Green
 
 # ── 3. Redis via Docker ────────────────────────────────────
-Write-Host "[3/6] Starting Redis (Docker)..." -ForegroundColor Yellow
+Write-Host "[3/7] Starting Redis (Docker)..." -ForegroundColor Yellow
 $dockerRunning = docker info 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  WARNING: Docker Desktop is not running." -ForegroundColor Red
@@ -64,7 +64,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # ── 4. Backend (FastAPI / uvicorn) ────────────────────────
-Write-Host "[4/6] Starting Backend (FastAPI)..." -ForegroundColor Yellow
+Write-Host "[4/7] Starting Backend (FastAPI)..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",
@@ -79,7 +79,7 @@ Write-Host "  Backend window opened." -ForegroundColor Green
 Start-Sleep -Seconds 2
 
 # ── 5. Celery Worker ──────────────────────────────────────
-Write-Host "[5/6] Starting Celery Worker..." -ForegroundColor Yellow
+Write-Host "[5/7] Starting Celery Worker..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",
@@ -90,8 +90,20 @@ Start-Process powershell -ArgumentList @(
 ) -WindowStyle Normal
 Write-Host "  Celery window opened." -ForegroundColor Green
 
-# ── 6. Frontend (Next.js / bun) ───────────────────────────
-Write-Host "[6/6] Starting Frontend (Next.js)..." -ForegroundColor Yellow
+# ── 6. Celery Beat (F3 scheduled distribution) ────────────
+Write-Host "[6/7] Starting Celery Beat..." -ForegroundColor Yellow
+Start-Process powershell -ArgumentList @(
+    "-NoExit",
+    "-Command",
+    "cd '$BACKEND'; " +
+    "Write-Host '=== ReelCast: Celery Beat ===' -ForegroundColor Cyan; " +
+    "& '$VENV_ACTIVATE'; " +
+    ".\venv\Scripts\celery -A app.worker.celery_app beat --loglevel=info"
+) -WindowStyle Normal
+Write-Host "  Celery Beat window opened." -ForegroundColor Green
+
+# ── 7. Frontend (Next.js / bun) ───────────────────────────
+Write-Host "[7/7] Starting Frontend (Next.js)..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",

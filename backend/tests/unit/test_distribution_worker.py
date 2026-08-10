@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from app.exceptions import DistributionPublishException
 from app.models.models import Distribution, Reel, SocialAccount
-from app.worker import _format_caption, _publishDistribution
+from app.worker import _format_caption, _publishDistribution, checkScheduledDistributions
 
 
 class FormatCaptionTests(unittest.TestCase):
@@ -127,6 +127,40 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         # ReelCastException.__str__ prefixes the class name — matches how
         # every other exception's message is surfaced in this codebase.
         self.assertEqual("DistributionPublishException: platform rejected it", failed_calls[0].kwargs["error_message"])
+
+
+class CheckScheduledDistributionsTests(unittest.TestCase):
+    """Celery Beat's periodic task — claims due distributions and queues them."""
+
+    def setUp(self) -> None:
+        self.db = MagicMock()
+
+    def test_claims_and_queues_due_distributions(self) -> None:
+        due = [
+            Distribution(distribution_id=uuid4(), status="Pending"),
+            Distribution(distribution_id=uuid4(), status="Pending"),
+        ]
+        self.db.query.return_value.filter.return_value.all.return_value = due
+
+        with patch("app.worker.SessionLocal", return_value=self.db), \
+             patch("app.worker.distribution_service.update_distribution") as mock_update, \
+             patch("app.worker.publishDistribution") as mock_task:
+            checkScheduledDistributions()
+
+        self.assertEqual(2, mock_update.call_count)
+        for call in mock_update.call_args_list:
+            self.assertEqual("Uploading", call.kwargs["status"])
+        self.assertEqual(2, mock_task.delay.call_count)
+
+    def test_no_due_distributions_queues_nothing(self) -> None:
+        self.db.query.return_value.filter.return_value.all.return_value = []
+
+        with patch("app.worker.SessionLocal", return_value=self.db), \
+             patch("app.worker.publishDistribution") as mock_task:
+            checkScheduledDistributions()
+
+        mock_task.delay.assert_not_called()
+        self.db.close.assert_called_once()
 
 
 if __name__ == "__main__":

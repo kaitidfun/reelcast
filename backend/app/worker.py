@@ -53,6 +53,8 @@ def _setup_windows_ssl() -> None:
 
 
 _setup_windows_ssl()
+from datetime import datetime, timezone
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import SessionLocal
@@ -91,6 +93,16 @@ celery_app.conf.task_routes = {
     "app.worker.generateReels": "main-queue",
     "app.worker.publishDistribution": "main-queue",
     "app.worker.checkScheduledDistributions": "main-queue",
+}
+
+# Requires a separate `celery -A app.worker.celery_app beat` process running
+# alongside the worker (see scripts/*/start.*) — the worker alone only
+# reacts to tasks it's handed, it doesn't watch the clock on its own.
+celery_app.conf.beat_schedule = {
+    "check-scheduled-distributions": {
+        "task": "app.worker.checkScheduledDistributions",
+        "schedule": 60.0,
+    },
 }
 
 
@@ -704,5 +716,36 @@ async def _publishDistribution(distribution_id: str) -> None:
             distribution_service.update_distribution(
                 db, distribution=distribution, status="Failed", error_message=str(exc)
             )
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.worker.checkScheduledDistributions")
+def checkScheduledDistributions():
+    """
+    Celery Beat periodic task (every 60s): find Distributions that are due
+    and queue publishDistribution for each.
+
+    "Due" = status Pending AND (no scheduled_time, i.e. publish ASAP, OR
+    scheduled_time has already passed). Flips status to "Uploading" here,
+    before queuing — not just inside publishDistribution — so a slow worker
+    can't cause the same distribution to be claimed twice on the next tick;
+    publishDistribution setting "Uploading" again afterward is a no-op.
+    """
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        due = (
+            db.query(Distribution)
+            .filter(
+                Distribution.status == "Pending",
+                or_(Distribution.scheduled_time.is_(None), Distribution.scheduled_time <= now),
+            )
+            .all()
+        )
+        for distribution in due:
+            logger.info(f"[Beat] Queuing due distribution {distribution.distribution_id}")
+            distribution_service.update_distribution(db, distribution=distribution, status="Uploading")
+            publishDistribution.delay(str(distribution.distribution_id))
     finally:
         db.close()

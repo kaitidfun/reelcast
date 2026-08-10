@@ -35,6 +35,17 @@ else
     pkill -f "celery -A app.worker.celery_app worker" 2>/dev/null
 fi
 
+# ── 2b. Stop Celery Beat ──────────────────────────────────
+if [ -f "$SCRIPT_DIR/.celery_beat_pid" ]; then
+    PID=$(cat "$SCRIPT_DIR/.celery_beat_pid")
+    echo "Stopping Celery Beat (PID: $PID)..."
+    kill $PID 2>/dev/null
+    rm "$SCRIPT_DIR/.celery_beat_pid"
+else
+    echo "Celery Beat PID not found. Searching for 'celery' beat processes..."
+    pkill -f "celery -A app.worker.celery_app beat" 2>/dev/null
+fi
+
 # ── 3. Stop Backend ───────────────────────────────────────
 if [ -f "$SCRIPT_DIR/.backend_pid" ]; then
     PID=$(cat "$SCRIPT_DIR/.backend_pid")

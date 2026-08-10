@@ -19,7 +19,7 @@ echo -e "\033[0;36m========================================\033[0m"
 echo ""
 
 # ── 1. Backend Dependencies ────────────────────────────────
-echo -e "\033[0;33m[1/6] Installing/updating Backend dependencies...\033[0m"
+echo -e "\033[0;33m[1/7] Installing/updating Backend dependencies...\033[0m"
 if ! command -v python3 > /dev/null 2>&1 && ! command -v python > /dev/null 2>&1; then
     echo -e "\033[0;31m  ERROR: Python is not installed or is not available on PATH.\033[0m"
     exit 1
@@ -39,7 +39,7 @@ fi
 echo -e "\033[0;32m  Backend dependencies are ready.\033[0m"
 
 # ── 2. Frontend Dependencies ───────────────────────────────
-echo -e "\033[0;33m[2/6] Installing/updating Frontend dependencies...\033[0m"
+echo -e "\033[0;33m[2/7] Installing/updating Frontend dependencies...\033[0m"
 if ! command -v bun > /dev/null 2>&1; then
     echo -e "\033[0;31m  ERROR: Bun is not installed or is not available on PATH.\033[0m"
     exit 1
@@ -50,7 +50,7 @@ bun install
 echo -e "\033[0;32m  Frontend dependencies are ready.\033[0m"
 
 # ── 3. Redis via Docker ────────────────────────────────────
-echo -e "\033[0;33m[3/6] Starting Redis (Docker)...\033[0m"
+echo -e "\033[0;33m[3/7] Starting Redis (Docker)...\033[0m"
 if ! docker info > /dev/null 2>&1; then
     echo -e "\033[0;31m  WARNING: Docker Desktop is not running.\033[0m"
     echo -e "\033[0;31m  -> Please open Docker manually, then re-run this script.\033[0m"
@@ -61,7 +61,7 @@ else
 fi
 
 # ── 4. Backend (FastAPI / uvicorn) ────────────────────────
-echo -e "\033[0;33m[4/6] Starting Backend (FastAPI)...\033[0m"
+echo -e "\033[0;33m[4/7] Starting Backend (FastAPI)...\033[0m"
 cd "$BACKEND_DIR"
 source venv/bin/activate
 uvicorn app.main:app --reload --port 8000 > backend.log 2>&1 &
@@ -71,13 +71,19 @@ echo -e "\033[0;32m  Backend started in background (PID: $BACKEND_PID).\033[0m"
 sleep 2
 
 # ── 5. Celery Worker ──────────────────────────────────────
-echo -e "\033[0;33m[5/6] Starting Celery Worker...\033[0m"
+echo -e "\033[0;33m[5/7] Starting Celery Worker...\033[0m"
 venv/bin/celery -A app.worker.celery_app worker --loglevel=info -Q main-queue > celery.log 2>&1 &
 CELERY_PID=$!
 echo -e "\033[0;32m  Celery Worker started in background (PID: $CELERY_PID).\033[0m"
 
-# ── 6. Frontend (Next.js / bun) ───────────────────────────
-echo -e "\033[0;33m[6/6] Starting Frontend (Next.js)...\033[0m"
+# ── 6. Celery Beat (F3 scheduled distribution) ────────────
+echo -e "\033[0;33m[6/7] Starting Celery Beat...\033[0m"
+venv/bin/celery -A app.worker.celery_app beat --loglevel=info > celery-beat.log 2>&1 &
+CELERY_BEAT_PID=$!
+echo -e "\033[0;32m  Celery Beat started in background (PID: $CELERY_BEAT_PID).\033[0m"
+
+# ── 7. Frontend (Next.js / bun) ───────────────────────────
+echo -e "\033[0;33m[7/7] Starting Frontend (Next.js)...\033[0m"
 cd "$FRONTEND_DIR"
 bun run dev > frontend.log 2>&1 &
 FRONTEND_PID=$!
@@ -86,6 +92,7 @@ echo -e "\033[0;32m  Frontend started in background (PID: $FRONTEND_PID).\033[0m
 # ── Save PIDs for stop script ─────────────────────────────
 echo "$BACKEND_PID" > "$ROOT_DIR/scripts/mac-linux/.backend_pid"
 echo "$CELERY_PID" > "$ROOT_DIR/scripts/mac-linux/.celery_pid"
+echo "$CELERY_BEAT_PID" > "$ROOT_DIR/scripts/mac-linux/.celery_beat_pid"
 echo "$FRONTEND_PID" > "$ROOT_DIR/scripts/mac-linux/.frontend_pid"
 
 # ── Summary ───────────────────────────────────────────────
@@ -102,6 +109,7 @@ echo ""
 echo -e "Logs are being written to:"
 echo -e "  - backend/backend.log"
 echo -e "  - backend/celery.log"
+echo -e "  - backend/celery-beat.log"
 echo -e "  - frontend/frontend.log"
 echo ""
 echo -e "\033[1;30m  To stop all services, run: ./scripts/mac-linux/stop.sh\033[0m"
