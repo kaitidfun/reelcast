@@ -46,9 +46,24 @@ cp backend/.env.example backend/.env
 | `GOOGLE_AI_API_KEY`      | Google AI API key (Requires Billing enabled)      |
 | `FAL_KEY`                | fal.ai API key for LTX Video 2.3 video generation |
 | `DATABASE_URL`           | PostgreSQL connection string                      |
+| `TOKEN_ENCRYPTION_KEY`   | (Feature 3) Encrypts SocialAccount tokens at rest — optional locally, has a dev-only fallback |
+| `BACKEND_URL`            | (Feature 3) Base URL for OAuth redirect URIs — see note below before testing Connect Account |
+| `TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET` | (Feature 3) TikTok Content Posting API app credentials |
+| `META_APP_ID` / `META_APP_SECRET`            | (Feature 3) Meta app credentials — covers both Facebook and Instagram |
+| `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET`| (Feature 3) Google Cloud OAuth client for YouTube uploads |
 
 > **Note:** `GOOGLE_AI_API_KEY` must be from a Google Cloud Project with Billing enabled.  
 > Free Tier will result in Error 429 RESOURCE_EXHAUSTED.
+
+> **Note (Feature 3 — testing "Connect Account"):** `BACKEND_URL` defaults to
+> `http://localhost:8000`, which only works for the YouTube connect flow —
+> TikTok rejects localhost/127.0.0.1 redirect URIs outright (requires public
+> HTTPS), and Meta requires HTTPS even for localhost. To test any connect
+> flow, run `ngrok http 8000` (free static domain), then set **both**
+> `BACKEND_URL` in `.env` **and** the redirect URI registered in each
+> platform's dev app settings to that same ngrok URL. Only needed for the
+> OAuth roundtrip itself — normal usage, including publishing once an
+> account is connected, never touches ngrok.
 
 ### E2E Testing — Create `e2e/.env.test`
 
@@ -82,6 +97,10 @@ cp e2e/.env.test.example e2e/.env.test
 - Node.js/npm must be installed and available on `PATH` when using `start-and-test`.
 
 ```bash
+# ===== WINDOWS (CMD) =====
+# start all services.
+powershell -ExecutionPolicy Bypass -File scripts\windows\start.ps1
+
 # ===== WINDOWS (PowerShell) =====
 # Start all services.
 .\scripts\windows\start.ps1
@@ -285,6 +304,18 @@ Important Reel storage fields:
 - `raw_video_url` stores the original video before overlays/logos.
 - `first_frame_url` stores the Gemini-generated first-frame image URL.
 - `final_commercial_video_url` stores the finalized MP4 with overlays.
+
+**There is no migration framework (no Alembic)** — `app/main.py` only calls
+`Base.metadata.create_all()`, which creates missing tables but never adds
+columns to tables that already exist. If your local database predates a
+model change, run `backend/schema_fixes.sql` once against it:
+
+```bash
+psql -U postgres -d reel_cast -f backend/schema_fixes.sql
+```
+
+Add new fixes to that file (don't add automatic migrations) whenever a
+model gains a column, so everyone on the team stays in sync.
 
 ---
 
