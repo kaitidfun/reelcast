@@ -744,8 +744,15 @@ def checkScheduledDistributions():
             .all()
         )
         for distribution in due:
-            logger.info(f"[Beat] Queuing due distribution {distribution.distribution_id}")
-            distribution_service.update_distribution(db, distribution=distribution, status="Uploading")
-            publishDistribution.delay(str(distribution.distribution_id))
+            # The row may have been claimed by Publish now or another Beat
+            # tick after this query ran. Queue it only if this process wins
+            # the atomic Pending -> Uploading transition.
+            if distribution_service.claim_distribution_for_publish(
+                db,
+                distribution_id=distribution.distribution_id,
+                allowed_statuses=("Pending",),
+            ):
+                logger.info(f"[Beat] Queuing due distribution {distribution.distribution_id}")
+                publishDistribution.delay(str(distribution.distribution_id))
     finally:
         db.close()

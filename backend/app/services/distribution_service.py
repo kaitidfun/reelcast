@@ -84,6 +84,36 @@ def update_distribution(
     return distribution
 
 
+def claim_distribution_for_publish(
+    db: Session,
+    *,
+    distribution_id: UUID,
+    allowed_statuses: tuple[str, ...],
+) -> bool:
+    """Atomically reserve a distribution before it is queued for publishing.
+
+    Both the Publish now endpoint and Celery Beat use this conditional update.
+    Only one caller can change an eligible Pending/Failed row to Uploading,
+    preventing duplicate tasks when requests or scheduler ticks overlap.
+    """
+    claimed = (
+        db.query(Distribution)
+        .filter(
+            Distribution.distribution_id == distribution_id,
+            Distribution.status.in_(allowed_statuses),
+        )
+        .update(
+            {
+                Distribution.status: "Uploading",
+                Distribution.error_message: None,
+            },
+            synchronize_session=False,
+        )
+    )
+    db.commit()
+    return claimed == 1
+
+
 def increment_retry(db: Session, *, distribution: Distribution) -> Distribution:
     distribution.retry_count = (distribution.retry_count or 0) + 1
     db.commit()

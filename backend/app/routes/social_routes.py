@@ -71,7 +71,16 @@ def connect_social_account(platform: str, request: Request, token: str, db: Sess
     request.session[_SESSION_STATE_KEY] = state
     request.session[_SESSION_PLATFORM_KEY] = platform
 
-    return RedirectResponse(url=build_authorize_url(platform, state))
+    try:
+        return RedirectResponse(url=build_authorize_url(platform, state))
+    except OAuthProviderException as exc:
+        # This is an expected Feature 3 error, not a failed ReelCast login.
+        # Return to the Distribution page so its error toast can explain how
+        # to proceed (for example, by configuring the platform credentials).
+        request.session.pop(_SESSION_USER_KEY, None)
+        request.session.pop(_SESSION_STATE_KEY, None)
+        request.session.pop(_SESSION_PLATFORM_KEY, None)
+        return _error_redirect(str(exc))
 
 
 @router.get("/{platform}/callback")
@@ -99,6 +108,13 @@ async def social_account_callback(
         return _error_redirect(str(exc))
 
     external_account_id = await fetch_external_account_id(platform, tokens["access_token"])
+    if not external_account_id:
+        # A successful OAuth token exchange alone is not enough to publish.
+        # Do not show this account as Connected until the platform-specific
+        # Page, Business account, channel, or open_id has been resolved.
+        return _error_redirect(
+            f"Could not complete {platform} connection: target account could not be resolved"
+        )
 
     existing = social_account_service.get_social_account_by_platform(
         db, user_id=UUID(user_id), platform_name=platform

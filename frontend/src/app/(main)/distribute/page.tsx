@@ -39,6 +39,9 @@ const STATUS_BADGE: Record<string, string> = {
   Failed: "bg-destructive/10 text-destructive ring-1 ring-destructive/20",
 };
 
+const DISTRIBUTION_STATUSES = ["Pending", "Uploading", "Published", "Failed"];
+const PAGE_SIZE = 10;
+
 type SocialAccount = { account_id: string; platform_name: string };
 type DistributionItem = {
   distribution_id: string;
@@ -65,7 +68,12 @@ const Distribution = () => {
 
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [distributions, setDistributions] = useState<DistributionItem[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [filterReelId, setFilterReelId] = useState("all");
+  const [filterAccountId, setFilterAccountId] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [page, setPage] = useState(0);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedReelId, setSelectedReelId] = useState("");
@@ -78,18 +86,29 @@ const Distribution = () => {
     try {
       const headers = authHeaders();
       if (!headers.Authorization) return;
+      const distributionParams = new URLSearchParams({
+        skip: String(page * PAGE_SIZE),
+        limit: String(PAGE_SIZE),
+      });
+      if (filterReelId !== "all") distributionParams.set("reel_id", filterReelId);
+      if (filterAccountId !== "all") distributionParams.set("account_id", filterAccountId);
+      if (filterStatus !== "all") distributionParams.set("status_filter", filterStatus);
       const [accountsRes, distRes] = await Promise.all([
         fetch("http://localhost:8000/api/social/accounts", { headers }),
-        fetch("http://localhost:8000/api/distributions", { headers }),
+        fetch(`http://localhost:8000/api/distributions?${distributionParams.toString()}`, { headers }),
       ]);
       if (accountsRes.ok) setAccounts((await accountsRes.json()).accounts ?? []);
-      if (distRes.ok) setDistributions((await distRes.json()).distributions ?? []);
+      if (distRes.ok) {
+        const data = await distRes.json();
+        setDistributions(data.distributions ?? []);
+        setTotal(data.total ?? 0);
+      }
     } catch (e) {
       console.error("Failed to load distribution data:", e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filterAccountId, filterReelId, filterStatus, page]);
 
   useEffect(() => {
     loadAll();
@@ -242,9 +261,34 @@ const Distribution = () => {
 
       {/* Distributions */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <div className="flex items-center gap-2 mb-4">
-          <Clock className="h-4 w-4 text-info" />
-          <h2 className="font-display text-lg font-semibold text-foreground">Distributions</h2>
+        <div className="flex flex-col gap-3 mb-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-info" />
+            <h2 className="font-display text-lg font-semibold text-foreground">Distributions</h2>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:w-[40rem]">
+            <Select value={filterReelId} onValueChange={(value) => { setFilterReelId(value); setPage(0); }}>
+              <SelectTrigger aria-label="Filter by reel"><SelectValue placeholder="All reels" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All reels</SelectItem>
+                {reels.map((reel) => <SelectItem key={reel.id} value={reel.id}>{reel.title.slice(0, 40)}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterAccountId} onValueChange={(value) => { setFilterAccountId(value); setPage(0); }}>
+              <SelectTrigger aria-label="Filter by account"><SelectValue placeholder="All accounts" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All accounts</SelectItem>
+                {accounts.map((account) => <SelectItem key={account.account_id} value={account.account_id} className="capitalize">{account.platform_name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterStatus} onValueChange={(value) => { setFilterStatus(value); setPage(0); }}>
+              <SelectTrigger aria-label="Filter by status"><SelectValue placeholder="All statuses" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {DISTRIBUTION_STATUSES.map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {loading ? (
@@ -301,6 +345,16 @@ const Distribution = () => {
                   </div>
                 </motion.div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {total > PAGE_SIZE && (
+          <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+            <span>Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((current) => current - 1)}>Previous</Button>
+              <Button variant="outline" size="sm" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage((current) => current + 1)}>Next</Button>
             </div>
           </div>
         )}

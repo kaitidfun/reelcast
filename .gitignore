@@ -11,6 +11,9 @@ node_modules/
 # macOS resource fork and extended attribute files
 *.pid.lock
 
+# Celery Beat scheduler state (machine-specific runtime files)
+backend/celerybeat-schedule*
+
 # Coverage
 coverage/
 *.lcov

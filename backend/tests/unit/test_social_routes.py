@@ -152,6 +152,21 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
         mock_build.assert_called_once()
         self.assertEqual(307, response.status_code)  # RedirectResponse default
 
+    @patch("app.routes.social_routes.jwt.decode")
+    def test_connect_unconfigured_platform_returns_to_distribution(self, mock_decode) -> None:
+        mock_decode.return_value = {"sub": self.user.email}
+        self.db.query.return_value.filter.return_value.first.return_value = self.user
+        request = SimpleNamespace(session={})
+
+        with patch(
+            "app.routes.social_routes.build_authorize_url",
+            side_effect=OAuthProviderException("tiktok is not configured yet"),
+        ):
+            response = connect_social_account("tiktok", request, token="valid-jwt", db=self.db)
+
+        self.assertIn("/distribute?error=", response.headers["location"])
+        self.assertEqual({}, request.session)
+
     async def test_callback_rejects_state_mismatch(self) -> None:
         request = SimpleNamespace(session={
             "reelcast_connect_state": "expected-state",
@@ -185,6 +200,26 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("connected=tiktok", response.headers["location"])
         self.db.add.assert_called_once()
+
+    async def test_callback_does_not_connect_without_target_account_id(self) -> None:
+        request = SimpleNamespace(session={
+            "reelcast_connect_state": "s1",
+            "reelcast_connect_platform": "facebook",
+            "reelcast_connect_user_id": str(uuid4()),
+        })
+        with patch(
+            "app.routes.social_routes.exchange_code_for_token",
+            new=AsyncMock(return_value={"access_token": "tok", "refresh_token": None}),
+        ), patch(
+            "app.routes.social_routes.fetch_external_account_id",
+            new=AsyncMock(return_value=None),
+        ):
+            response = await social_account_callback(
+                "facebook", request, code="abc", state="s1", error=None, db=self.db
+            )
+
+        self.assertIn("/distribute?error=", response.headers["location"])
+        self.db.add.assert_not_called()
 
     def test_list_social_accounts_returns_current_user_accounts_only(self) -> None:
         self.db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [

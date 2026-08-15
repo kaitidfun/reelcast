@@ -149,6 +149,19 @@ def publish_now(
     if distribution.status not in ("Pending", "Failed"):
         raise HTTPException(status_code=409, detail=f"Distribution is already {distribution.status}")
 
+    # Claim in the database before queueing. The initial status check above is
+    # useful for a clear error response, but only this conditional update is
+    # safe when two publish-now requests arrive at the same time.
+    if not distribution_service.claim_distribution_for_publish(
+        db,
+        distribution_id=distribution.distribution_id,
+        allowed_statuses=("Pending", "Failed"),
+    ):
+        db.refresh(distribution)
+        raise HTTPException(status_code=409, detail=f"Distribution is already {distribution.status}")
+
+    db.refresh(distribution)
+
     from app.worker import publishDistribution  # local import — avoids a circular import with worker.py
 
     publishDistribution.delay(str(distribution.distribution_id))

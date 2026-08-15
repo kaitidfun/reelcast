@@ -117,11 +117,25 @@ class PublishNowTests(unittest.TestCase):
         dist = Distribution(distribution_id=self.distribution_id, status="Pending")
         self.db.query.return_value.join.return_value.filter.return_value.first.return_value = dist
 
-        with patch("app.worker.publishDistribution") as mock_task:
+        with patch("app.routes.distribution_routes.distribution_service.claim_distribution_for_publish", return_value=True) as mock_claim, \
+             patch("app.worker.publishDistribution") as mock_task:
             result = publish_now(self.distribution_id, db=self.db, current_user=self.user)
 
+        mock_claim.assert_called_once_with(
+            self.db, distribution_id=self.distribution_id, allowed_statuses=("Pending", "Failed")
+        )
         mock_task.delay.assert_called_once_with(str(self.distribution_id))
         self.assertEqual(dist, result)
+
+    def test_publish_now_rejects_if_another_request_claimed_it_first(self) -> None:
+        dist = Distribution(distribution_id=self.distribution_id, status="Pending")
+        self.db.query.return_value.join.return_value.filter.return_value.first.return_value = dist
+
+        with patch("app.routes.distribution_routes.distribution_service.claim_distribution_for_publish", return_value=False), \
+             self.assertRaises(HTTPException) as ctx:
+            publish_now(self.distribution_id, db=self.db, current_user=self.user)
+
+        self.assertEqual(409, ctx.exception.status_code)
 
 
 if __name__ == "__main__":

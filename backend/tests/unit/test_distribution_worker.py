@@ -143,14 +143,23 @@ class CheckScheduledDistributionsTests(unittest.TestCase):
         self.db.query.return_value.filter.return_value.all.return_value = due
 
         with patch("app.worker.SessionLocal", return_value=self.db), \
-             patch("app.worker.distribution_service.update_distribution") as mock_update, \
+             patch("app.worker.distribution_service.claim_distribution_for_publish", side_effect=[True, True]) as mock_claim, \
              patch("app.worker.publishDistribution") as mock_task:
             checkScheduledDistributions()
 
-        self.assertEqual(2, mock_update.call_count)
-        for call in mock_update.call_args_list:
-            self.assertEqual("Uploading", call.kwargs["status"])
+        self.assertEqual(2, mock_claim.call_count)
         self.assertEqual(2, mock_task.delay.call_count)
+
+    def test_already_claimed_distribution_is_not_queued_twice(self) -> None:
+        due = [Distribution(distribution_id=uuid4(), status="Pending")]
+        self.db.query.return_value.filter.return_value.all.return_value = due
+
+        with patch("app.worker.SessionLocal", return_value=self.db), \
+             patch("app.worker.distribution_service.claim_distribution_for_publish", return_value=False), \
+             patch("app.worker.publishDistribution") as mock_task:
+            checkScheduledDistributions()
+
+        mock_task.delay.assert_not_called()
 
     def test_no_due_distributions_queues_nothing(self) -> None:
         self.db.query.return_value.filter.return_value.all.return_value = []
