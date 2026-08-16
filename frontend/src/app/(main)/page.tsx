@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Plus, Folder, ChevronRight } from "lucide-react";
+import { Search, Plus, Folder, ChevronRight, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,8 +19,23 @@ export default function Home() {
   const { user } = useAuth();
   const router = useRouter();
   const firstName = user?.displayName?.split(" ")[0] ?? "Creator";
-  const { reels: recentReels, loading: reelsLoading } = useReels({ limit: 4 });
+  const [searchQuery, setSearchQuery] = useState("");
+  const { reels, loading: reelsLoading } = useReels();
   const campaigns = useProductLibrary();
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+  const isSearching = normalizedQuery.length > 0;
+  const visibleReels = (isSearching
+    ? reels.filter((reel) =>
+        [reel.title, reel.status].some((value) => value.toLocaleLowerCase().includes(normalizedQuery)),
+      )
+    : reels.slice(0, 4));
+  const visibleCampaigns = campaigns.filter((campaign) =>
+    [
+      campaign.name,
+      ...campaign.products.flatMap((product) => [product.name, product.highlights]),
+    ].some((value) => value.toLocaleLowerCase().includes(normalizedQuery)),
+  );
+  const searchResultCount = visibleReels.length + visibleCampaigns.length;
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -40,10 +56,29 @@ export default function Home() {
           <input
             type="text"
             placeholder="Search videos, products, campaigns…"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            aria-label="Search videos, products, and campaigns"
             className="w-full rounded-full border border-border bg-card pl-11 pr-5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
           />
+          {isSearching && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </motion.div>
+
+      {isSearching && (
+        <p className="-mt-4 text-sm text-muted-foreground">
+          {searchResultCount} {searchResultCount === 1 ? "result" : "results"} for “{searchQuery.trim()}”
+        </p>
+      )}
 
       {/* Quick Actions */}
       <motion.div
@@ -78,7 +113,7 @@ export default function Home() {
       <motion.section {...fadeUp} transition={{ duration: 0.4, delay: 0.2 }} className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold text-foreground">Recent Videos</h2>
-          {recentReels.length > 0 && (
+          {!isSearching && reels.length > 4 && (
             <Link href="/reels" className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
               View all
             </Link>
@@ -88,13 +123,13 @@ export default function Home() {
           <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
             Loading…
           </div>
-        ) : recentReels.length === 0 ? (
+        ) : visibleReels.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
-            No reels yet — generate your first one with "Create new video" above.
+            {isSearching ? "No videos match your search." : "No reels yet — generate your first one with \"Create new video\" above."}
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {recentReels.map((reel) => (
+            {visibleReels.map((reel) => (
               <ReelCard key={reel.id} reel={reel} onClick={() => router.push(`/create?reelId=${encodeURIComponent(reel.id)}`)} />
             ))}
           </div>
@@ -109,8 +144,12 @@ export default function Home() {
             <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
               No campaigns in your product library yet. <Link href="/library" className="font-medium text-primary hover:text-primary/80">Create one in Library</Link>.
             </div>
+          ) : visibleCampaigns.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
+              No campaigns or products match your search.
+            </div>
           ) : (
-            campaigns.map((campaign) => (
+            visibleCampaigns.map((campaign) => (
               <button
                 key={campaign.id}
                 onClick={() => router.push(`/library?campaign=${encodeURIComponent(campaign.id)}`)}
