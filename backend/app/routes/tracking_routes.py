@@ -15,7 +15,7 @@ from app.schemas.analytics import (
     EcommerceAccountResponse,
     TrackingMetricCreate,
 )
-from app.services import tracking_service
+from app.services import tracking_provider_service, tracking_service
 
 router = APIRouter(prefix="/api/tracking", tags=["Data Tracking"])
 
@@ -71,12 +71,20 @@ def ingest_tracking_metric(
 
 
 @router.post("/sync")
-def synchronize_tracking_data(
+async def synchronize_tracking_data(
     db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
 ):
-    """F5-UC03/F5-UC04: request a safe synchronization of connected sources."""
-    count = tracking_service.mark_accounts_synced(db, user_id=current_user.user_id)
-    return {"synced_accounts": count}
+    """F5-UC03/F5-UC04: synchronize configured shop and social adapters."""
+    return await tracking_provider_service.sync_member(db, user_id=current_user.user_id)
+
+
+@router.get("/readiness")
+def tracking_readiness(
+    current_user: User = Depends(get_current_user),
+):
+    """Expose only which provider adapters are configured, never their secrets."""
+    del current_user
+    return {"providers": tracking_provider_service.readiness()}
 
 
 @router.get("/dashboard")

@@ -327,6 +327,8 @@ class Analytics(Base):
         nullable=True,
     )
     source_platform = Column(String, nullable=True)
+    # Provider event/order/post identifier. Used to make periodic syncs idempotent.
+    external_ref = Column(String, nullable=True, index=True)
     views = Column(Integer, server_default=text("0"))
     clicks = Column(Integer, server_default=text("0"))
     orders = Column(Integer, server_default=text("0"))

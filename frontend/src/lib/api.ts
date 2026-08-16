@@ -142,5 +142,5 @@ export function connectEcommerceAccount(data: {
 }
 
 export function syncTrackingData() {
-  return trackingRequest<{ synced_accounts: number }>("/sync", { method: "POST" });
+  return trackingRequest<{ ecommerce_metrics: number; social_metrics: number }>("/sync", { method: "POST" });
 }

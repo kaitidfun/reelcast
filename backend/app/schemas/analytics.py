@@ -11,6 +11,7 @@ class AnalyticsCreate(BaseModel):
     distribution_id: Optional[UUID] = None
     product_id: Optional[UUID] = None
     source_platform: Optional[str] = None
+    external_ref: Optional[str] = None
     views: int = 0
     clicks: int = 0
     orders: int = 0
@@ -24,6 +25,7 @@ class AnalyticsUpdate(BaseModel):
     orders: Optional[int] = None
     revenue: Optional[float] = None
     source_platform: Optional[str] = None
+    external_ref: Optional[str] = None
     record_date: Optional[date] = None
 
 
@@ -34,6 +36,7 @@ class AnalyticsResponse(BaseModel):
     distribution_id: Optional[UUID] = None
     product_id: Optional[UUID] = None
     source_platform: Optional[str] = None
+    external_ref: Optional[str] = None
     views: int = 0
     clicks: int = 0
     orders: int = 0
@@ -79,6 +82,7 @@ class TrackingMetricCreate(BaseModel):
     product_id: Optional[UUID] = None
     distribution_id: Optional[UUID] = None
     source_platform: str
+    external_ref: Optional[str] = None
     views: int = 0
     clicks: int = 0
     orders: int = 0

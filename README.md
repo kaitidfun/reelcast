@@ -192,6 +192,19 @@ Verify: Open [http://localhost:3000](http://localhost:3000)
 
 ---
 
+### STEP 5 — Celery Beat (Scheduled distribution and data tracking)
+
+Open one more terminal in `backend`. This triggers scheduled Reel publishing
+every minute and Feature 5 data synchronization every 15 minutes:
+
+```bash
+cd backend
+venv\Scripts\activate
+venv\Scripts\celery -A app.worker.celery_app beat --loglevel=info
+```
+
+---
+
 ## Port Summary
 
 | Service     | URL                        |
@@ -316,6 +329,57 @@ psql -U postgres -d reel_cast -f backend/schema_fixes.sql
 
 Add new fixes to that file (don't add automatic migrations) whenever a
 model gains a column, so everyone on the team stays in sync.
+
+## Feature 5: Data Tracking connector setup
+
+Run `backend/schema_fixes.sql` before using Feature 5. It creates the
+e-commerce account table and adds idempotency/revenue fields to analytics.
+Then copy the Feature 5 variables in `backend/.env.example` into
+`backend/.env.local`.
+
+Each `TRACKING_<PLATFORM>_SYNC_URL` points to a **server-side adapter** for
+that platform. The ReelCast worker POSTs this payload to the adapter; it is
+never called from the browser:
+
+```json
+{
+  "platform": "shopee",
+  "account_id": "reelcast-account-uuid",
+  "external_account_id": "provider-shop-or-channel-id",
+  "access_token": "decrypted-provider-token",
+  "from_date": "2026-07-18",
+  "to_date": "2026-08-17"
+}
+```
+
+The adapter must respond with a normalized JSON payload. `external_ref` must
+be stable per order/post/event so retries update the metric instead of adding
+it twice. `product_id` and `distribution_id` must belong to the signed-in
+ReelCast Member when supplied.
+
+```json
+{
+  "metrics": [
+    {
+      "external_ref": "provider-order-or-post-id",
+      "record_date": "2026-08-17",
+      "product_id": "optional-reelcast-product-uuid",
+      "distribution_id": "optional-reelcast-distribution-uuid",
+      "views": 1200,
+      "clicks": 48,
+      "orders": 3,
+      "revenue": 1290.00
+    }
+  ]
+}
+```
+
+Use a separate adapter/key for each provider. It keeps provider-specific
+request signing (for example TikTok Shop signatures and Shopee/Lazada partner
+signatures) out of the web app, while ReelCast takes care of encrypted token
+storage, retries, deduplication, ownership validation, scheduling, and the
+dashboard. The current readiness endpoint is `GET /api/tracking/readiness`;
+it exposes only whether each adapter URL is configured, never a URL or secret.
 
 ---
 

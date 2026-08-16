@@ -92,6 +92,7 @@ def record_metric(
     *,
     user_id: UUID,
     source_platform: str,
+    external_ref: str | None = None,
     record_date: date,
     product_id: UUID | None = None,
     distribution_id: UUID | None = None,
@@ -113,10 +114,30 @@ def record_metric(
     ):
         raise LookupError("Distribution not found")
 
+    if external_ref:
+        existing = db.query(Analytics).filter(
+            Analytics.source_platform == source_platform,
+            Analytics.external_ref == external_ref,
+        ).first()
+        if existing:
+            # A provider may return the same order/post on every polling run.
+            # Update it rather than double-counting the dashboard totals.
+            existing.product_id = product_id
+            existing.distribution_id = distribution_id
+            existing.record_date = record_date
+            existing.views = max(0, views)
+            existing.clicks = max(0, clicks)
+            existing.orders = max(0, orders)
+            existing.revenue = Decimal(str(max(0, revenue)))
+            db.commit()
+            db.refresh(existing)
+            return existing
+
     record = Analytics(
         product_id=product_id,
         distribution_id=distribution_id,
         source_platform=source_platform,
+        external_ref=external_ref,
         record_date=record_date,
         views=max(0, views),
         clicks=max(0, clicks),

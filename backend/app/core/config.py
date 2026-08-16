@@ -63,6 +63,31 @@ YOUTUBE_CLIENT_SECRET = os.getenv("YOUTUBE_CLIENT_SECRET", "")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
+# Feature 5 - Data Tracking connectors
+#
+# These URLs point to a small provider adapter (or API gateway) that converts a
+# shop/social platform response into ReelCast's normalized metric contract.
+# They deliberately remain empty until the corresponding app/API credentials
+# and permissions have been approved by the provider.
+TRACKING_SYNC_TIMEOUT_SECONDS = int(os.getenv("TRACKING_SYNC_TIMEOUT_SECONDS", "30"))
+TRACKING_TIKTOK_SHOP_SYNC_URL = os.getenv("TRACKING_TIKTOK_SHOP_SYNC_URL", "")
+TRACKING_SHOPEE_SYNC_URL = os.getenv("TRACKING_SHOPEE_SYNC_URL", "")
+TRACKING_LAZADA_SYNC_URL = os.getenv("TRACKING_LAZADA_SYNC_URL", "")
+TRACKING_TIKTOK_SYNC_URL = os.getenv("TRACKING_TIKTOK_SYNC_URL", "")
+TRACKING_YOUTUBE_SYNC_URL = os.getenv("TRACKING_YOUTUBE_SYNC_URL", "")
+TRACKING_FACEBOOK_SYNC_URL = os.getenv("TRACKING_FACEBOOK_SYNC_URL", "")
+TRACKING_INSTAGRAM_SYNC_URL = os.getenv("TRACKING_INSTAGRAM_SYNC_URL", "")
+
+# Optional key used to authenticate ReelCast to each adapter. The account's
+# provider OAuth token is passed server-to-server only, never to the browser.
+TRACKING_TIKTOK_SHOP_ADAPTER_KEY = os.getenv("TRACKING_TIKTOK_SHOP_ADAPTER_KEY", "")
+TRACKING_SHOPEE_ADAPTER_KEY = os.getenv("TRACKING_SHOPEE_ADAPTER_KEY", "")
+TRACKING_LAZADA_ADAPTER_KEY = os.getenv("TRACKING_LAZADA_ADAPTER_KEY", "")
+TRACKING_TIKTOK_ADAPTER_KEY = os.getenv("TRACKING_TIKTOK_ADAPTER_KEY", "")
+TRACKING_YOUTUBE_ADAPTER_KEY = os.getenv("TRACKING_YOUTUBE_ADAPTER_KEY", "")
+TRACKING_FACEBOOK_ADAPTER_KEY = os.getenv("TRACKING_FACEBOOK_ADAPTER_KEY", "")
+TRACKING_INSTAGRAM_ADAPTER_KEY = os.getenv("TRACKING_INSTAGRAM_ADAPTER_KEY", "")
+
 # Cloudflare R2 Storage
 R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID", "")
 R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "")

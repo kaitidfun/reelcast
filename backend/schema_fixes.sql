@@ -40,3 +40,7 @@ CREATE TABLE IF NOT EXISTS ecommerce_accounts (
 );
 
 ALTER TABLE analytics ADD COLUMN IF NOT EXISTS revenue NUMERIC(14, 2) DEFAULT 0;
+ALTER TABLE analytics ADD COLUMN IF NOT EXISTS external_ref VARCHAR;
+CREATE UNIQUE INDEX IF NOT EXISTS analytics_source_external_ref_unique
+    ON analytics (source_platform, external_ref)
+    WHERE external_ref IS NOT NULL;

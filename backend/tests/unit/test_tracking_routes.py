@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import unittest
+import asyncio
 from datetime import date
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -13,6 +14,7 @@ from app.routes.tracking_routes import (
     disconnect_ecommerce_account,
     get_tracking_dashboard,
     ingest_tracking_metric,
+    synchronize_tracking_data,
 )
 from app.schemas.analytics import EcommerceAccountConnect, TrackingMetricCreate
 
@@ -67,6 +69,16 @@ class TrackingRouteTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as context:
             get_tracking_dashboard(start=date(2026, 8, 17), end=date(2026, 8, 1), db=self.db, current_user=self.user)
         self.assertEqual(422, context.exception.status_code)
+
+    def test_F5_UTC03_runs_the_configured_provider_sync(self) -> None:
+        expected = {"ecommerce_metrics": 2, "social_metrics": 3}
+        with patch(
+            "app.routes.tracking_routes.tracking_provider_service.sync_member",
+            new=AsyncMock(return_value=expected),
+        ) as sync:
+            result = asyncio.run(synchronize_tracking_data(db=self.db, current_user=self.user))
+        self.assertEqual(expected, result)
+        sync.assert_awaited_once_with(self.db, user_id=self.user.user_id)
 
 
 if __name__ == "__main__":
