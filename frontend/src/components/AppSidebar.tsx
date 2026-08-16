@@ -8,10 +8,10 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
-  { href: "/tracking", icon: ChartNoAxesCombined, label: "Tracking" },
   { href: "/create", icon: Video, label: "Create" },
-  { href: "/library", icon: Library, label: "Library" },
   { href: "/distribute", icon: Send, label: "Distribute" },
+  { href: "/library", icon: Library, label: "Library" },
+  { href: "/tracking", icon: ChartNoAxesCombined, label: "Tracking" },
 ];
 
 /* ---------- Desktop narrow rail ---------- */
