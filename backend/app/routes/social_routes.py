@@ -25,6 +25,7 @@ from app.services.oauth_platforms import (
     build_authorize_url,
     exchange_code_for_token,
     fetch_external_account_id,
+    is_configured,
 )
 
 router = APIRouter(prefix="/api/social", tags=["Social Accounts"])
@@ -40,6 +41,15 @@ _SESSION_PLATFORM_KEY = "reelcast_connect_platform"
 
 def _error_redirect(message: str) -> RedirectResponse:
     return RedirectResponse(url=f"{FRONTEND_URL}/distribute?error={urllib.parse.quote(message)}")
+
+
+@router.get("/readiness")
+def social_platform_readiness(
+    current_user: User = Depends(get_current_user),
+):
+    """Return configuration state only; client ids, URLs and secrets stay server-side."""
+    del current_user
+    return {"platforms": {platform: is_configured(platform) for platform in PLATFORM_CONFIGS}}
 
 
 @router.get("/{platform}/connect")

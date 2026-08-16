@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useReels } from "@/hooks/useReels";
+import { API_BASE_URL } from "@/lib/api";
 
 const PLATFORMS = [
   { key: "tiktok", label: "TikTok" },
@@ -74,6 +75,7 @@ const Distribution = () => {
   const [filterAccountId, setFilterAccountId] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [page, setPage] = useState(0);
+  const [platformReady, setPlatformReady] = useState<Record<string, boolean>>({});
 
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedReelId, setSelectedReelId] = useState("");
@@ -93,15 +95,19 @@ const Distribution = () => {
       if (filterReelId !== "all") distributionParams.set("reel_id", filterReelId);
       if (filterAccountId !== "all") distributionParams.set("account_id", filterAccountId);
       if (filterStatus !== "all") distributionParams.set("status_filter", filterStatus);
-      const [accountsRes, distRes] = await Promise.all([
-        fetch("http://localhost:8000/api/social/accounts", { headers }),
-        fetch(`http://localhost:8000/api/distributions?${distributionParams.toString()}`, { headers }),
+      const [accountsRes, distRes, readinessRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/social/accounts`, { headers }),
+        fetch(`${API_BASE_URL}/distributions?${distributionParams.toString()}`, { headers }),
+        fetch(`${API_BASE_URL}/social/readiness`, { headers }),
       ]);
       if (accountsRes.ok) setAccounts((await accountsRes.json()).accounts ?? []);
       if (distRes.ok) {
         const data = await distRes.json();
         setDistributions(data.distributions ?? []);
         setTotal(data.total ?? 0);
+      }
+      if (readinessRes.ok) {
+        setPlatformReady((await readinessRes.json()).platforms ?? {});
       }
     } catch (e) {
       console.error("Failed to load distribution data:", e);
@@ -138,11 +144,11 @@ const Distribution = () => {
     // the platform's own consent screen, so this can't go through a normal
     // authenticated XHR. The token rides along as a query param instead
     // (see backend/app/routes/social_routes.py for why).
-    window.location.href = `http://localhost:8000/api/social/${platform}/connect?token=${encodeURIComponent(token)}`;
+    window.location.href = `${API_BASE_URL}/social/${platform}/connect?token=${encodeURIComponent(token)}`;
   };
 
   const handleDisconnect = async (accountId: string) => {
-    const res = await fetch(`http://localhost:8000/api/social/accounts/${accountId}`, {
+    const res = await fetch(`${API_BASE_URL}/social/accounts/${accountId}`, {
       method: "DELETE",
       headers: authHeaders(),
     });
@@ -165,7 +171,7 @@ const Distribution = () => {
     }
     setSubmitting(true);
     try {
-      const res = await fetch("http://localhost:8000/api/distributions", {
+      const res = await fetch(`${API_BASE_URL}/distributions`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -190,7 +196,7 @@ const Distribution = () => {
   };
 
   const handleCancel = async (distributionId: string) => {
-    const res = await fetch(`http://localhost:8000/api/distributions/${distributionId}`, {
+    const res = await fetch(`${API_BASE_URL}/distributions/${distributionId}`, {
       method: "DELETE",
       headers: authHeaders(),
     });
@@ -201,7 +207,7 @@ const Distribution = () => {
   };
 
   const handlePublishNow = async (distributionId: string) => {
-    const res = await fetch(`http://localhost:8000/api/distributions/${distributionId}/publish-now`, {
+    const res = await fetch(`${API_BASE_URL}/distributions/${distributionId}/publish-now`, {
       method: "POST",
       headers: authHeaders(),
     });
@@ -238,6 +244,7 @@ const Distribution = () => {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {PLATFORMS.map((p) => {
             const account = accounts.find((a) => a.platform_name === p.key);
+            const configured = platformReady[p.key] ?? false;
             return (
               <div key={p.key} className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
@@ -249,8 +256,8 @@ const Distribution = () => {
                     Disconnect
                   </Button>
                 ) : (
-                  <Button size="sm" onClick={() => handleConnect(p.key)} className="gradient-primary text-primary-foreground">
-                    Connect
+                  <Button size="sm" disabled={!configured} title={configured ? undefined : "Add this platform's OAuth credentials to backend/.env.local and restart the backend"} onClick={() => handleConnect(p.key)} className="gradient-primary text-primary-foreground">
+                    {configured ? "Connect" : "Needs setup"}
                   </Button>
                 )}
               </div>

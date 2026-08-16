@@ -381,6 +381,29 @@ storage, retries, deduplication, ownership validation, scheduling, and the
 dashboard. The current readiness endpoint is `GET /api/tracking/readiness`;
 it exposes only whether each adapter URL is configured, never a URL or secret.
 
+## Feature 3: Social distribution setup
+
+Feature 3 is ready for the production OAuth credentials already named in
+`backend/.env.example`: `TIKTOK_CLIENT_KEY`/`TIKTOK_CLIENT_SECRET`,
+`META_APP_ID`/`META_APP_SECRET`, and
+`YOUTUBE_CLIENT_ID`/`YOUTUBE_CLIENT_SECRET`. Set both `BACKEND_URL` and
+`FRONTEND_URL` to the public HTTPS addresses used by your deployment, then
+register these callback URLs with the matching platform application:
+
+```text
+{BACKEND_URL}/api/social/tiktok/callback
+{BACKEND_URL}/api/social/youtube/callback
+{BACKEND_URL}/api/social/facebook/callback
+{BACKEND_URL}/api/social/instagram/callback
+```
+
+The Distribution screen disables a platform that is not configured, and the
+authenticated `GET /api/social/readiness` endpoint exposes only a true/false
+state for each platform. Restart the FastAPI and Celery processes after
+changing `.env.local`; then connect each account from Distribution to complete
+the OAuth consent flow. Use real production R2/public video URLs so TikTok,
+Meta and Instagram can retrieve the video during publishing.
+
 ---
 
 ## Core API Surface

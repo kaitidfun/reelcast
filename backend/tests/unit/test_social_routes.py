@@ -14,6 +14,7 @@ from app.routes.social_routes import (
     disconnectSocialAccount,
     list_social_accounts,
     socialAccountCallback,
+    social_platform_readiness,
 )
 from app.services import social_account_service
 from app.services.crypto_service import decrypt_token
@@ -234,6 +235,17 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(Exception) as ctx:
             disconnectSocialAccount(uuid4(), db=self.db, current_user=self.user)
         self.assertEqual(404, getattr(ctx.exception, "status_code", None))
+
+    def test_F3_UTC01_readiness_exposes_no_platform_credentials(self) -> None:
+        with patch(
+            "app.routes.social_routes.is_configured",
+            side_effect=lambda platform: platform == "youtube",
+        ):
+            result = social_platform_readiness(current_user=SimpleNamespace())
+        self.assertEqual(
+            {"platforms": {"tiktok": False, "facebook": False, "instagram": False, "youtube": True}},
+            result,
+        )
 
 
 if __name__ == "__main__":
