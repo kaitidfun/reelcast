@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Send, Clock, Plus, Trash2, Loader2, CheckCircle2 } from "lucide-react";
+import { Send, Clock, Plus, Trash2, Loader2, CheckCircle2, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -239,19 +239,33 @@ const Distribution = () => {
       </div>
 
       {/* Connected Accounts */}
-      <div>
-        <h2 className="font-display text-lg font-semibold text-foreground mb-3">Connected Accounts</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <section className="rounded-2xl border border-border bg-card p-5 shadow-card">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+            <Radio className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-display text-base font-semibold text-foreground">Social media connections</h2>
+            <p className="text-xs text-muted-foreground">Connect accounts securely to publish completed Reels.</p>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {PLATFORMS.map((p) => {
             const account = accounts.find((a) => a.platform_name === p.key);
             const configured = platformReady[p.key] ?? false;
             return (
-              <div key={p.key} className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">{p.label}</span>
+              <div key={p.key} className="rounded-xl border border-border bg-muted/30 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{p.label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {account ? "Connected" : configured ? "Not connected" : "Needs setup"}
+                    </p>
+                  </div>
                   {account && <CheckCircle2 className="h-4 w-4 text-success shrink-0" />}
                 </div>
-                {account ? (
+                <div className="mt-4">
+                  {account ? (
                   <Button variant="outline" size="sm" onClick={() => handleDisconnect(account.account_id)}>
                     Disconnect
                   </Button>
@@ -260,11 +274,12 @@ const Distribution = () => {
                     {configured ? "Connect" : "Needs setup"}
                   </Button>
                 )}
+                </div>
               </div>
             );
           })}
         </div>
-      </div>
+      </section>
 
       {/* Distributions */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>

@@ -106,7 +106,7 @@ export default function Tracking() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div><h1 className="font-display text-2xl font-bold text-foreground">Data Tracking</h1><p className="mt-1 text-sm text-muted-foreground">Consolidated performance from your connected shops and published Reels.</p></div>
+        <div><h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Data Tracking</h1><p className="mt-1 text-sm text-muted-foreground">Consolidated performance from your connected shops and published Reels.</p></div>
         <button type="button" onClick={sync} disabled={syncing || loading} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">
           {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Sync now
         </button>
