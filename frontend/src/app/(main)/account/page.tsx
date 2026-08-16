@@ -13,17 +13,13 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from "@/components/ui/input-otp";
-import { User, Mail, Shield, Calendar, LogOut, Save, ToggleLeft, ToggleRight, ShieldCheck, ShieldOff, Copy, Check, Loader2, Lock, Eye, EyeOff, CheckCircle2, KeyRound, Camera } from "lucide-react";
+import { User, Mail, Shield, Calendar, LogOut, Save, ShieldCheck, ShieldOff, Copy, Check, Loader2, Lock, Eye, EyeOff, CheckCircle2, KeyRound, Camera } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { validateProfileImage } from "@/lib/test-plan";
 
 const API_URL = "http://localhost:8000";
-
-interface PlatformToggle {
-  id: string; name: string; icon: string; active: boolean;
-}
 
 const Account = () => {
   const {
@@ -64,18 +60,6 @@ const Account = () => {
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [changePasswordError, setChangePasswordError] = useState("");
-
-  const [socialPlatforms, setSocialPlatforms] = useState<PlatformToggle[]>([
-    { id: "youtube", name: "YouTube", icon: "🎬", active: true },
-    { id: "facebook", name: "Facebook", icon: "📘", active: true },
-    { id: "instagram", name: "Instagram", icon: "📸", active: false },
-    { id: "tiktok", name: "TikTok", icon: "🎵", active: true },
-  ]);
-  const [ecommercePlatforms, setEcommercePlatforms] = useState<PlatformToggle[]>([
-    { id: "tiktok-shop", name: "TikTok Shop", icon: "🛒", active: true },
-    { id: "lazada", name: "Lazada", icon: "🛍️", active: false },
-    { id: "shopee", name: "Shopee", icon: "🧡", active: false },
-  ]);
 
   if (!user) return null;
 
@@ -144,17 +128,6 @@ const Account = () => {
       // Reset file input so the same file can be re-selected
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  };
-
-  const toggleSocial = (id: string) => {
-    setSocialPlatforms((prev) => prev.map((p) => (p.id === id ? { ...p, active: !p.active } : p)));
-    const platform = socialPlatforms.find((p) => p.id === id);
-    if (platform) toast.success(`${platform.name} ${platform.active ? "deactivated" : "activated"}`);
-  };
-  const toggleEcommerce = (id: string) => {
-    setEcommercePlatforms((prev) => prev.map((p) => (p.id === id ? { ...p, active: !p.active } : p)));
-    const platform = ecommercePlatforms.find((p) => p.id === id);
-    if (platform) toast.success(`${platform.name} ${platform.active ? "deactivated" : "activated"}`);
   };
 
   // ===== 2FA Enable Flow =====
@@ -293,21 +266,6 @@ const Account = () => {
     setChangingPassword(false);
   };
 
-  const PlatformRow = ({ platform, onToggle }: { platform: PlatformToggle; onToggle: (id: string) => void }) => (
-    <div className="flex items-center justify-between py-2.5">
-      <div className="flex items-center gap-3">
-        <div className={`flex h-9 w-9 items-center justify-center rounded-xl text-base transition-all ${platform.active ? "bg-primary/10 ring-1 ring-primary/20" : "bg-muted ring-1 ring-border"}`}>{platform.icon}</div>
-        <div>
-          <p className="text-sm font-medium text-foreground">{platform.name}</p>
-          <p className="text-[11px] text-muted-foreground">{platform.active ? "Active" : "Inactive"}</p>
-        </div>
-      </div>
-      <button onClick={() => onToggle(platform.id)} className="transition-transform hover:scale-110">
-        {platform.active ? <ToggleRight className="h-7 w-7 text-primary" /> : <ToggleLeft className="h-7 w-7 text-muted-foreground" />}
-      </button>
-    </div>
-  );
-
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
@@ -380,19 +338,8 @@ const Account = () => {
         </Card>
       </motion.div>
 
-      {/* Activate Platforms */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-        <Card className="border-border bg-card">
-          <CardHeader><CardTitle className="text-base">🔗 Connect Platforms</CardTitle><CardDescription>Enable or disable platforms for publishing and data tracking</CardDescription></CardHeader>
-          <CardContent className="space-y-5">
-            <div><h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Social Media Platforms</h3><div className="divide-y divide-border rounded-xl border border-border px-4">{socialPlatforms.map((p) => <PlatformRow key={p.id} platform={p} onToggle={toggleSocial} />)}</div></div>
-            <div><h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">E-Commerce Platforms</h3><div className="divide-y divide-border rounded-xl border border-border px-4">{ecommercePlatforms.map((p) => <PlatformRow key={p.id} platform={p} onToggle={toggleEcommerce} />)}</div></div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
       {/* Security - 2FA Section */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
         <Card className="border-border bg-card">
           <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Shield className="h-4 w-4 text-primary" /> Security</CardTitle></CardHeader>
           <CardContent className="space-y-4">
@@ -432,7 +379,7 @@ const Account = () => {
       </motion.div>
 
       {/* Logout */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
         <Button variant="outline" className="w-full border-destructive/30 text-destructive hover:bg-destructive/10" onClick={handleLogout}><LogOut className="h-4 w-4" /> Sign Out</Button>
       </motion.div>
 

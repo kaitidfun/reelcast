@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Video, Eye, BarChart3, ShoppingCart, DollarSign, MousePointerClick } from "lucide-react";
+import { Video, Eye, BarChart3, ShoppingCart, DollarSign, MousePointerClick, ToggleLeft, ToggleRight } from "lucide-react";
 import StatCard from "@/components/StatCard";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 
@@ -17,10 +17,12 @@ const socialData = [
 ];
 
 const ecommerceData = [
-  { platform: "TikTok Shop", orders: 245, ctr: 4.2, revenue: 128500 },
-  { platform: "Shopee", orders: 189, ctr: 3.8, revenue: 95200 },
-  { platform: "Lazada", orders: 134, ctr: 3.1, revenue: 72800 },
+  { id: "tiktok-shop", platform: "TikTok Shop", icon: "🛒", orders: 245, ctr: 4.2, revenue: 128500 },
+  { id: "shopee", platform: "Shopee", icon: "🧡", orders: 189, ctr: 3.8, revenue: 95200 },
+  { id: "lazada", platform: "Lazada", icon: "🛍️", orders: 134, ctr: 3.1, revenue: 72800 },
 ];
+
+type EcommercePlatform = (typeof ecommerceData)[number];
 
 const platformEngagement = [
   { date: "Mar 3", youtube: 2800, tiktok: 3500, facebook: 1900, instagram: 2100 },
@@ -41,6 +43,16 @@ const socialMetrics = [
 const Tracking = () => {
   const [activeMetrics, setActiveMetrics] = useState<string[]>(["views", "clicks", "conversions"]);
   const [chartTab, setChartTab] = useState<"social" | "ecommerce" | "platform">("social");
+  const [ecommercePlatforms, setEcommercePlatforms] = useState<Array<EcommercePlatform & { active: boolean }>>(
+    ecommerceData.map((platform) => ({ ...platform, active: platform.id === "tiktok-shop" })),
+  );
+  const activeEcommerceData = ecommercePlatforms.filter((platform) => platform.active);
+
+  const toggleEcommercePlatform = (id: string) => {
+    setEcommercePlatforms((platforms) => platforms.map((platform) => (
+      platform.id === id ? { ...platform, active: !platform.active } : platform
+    )));
+  };
 
   return (
     <div className="space-y-8">
@@ -52,10 +64,39 @@ const Tracking = () => {
         <StatCard icon={DollarSign} label="Revenue" value="฿296.5K" change="+15%" positive delay={0.2} />
       </div>
 
+      {/* E-commerce platforms are configured where their metrics are viewed. */}
+      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+        <div className="mb-3">
+          <h2 className="font-display text-lg font-semibold text-foreground">E-Commerce Platforms</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Choose the stores to include in your tracking dashboard.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {ecommercePlatforms.map((platform) => (
+            <div key={platform.id} className="flex items-center justify-between rounded-2xl border border-border bg-card px-4 py-3 shadow-card">
+              <div className="flex items-center gap-3">
+                <div className={`flex h-9 w-9 items-center justify-center rounded-xl text-base ${platform.active ? "bg-primary/10 ring-1 ring-primary/20" : "bg-muted ring-1 ring-border"}`}>{platform.icon}</div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{platform.platform}</p>
+                  <p className="text-xs text-muted-foreground">{platform.active ? "Included in tracking" : "Not included"}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleEcommercePlatform(platform.id)}
+                className="rounded-md transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                aria-label={`${platform.active ? "Remove" : "Add"} ${platform.platform} from tracking`}
+              >
+                {platform.active ? <ToggleRight className="h-7 w-7 text-primary" /> : <ToggleLeft className="h-7 w-7 text-muted-foreground" />}
+              </button>
+            </div>
+          ))}
+        </div>
+      </motion.section>
+
       {/* E-commerce Tracking Summary */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {ecommerceData.map((shop, i) => (
+          {activeEcommerceData.map((shop, i) => (
             <motion.div key={shop.platform} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 + i * 0.05 }}
               className="rounded-2xl border border-border bg-card p-5 shadow-card card-shine hover:border-primary/20 transition-all"
             >
@@ -141,7 +182,7 @@ const Tracking = () => {
                 {activeMetrics.includes("conversions") && <Area type="monotone" dataKey="conversions" name="Conversions" stroke="hsl(var(--success))" strokeWidth={2.5} fill="url(#gradConv)" dot={{ r: 4, fill: "hsl(var(--success))", strokeWidth: 0 }} activeDot={{ r: 6, strokeWidth: 2, stroke: "hsl(var(--card))" }} />}
               </AreaChart>
             ) : chartTab === "ecommerce" ? (
-              <BarChart data={ecommerceData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+              <BarChart data={activeEcommerceData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
                 <XAxis dataKey="platform" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
