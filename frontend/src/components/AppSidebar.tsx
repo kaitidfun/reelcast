@@ -1,7 +1,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { NavLink } from "./NavLink";
 import { ChartNoAxesCombined, Video, Library, Send, Sparkles, Menu, LogOut } from "lucide-react";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState } from "react";
@@ -210,6 +210,7 @@ export const MobileHeader = () => {
           </button>
         </SheetTrigger>
         <SheetContent side="left" className="w-64 bg-sidebar p-0 border-border [&>button]:hidden">
+          <SheetTitle className="sr-only">Navigation menu</SheetTitle>
           <div className="flex h-full flex-col">
             <DrawerContent onNavigate={() => setOpen(false)} />
           </div>
