@@ -7,12 +7,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useReels } from "@/hooks/useReels";
 import { ReelCard } from "@/components/ReelCard";
-
-const campaigns = [
-  { name: "Summer Sale 2026", meta: "12 reels · 3 platforms" },
-  { name: "New Arrivals Q2", meta: "8 reels · 2 platforms" },
-  { name: "Affiliate Boost", meta: "5 reels · 4 platforms" },
-];
+import { useProductLibrary } from "./create/_hooks/useProductLibrary";
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -24,6 +19,7 @@ export default function Home() {
   const router = useRouter();
   const firstName = user?.displayName?.split(" ")[0] ?? "Creator";
   const { reels: recentReels, loading: reelsLoading } = useReels({ limit: 4 });
+  const campaigns = useProductLibrary();
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -109,21 +105,30 @@ export default function Home() {
       <motion.section {...fadeUp} transition={{ duration: 0.4, delay: 0.3 }} className="space-y-4">
         <h2 className="font-display text-lg font-semibold text-foreground">Campaigns</h2>
         <div className="space-y-3">
-          {campaigns.map((c) => (
-            <button
-              key={c.name}
-              className="group w-full flex items-center gap-4 rounded-2xl border border-border bg-card p-5 text-left transition-all duration-200 hover:border-primary/40 hover:shadow-card"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl gradient-primary shadow-glow shrink-0">
-                <Folder className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-display text-sm font-semibold text-foreground truncate">{c.name}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{c.meta}</p>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-1 group-hover:text-foreground" />
-            </button>
-          ))}
+          {campaigns.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
+              No campaigns in your product library yet. <Link href="/library" className="font-medium text-primary hover:text-primary/80">Create one in Library</Link>.
+            </div>
+          ) : (
+            campaigns.map((campaign) => (
+              <button
+                key={campaign.id}
+                onClick={() => router.push(`/library?campaign=${encodeURIComponent(campaign.id)}`)}
+                className="group w-full flex items-center gap-4 rounded-2xl border border-border bg-card p-5 text-left transition-all duration-200 hover:border-primary/40 hover:shadow-card"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl gradient-primary shadow-glow shrink-0">
+                  <Folder className="h-5 w-5 text-primary-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-display text-sm font-semibold text-foreground truncate">{campaign.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {campaign.products.length} {campaign.products.length === 1 ? "product" : "products"}
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-hover:translate-x-1 group-hover:text-foreground" />
+              </button>
+            ))
+          )}
         </div>
       </motion.section>
 
