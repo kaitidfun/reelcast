@@ -2,14 +2,9 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Video, Eye, Link2, TrendingUp, Play, Clock, BarChart3, Sparkles, Zap, ShoppingCart, DollarSign, MousePointerClick } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Video, Eye, BarChart3, ShoppingCart, DollarSign, MousePointerClick } from "lucide-react";
 import StatCard from "@/components/StatCard";
-import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
-import Link from "next/link";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
-import { useReels } from "@/hooks/useReels";
-import { ReelCard } from "@/components/ReelCard";
 
 const socialData = [
   { date: "Mar 3", views: 4200, clicks: 1800, conversions: 320 },
@@ -43,41 +38,12 @@ const socialMetrics = [
   { key: "conversions", label: "Conversions", color: "hsl(var(--success))" },
 ] as const;
 
-const Dashboard = () => {
-  const router = useRouter();
+const Tracking = () => {
   const [activeMetrics, setActiveMetrics] = useState<string[]>(["views", "clicks", "conversions"]);
   const [chartTab, setChartTab] = useState<"social" | "ecommerce" | "platform">("social");
-  const { reels: recentReels, loading: reelsLoading } = useReels({ limit: 10 });
 
   return (
     <div className="space-y-8">
-      {/* Welcome Banner */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl border border-border bg-card p-6 sm:p-8"
-      >
-        <div className="absolute inset-0 gradient-glow opacity-60" />
-        <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-primary/5 blur-3xl" />
-        <div className="relative z-10">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-md gradient-primary">
-                  <Zap className="h-3.5 w-3.5 text-primary-foreground" />
-                </div>
-                <span className="text-xs font-semibold uppercase tracking-widest text-primary">ReelCast Studio</span>
-              </div>
-              <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Hello, Welcome Back 👋</h1>
-              <p className="mt-2 text-muted-foreground max-w-lg">Overview of your content, sales, and engagement across all platforms</p>
-            </div>
-            <Button onClick={() => router.push("/create")} className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto">
-              <Sparkles className="h-4 w-4" />Create New Reel
-            </Button>
-          </div>
-        </div>
-      </motion.div>
-
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 sm:gap-6">
         <StatCard icon={Video} label="Total Reels" value="128" change="+12%" positive delay={0.05} />
@@ -200,47 +166,11 @@ const Dashboard = () => {
         </div>
       </motion.div>
 
-      {/* Recent Reels */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-        className="rounded-2xl border border-border bg-card shadow-card overflow-hidden"
-      >
-        <div className="flex items-center justify-between border-b border-border px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-              <Play className="h-4 w-4 text-primary" />
-            </div>
-            <h2 className="font-display text-lg font-semibold text-foreground">Recent Reels</h2>
-          </div>
-          {recentReels.length > 0 && (
-            <Link href="/reels" className="text-xs font-medium text-primary hover:text-primary/80 transition-colors">
-              View all
-            </Link>
-          )}
-        </div>
-        <div className="p-6">
-          {reelsLoading ? (
-            <div className="py-4 text-center text-sm text-muted-foreground">Loading…</div>
-          ) : recentReels.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-4 text-center">
-              <p className="text-sm text-muted-foreground">No reels yet — generate your first one to see it here.</p>
-              <Button onClick={() => router.push("/create")} size="sm" className="gradient-primary gap-2 text-primary-foreground">
-                <Sparkles className="h-4 w-4" />Create New Reel
-              </Button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              {recentReels.map((reel) => (
-                <ReelCard key={reel.id} reel={reel} onClick={() => router.push(`/create?reelId=${encodeURIComponent(reel.id)}`)} />
-              ))}
-            </div>
-          )}
-        </div>
-      </motion.div>
     </div>
   );
 };
 
-export default Dashboard;
+export default Tracking;
 
 
 
