@@ -8,6 +8,7 @@ from app.models.models import (
     Reel,
     Distribution,
     Analytics,
+    EcommerceAccount,
 )
 
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     "Reel",
     "Distribution",
     "Analytics",
+    "EcommerceAccount",
 ]

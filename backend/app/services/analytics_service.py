@@ -21,6 +21,7 @@ def create_analytics(
     views: int = 0,
     clicks: int = 0,
     orders: int = 0,
+    revenue: float = 0,
     record_date: Optional[date] = None,
 ) -> Analytics:
     record = Analytics(
@@ -30,6 +31,7 @@ def create_analytics(
         views=views,
         clicks=clicks,
         orders=orders,
+        revenue=revenue,
         record_date=record_date,
     )
     db.add(record)
@@ -89,6 +91,7 @@ def update_analytics(
     views: Optional[int] = None,
     clicks: Optional[int] = None,
     orders: Optional[int] = None,
+    revenue: Optional[float] = None,
     source_platform: Optional[str] = None,
     record_date: Optional[date] = None,
 ) -> Analytics:
@@ -98,6 +101,8 @@ def update_analytics(
         record.clicks = clicks
     if orders is not None:
         record.orders = orders
+    if revenue is not None:
+        record.revenue = revenue
     if source_platform is not None:
         record.source_platform = source_platform
     if record_date is not None:
@@ -127,6 +132,7 @@ def get_product_analytics_summary(db: Session, *, product_id: UUID) -> dict:
             func.coalesce(func.sum(Analytics.views), 0).label("total_views"),
             func.coalesce(func.sum(Analytics.clicks), 0).label("total_clicks"),
             func.coalesce(func.sum(Analytics.orders), 0).label("total_orders"),
+            func.coalesce(func.sum(Analytics.revenue), 0).label("total_revenue"),
         )
         .filter(Analytics.product_id == product_id)
         .first()
@@ -135,4 +141,5 @@ def get_product_analytics_summary(db: Session, *, product_id: UUID) -> dict:
         "total_views": result.total_views,
         "total_clicks": result.total_clicks,
         "total_orders": result.total_orders,
+        "total_revenue": float(result.total_revenue),
     }

@@ -73,3 +73,74 @@ export async function fetchHealth() {
     return { status: "error", message: "Failed to connect to backend" };
   }
 }
+
+export type TrackingTotals = {
+  reels: number;
+  views: number;
+  clicks: number;
+  orders: number;
+  revenue: number;
+};
+
+export type TrackingMetric = {
+  views: number;
+  clicks: number;
+  orders: number;
+  revenue: number;
+};
+
+export type TrackingDashboard = {
+  totals: TrackingTotals;
+  trend: Array<TrackingMetric & { date: string }>;
+  platforms: Array<TrackingMetric & { platform: string }>;
+  products: Array<TrackingMetric & { id: string; name: string }>;
+  campaigns: Array<TrackingMetric & { id: string; name: string }>;
+  reels: Array<TrackingMetric & { id: string; name: string }>;
+  generated_at: string;
+};
+
+export type EcommerceAccount = {
+  ecommerce_account_id: string;
+  platform_name: string;
+  external_shop_id: string;
+  shop_name?: string | null;
+  last_synced_at?: string | null;
+  sync_error?: string | null;
+};
+
+async function trackingRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}/tracking${path}`, {
+    ...init,
+    headers: { ...getJsonHeaders(), ...init?.headers },
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || "Unable to load tracking data");
+  }
+  return response.json() as Promise<T>;
+}
+
+export function fetchTrackingDashboard() {
+  return trackingRequest<TrackingDashboard>("/dashboard");
+}
+
+export function fetchEcommerceAccounts() {
+  return trackingRequest<EcommerceAccount[]>("/ecommerce/accounts");
+}
+
+export function connectEcommerceAccount(data: {
+  platform_name: "tiktok_shop" | "shopee" | "lazada";
+  external_shop_id: string;
+  shop_name?: string;
+  access_token: string;
+  refresh_token?: string;
+}) {
+  return trackingRequest<EcommerceAccount>("/ecommerce/accounts", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function syncTrackingData() {
+  return trackingRequest<{ synced_accounts: number }>("/sync", { method: "POST" });
+}

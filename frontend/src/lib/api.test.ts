@@ -5,6 +5,8 @@ import {
   previewAndApproveContent,
   regenerateContent,
   uploadOwnReel,
+  fetchTrackingDashboard,
+  syncTrackingData,
 } from "./api";
 
 describe("Reel API client", () => {
@@ -109,5 +111,31 @@ describe("Reel API client", () => {
         product_id: "product-1",
       }),
     ).rejects.toThrow("Failed to generate AI Reel");
+  });
+
+  it("F5-UTC05 loads the real tracking dashboard with authentication", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ totals: {}, trend: [] }), { status: 200 }),
+    );
+
+    await fetchTrackingDashboard();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/tracking/dashboard"),
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer test-token" }) }),
+    );
+  });
+
+  it("F5-UTC03 can request a tracking synchronization", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ synced_accounts: 1 }), { status: 200 }),
+    );
+
+    await syncTrackingData();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/tracking/sync"),
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });

@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, String, Boolean, Integer, Text, Date,
+    Column, String, Boolean, Integer, Text, Date, Numeric,
     ForeignKey, Enum, text,
 )
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP, JSONB
@@ -55,6 +55,9 @@ class User(Base):
     )
     reels = relationship(
         "Reel", back_populates="user", cascade="all, delete-orphan",
+    )
+    ecommerce_accounts = relationship(
+        "EcommerceAccount", back_populates="user", cascade="all, delete-orphan",
     )
 
     @property
@@ -327,6 +330,7 @@ class Analytics(Base):
     views = Column(Integer, server_default=text("0"))
     clicks = Column(Integer, server_default=text("0"))
     orders = Column(Integer, server_default=text("0"))
+    revenue = Column(Numeric(14, 2), server_default=text("0"))
     record_date = Column(Date, nullable=True)
     created_at = Column(
         TIMESTAMP(timezone=False),
@@ -341,3 +345,33 @@ class Analytics(Base):
     # Relationships
     distribution = relationship("Distribution", back_populates="analytics")
     product = relationship("Product", back_populates="analytics")
+
+
+class EcommerceAccount(Base):
+    """A Member's connected TikTok Shop, Shopee, or Lazada store.
+
+    Access tokens are encrypted before persistence, just like social accounts.
+    The F5 synchronization job writes its most recent result here so the UI can
+    show whether a connection is current without exposing any credentials.
+    """
+
+    __tablename__ = "ecommerce_accounts"
+
+    ecommerce_account_id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"),
+    )
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False,
+    )
+    platform_name = Column(String, nullable=False)
+    external_shop_id = Column(String, nullable=False)
+    shop_name = Column(String, nullable=True)
+    access_token = Column(String, nullable=False)
+    refresh_token = Column(String, nullable=True)
+    last_synced_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    sync_error = Column(Text, nullable=True)
+    created_at = Column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    user = relationship("User", back_populates="ecommerce_accounts")

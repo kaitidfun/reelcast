@@ -21,3 +21,22 @@ ALTER TABLE reels ADD COLUMN IF NOT EXISTS first_frame_url VARCHAR;
 -- that Page/IG account's own id, not the OAuth user's id — the connect
 -- callback resolves and stores it here right after the token exchange.
 ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS external_account_id VARCHAR;
+
+-- 2026-08-17: Feature 5 - E-commerce shop connections.
+-- New databases receive this through SQLAlchemy create_all; run this block
+-- once for existing local/dev databases.
+CREATE TABLE IF NOT EXISTS ecommerce_accounts (
+    ecommerce_account_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    platform_name VARCHAR NOT NULL,
+    external_shop_id VARCHAR NOT NULL,
+    shop_name VARCHAR,
+    access_token VARCHAR NOT NULL,
+    refresh_token VARCHAR,
+    last_synced_at TIMESTAMPTZ,
+    sync_error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, platform_name, external_shop_id)
+);
+
+ALTER TABLE analytics ADD COLUMN IF NOT EXISTS revenue NUMERIC(14, 2) DEFAULT 0;

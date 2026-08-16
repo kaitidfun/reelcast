@@ -57,4 +57,7 @@ from app.schemas.analytics import (
     AnalyticsUpdate,
     AnalyticsResponse,
     AnalyticsListResponse,
+    EcommerceAccountConnect,
+    EcommerceAccountResponse,
+    TrackingMetricCreate,
 )

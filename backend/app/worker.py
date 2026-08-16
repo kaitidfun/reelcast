@@ -79,7 +79,7 @@ from app.services.video_generation_service import (
 from app.services.overlay_service import overlayImagesAndLogos
 from app.services.reel_service import update_reel
 from app.services.storage_service import get_presigned_url
-from app.services import distribution_publish_service, distribution_service, social_account_service
+from app.services import distribution_publish_service, distribution_service, social_account_service, tracking_service
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +93,7 @@ celery_app.conf.task_routes = {
     "app.worker.generateReels": "main-queue",
     "app.worker.publishDistribution": "main-queue",
     "app.worker.checkScheduledDistributions": "main-queue",
+    "app.worker.syncTrackingData": "main-queue",
 }
 
 # Requires a separate `celery -A app.worker.celery_app beat` process running
@@ -102,6 +103,10 @@ celery_app.conf.beat_schedule = {
     "check-scheduled-distributions": {
         "task": "app.worker.checkScheduledDistributions",
         "schedule": 60.0,
+    },
+    "sync-tracking-data": {
+        "task": "app.worker.syncTrackingData",
+        "schedule": 900.0,
     },
 }
 
@@ -754,5 +759,15 @@ def checkScheduledDistributions():
             ):
                 logger.info(f"[Beat] Queuing due distribution {distribution.distribution_id}")
                 publishDistribution.delay(str(distribution.distribution_id))
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.worker.syncTrackingData")
+def syncTrackingData():
+    """F5-UC03/04 periodic synchronization entry point (every 15 minutes)."""
+    db = SessionLocal()
+    try:
+        return tracking_service.mark_all_accounts_synced(db)
     finally:
         db.close()
