@@ -43,7 +43,7 @@ def _error_redirect(message: str) -> RedirectResponse:
 
 
 @router.get("/{platform}/connect")
-def connect_social_account(platform: str, request: Request, token: str, db: Session = Depends(get_db)):
+def connectSocialAccount(platform: str, request: Request, token: str, db: Session = Depends(get_db)):
     """
     Start the OAuth connect flow for a platform.
 
@@ -84,7 +84,7 @@ def connect_social_account(platform: str, request: Request, token: str, db: Sess
 
 
 @router.get("/{platform}/callback")
-async def social_account_callback(
+async def socialAccountCallback(
     platform: str,
     request: Request,
     code: str | None = None,
@@ -150,7 +150,7 @@ def list_social_accounts(
 
 
 @router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
-def disconnect_social_account(
+def disconnectSocialAccount(
     account_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
