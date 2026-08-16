@@ -1,6 +1,6 @@
 import { usePathname, useRouter } from "next/navigation";
 import { NavLink } from "./NavLink";
-import { Home as HomeIcon, Video, Library, Link2, Send, Sparkles, Menu, LogOut } from "lucide-react";
+import { Home as HomeIcon, Video, Library, Send, Sparkles, Menu, LogOut } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -11,7 +11,6 @@ const navItems = [
   { href: "/dashboard", icon: HomeIcon, label: "Dashboard" },
   { href: "/create", icon: Video, label: "Create" },
   { href: "/library", icon: Library, label: "Library" },
-  { href: "/links", icon: Link2, label: "Links" },
   { href: "/distribute", icon: Send, label: "Distribute" },
 ];
 
