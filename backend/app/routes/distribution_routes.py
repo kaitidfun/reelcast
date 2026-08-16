@@ -64,7 +64,7 @@ def _get_owned_distribution(db: Session, *, distribution_id: UUID, user_id: UUID
 
 
 @router.post("", response_model=DistributionResponse, status_code=status.HTTP_201_CREATED)
-def create_distribution(
+def createDistribution(
     req: DistributionCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -101,7 +101,7 @@ def create_distribution(
 
 
 @router.get("", response_model=DistributionListResponse)
-def list_distributions(
+def listDistributions(
     reel_id: Optional[UUID] = None,
     account_id: Optional[UUID] = None,
     status_filter: Optional[str] = None,
@@ -127,7 +127,7 @@ def list_distributions(
 
 
 @router.delete("/{distribution_id}", status_code=status.HTTP_204_NO_CONTENT)
-def cancel_distribution(
+def cancelDistribution(
     distribution_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -139,7 +139,7 @@ def cancel_distribution(
 
 
 @router.post("/{distribution_id}/publish-now", response_model=DistributionResponse)
-def publish_now(
+def publishNow(
     distribution_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

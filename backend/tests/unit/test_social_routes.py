@@ -10,10 +10,10 @@ import httpx
 from app.exceptions import OAuthProviderException
 from app.models.models import SocialAccount
 from app.routes.social_routes import (
-    connect_social_account,
-    disconnect_social_account,
+    connectSocialAccount,
+    disconnectSocialAccount,
     list_social_accounts,
-    social_account_callback,
+    socialAccountCallback,
 )
 from app.services import social_account_service
 from app.services.crypto_service import decrypt_token
@@ -130,12 +130,12 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
     def test_connect_unknown_platform_raises(self) -> None:
         request = SimpleNamespace(session={})
         with self.assertRaises(OAuthProviderException):
-            connect_social_account("myspace", request, token="whatever", db=self.db)
+            connectSocialAccount("myspace", request, token="whatever", db=self.db)
 
     def test_connect_invalid_token_raises(self) -> None:
         request = SimpleNamespace(session={})
         with self.assertRaises(OAuthProviderException):
-            connect_social_account("tiktok", request, token="not-a-real-jwt", db=self.db)
+            connectSocialAccount("tiktok", request, token="not-a-real-jwt", db=self.db)
 
     @patch("app.routes.social_routes.jwt.decode")
     def test_connect_stashes_user_and_state_in_session(self, mock_decode) -> None:
@@ -144,7 +144,7 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
         request = SimpleNamespace(session={})
 
         with patch("app.routes.social_routes.build_authorize_url", return_value="https://example.com/authorize") as mock_build:
-            response = connect_social_account("youtube", request, token="valid-jwt", db=self.db)
+            response = connectSocialAccount("youtube", request, token="valid-jwt", db=self.db)
 
         self.assertEqual(str(self.user.user_id), request.session["reelcast_connect_user_id"])
         self.assertEqual("youtube", request.session["reelcast_connect_platform"])
@@ -162,7 +162,7 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
             "app.routes.social_routes.build_authorize_url",
             side_effect=OAuthProviderException("tiktok is not configured yet"),
         ):
-            response = connect_social_account("tiktok", request, token="valid-jwt", db=self.db)
+            response = connectSocialAccount("tiktok", request, token="valid-jwt", db=self.db)
 
         self.assertIn("/distribute?error=", response.headers["location"])
         self.assertEqual({}, request.session)
@@ -173,7 +173,7 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
             "reelcast_connect_platform": "tiktok",
             "reelcast_connect_user_id": str(uuid4()),
         })
-        response = await social_account_callback(
+        response = await socialAccountCallback(
             "tiktok", request, code="abc", state="wrong-state", error=None, db=self.db
         )
         self.assertIn("error=", response.headers["location"])
@@ -194,7 +194,7 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
             "app.routes.social_routes.fetch_external_account_id",
             new=AsyncMock(return_value="tiktok-open-id-123"),
         ):
-            response = await social_account_callback(
+            response = await socialAccountCallback(
                 "tiktok", request, code="abc", state="s1", error=None, db=self.db
             )
 
@@ -214,7 +214,7 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
             "app.routes.social_routes.fetch_external_account_id",
             new=AsyncMock(return_value=None),
         ):
-            response = await social_account_callback(
+            response = await socialAccountCallback(
                 "facebook", request, code="abc", state="s1", error=None, db=self.db
             )
 
@@ -232,7 +232,7 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
     def test_disconnect_missing_account_raises_404(self) -> None:
         self.db.query.return_value.filter.return_value.first.return_value = None
         with self.assertRaises(Exception) as ctx:
-            disconnect_social_account(uuid4(), db=self.db, current_user=self.user)
+            disconnectSocialAccount(uuid4(), db=self.db, current_user=self.user)
         self.assertEqual(404, getattr(ctx.exception, "status_code", None))
 
 
