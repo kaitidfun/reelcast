@@ -12,6 +12,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import quote, urlencode
 from uuid import UUID
 
 import httpx
@@ -29,12 +30,14 @@ logger = logging.getLogger(__name__)
 class ProviderConfig:
     url: str
     adapter_key: str
+    authorize_url: str = ""
+    token_exchange_url: str = ""
 
 
 _PROVIDERS: dict[str, ProviderConfig] = {
-    "tiktok_shop": ProviderConfig(config.TRACKING_TIKTOK_SHOP_SYNC_URL, config.TRACKING_TIKTOK_SHOP_ADAPTER_KEY),
-    "shopee": ProviderConfig(config.TRACKING_SHOPEE_SYNC_URL, config.TRACKING_SHOPEE_ADAPTER_KEY),
-    "lazada": ProviderConfig(config.TRACKING_LAZADA_SYNC_URL, config.TRACKING_LAZADA_ADAPTER_KEY),
+    "tiktok_shop": ProviderConfig(config.TRACKING_TIKTOK_SHOP_SYNC_URL, config.TRACKING_TIKTOK_SHOP_ADAPTER_KEY, config.TRACKING_TIKTOK_SHOP_AUTHORIZE_URL, config.TRACKING_TIKTOK_SHOP_TOKEN_EXCHANGE_URL),
+    "shopee": ProviderConfig(config.TRACKING_SHOPEE_SYNC_URL, config.TRACKING_SHOPEE_ADAPTER_KEY, config.TRACKING_SHOPEE_AUTHORIZE_URL, config.TRACKING_SHOPEE_TOKEN_EXCHANGE_URL),
+    "lazada": ProviderConfig(config.TRACKING_LAZADA_SYNC_URL, config.TRACKING_LAZADA_ADAPTER_KEY, config.TRACKING_LAZADA_AUTHORIZE_URL, config.TRACKING_LAZADA_TOKEN_EXCHANGE_URL),
     "tiktok": ProviderConfig(config.TRACKING_TIKTOK_SYNC_URL, config.TRACKING_TIKTOK_ADAPTER_KEY),
     "youtube": ProviderConfig(config.TRACKING_YOUTUBE_SYNC_URL, config.TRACKING_YOUTUBE_ADAPTER_KEY),
     "facebook": ProviderConfig(config.TRACKING_FACEBOOK_SYNC_URL, config.TRACKING_FACEBOOK_ADAPTER_KEY),
@@ -49,6 +52,60 @@ class TrackingProviderError(RuntimeError):
 def readiness() -> dict[str, bool]:
     """Safe-to-return readiness map; secrets and URLs are intentionally omitted."""
     return {platform: bool(provider.url) for platform, provider in _PROVIDERS.items()}
+
+
+def oauth_readiness() -> dict[str, bool]:
+    """Whether each e-commerce platform can start and finish OAuth safely."""
+    return {
+        platform: bool(_PROVIDERS[platform].authorize_url and _PROVIDERS[platform].token_exchange_url)
+        for platform in ("tiktok_shop", "shopee", "lazada")
+    }
+
+
+def build_authorize_url(platform: str, *, state: str, redirect_uri: str) -> str:
+    provider = _PROVIDERS.get(platform)
+    if not provider or not provider.authorize_url:
+        raise TrackingProviderError(f"{platform} OAuth is not configured")
+
+    # Adapters may require pre-signed vendor URLs. They can use explicit
+    # placeholders; otherwise standard OAuth parameters are appended.
+    if "{state}" in provider.authorize_url or "{redirect_uri}" in provider.authorize_url:
+        return provider.authorize_url.replace("{state}", quote(state, safe="")).replace(
+            "{redirect_uri}", quote(redirect_uri, safe=""),
+        )
+    separator = "&" if "?" in provider.authorize_url else "?"
+    return f"{provider.authorize_url}{separator}{urlencode({'state': state, 'redirect_uri': redirect_uri})}"
+
+
+async def exchange_authorization_code(
+    platform: str, *, code: str, state: str, redirect_uri: str,
+) -> dict[str, str | None]:
+    provider = _PROVIDERS.get(platform)
+    if not provider or not provider.token_exchange_url:
+        raise TrackingProviderError(f"{platform} OAuth is not configured")
+    headers = {"Accept": "application/json"}
+    if provider.adapter_key:
+        headers["X-ReelCast-Adapter-Key"] = provider.adapter_key
+    try:
+        async with httpx.AsyncClient(timeout=config.TRACKING_SYNC_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                provider.token_exchange_url,
+                json={"platform": platform, "code": code, "state": state, "redirect_uri": redirect_uri},
+                headers=headers,
+            )
+        response.raise_for_status()
+        payload = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise TrackingProviderError(f"{platform} authorization exchange failed") from exc
+
+    if not isinstance(payload, dict) or not payload.get("access_token") or not payload.get("external_shop_id"):
+        raise TrackingProviderError("Adapter response must include access_token and external_shop_id")
+    return {
+        "access_token": str(payload["access_token"]),
+        "refresh_token": str(payload["refresh_token"]) if payload.get("refresh_token") else None,
+        "external_shop_id": str(payload["external_shop_id"]),
+        "shop_name": str(payload["shop_name"]) if payload.get("shop_name") else None,
+    }
 
 
 def _metric_payload(metric: dict[str, Any], source_platform: str) -> dict[str, Any]:

@@ -108,6 +108,11 @@ export type EcommerceAccount = {
   sync_error?: string | null;
 };
 
+export type TrackingReadiness = {
+  providers: Record<string, boolean>;
+  oauth: Record<"tiktok_shop" | "shopee" | "lazada", boolean>;
+};
+
 async function trackingRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}/tracking${path}`, {
     ...init,
@@ -128,6 +133,10 @@ export function fetchEcommerceAccounts() {
   return trackingRequest<EcommerceAccount[]>("/ecommerce/accounts");
 }
 
+export function fetchTrackingReadiness() {
+  return trackingRequest<TrackingReadiness>("/readiness");
+}
+
 export function connectEcommerceAccount(data: {
   platform_name: "tiktok_shop" | "shopee" | "lazada";
   external_shop_id: string;
@@ -139,6 +148,14 @@ export function connectEcommerceAccount(data: {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+export async function disconnectEcommerceAccount(accountId: string) {
+  const response = await fetch(`${API_BASE_URL}/tracking/ecommerce/accounts/${accountId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error("Unable to disconnect shop");
 }
 
 export function syncTrackingData() {

@@ -381,6 +381,41 @@ storage, retries, deduplication, ownership validation, scheduling, and the
 dashboard. The current readiness endpoint is `GET /api/tracking/readiness`;
 it exposes only whether each adapter URL is configured, never a URL or secret.
 
+### Shop OAuth (Tracking UI)
+
+The Tracking cards use OAuth exactly like the Distribution cards. Do not ask
+members to paste a Shop ID or access token. For each shop, configure these two
+adapter values in `.env.local`:
+
+```env
+TRACKING_TIKTOK_SHOP_AUTHORIZE_URL=https://your-adapter/authorize?state={state}&redirect_uri={redirect_uri}
+TRACKING_TIKTOK_SHOP_TOKEN_EXCHANGE_URL=https://your-adapter/token-exchange
+```
+
+Use the corresponding `SHOPEE` or `LAZADA` prefix for those platforms. The
+adapter's authorization URL receives the member at the provider consent page;
+the callback URL to register is:
+
+```text
+{BACKEND_URL}/api/tracking/ecommerce/{tiktok_shop|shopee|lazada}/callback
+```
+
+ReelCast sends the callback `code`, `state`, and `redirect_uri` to the token
+exchange URL. It must return only this server-side payload:
+
+```json
+{
+  "access_token": "provider-access-token",
+  "refresh_token": "optional-provider-refresh-token",
+  "external_shop_id": "provider-shop-id",
+  "shop_name": "optional-display-name"
+}
+```
+
+The frontend displays `Needs setup` until both OAuth URLs for that shop are
+configured, then shows `Connect`. Tokens are encrypted immediately in the
+backend and are never rendered by the UI.
+
 ## Feature 3: Social distribution setup
 
 Feature 3 is ready for the production OAuth credentials already named in

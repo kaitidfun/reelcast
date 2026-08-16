@@ -1,15 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { BarChart3, Eye, Loader2, MousePointerClick, RefreshCw, ShoppingBag, ShoppingCart, Video } from "lucide-react";
+import { BarChart3, CheckCircle2, Eye, Loader2, MousePointerClick, RefreshCw, ShoppingBag, ShoppingCart, Trash2, Video } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import StatCard from "@/components/StatCard";
-import { connectEcommerceAccount, EcommerceAccount, fetchEcommerceAccounts, fetchTrackingDashboard, syncTrackingData, TrackingDashboard } from "@/lib/api";
+import { API_BASE_URL, disconnectEcommerceAccount, EcommerceAccount, fetchEcommerceAccounts, fetchTrackingDashboard, fetchTrackingReadiness, syncTrackingData, TrackingDashboard } from "@/lib/api";
 
 const number = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 const currency = new Intl.NumberFormat("th-TH", { style: "currency", currency: "THB", maximumFractionDigits: 0 });
+const SHOP_PLATFORMS = [
+  { key: "tiktok_shop", label: "TikTok Shop" },
+  { key: "shopee", label: "Shopee" },
+  { key: "lazada", label: "Lazada" },
+] as const;
 
 function EmptyState({ message }: { message: string }) {
   return <p className="py-8 text-center text-sm text-muted-foreground">{message}</p>;
@@ -34,22 +40,23 @@ function PerformanceList({ title, items }: { title: string; items: TrackingDashb
 }
 
 export default function Tracking() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [dashboard, setDashboard] = useState<TrackingDashboard | null>(null);
   const [accounts, setAccounts] = useState<EcommerceAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [showConnect, setShowConnect] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-  const [connectionForm, setConnectionForm] = useState({ platform_name: "tiktok_shop" as "tiktok_shop" | "shopee" | "lazada", external_shop_id: "", shop_name: "", access_token: "" });
+  const [shopOAuthReady, setShopOAuthReady] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [nextDashboard, nextAccounts] = await Promise.all([fetchTrackingDashboard(), fetchEcommerceAccounts()]);
+      const [nextDashboard, nextAccounts, readiness] = await Promise.all([fetchTrackingDashboard(), fetchEcommerceAccounts(), fetchTrackingReadiness()]);
       setDashboard(nextDashboard);
       setAccounts(nextAccounts);
+      setShopOAuthReady(readiness.oauth);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load tracking data");
     } finally {
@@ -59,6 +66,18 @@ export default function Tracking() {
 
   useEffect(() => { void load(); }, [load]);
 
+  useEffect(() => {
+    const connected = searchParams.get("connected");
+    const connectError = searchParams.get("error");
+    if (connected) {
+      void load();
+      router.replace("/tracking");
+    } else if (connectError) {
+      setError(connectError);
+      router.replace("/tracking");
+    }
+  }, [load, router, searchParams]);
+
   const sync = async () => {
     setSyncing(true);
     try { await syncTrackingData(); await load(); }
@@ -66,19 +85,18 @@ export default function Tracking() {
     finally { setSyncing(false); }
   };
 
-  const connect = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setConnecting(true);
-    setError(null);
+  const connectShop = (platform: string) => {
+    const token = localStorage.getItem("rf_token");
+    if (!token) return;
+    window.location.href = `${API_BASE_URL}/tracking/ecommerce/${platform}/connect?token=${encodeURIComponent(token)}`;
+  };
+
+  const disconnectShop = async (accountId: string) => {
     try {
-      await connectEcommerceAccount(connectionForm);
-      setConnectionForm({ platform_name: "tiktok_shop", external_shop_id: "", shop_name: "", access_token: "" });
-      setShowConnect(false);
+      await disconnectEcommerceAccount(accountId);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to connect shop");
-    } finally {
-      setConnecting(false);
+      setError(err instanceof Error ? err.message : "Unable to disconnect shop");
     }
   };
 
@@ -104,11 +122,8 @@ export default function Tracking() {
       </div>
 
       <section className="rounded-2xl border border-border bg-card p-5 shadow-card">
-        <div className="flex items-start justify-between gap-3"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10"><ShoppingBag className="h-4 w-4 text-primary" /></div><div><h2 className="font-display text-base font-semibold text-foreground">E-commerce connections</h2><p className="text-xs text-muted-foreground">TikTok Shop, Shopee and Lazada accounts linked to this member.</p></div></div><button type="button" onClick={() => setShowConnect((value) => !value)} className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted">{showConnect ? "Cancel" : "Connect shop"}</button></div>
-        {showConnect && <form onSubmit={connect} className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-2"><label className="text-xs font-medium text-foreground">Platform<select value={connectionForm.platform_name} onChange={(event) => setConnectionForm((form) => ({ ...form, platform_name: event.target.value as typeof form.platform_name }))} className="mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"><option value="tiktok_shop">TikTok Shop</option><option value="shopee">Shopee</option><option value="lazada">Lazada</option></select></label><label className="text-xs font-medium text-foreground">Shop ID<input required value={connectionForm.external_shop_id} onChange={(event) => setConnectionForm((form) => ({ ...form, external_shop_id: event.target.value }))} className="mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" /></label><label className="text-xs font-medium text-foreground">Shop name <span className="font-normal text-muted-foreground">(optional)</span><input value={connectionForm.shop_name} onChange={(event) => setConnectionForm((form) => ({ ...form, shop_name: event.target.value }))} className="mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" /></label><label className="text-xs font-medium text-foreground">OAuth access token<input required type="password" autoComplete="off" value={connectionForm.access_token} onChange={(event) => setConnectionForm((form) => ({ ...form, access_token: event.target.value }))} className="mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" /></label><div className="md:col-span-2 flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Paste the token returned by your platform OAuth integration. It is encrypted before storage.</p><button disabled={connecting} className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-60">{connecting ? "Connecting..." : "Save connection"}</button></div></form>}
-        {loading ? <EmptyState message="Loading connections..." /> : accounts.length === 0 ? <EmptyState message="No e-commerce shop connected yet. Complete a shop OAuth connection to start syncing orders and affiliate clicks." /> : (
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">{accounts.map((account) => <div key={account.ecommerce_account_id} className="rounded-xl border border-border bg-muted/30 p-4"><p className="text-sm font-semibold capitalize text-foreground">{account.shop_name || account.platform_name.replace("_", " ")}</p><p className="mt-1 text-xs text-muted-foreground">{account.last_synced_at ? `Last sync ${new Date(account.last_synced_at).toLocaleString()}` : "Awaiting first sync"}</p>{account.sync_error && <p className="mt-2 text-xs text-destructive">{account.sync_error}</p>}</div>)}</div>
-        )}
+        <div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10"><ShoppingBag className="h-4 w-4 text-primary" /></div><div><h2 className="font-display text-base font-semibold text-foreground">E-commerce connections</h2><p className="text-xs text-muted-foreground">Connect a store securely to synchronize affiliate orders and clicks.</p></div></div>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">{SHOP_PLATFORMS.map((platform) => { const account = accounts.find((item) => item.platform_name === platform.key); const configured = shopOAuthReady[platform.key] ?? false; return <div key={platform.key} className="rounded-xl border border-border bg-muted/30 p-4"><div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold text-foreground">{account?.shop_name || platform.label}</p><p className="mt-1 text-xs text-muted-foreground">{account ? (account.last_synced_at ? `Last sync ${new Date(account.last_synced_at).toLocaleString()}` : "Connected - awaiting first sync") : (configured ? "Not connected" : "Needs setup")}</p></div>{account && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}</div>{account?.sync_error && <p className="mt-2 text-xs text-destructive">{account.sync_error}</p>}<div className="mt-4">{account ? <button type="button" onClick={() => disconnectShop(account.ecommerce_account_id)} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"><Trash2 className="h-3.5 w-3.5" />Disconnect</button> : <button type="button" disabled={!configured} title={configured ? undefined : "Configure this shop OAuth adapter in backend/.env.local first"} onClick={() => connectShop(platform.key)} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">{configured ? "Connect" : "Needs setup"}</button>}</div></div>; })}</div>
       </section>
 
       <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-6 shadow-card">

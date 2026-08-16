@@ -15,6 +15,8 @@ from app.routes.tracking_routes import (
     get_tracking_dashboard,
     ingest_tracking_metric,
     synchronize_tracking_data,
+    start_ecommerce_oauth,
+    finish_ecommerce_oauth,
 )
 from app.schemas.analytics import EcommerceAccountConnect, TrackingMetricCreate
 
@@ -79,6 +81,34 @@ class TrackingRouteTests(unittest.TestCase):
             result = asyncio.run(synchronize_tracking_data(db=self.db, current_user=self.user))
         self.assertEqual(expected, result)
         sync.assert_awaited_once_with(self.db, user_id=self.user.user_id)
+
+    def test_F5_UTC01_starts_shop_oauth_without_exposing_provider_token(self) -> None:
+        request = SimpleNamespace(session={})
+        self.db.query.return_value.filter.return_value.first.return_value = self.user
+        with patch("app.routes.tracking_routes.jwt.decode", return_value={"sub": "member@example.com"}), \
+             patch("app.routes.tracking_routes.tracking_provider_service.build_authorize_url", return_value="https://provider.example/consent"):
+            response = start_ecommerce_oauth("shopee", request, token="member-jwt", db=self.db)
+        self.assertEqual("https://provider.example/consent", response.headers["location"])
+        self.assertNotIn("member-jwt", response.headers["location"])
+        self.assertEqual("shopee", request.session["reelcast_shop_connect_platform"])
+
+    def test_F5_UTC01_callback_saves_encrypted_shop_credentials_server_side(self) -> None:
+        user_id = uuid4()
+        request = SimpleNamespace(session={
+            "reelcast_shop_connect_state": "state-1",
+            "reelcast_shop_connect_platform": "lazada",
+            "reelcast_shop_connect_user_id": str(user_id),
+        })
+        tokens = {
+            "access_token": "provider-token", "refresh_token": None,
+            "external_shop_id": "shop-99", "shop_name": "Demo Shop",
+        }
+        with patch("app.routes.tracking_routes.tracking_provider_service.exchange_authorization_code", new=AsyncMock(return_value=tokens)), \
+             patch("app.routes.tracking_routes.tracking_service.upsert_ecommerce_account") as save:
+            response = asyncio.run(finish_ecommerce_oauth("lazada", request, code="code-1", state="state-1", db=self.db))
+        self.assertIn("connected=lazada", response.headers["location"])
+        self.assertEqual("provider-token", save.call_args.kwargs["access_token"])
+        self.assertEqual(user_id, save.call_args.kwargs["user_id"])
 
 
 if __name__ == "__main__":

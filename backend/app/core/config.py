@@ -78,6 +78,16 @@ TRACKING_YOUTUBE_SYNC_URL = os.getenv("TRACKING_YOUTUBE_SYNC_URL", "")
 TRACKING_FACEBOOK_SYNC_URL = os.getenv("TRACKING_FACEBOOK_SYNC_URL", "")
 TRACKING_INSTAGRAM_SYNC_URL = os.getenv("TRACKING_INSTAGRAM_SYNC_URL", "")
 
+# OAuth is delegated to the matching adapter because the three shop providers
+# use different signing rules. AUTHORIZE_URL may contain {state} and
+# {redirect_uri}; TOKEN_EXCHANGE_URL returns a normalized token payload.
+TRACKING_TIKTOK_SHOP_AUTHORIZE_URL = os.getenv("TRACKING_TIKTOK_SHOP_AUTHORIZE_URL", "")
+TRACKING_TIKTOK_SHOP_TOKEN_EXCHANGE_URL = os.getenv("TRACKING_TIKTOK_SHOP_TOKEN_EXCHANGE_URL", "")
+TRACKING_SHOPEE_AUTHORIZE_URL = os.getenv("TRACKING_SHOPEE_AUTHORIZE_URL", "")
+TRACKING_SHOPEE_TOKEN_EXCHANGE_URL = os.getenv("TRACKING_SHOPEE_TOKEN_EXCHANGE_URL", "")
+TRACKING_LAZADA_AUTHORIZE_URL = os.getenv("TRACKING_LAZADA_AUTHORIZE_URL", "")
+TRACKING_LAZADA_TOKEN_EXCHANGE_URL = os.getenv("TRACKING_LAZADA_TOKEN_EXCHANGE_URL", "")
+
 # Optional key used to authenticate ReelCast to each adapter. The account's
 # provider OAuth token is passed server-to-server only, never to the browser.
 TRACKING_TIKTOK_SHOP_ADAPTER_KEY = os.getenv("TRACKING_TIKTOK_SHOP_ADAPTER_KEY", "")
