@@ -67,7 +67,10 @@ PLATFORM_CONFIGS: dict[str, dict] = {
     "youtube": {
         "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
         "token_url": "https://oauth2.googleapis.com/token",
-        "scope": "https://www.googleapis.com/auth/youtube.upload",
+        # youtube.upload alone is not enough to call channels.list (used below
+        # to resolve external_account_id) — Google returns 403 Forbidden
+        # without youtube.readonly too.
+        "scope": "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly",
         "client_id_param": "client_id",
         "client_id": YOUTUBE_CLIENT_ID,
         "client_secret": YOUTUBE_CLIENT_SECRET,
