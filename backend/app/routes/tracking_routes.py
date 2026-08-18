@@ -49,14 +49,20 @@ def connect_ecommerce_account(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """F5-UC01 OAuth callback target; tokens are encrypted at rest."""
+    """
+    Direct token-entry path — not reachable from the UI, which only uses
+    connectEcommerceAccount/ecommerceAccountCallback (the real OAuth
+    redirect flow UC01 describes). Kept for manually seeding a ShopAccount
+    when a provider's OAuth app isn't registered yet. Tokens are encrypted
+    at rest either way.
+    """
     return tracking_service.upsert_ecommerce_account(
         db, user_id=current_user.user_id, **payload.model_dump(),
     )
 
 
 @router.get("/ecommerce/{platform}/connect")
-def start_ecommerce_oauth(
+def connectEcommerceAccount(
     platform: str,
     request: Request,
     token: str,
@@ -91,7 +97,7 @@ def start_ecommerce_oauth(
 
 
 @router.get("/ecommerce/{platform}/callback")
-async def finish_ecommerce_oauth(
+async def ecommerceAccountCallback(
     platform: str,
     request: Request,
     code: str | None = None,
@@ -128,7 +134,7 @@ async def finish_ecommerce_oauth(
 
 
 @router.delete("/ecommerce/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
-def disconnect_ecommerce_account(
+def disconnectEcommerceAccount(
     account_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -156,7 +162,7 @@ def ingest_tracking_metric(
 
 
 @router.post("/sync")
-async def synchronize_tracking_data(
+async def synchronizeTrackingData(
     db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
 ):
     """F5-UC03/F5-UC04: synchronize configured shop and social adapters."""
@@ -176,7 +182,7 @@ def tracking_readiness(
 
 
 @router.get("/dashboard")
-def get_tracking_dashboard(
+def getTrackingDashboard(
     start: date | None = Query(None),
     end: date | None = Query(None),
     db: Session = Depends(get_db),

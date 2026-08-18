@@ -11,12 +11,12 @@ from fastapi import HTTPException
 
 from app.routes.tracking_routes import (
     connect_ecommerce_account,
-    disconnect_ecommerce_account,
-    get_tracking_dashboard,
+    disconnectEcommerceAccount,
+    getTrackingDashboard,
     ingest_tracking_metric,
-    synchronize_tracking_data,
-    start_ecommerce_oauth,
-    finish_ecommerce_oauth,
+    synchronizeTrackingData,
+    connectEcommerceAccount,
+    ecommerceAccountCallback,
 )
 from app.schemas.analytics import EcommerceAccountConnect, TrackingMetricCreate
 
@@ -43,7 +43,7 @@ class TrackingRouteTests(unittest.TestCase):
     def test_F5_UTC02_cannot_disconnect_another_members_shop(self) -> None:
         with patch("app.routes.tracking_routes.tracking_service.delete_ecommerce_account", return_value=False):
             with self.assertRaises(HTTPException) as context:
-                disconnect_ecommerce_account(uuid4(), db=self.db, current_user=self.user)
+                disconnectEcommerceAccount(uuid4(), db=self.db, current_user=self.user)
         self.assertEqual(404, context.exception.status_code)
 
     def test_F5_UTC03_records_only_owned_tracking_metric(self) -> None:
@@ -63,13 +63,13 @@ class TrackingRouteTests(unittest.TestCase):
     def test_F5_UTC05_dashboard_delegates_with_date_filters(self) -> None:
         start, end = date(2026, 8, 1), date(2026, 8, 17)
         with patch("app.routes.tracking_routes.tracking_service.dashboard", return_value={"totals": {}}) as dashboard:
-            result = get_tracking_dashboard(start=start, end=end, db=self.db, current_user=self.user)
+            result = getTrackingDashboard(start=start, end=end, db=self.db, current_user=self.user)
         self.assertEqual({"totals": {}}, result)
         dashboard.assert_called_once_with(self.db, user_id=self.user.user_id, start=start, end=end)
 
     def test_F5_UTC05_rejects_invalid_date_range(self) -> None:
         with self.assertRaises(HTTPException) as context:
-            get_tracking_dashboard(start=date(2026, 8, 17), end=date(2026, 8, 1), db=self.db, current_user=self.user)
+            getTrackingDashboard(start=date(2026, 8, 17), end=date(2026, 8, 1), db=self.db, current_user=self.user)
         self.assertEqual(422, context.exception.status_code)
 
     def test_F5_UTC03_runs_the_configured_provider_sync(self) -> None:
@@ -78,7 +78,7 @@ class TrackingRouteTests(unittest.TestCase):
             "app.routes.tracking_routes.tracking_provider_service.sync_member",
             new=AsyncMock(return_value=expected),
         ) as sync:
-            result = asyncio.run(synchronize_tracking_data(db=self.db, current_user=self.user))
+            result = asyncio.run(synchronizeTrackingData(db=self.db, current_user=self.user))
         self.assertEqual(expected, result)
         sync.assert_awaited_once_with(self.db, user_id=self.user.user_id)
 
@@ -87,7 +87,7 @@ class TrackingRouteTests(unittest.TestCase):
         self.db.query.return_value.filter.return_value.first.return_value = self.user
         with patch("app.routes.tracking_routes.jwt.decode", return_value={"sub": "member@example.com"}), \
              patch("app.routes.tracking_routes.tracking_provider_service.build_authorize_url", return_value="https://provider.example/consent"):
-            response = start_ecommerce_oauth("shopee", request, token="member-jwt", db=self.db)
+            response = connectEcommerceAccount("shopee", request, token="member-jwt", db=self.db)
         self.assertEqual("https://provider.example/consent", response.headers["location"])
         self.assertNotIn("member-jwt", response.headers["location"])
         self.assertEqual("shopee", request.session["reelcast_shop_connect_platform"])
@@ -105,7 +105,7 @@ class TrackingRouteTests(unittest.TestCase):
         }
         with patch("app.routes.tracking_routes.tracking_provider_service.exchange_authorization_code", new=AsyncMock(return_value=tokens)), \
              patch("app.routes.tracking_routes.tracking_service.upsert_ecommerce_account") as save:
-            response = asyncio.run(finish_ecommerce_oauth("lazada", request, code="code-1", state="state-1", db=self.db))
+            response = asyncio.run(ecommerceAccountCallback("lazada", request, code="code-1", state="state-1", db=self.db))
         self.assertIn("connected=lazada", response.headers["location"])
         self.assertEqual("provider-token", save.call_args.kwargs["access_token"])
         self.assertEqual(user_id, save.call_args.kwargs["user_id"])
