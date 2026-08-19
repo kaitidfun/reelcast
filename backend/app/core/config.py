@@ -65,6 +65,15 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 # Feature 5 - Data Tracking connectors
 #
+# TikTok Shop credentials issued in Partner Center. These are kept separate
+# from the ReelCast-to-adapter credentials below and must remain server-side.
+TIKTOK_SHOP_APP_KEY = os.getenv("TIKTOK_SHOP_APP_KEY", "")
+TIKTOK_SHOP_APP_SECRET = os.getenv("TIKTOK_SHOP_APP_SECRET", "")
+SHOPEE_APP_KEY = os.getenv("SHOPEE_APP_KEY", "")
+SHOPEE_APP_SECRET = os.getenv("SHOPEE_APP_SECRET", "")
+LAZADA_APP_KEY = os.getenv("LAZADA_APP_KEY", "")
+LAZADA_APP_SECRET = os.getenv("LAZADA_APP_SECRET", "")
+
 # These URLs point to a small provider adapter (or API gateway) that converts a
 # shop/social platform response into ReelCast's normalized metric contract.
 # They deliberately remain empty until the corresponding app/API credentials
