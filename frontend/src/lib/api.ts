@@ -79,6 +79,8 @@ export type TrackingTotals = {
   views: number;
   clicks: number;
   orders: number;
+  engagement: number;
+  click_through_rate: number;
   revenue: number;
 };
 
@@ -86,7 +88,9 @@ export type TrackingMetric = {
   views: number;
   clicks: number;
   orders: number;
+  engagement: number;
   revenue: number;
+  click_through_rate?: number;
 };
 
 export type TrackingDashboard = {
@@ -96,7 +100,31 @@ export type TrackingDashboard = {
   products: Array<TrackingMetric & { id: string; name: string }>;
   campaigns: Array<TrackingMetric & { id: string; name: string }>;
   reels: Array<TrackingMetric & { id: string; name: string }>;
+  has_data: boolean;
+  last_synced_at: string | null;
   generated_at: string;
+};
+
+export type TrackingFilterOptions = {
+  platforms: string[];
+  campaigns: Array<{ id: string; name: string }>;
+  products: Array<{ id: string; name: string }>;
+};
+
+export type TrackingAnalysis = {
+  level: "product" | "campaign" | "reel" | "platform";
+  metric: "views" | "clicks" | "orders" | "engagement" | "revenue" | "ctr";
+  rows: Array<TrackingMetric & { id: string; name: string; value: number }>;
+  trend: Array<{ date: string; value: number }>;
+  generated_at: string;
+};
+
+export type TrackingFilters = {
+  start?: string;
+  end?: string;
+  platform?: string;
+  campaign_id?: string;
+  product_id?: string;
 };
 
 export type EcommerceAccount = {
@@ -125,8 +153,27 @@ async function trackingRequest<T>(path: string, init?: RequestInit): Promise<T> 
   return response.json() as Promise<T>;
 }
 
-export function fetchTrackingDashboard() {
-  return trackingRequest<TrackingDashboard>("/dashboard");
+function trackingQuery(filters?: Record<string, string | undefined>) {
+  const params = new URLSearchParams();
+  Object.entries(filters ?? {}).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+  const encodedRange = params.toString();
+  return encodedRange ? `?${encodedRange}` : "";
+}
+
+export function fetchTrackingDashboard(filters?: TrackingFilters) {
+  return trackingRequest<TrackingDashboard>(`/dashboard${trackingQuery(filters)}`);
+}
+
+export function fetchTrackingFilterOptions() {
+  return trackingRequest<TrackingFilterOptions>("/filter-options");
+}
+
+export function fetchTrackingAnalysis(
+  filters: TrackingFilters & { level: TrackingAnalysis["level"]; metric: TrackingAnalysis["metric"] },
+) {
+  return trackingRequest<TrackingAnalysis>(`/analysis${trackingQuery(filters)}`);
 }
 
 export function fetchEcommerceAccounts() {

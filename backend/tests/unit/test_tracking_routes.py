@@ -17,6 +17,7 @@ from app.routes.tracking_routes import (
     synchronizeTrackingData,
     connectEcommerceAccount,
     ecommerceAccountCallback,
+    analyzeTrackingPerformance,
 )
 from app.schemas.analytics import EcommerceAccountConnect, TrackingMetricCreate
 
@@ -65,11 +66,57 @@ class TrackingRouteTests(unittest.TestCase):
         with patch("app.routes.tracking_routes.tracking_service.dashboard", return_value={"totals": {}}) as dashboard:
             result = getTrackingDashboard(start=start, end=end, db=self.db, current_user=self.user)
         self.assertEqual({"totals": {}}, result)
-        dashboard.assert_called_once_with(self.db, user_id=self.user.user_id, start=start, end=end)
+        dashboard.assert_called_once_with(
+            self.db, user_id=self.user.user_id, start=start, end=end,
+            platform=None, campaign_id=None, product_id=None,
+        )
 
     def test_F5_UTC05_rejects_invalid_date_range(self) -> None:
         with self.assertRaises(HTTPException) as context:
             getTrackingDashboard(start=date(2026, 8, 17), end=date(2026, 8, 1), db=self.db, current_user=self.user)
+        self.assertEqual(422, context.exception.status_code)
+
+    def test_F5_UTC06_dashboard_accepts_an_open_ended_date_filter(self) -> None:
+        start = date(2026, 8, 1)
+        with patch("app.routes.tracking_routes.tracking_service.dashboard", return_value={"totals": {}}) as dashboard:
+            result = getTrackingDashboard(start=start, end=None, db=self.db, current_user=self.user)
+        self.assertEqual({"totals": {}}, result)
+        dashboard.assert_called_once_with(
+            self.db, user_id=self.user.user_id, start=start, end=None,
+            platform=None, campaign_id=None, product_id=None,
+        )
+
+    def test_F5_UTC05_dashboard_forwards_supported_platform_filter(self) -> None:
+        with patch("app.routes.tracking_routes.tracking_service.dashboard", return_value={"totals": {}}) as dashboard:
+            result = getTrackingDashboard(
+                start=None, end=None, platform="instagram", campaign_id=None,
+                product_id=None, db=self.db, current_user=self.user,
+            )
+        self.assertEqual({"totals": {}}, result)
+        dashboard.assert_called_once_with(
+            self.db, user_id=self.user.user_id, start=None, end=None,
+            platform="instagram", campaign_id=None, product_id=None,
+        )
+
+    def test_F5_UTC06_delegates_owned_analysis_with_selected_scope_and_metric(self) -> None:
+        expected = {"level": "reel", "metric": "engagement", "rows": []}
+        with patch("app.routes.tracking_routes.tracking_service.analyze_performance", return_value=expected) as analyze:
+            result = analyzeTrackingPerformance(
+                level="reel", metric="engagement", start=None, end=None, platform=None,
+                campaign_id=None, product_id=None, db=self.db, current_user=self.user,
+            )
+        self.assertEqual(expected, result)
+        analyze.assert_called_once_with(
+            self.db, user_id=self.user.user_id, level="reel", metric="engagement",
+            start=None, end=None, platform=None, campaign_id=None, product_id=None,
+        )
+
+    def test_F5_UTC06_rejects_an_unsupported_analysis_metric(self) -> None:
+        with self.assertRaises(HTTPException) as context:
+            analyzeTrackingPerformance(
+                level="product", metric="followers", start=None, end=None, platform=None,
+                campaign_id=None, product_id=None, db=self.db, current_user=self.user,
+            )
         self.assertEqual(422, context.exception.status_code)
 
     def test_F5_UTC03_runs_the_configured_provider_sync(self) -> None:

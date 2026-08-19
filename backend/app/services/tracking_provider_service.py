@@ -121,6 +121,7 @@ def _metric_payload(metric: dict[str, Any], source_platform: str) -> dict[str, A
             "views": int(metric.get("views", 0)),
             "clicks": int(metric.get("clicks", 0)),
             "orders": int(metric.get("orders", 0)),
+            "engagement": int(metric.get("engagement", 0)),
             "revenue": float(metric.get("revenue", 0)),
         }
     except (TypeError, ValueError, KeyError) as exc:

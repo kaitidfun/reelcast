@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_db
 from app.core.config import ALGORITHM, BACKEND_URL, FRONTEND_URL, SECRET_KEY
-from app.models.models import User
+from app.models.models import Campaign, Product, User
 from app.schemas.analytics import (
     EcommerceAccountConnect,
     EcommerceAccountResponse,
@@ -31,6 +31,30 @@ _SHOP_SESSION_PLATFORM_KEY = "reelcast_shop_connect_platform"
 
 def _tracking_error_redirect(message: str) -> RedirectResponse:
     return RedirectResponse(url=f"{FRONTEND_URL}/tracking?error={urllib.parse.quote(message)}")
+
+
+def _validate_tracking_filters(
+    db: Session,
+    *,
+    user_id: UUID,
+    platform: str | None,
+    campaign_id: UUID | None,
+    product_id: UUID | None,
+) -> None:
+    if platform and platform not in tracking_service.SUPPORTED_TRACKING_PLATFORMS:
+        raise HTTPException(status_code=422, detail="Unsupported tracking platform")
+    if campaign_id and not db.query(Campaign.campaign_id).filter(
+        Campaign.campaign_id == campaign_id,
+        Campaign.user_id == user_id,
+        Campaign.deleted_at.is_(None),
+    ).first():
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if product_id and not db.query(Product.product_id).filter(
+        Product.product_id == product_id,
+        Product.user_id == user_id,
+        Product.deleted_at.is_(None),
+    ).first():
+        raise HTTPException(status_code=404, detail="Product not found")
 
 
 @router.get("/ecommerce/accounts", response_model=list[EcommerceAccountResponse])
@@ -185,10 +209,68 @@ def tracking_readiness(
 def getTrackingDashboard(
     start: date | None = Query(None),
     end: date | None = Query(None),
+    platform: str | None = None,
+    campaign_id: UUID | None = None,
+    product_id: UUID | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """F5-UC05/06: aggregated dashboard with Product, Campaign and Reel views."""
+    """F5-UC05: display only the Member's filtered, synchronized tracking data."""
     if start and end and start > end:
         raise HTTPException(status_code=422, detail="start date must be before end date")
-    return tracking_service.dashboard(db, user_id=current_user.user_id, start=start, end=end)
+    _validate_tracking_filters(
+        db, user_id=current_user.user_id, platform=platform,
+        campaign_id=campaign_id, product_id=product_id,
+    )
+    return tracking_service.dashboard(
+        db, user_id=current_user.user_id, start=start, end=end, platform=platform,
+        campaign_id=campaign_id, product_id=product_id,
+    )
+
+
+@router.get("/analysis")
+def analyzeTrackingPerformance(
+    level: str = Query(...),
+    metric: str = Query(...),
+    start: date | None = Query(None),
+    end: date | None = Query(None),
+    platform: str | None = None,
+    campaign_id: UUID | None = None,
+    product_id: UUID | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """F5-UC06: rank and trend a Member's selected performance scope and metric."""
+    if level not in tracking_service.ANALYSIS_LEVELS:
+        raise HTTPException(status_code=422, detail="Unsupported analysis level")
+    if metric not in tracking_service.ANALYSIS_METRICS:
+        raise HTTPException(status_code=422, detail="Unsupported analysis metric")
+    if start and end and start > end:
+        raise HTTPException(status_code=422, detail="start date must be before end date")
+    _validate_tracking_filters(
+        db, user_id=current_user.user_id, platform=platform,
+        campaign_id=campaign_id, product_id=product_id,
+    )
+    return tracking_service.analyze_performance(
+        db, user_id=current_user.user_id, level=level, metric=metric,
+        start=start, end=end, platform=platform, campaign_id=campaign_id,
+        product_id=product_id,
+    )
+
+
+@router.get("/filter-options")
+def trackingFilterOptions(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """Owned filter values for UC05/06; IDs from another Member are never exposed."""
+    campaigns = db.query(Campaign).filter(
+        Campaign.user_id == current_user.user_id, Campaign.deleted_at.is_(None),
+    ).order_by(Campaign.name).all()
+    products = db.query(Product).filter(
+        Product.user_id == current_user.user_id, Product.deleted_at.is_(None),
+    ).order_by(Product.product_name).all()
+    return {
+        "platforms": sorted(tracking_service.SUPPORTED_TRACKING_PLATFORMS),
+        "campaigns": [{"id": str(item.campaign_id), "name": item.name} for item in campaigns],
+        "products": [{"id": str(item.product_id), "name": item.product_name} for item in products],
+    }

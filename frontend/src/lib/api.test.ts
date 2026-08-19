@@ -6,6 +6,7 @@ import {
   regenerateContent,
   uploadOwnReel,
   fetchTrackingDashboard,
+  fetchTrackingAnalysis,
   syncTrackingData,
 } from "./api";
 
@@ -123,6 +124,32 @@ describe("Reel API client", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/tracking/dashboard"),
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer test-token" }) }),
+    );
+  });
+
+  it("F5-UTC06 sends the selected tracking date range", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ totals: {}, trend: [] }), { status: 200 }),
+    );
+
+    await fetchTrackingDashboard({ start: "2026-08-01", end: "2026-08-17" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/tracking/dashboard?start=2026-08-01&end=2026-08-17"),
+      expect.anything(),
+    );
+  });
+
+  it("F5-UTC06 sends the selected performance analysis criteria", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ rows: [], trend: [] }), { status: 200 }),
+    );
+
+    await fetchTrackingAnalysis({ level: "reel", metric: "engagement", platform: "instagram" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/tracking/analysis?level=reel&metric=engagement&platform=instagram"),
+      expect.anything(),
     );
   });
 

@@ -15,6 +15,7 @@ class AnalyticsCreate(BaseModel):
     views: int = 0
     clicks: int = 0
     orders: int = 0
+    engagement: int = 0
     revenue: float = 0
     record_date: Optional[date] = None
 
@@ -23,6 +24,7 @@ class AnalyticsUpdate(BaseModel):
     views: Optional[int] = None
     clicks: Optional[int] = None
     orders: Optional[int] = None
+    engagement: Optional[int] = None
     revenue: Optional[float] = None
     source_platform: Optional[str] = None
     external_ref: Optional[str] = None
@@ -40,6 +42,7 @@ class AnalyticsResponse(BaseModel):
     views: int = 0
     clicks: int = 0
     orders: int = 0
+    engagement: int = 0
     revenue: float = 0
     record_date: Optional[date] = None
     created_at: Optional[datetime] = None
@@ -86,5 +89,6 @@ class TrackingMetricCreate(BaseModel):
     views: int = 0
     clicks: int = 0
     orders: int = 0
+    engagement: int = 0
     revenue: float = 0
     record_date: date

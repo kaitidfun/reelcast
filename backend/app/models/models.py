@@ -332,6 +332,7 @@ class Analytics(Base):
     views = Column(Integer, server_default=text("0"))
     clicks = Column(Integer, server_default=text("0"))
     orders = Column(Integer, server_default=text("0"))
+    engagement = Column(Integer, server_default=text("0"))
     revenue = Column(Numeric(14, 2), server_default=text("0"))
     record_date = Column(Date, nullable=True)
     created_at = Column(
