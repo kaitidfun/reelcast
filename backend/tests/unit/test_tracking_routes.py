@@ -10,10 +10,10 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from app.routes.tracking_routes import (
-    connect_ecommerce_account,
+    connectEcommerceAccountManually,
     disconnectEcommerceAccount,
     getTrackingDashboard,
-    ingest_tracking_metric,
+    ingestTrackingMetric,
     synchronizeTrackingData,
     connectEcommerceAccount,
     ecommerceAccountCallback,
@@ -32,7 +32,7 @@ class TrackingRouteTests(unittest.TestCase):
         )
         expected = SimpleNamespace(platform_name="shopee")
         with patch("app.routes.tracking_routes.tracking_service.upsert_ecommerce_account", return_value=expected) as create:
-            result = connect_ecommerce_account(request, db=self.db, current_user=self.user)
+            result = connectEcommerceAccountManually(request, db=self.db, current_user=self.user)
 
         self.assertIs(expected, result)
         create.assert_called_once_with(
@@ -49,7 +49,7 @@ class TrackingRouteTests(unittest.TestCase):
     def test_F5_UTC03_records_only_owned_tracking_metric(self) -> None:
         request = TrackingMetricCreate(source_platform="tiktok_shop", record_date=date(2026, 8, 17), orders=3)
         with patch("app.routes.tracking_routes.tracking_service.record_metric", return_value={"orders": 3}) as record:
-            result = ingest_tracking_metric(request, db=self.db, current_user=self.user)
+            result = ingestTrackingMetric(request, db=self.db, current_user=self.user)
         self.assertEqual({"orders": 3}, result)
         self.assertEqual(self.user.user_id, record.call_args.kwargs["user_id"])
 
@@ -57,7 +57,7 @@ class TrackingRouteTests(unittest.TestCase):
         request = TrackingMetricCreate(source_platform="lazada", record_date=date(2026, 8, 17), product_id=uuid4())
         with patch("app.routes.tracking_routes.tracking_service.record_metric", side_effect=LookupError("Product not found")):
             with self.assertRaises(HTTPException) as context:
-                ingest_tracking_metric(request, db=self.db, current_user=self.user)
+                ingestTrackingMetric(request, db=self.db, current_user=self.user)
         self.assertEqual(404, context.exception.status_code)
 
     def test_F5_UTC05_dashboard_delegates_with_date_filters(self) -> None:

@@ -44,7 +44,7 @@ def list_ecommerce_accounts(
 @router.post(
     "/ecommerce/accounts", response_model=EcommerceAccountResponse, status_code=status.HTTP_201_CREATED,
 )
-def connect_ecommerce_account(
+def connectEcommerceAccountManually(
     payload: EcommerceAccountConnect,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -147,7 +147,7 @@ def disconnectEcommerceAccount(
 
 
 @router.post("/metrics", status_code=status.HTTP_201_CREATED)
-def ingest_tracking_metric(
+def ingestTrackingMetric(
     payload: TrackingMetricCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
