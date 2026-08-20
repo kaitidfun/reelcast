@@ -8,7 +8,9 @@ $ROOT = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $E2E  = Join-Path $ROOT "e2e"
 $BACKEND = Join-Path $ROOT "backend"
 $FRONTEND = Join-Path $ROOT "frontend"
+$ADAPTER = Join-Path $ROOT "tracking-provider-adapter"
 $VENV_PY = Join-Path $BACKEND "venv\Scripts\python.exe"
+$ADAPTER_VENV_PY = Join-Path $ADAPTER ".venv\Scripts\python.exe"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -61,7 +63,21 @@ if ($LASTEXITCODE -ne 0) {
 
 Pop-Location
 
-# 5. Run Frontend Unit Tests
+# 5. Run Tracking Provider Adapter Unit Tests
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "   Running Adapter Unit Tests           " -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+
+Push-Location -Path $ADAPTER
+& $ADAPTER_VENV_PY -B -m pytest -q -p no:cacheprovider
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  ERROR: Adapter Unit Tests failed!" -ForegroundColor Red
+    exit $LASTEXITCODE
+}
+Pop-Location
+
+# 6. Run Frontend Unit Tests
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "   Running Frontend Unit Tests          " -ForegroundColor Cyan
@@ -75,7 +91,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 Pop-Location
 
-# 6. Run UI Unit E2E and System E2E Tests
+# 7. Run UI Unit E2E and System E2E Tests
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "   Running Playwright Test Suites       " -ForegroundColor Cyan

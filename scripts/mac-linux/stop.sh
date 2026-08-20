@@ -24,7 +24,18 @@ else
     pkill -f "bun run dev" 2>/dev/null
 fi
 
-# ── 2. Stop Celery Worker ─────────────────────────────────
+# ── 2. Stop Tracking Provider Adapter ─────────────────────
+if [ -f "$SCRIPT_DIR/.adapter_pid" ]; then
+    PID=$(cat "$SCRIPT_DIR/.adapter_pid")
+    echo "Stopping Tracking Provider Adapter (PID: $PID)..."
+    kill $PID 2>/dev/null
+    rm "$SCRIPT_DIR/.adapter_pid"
+else
+    echo "Adapter PID not found. Searching for adapter uvicorn process..."
+    pkill -f "uvicorn app.main:app.*9000" 2>/dev/null
+fi
+
+# ── 3. Stop Celery Worker ─────────────────────────────────
 if [ -f "$SCRIPT_DIR/.celery_pid" ]; then
     PID=$(cat "$SCRIPT_DIR/.celery_pid")
     echo "Stopping Celery Worker (PID: $PID)..."

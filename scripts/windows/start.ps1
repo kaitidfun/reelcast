@@ -8,8 +8,11 @@
 $ROOT     = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $BACKEND  = Join-Path $ROOT "backend"
 $FRONTEND = Join-Path $ROOT "frontend"
+$ADAPTER  = Join-Path $ROOT "tracking-provider-adapter"
 $VENV_PY  = Join-Path $BACKEND "venv\Scripts\python.exe"
 $VENV_ACTIVATE = Join-Path $BACKEND "venv\Scripts\Activate.ps1"
+$ADAPTER_VENV_PY = Join-Path $ADAPTER ".venv\Scripts\python.exe"
+$ADAPTER_VENV_ACTIVATE = Join-Path $ADAPTER ".venv\Scripts\Activate.ps1"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -18,7 +21,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # ── 1. Backend Dependencies ────────────────────────────────
-Write-Host "[1/7] Installing/updating Backend dependencies..." -ForegroundColor Yellow
+Write-Host "[1/8] Installing/updating Backend dependencies..." -ForegroundColor Yellow
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     Write-Host "  ERROR: Python is not installed or is not available on PATH." -ForegroundColor Red
     exit 1
@@ -39,7 +42,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "  Backend dependencies are ready." -ForegroundColor Green
 
 # ── 2. Frontend Dependencies ───────────────────────────────
-Write-Host "[2/7] Installing/updating Frontend dependencies..." -ForegroundColor Yellow
+Write-Host "[2/8] Installing/updating Frontend dependencies..." -ForegroundColor Yellow
 if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
     Write-Host "  ERROR: Bun is not installed or is not available on PATH." -ForegroundColor Red
     exit 1
@@ -52,7 +55,7 @@ Pop-Location
 Write-Host "  Frontend dependencies are ready." -ForegroundColor Green
 
 # ── 3. Redis via Docker ────────────────────────────────────
-Write-Host "[3/7] Starting Redis (Docker)..." -ForegroundColor Yellow
+Write-Host "[3/8] Starting Redis (Docker)..." -ForegroundColor Yellow
 $dockerRunning = docker info 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  WARNING: Docker Desktop is not running." -ForegroundColor Red
@@ -63,8 +66,34 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "  Redis started (or already running)." -ForegroundColor Green
 }
 
-# ── 4. Backend (FastAPI / uvicorn) ────────────────────────
-Write-Host "[4/7] Starting Backend (FastAPI)..." -ForegroundColor Yellow
+# ── 4. Tracking Provider Adapter (FastAPI / uvicorn) ──────
+Write-Host "[4/8] Installing/updating Tracking Provider Adapter dependencies..." -ForegroundColor Yellow
+if (-not (Test-Path $ADAPTER_VENV_PY)) {
+    Write-Host "  Creating adapter virtual environment..." -ForegroundColor DarkGray
+    Push-Location $ADAPTER
+    python -m venv .venv
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Pop-Location
+}
+& $ADAPTER_VENV_PY -m pip install --upgrade pip
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& $ADAPTER_VENV_PY -m pip install --upgrade -r (Join-Path $ADAPTER "requirements.txt")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Write-Host "  Adapter dependencies are ready." -ForegroundColor Green
+
+Write-Host "[5/8] Starting Tracking Provider Adapter (FastAPI)..." -ForegroundColor Yellow
+Start-Process powershell -ArgumentList @(
+    "-NoExit",
+    "-Command",
+    "cd '$ADAPTER'; " +
+    "Write-Host '=== ReelCast: Tracking Provider Adapter ===' -ForegroundColor Cyan; " +
+    "& '$ADAPTER_VENV_ACTIVATE'; " +
+    "uvicorn app.main:app --reload --port 9000"
+) -WindowStyle Normal
+Write-Host "  Tracking Provider Adapter window opened." -ForegroundColor Green
+
+# ── 5. Backend (FastAPI / uvicorn) ────────────────────────
+Write-Host "[6/8] Starting Backend (FastAPI)..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",
@@ -78,8 +107,8 @@ Write-Host "  Backend window opened." -ForegroundColor Green
 # Brief pause so Backend gets a head start before Celery
 Start-Sleep -Seconds 2
 
-# ── 5. Celery Worker ──────────────────────────────────────
-Write-Host "[5/7] Starting Celery Worker..." -ForegroundColor Yellow
+# ── 6. Celery Worker ──────────────────────────────────────
+Write-Host "[7/8] Starting Celery Worker..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",
@@ -90,8 +119,8 @@ Start-Process powershell -ArgumentList @(
 ) -WindowStyle Normal
 Write-Host "  Celery window opened." -ForegroundColor Green
 
-# ── 6. Celery Beat (F3 scheduled distribution) ────────────
-Write-Host "[6/7] Starting Celery Beat..." -ForegroundColor Yellow
+# ── 7. Celery Beat (F3 scheduled distribution) ────────────
+Write-Host "[8/8] Starting Celery Beat..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",
@@ -102,8 +131,8 @@ Start-Process powershell -ArgumentList @(
 ) -WindowStyle Normal
 Write-Host "  Celery Beat window opened." -ForegroundColor Green
 
-# ── 7. Frontend (Next.js / bun) ───────────────────────────
-Write-Host "[7/7] Starting Frontend (Next.js)..." -ForegroundColor Yellow
+# ── 8. Frontend (Next.js / bun) ───────────────────────────
+Write-Host "Starting Frontend (Next.js)..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",
@@ -122,6 +151,8 @@ Write-Host ""
 Write-Host "  Frontend  ->  http://localhost:3000     " -ForegroundColor White
 Write-Host "  Backend   ->  http://localhost:8000     " -ForegroundColor White
 Write-Host "  API Docs  ->  http://localhost:8000/docs" -ForegroundColor White
+Write-Host "  Adapter   ->  http://localhost:9000     " -ForegroundColor White
+Write-Host "  Adapter Docs -> http://localhost:9000/docs" -ForegroundColor White
 Write-Host "  Redis     ->  localhost:6379            " -ForegroundColor White
 Write-Host ""
 Write-Host "  To stop all services, run: .\scripts\windows\stop.ps1" -ForegroundColor DarkGray

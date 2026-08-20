@@ -10,7 +10,9 @@ ROOT_DIR=$(cd "$(dirname "$0")/../.." && pwd)
 E2E_DIR="$ROOT_DIR/e2e"
 BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
+ADAPTER_DIR="$ROOT_DIR/tracking-provider-adapter"
 VENV_PY="$BACKEND_DIR/venv/bin/python"
+ADAPTER_VENV_PY="$ADAPTER_DIR/.venv/bin/python"
 
 echo ""
 echo -e "\033[0;36m========================================\033[0m"
@@ -57,7 +59,16 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# 5. Run Frontend Unit Tests
+# 5. Run Tracking Provider Adapter Unit Tests
+echo ""
+echo -e "\033[0;36m========================================\033[0m"
+echo -e "\033[0;36m   Running Adapter Unit Tests           \033[0m"
+echo -e "\033[0;36m========================================\033[0m"
+
+cd "$ADAPTER_DIR"
+"$ADAPTER_VENV_PY" -B -m pytest -q -p no:cacheprovider
+
+# 6. Run Frontend Unit Tests
 echo ""
 echo -e "\033[0;36m========================================\033[0m"
 echo -e "\033[0;36m   Running Frontend Unit Tests          \033[0m"
@@ -66,7 +77,7 @@ echo -e "\033[0;36m========================================\033[0m"
 cd "$FRONTEND_DIR"
 bun run test
 
-# 6. Run UI Unit E2E and System E2E Tests
+# 7. Run UI Unit E2E and System E2E Tests
 echo ""
 echo -e "\033[0;36m========================================\033[0m"
 echo -e "\033[0;36m   Running Playwright Test Suites       \033[0m"
