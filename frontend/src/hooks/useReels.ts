@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { ReelCardData } from "@/components/ReelCard";
+import { resolveVideoUrl } from "@/lib/reel-status";
 
 export function useReels(params: { limit?: number; productId?: string } = {}) {
   const [reels, setReels] = useState<ReelCardData[]>([]);
@@ -30,7 +31,7 @@ export function useReels(params: { limit?: number; productId?: string } = {}) {
           id: r.reel_id,
           title: r.prompt_text?.trim() || "(no prompt)",
           status: r.status,
-          thumbnail: r.first_frame_url || null,
+          thumbnail: resolveVideoUrl(r.first_frame_url),
           createdAt: r.created_at,
         }))
       );

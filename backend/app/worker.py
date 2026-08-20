@@ -30,7 +30,7 @@ from app.services.video_generation_service import (
     generate_first_frame_with_gemini,
     LTX_MAX_CLIP_DURATION,
 )
-from app.services.overlay_service import overlayImagesAndLogos
+from app.services.overlay_service import overlayImagesAndLogos, generateVideoThumbnail
 from app.services.reel_service import update_reel
 from app.services.storage_service import get_presigned_url
 from app.services import distribution_publish_service, distribution_service, social_account_service
@@ -249,6 +249,16 @@ async def _generateReels(
             # User-uploaded video — apply overlay + captions, skip AI generation
             final_video_url = reel.uploaded_video_url
             first_frame_url = reel.first_frame_url
+            # Uploaded reels never get a Gemini-generated first frame, so they'd
+            # otherwise have no thumbnail in the library/reel history views.
+            # Best-effort: a failed snap just leaves the reel without a
+            # thumbnail rather than blocking the rest of the pipeline.
+            if not first_frame_url and reel.uploaded_video_url:
+                try:
+                    upload_video_url = get_presigned_url(reel.uploaded_video_url)
+                    first_frame_url = await generateVideoThumbnail(upload_video_url, reel_id)
+                except Exception as thumb_err:
+                    logger.warning(f"[Worker] Thumbnail extraction failed for upload: {thumb_err}")
         else:
             # Caption-only regeneration — retain existing video
             final_video_url = reel.final_commercial_video_url

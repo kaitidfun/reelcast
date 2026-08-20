@@ -44,6 +44,7 @@ logger.debug(f"[Overlay] Using ffmpeg binary: {_FFMPEG_EXE}")
 # ─────────────────────────────────────────────────────────────────────────────
 
 OVERLAY_MAX_WIDTH = 150  # Max width in pixels (prevents logo covering video content)
+_THUMBNAIL_TIMEOUT_SECONDS = 30
 POSITION_COORDS = {
     'top-left': ('10', '10'),
     'top-right': ('main_w-overlay_w-10', '10'),
@@ -252,3 +253,75 @@ async def overlayImagesAndLogos(
     finally:
         # Always clean up temporary files (even on error)
         _cleanup_temp_files(video_tmp, overlay_tmp, output_tmp)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Thumbnail Extraction (member-uploaded videos have no Gemini first frame)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _extract_first_frame(video_path: str, output_path: str) -> str:
+    """Grab the first frame of a video file as a JPEG via FFmpeg."""
+    cmd = [
+        _FFMPEG_EXE,
+        "-i", video_path,
+        "-vframes", "1",
+        "-q:v", "2",
+        "-y", output_path,
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=_THUMBNAIL_TIMEOUT_SECONDS)
+        if result.returncode != 0:
+            stderr_msg = result.stderr.decode("utf-8", errors="replace")
+            logger.error(f"FFmpeg error extracting first frame: {stderr_msg}")
+            raise FFmpegProcessingException(stderr_msg)
+        return output_path
+    except subprocess.TimeoutExpired as e:
+        raise FFmpegProcessingException(
+            f"FFmpeg first-frame extraction timed out after {_THUMBNAIL_TIMEOUT_SECONDS} seconds"
+        ) from e
+
+
+async def generateVideoThumbnail(video_url: str, reel_id: str) -> str:
+    """
+    Snap the first frame of a member-uploaded video as its thumbnail image.
+
+    AI-generated reels already have a Gemini-produced first_frame_url; uploaded
+    reels skip that step entirely (F2-URS08 upload workflow), so they'd
+    otherwise have no thumbnail at all in the library/reel history views.
+
+    Args:
+        video_url: Publicly downloadable URL to the uploaded video
+                   (pass a presigned URL for R2 keys so httpx can fetch it)
+        reel_id: Reel UUID for organizing output in R2
+
+    Returns:
+        R2 object key of the extracted JPEG frame
+
+    Raises:
+        Exception: If any step (download / FFmpeg / R2 upload) fails
+    """
+    video_tmp = None
+    output_tmp = None
+    try:
+        video_tmp = await download_to_temp(video_url, suffix=".mp4")
+
+        fd, output_tmp = tempfile.mkstemp(suffix=".jpg")
+        os.close(fd)
+
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _extract_first_frame, video_tmp, output_tmp)
+
+        with open(output_tmp, "rb") as f:
+            output_bytes = f.read()
+
+        object_key = upload_raw_bytes_to_r2(
+            data=output_bytes,
+            filename=f"reel_{reel_id}_thumb.jpg",
+            prefix="videos/reels/thumbnails",
+            category=reel_id,
+            return_key_only=True,
+        )
+        logger.info(f"[Thumbnail] Extracted first frame for reel {reel_id}: key={object_key}")
+        return object_key
+    finally:
+        _cleanup_temp_files(video_tmp, output_tmp)
