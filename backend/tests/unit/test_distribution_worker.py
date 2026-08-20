@@ -106,6 +106,64 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Published", statuses)
         self.assertNotIn("Failed", statuses)
 
+    async def test_refreshes_access_token_before_publish_when_refresh_token_saved(self) -> None:
+        account_with_refresh = SocialAccount(
+            account_id=self.account_id,
+            user_id=self.user_id,
+            platform_name="youtube",
+            access_token="encrypted-token",
+            refresh_token="encrypted-refresh-token",
+        )
+        db = self._db_returning(distribution=self.distribution, reel=self.reel)
+
+        with patch("app.worker.SessionLocal", return_value=db), \
+             patch("app.worker.social_account_service.get_social_account", return_value=account_with_refresh), \
+             patch("app.worker.social_account_service.get_decrypted_access_token", return_value="stale-token"), \
+             patch("app.worker.social_account_service.get_decrypted_refresh_token", return_value="plain-refresh-token"), \
+             patch(
+                 "app.worker.oauth_platforms.refresh_access_token",
+                 new=AsyncMock(return_value={"access_token": "fresh-token", "refresh_token": None}),
+             ) as mock_refresh, \
+             patch("app.worker.social_account_service.update_social_account_tokens") as mock_update_tokens, \
+             patch("app.worker.get_presigned_url", return_value="https://cdn.example.com/video.mp4"), \
+             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value="yt-video-id")) as mock_publish, \
+             patch("app.worker.distribution_service.update_distribution"):
+            await _publishDistribution(str(self.distribution_id))
+
+        mock_refresh.assert_awaited_once_with("youtube", "plain-refresh-token")
+        mock_update_tokens.assert_called_once()
+        self.assertEqual("fresh-token", mock_update_tokens.call_args.kwargs["access_token"])
+        # The refreshed token — not the stale one — is what actually gets published with.
+        self.assertEqual("fresh-token", mock_publish.call_args.kwargs["access_token"])
+
+    async def test_refresh_failure_falls_back_to_existing_access_token(self) -> None:
+        account_with_refresh = SocialAccount(
+            account_id=self.account_id,
+            user_id=self.user_id,
+            platform_name="youtube",
+            access_token="encrypted-token",
+            refresh_token="encrypted-refresh-token",
+        )
+        db = self._db_returning(distribution=self.distribution, reel=self.reel)
+
+        with patch("app.worker.SessionLocal", return_value=db), \
+             patch("app.worker.social_account_service.get_social_account", return_value=account_with_refresh), \
+             patch("app.worker.social_account_service.get_decrypted_access_token", return_value="stale-token"), \
+             patch("app.worker.social_account_service.get_decrypted_refresh_token", return_value="plain-refresh-token"), \
+             patch(
+                 "app.worker.oauth_platforms.refresh_access_token",
+                 new=AsyncMock(side_effect=Exception("refresh endpoint down")),
+             ), \
+             patch("app.worker.get_presigned_url", return_value="https://cdn.example.com/video.mp4"), \
+             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value="yt-video-id")) as mock_publish, \
+             patch("app.worker.distribution_service.update_distribution") as mock_update:
+            await _publishDistribution(str(self.distribution_id))
+
+        # Publish still goes through with the pre-refresh token instead of failing the distribution.
+        self.assertEqual("stale-token", mock_publish.call_args.kwargs["access_token"])
+        failed_calls = [c for c in mock_update.call_args_list if c.kwargs.get("status") == "Failed"]
+        self.assertEqual(0, len(failed_calls))
+
     async def test_publish_exception_marks_failed_and_retries(self) -> None:
         db = self._db_returning(distribution=self.distribution, reel=self.reel)
 

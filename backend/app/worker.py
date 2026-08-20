@@ -33,7 +33,7 @@ from app.services.video_generation_service import (
 from app.services.overlay_service import overlayImagesAndLogos, generateVideoThumbnail
 from app.services.reel_service import update_reel
 from app.services.storage_service import get_presigned_url
-from app.services import distribution_publish_service, distribution_service, social_account_service
+from app.services import distribution_publish_service, distribution_service, oauth_platforms, social_account_service
 
 logger = logging.getLogger(__name__)
 
@@ -663,6 +663,32 @@ async def _publishDistribution(distribution_id: str) -> None:
             video_url = get_presigned_url(reel.final_commercial_video_url)
             access_token = social_account_service.get_decrypted_access_token(account)
             caption = _format_caption(reel.caption_and_hashtags)
+
+            # Access tokens expire (~1h for Google/TikTok) long before a
+            # scheduled distribution gets published. Refresh proactively
+            # whenever a refresh_token was saved — best-effort: if the
+            # platform doesn't support this grant (Meta) or the refresh
+            # itself fails, fall back to the existing access_token rather
+            # than failing the whole publish over it.
+            refresh_token = social_account_service.get_decrypted_refresh_token(account)
+            if refresh_token:
+                try:
+                    refreshed = await oauth_platforms.refresh_access_token(
+                        account.platform_name, refresh_token
+                    )
+                    access_token = refreshed["access_token"]
+                    social_account_service.update_social_account_tokens(
+                        db,
+                        account=account,
+                        access_token=access_token,
+                        refresh_token=refreshed.get("refresh_token") or refresh_token,
+                    )
+                    logger.info(f"[Distribution] Refreshed {account.platform_name} access token before publish")
+                except Exception as refresh_err:
+                    logger.warning(
+                        f"[Distribution] Token refresh failed for {account.platform_name}, "
+                        f"using existing access token: {refresh_err}"
+                    )
 
             platform_post_id = await distribution_publish_service.publish(
                 account.platform_name,

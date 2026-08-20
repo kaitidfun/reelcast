@@ -162,6 +162,61 @@ async def exchange_code_for_token(platform: str, code: str) -> dict[str, Optiona
     }
 
 
+async def refresh_access_token(platform: str, refresh_token: str) -> dict[str, Optional[str]]:
+    """
+    Exchange a stored refresh_token for a new access_token.
+
+    Google and TikTok access tokens expire (~1 hour); a connected account
+    is otherwise unusable for publishing past that window even though a
+    valid refresh_token was saved at connect time and never used. Meta
+    (Facebook/Instagram) long-lived tokens use a different exchange
+    mechanism entirely (fb_exchange_token, not grant_type=refresh_token) —
+    not implemented here since neither platform is configured yet; callers
+    should treat a failure from this function as non-fatal and fall back
+    to the existing access_token.
+
+    Returns:
+        {"access_token": str, "refresh_token": str | None} — refresh_token
+        is only present when the provider issued a new one (Google
+        normally keeps the original one valid instead of rotating it).
+
+    Raises:
+        OAuthProviderException: If the platform is unconfigured or the
+            token endpoint rejects the refresh_token.
+    """
+    cfg = _get_config(platform)
+    if not is_configured(platform):
+        raise OAuthProviderException(
+            f"{platform} is not configured yet — set its client id/secret in .env"
+        )
+
+    body = {
+        cfg["client_id_param"]: cfg["client_id"],
+        "client_secret": cfg["client_secret"],
+        "refresh_token": refresh_token,
+        "grant_type": "refresh_token",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                cfg["token_url"], data=body, headers={"Accept": "application/json"}
+            )
+        resp.raise_for_status()
+        data = resp.json()
+    except httpx.HTTPError as exc:
+        raise OAuthProviderException(f"{platform} rejected the token refresh") from exc
+
+    access_token = data.get("access_token")
+    if not access_token:
+        raise OAuthProviderException(f"{platform} did not return a refreshed access token")
+
+    return {
+        "access_token": access_token,
+        "refresh_token": data.get("refresh_token"),
+    }
+
+
 async def fetch_external_account_id(platform: str, access_token: str) -> Optional[str]:
     """
     Resolve the id to actually publish to — distinct from the OAuth user's
