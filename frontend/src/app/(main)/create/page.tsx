@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Sparkles, Video, Wand2, Check, Loader2, Film, RefreshCw,
@@ -93,6 +93,7 @@ const CAMERA_OPTIONS: GuideOption[] = [
 
 const CreateReelContent = () => {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { toast } = useToast();
   const { startGeneration } = useGenerationQueue();
 
@@ -482,6 +483,8 @@ const CreateReelContent = () => {
       }
       const data = await res.json();
       setReelId(data.reel_id);
+      hasResumedRef.current = true;
+      router.replace(`/create?reelId=${data.reel_id}`);
       startGeneration(data.reel_id, selectedProduct.name);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Failed to start generation";
@@ -580,6 +583,8 @@ const CreateReelContent = () => {
       if (xhr.status === 200) {
         const data = JSON.parse(xhr.responseText);
         setReelId(data.reel_id);
+        hasResumedRef.current = true;
+        router.replace(`/create?reelId=${data.reel_id}`);
         setUploadStatus("done");
         completedModeRef.current = "upload";
         setCompletedMode(null);
@@ -1077,7 +1082,7 @@ const CreateReelContent = () => {
         </div>
 
         {/* ============ RIGHT: Video Preview ============ */}
-        <div className="lg:col-span-2 lg:sticky lg:top-4 lg:h-[calc(100vh-4rem)] flex flex-col gap-3">
+        <div className="h-[70vh] min-h-[420px] lg:col-span-2 lg:sticky lg:top-4 lg:h-[calc(100vh-4rem)] flex flex-col gap-3">
           <div className="relative flex-1 flex flex-col rounded-3xl border border-border bg-gradient-to-b from-card to-card/60 p-3 shadow-elevated overflow-hidden">
             <div className="flex items-center justify-between px-1 pb-2 shrink-0">
               <div className="flex items-center gap-1.5">
