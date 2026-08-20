@@ -1,58 +1,12 @@
 import os
-import sys
-import ssl
 import math
 import asyncio
 import logging
-import tempfile
-import certifi
 from celery import Celery
 
+from app.core.ssl_fix import setup_windows_ssl
 
-def _setup_windows_ssl() -> None:
-    """
-    Extend certifi's CA bundle with the Windows system trust store.
-
-    WHY: google-auth uses `requests`/urllib3 for OAuth2 token exchange
-    (POST https://oauth2.googleapis.com/token).  On Windows, requests uses
-    certifi's bundle which does NOT include certificates added by the OS
-    (e.g. a university/corporate proxy root CA).  httpx — used for all other
-    calls — accesses the Windows trust store natively via Python's ssl module
-    and therefore works without this fix.
-
-    This function builds a temporary PEM file that merges certifi's bundle with
-    all trusted root CAs from the Windows certificate store, then sets
-    REQUESTS_CA_BUNDLE so requests picks it up before any HTTP call is made.
-
-    No-op on non-Windows or if env var is already set externally.
-    """
-    if os.environ.get("REQUESTS_CA_BUNDLE"):
-        return  # Already set externally — don't override
-
-    with open(certifi.where(), "r", encoding="utf-8") as _f:
-        pems = [_f.read()]
-
-    if sys.platform == "win32":
-        for store in ("ROOT", "CA"):
-            try:
-                for cert, encoding, _trust in ssl.enum_certificates(store):
-                    if encoding == "x509_asn":
-                        try:
-                            pems.append(ssl.DER_cert_to_PEM_cert(cert))
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-
-    fd, path = tempfile.mkstemp(suffix=".pem", prefix="reelcast_ca_")
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write("\n".join(pems))
-
-    os.environ["REQUESTS_CA_BUNDLE"] = path
-    os.environ["SSL_CERT_FILE"] = path
-
-
-_setup_windows_ssl()
+setup_windows_ssl()
 from datetime import datetime, timezone
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
