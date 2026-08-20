@@ -125,7 +125,8 @@ The start script will:
 3. Start **Redis** via Docker (`docker compose up -d`)
 4. Open a new terminal → activate venv → start **FastAPI** on port 8000
 5. Open a new terminal → activate venv → start **Celery Worker**
-6. Open a new terminal → start **Next.js Frontend** on port 3000
+6. Open a new terminal → activate venv → start **Celery Beat** (scheduled Distribution auto-publish — separate process from the Worker, see STEP 4 below)
+7. Open a new terminal → start **Next.js Frontend** on port 3000
 
 The start-and-test script installs E2E dependencies and Playwright browsers, starts the services in deterministic test mode, then runs backend unit, frontend unit, UI unit E2E, and non-external system E2E suites.
 
@@ -179,7 +180,28 @@ Verify: Seeing `celery@... ready.` = Success
 
 ---
 
-### STEP 4 — Frontend (Next.js / bun)
+### STEP 4 — Celery Beat (F3 scheduled distribution)
+
+Open another new terminal and navigate to `backend`:
+
+```bash
+cd backend
+venv\Scripts\activate
+venv\Scripts\celery -A app.worker.celery_app beat --loglevel=info
+```
+
+Verify: Seeing `Scheduler: Sending due task check-scheduled-distributions` (every 60s) = Success
+
+> **This is a separate process from the Celery Worker in STEP 3 — both must be
+> running.** Worker executes tasks; Beat only watches the clock and queues
+> `checkScheduledDistributions` every 60 seconds for the Worker to pick up.
+> Without Beat running, a scheduled Distribution just sits at status
+> `Pending` forever — Publish Now still works fine since that path skips
+> Beat entirely, but nothing will ever auto-publish at its `scheduled_time`.
+
+---
+
+### STEP 5 — Frontend (Next.js / bun)
 
 Open a new terminal and navigate to `frontend`:
 
@@ -347,6 +369,8 @@ The route URLs stay stable for the frontend, while the internal handler names fo
 | Celery crashes on Windows    | Must use `--pool=solo` (prevents WinError 5)                |
 | Error 429 RESOURCE_EXHAUSTED | GOOGLE_AI_API_KEY requires a Billing project, not Free Tier |
 | Celery executing old tasks   | Must restart Celery whenever task signatures are modified   |
+| Scheduled Distribution stuck on `Pending` past its `scheduled_time` | Celery Beat (STEP 4) isn't running — it's a separate process from the Worker. Publish Now still works without it; only the 60s auto-publish check needs Beat. |
+| YouTube publish fails with `401 Unauthorized` | The connected account's access token expired (~1h) and had never been refreshed before this was fixed — should no longer happen; if it does, reconnect the account |
 
 ---
 
