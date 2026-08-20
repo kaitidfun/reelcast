@@ -51,9 +51,15 @@ def get_reels(
     skip: int = 0,
     limit: int = 50,
 ) -> tuple[list[Reel], int]:
+    # Only explicitly-saved reels are browsable — a Completed reel doesn't
+    # appear here until the member clicks Save on the Create page. Nothing
+    # currently needs the unsaved ones through this listing endpoint (the
+    # Create page's own in-progress/just-finished reel is fetched by id via
+    # get_reel(), not this list).
     base = db.query(Reel).filter(
         Reel.user_id == user_id,
         Reel.deleted_at.is_(None),
+        Reel.is_saved.is_(True),
     )
     if product_id:
         base = base.filter(Reel.product_id == product_id)
@@ -79,6 +85,7 @@ def update_reel(
     final_commercial_video_url: Optional[str] = None,
     status: Optional[str] = None,
     error_message: Optional[str] = None,
+    is_saved: Optional[bool] = None,
 ) -> Reel:
     """
     Update mutable fields on a Reel ORM instance and commit to DB.
@@ -111,6 +118,8 @@ def update_reel(
         reel.status = status
     if error_message is not None:
         reel.error_message = error_message
+    if is_saved is not None:
+        reel.is_saved = is_saved
     db.commit()
     db.refresh(reel)
     return reel

@@ -177,6 +177,7 @@ class ReelResponse(BaseModel):
     raw_video_url: Optional[str] = None
     first_frame_url: Optional[str] = None
     caption_and_hashtags: Optional[dict] = None
+    is_saved: bool = False
     created_at: Optional[datetime] = None
     class Config:
         from_attributes = True
@@ -450,6 +451,12 @@ def previewAndApproveContent(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Saves the reel into the member's Library — a Completed reel doesn't
+    appear in Library/browse listings (get_reels()) until this is called
+    with decision=True. Endpoint path/name kept as-is (matches F2-MD06 in
+    the design doc); only the persisted effect of decision=True changed.
+    """
     reel = get_reel(db=db, reel_id=reel_id, user_id=current_user.user_id)
     if not reel or not (
         reel.final_commercial_video_url
@@ -458,10 +465,14 @@ def previewAndApproveContent(
     ):
         raise MediaNotFoundException()
 
+    if request.decision:
+        update_reel(db, reel=reel, is_saved=True)
+
     return {
         "approved": request.decision,
         "queued_for_distribution": request.decision,
         "reel_id": reel.reel_id,
+        "is_saved": reel.is_saved,
     }
 
 

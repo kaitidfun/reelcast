@@ -128,6 +128,7 @@ def _attach_reel_counts(db: Session, products: list[Product], *, user_id) -> Non
         .filter(
             Reel.user_id == user_id,
             Reel.deleted_at.is_(None),
+            Reel.is_saved.is_(True),
             Reel.product_id.in_(product_ids),
         )
         .group_by(Reel.product_id)

@@ -21,3 +21,10 @@ ALTER TABLE reels ADD COLUMN IF NOT EXISTS first_frame_url VARCHAR;
 -- that Page/IG account's own id, not the OAuth user's id — the connect
 -- callback resolves and stores it here right after the token exchange.
 ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS external_account_id VARCHAR;
+
+-- 2026-08-20: reels.is_saved
+-- A Completed reel used to appear in the Library automatically. Now it only
+-- shows up once the member explicitly clicks "Save" on the Create page —
+-- previewAndApproveContent() sets this column true. Existing Completed rows
+-- default to false and won't reappear in Library until re-saved.
+ALTER TABLE reels ADD COLUMN IF NOT EXISTS is_saved BOOLEAN NOT NULL DEFAULT false;
