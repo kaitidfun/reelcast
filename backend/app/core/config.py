@@ -1,9 +1,14 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Load env variables
-load_dotenv(".env.local")
-load_dotenv()
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# Local project configuration must win over variables inherited by an old
+# development shell; otherwise an empty inherited value leaves OAuth disabled.
+load_dotenv(PROJECT_ROOT / ".env", override=True)
+load_dotenv(PROJECT_ROOT / ".env.local", override=True)
 
 # Test execution
 REELCAST_TEST_MODE = os.getenv("REELCAST_TEST_MODE", "false").lower() in {

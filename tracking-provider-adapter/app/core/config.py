@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
     """Settings are intentionally read only from the adapter environment."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # Resolve files from this service's directory, not the shell's working
+    # directory.  Local overrides mirror the backend's `.env.local` setup.
+    model_config = SettingsConfigDict(
+        env_file=(PROJECT_ROOT / ".env", PROJECT_ROOT / ".env.local"),
+        extra="ignore",
+    )
 
     port: int = 9000
     request_timeout_seconds: float = 15.0
