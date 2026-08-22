@@ -249,6 +249,9 @@ class Reel(Base):
     )
     error_message = Column(Text, nullable=True)
     retry_count = Column(Integer, nullable=False, server_default=text("0"))
+    # A Completed reel only appears in the Library once the member explicitly
+    # saves it from the Create page — not automatically on generation finishing.
+    is_saved = Column(Boolean, nullable=False, server_default=text("false"))
     created_at = Column(
         TIMESTAMP(timezone=True),
         nullable=False,

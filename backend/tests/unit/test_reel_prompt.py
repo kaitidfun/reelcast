@@ -112,6 +112,7 @@ class ReelGenerationTests(unittest.TestCase):
             final_commercial_video_url="video.mp4",
             raw_video_url=None,
             uploaded_video_url=None,
+            is_saved=False,
         )
 
         result = previewAndApproveContent(
@@ -122,6 +123,7 @@ class ReelGenerationTests(unittest.TestCase):
         )
         self.assertTrue(result["approved"])
         self.assertTrue(result["queued_for_distribution"])
+        self.assertTrue(result["is_saved"])
 
     @patch("app.routes.reel_routes.get_reel")
     def test_F2_UTC06_TC02_rejects_content(self, get_reel) -> None:
@@ -130,6 +132,7 @@ class ReelGenerationTests(unittest.TestCase):
             final_commercial_video_url="video.mp4",
             raw_video_url=None,
             uploaded_video_url=None,
+            is_saved=False,
         )
 
         result = previewAndApproveContent(

@@ -45,3 +45,10 @@ ALTER TABLE analytics ADD COLUMN IF NOT EXISTS engagement INTEGER NOT NULL DEFAU
 CREATE UNIQUE INDEX IF NOT EXISTS analytics_source_external_ref_unique
     ON analytics (source_platform, external_ref)
     WHERE external_ref IS NOT NULL;
+    
+-- 2026-08-20: reels.is_saved
+-- A Completed reel used to appear in the Library automatically. Now it only
+-- shows up once the member explicitly clicks "Save" on the Create page —
+-- previewAndApproveContent() sets this column true. Existing Completed rows
+-- default to false and won't reappear in Library until re-saved.
+ALTER TABLE reels ADD COLUMN IF NOT EXISTS is_saved BOOLEAN NOT NULL DEFAULT false;

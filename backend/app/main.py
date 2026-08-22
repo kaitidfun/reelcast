@@ -1,3 +1,7 @@
+from app.core.ssl_fix import setup_windows_ssl
+
+setup_windows_ssl()
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware

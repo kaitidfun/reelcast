@@ -24,6 +24,7 @@ from app.services.oauth_platforms import (
     exchange_code_for_token,
     fetch_external_account_id,
     is_configured,
+    refresh_access_token,
 )
 
 
@@ -61,6 +62,40 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
 
             with self.assertRaises(OAuthProviderException):
                 await exchange_code_for_token("youtube", "some-code")
+
+    async def test_refresh_access_token_returns_new_token(self) -> None:
+        with patch("app.services.oauth_platforms.is_configured", return_value=True), \
+             patch("app.services.oauth_platforms.httpx.AsyncClient") as mock_client_cls:
+            mock_response = MagicMock()
+            mock_response.json.return_value = {"access_token": "new-access-token"}
+            mock_response.raise_for_status.return_value = None
+            mock_client = AsyncMock()
+            mock_client.post.return_value = mock_response
+            mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+            result = await refresh_access_token("youtube", "some-refresh-token")
+
+        self.assertEqual("new-access-token", result["access_token"])
+        post_kwargs = mock_client.post.call_args.kwargs
+        self.assertEqual("refresh_token", post_kwargs["data"]["grant_type"])
+        self.assertEqual("some-refresh-token", post_kwargs["data"]["refresh_token"])
+
+    async def test_refresh_access_token_raises_on_missing_access_token(self) -> None:
+        with patch("app.services.oauth_platforms.is_configured", return_value=True), \
+             patch("app.services.oauth_platforms.httpx.AsyncClient") as mock_client_cls:
+            mock_response = MagicMock()
+            mock_response.json.return_value = {}
+            mock_response.raise_for_status.return_value = None
+            mock_client = AsyncMock()
+            mock_client.post.return_value = mock_response
+            mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+            with self.assertRaises(OAuthProviderException):
+                await refresh_access_token("youtube", "some-refresh-token")
+
+    async def test_refresh_access_token_unconfigured_platform_raises(self) -> None:
+        with self.assertRaises(OAuthProviderException):
+            await refresh_access_token("tiktok", "some-refresh-token")
 
     async def test_fetch_external_account_id_youtube_returns_channel_id(self) -> None:
         mock_response = MagicMock()

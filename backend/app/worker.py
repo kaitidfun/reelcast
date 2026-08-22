@@ -1,58 +1,12 @@
 import os
-import sys
-import ssl
 import math
 import asyncio
 import logging
-import tempfile
-import certifi
 from celery import Celery
 
+from app.core.ssl_fix import setup_windows_ssl
 
-def _setup_windows_ssl() -> None:
-    """
-    Extend certifi's CA bundle with the Windows system trust store.
-
-    WHY: google-auth uses `requests`/urllib3 for OAuth2 token exchange
-    (POST https://oauth2.googleapis.com/token).  On Windows, requests uses
-    certifi's bundle which does NOT include certificates added by the OS
-    (e.g. a university/corporate proxy root CA).  httpx — used for all other
-    calls — accesses the Windows trust store natively via Python's ssl module
-    and therefore works without this fix.
-
-    This function builds a temporary PEM file that merges certifi's bundle with
-    all trusted root CAs from the Windows certificate store, then sets
-    REQUESTS_CA_BUNDLE so requests picks it up before any HTTP call is made.
-
-    No-op on non-Windows or if env var is already set externally.
-    """
-    if os.environ.get("REQUESTS_CA_BUNDLE"):
-        return  # Already set externally — don't override
-
-    with open(certifi.where(), "r", encoding="utf-8") as _f:
-        pems = [_f.read()]
-
-    if sys.platform == "win32":
-        for store in ("ROOT", "CA"):
-            try:
-                for cert, encoding, _trust in ssl.enum_certificates(store):
-                    if encoding == "x509_asn":
-                        try:
-                            pems.append(ssl.DER_cert_to_PEM_cert(cert))
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-
-    fd, path = tempfile.mkstemp(suffix=".pem", prefix="reelcast_ca_")
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write("\n".join(pems))
-
-    os.environ["REQUESTS_CA_BUNDLE"] = path
-    os.environ["SSL_CERT_FILE"] = path
-
-
-_setup_windows_ssl()
+setup_windows_ssl()
 from datetime import datetime, timezone
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
@@ -76,7 +30,7 @@ from app.services.video_generation_service import (
     generate_first_frame_with_gemini,
     LTX_MAX_CLIP_DURATION,
 )
-from app.services.overlay_service import overlayImagesAndLogos
+from app.services.overlay_service import overlayImagesAndLogos, generateVideoThumbnail
 from app.services.reel_service import update_reel
 from app.services.storage_service import get_presigned_url
 from app.services import distribution_publish_service, distribution_service, social_account_service, tracking_provider_service
@@ -300,6 +254,16 @@ async def _generateReels(
             # User-uploaded video — apply overlay + captions, skip AI generation
             final_video_url = reel.uploaded_video_url
             first_frame_url = reel.first_frame_url
+            # Uploaded reels never get a Gemini-generated first frame, so they'd
+            # otherwise have no thumbnail in the library/reel history views.
+            # Best-effort: a failed snap just leaves the reel without a
+            # thumbnail rather than blocking the rest of the pipeline.
+            if not first_frame_url and reel.uploaded_video_url:
+                try:
+                    upload_video_url = get_presigned_url(reel.uploaded_video_url)
+                    first_frame_url = await generateVideoThumbnail(upload_video_url, reel_id)
+                except Exception as thumb_err:
+                    logger.warning(f"[Worker] Thumbnail extraction failed for upload: {thumb_err}")
         else:
             # Caption-only regeneration — retain existing video
             final_video_url = reel.final_commercial_video_url
@@ -704,6 +668,32 @@ async def _publishDistribution(distribution_id: str) -> None:
             video_url = get_presigned_url(reel.final_commercial_video_url)
             access_token = social_account_service.get_decrypted_access_token(account)
             caption = _format_caption(reel.caption_and_hashtags)
+
+            # Access tokens expire (~1h for Google/TikTok) long before a
+            # scheduled distribution gets published. Refresh proactively
+            # whenever a refresh_token was saved — best-effort: if the
+            # platform doesn't support this grant (Meta) or the refresh
+            # itself fails, fall back to the existing access_token rather
+            # than failing the whole publish over it.
+            refresh_token = social_account_service.get_decrypted_refresh_token(account)
+            if refresh_token:
+                try:
+                    refreshed = await oauth_platforms.refresh_access_token(
+                        account.platform_name, refresh_token
+                    )
+                    access_token = refreshed["access_token"]
+                    social_account_service.update_social_account_tokens(
+                        db,
+                        account=account,
+                        access_token=access_token,
+                        refresh_token=refreshed.get("refresh_token") or refresh_token,
+                    )
+                    logger.info(f"[Distribution] Refreshed {account.platform_name} access token before publish")
+                except Exception as refresh_err:
+                    logger.warning(
+                        f"[Distribution] Token refresh failed for {account.platform_name}, "
+                        f"using existing access token: {refresh_err}"
+                    )
 
             platform_post_id = await distribution_publish_service.publish(
                 account.platform_name,

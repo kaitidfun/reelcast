@@ -1,12 +1,13 @@
 "use client";
 
 import { useRef, useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Sparkles, Video, Wand2, Check, Loader2, Film, RefreshCw,
   Play, Pause, Volume2, VolumeX, ShoppingBag, FolderOpen,
   ChevronRight, X, Expand, Download, Clock, Upload, Lightbulb,
+  Save, CheckCircle2,
 } from "lucide-react";
 import { useGenerationQueue } from "@/contexts/GenerationQueueContext";
 import { Button } from "@/components/ui/button";
@@ -93,6 +94,7 @@ const CAMERA_OPTIONS: GuideOption[] = [
 
 const CreateReelContent = () => {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { toast } = useToast();
   const { startGeneration } = useGenerationQueue();
 
@@ -113,7 +115,8 @@ const CreateReelContent = () => {
 
   // Output / preview state
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
-  const [isApproved, setIsApproved] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [completedMode, setCompletedMode] = useState<"generate" | "upload" | null>(null);
   const completedModeRef = useRef<"generate" | "upload">("generate");
   const captionOnlyRegenRef = useRef(false);
@@ -193,6 +196,7 @@ const CreateReelContent = () => {
         setReelId(data.reel_id);
         setPromptText(data.prompt_text || "");
         setCaption(formatCaptionAndHashtags(data.caption_and_hashtags));
+        setIsSaved(Boolean(data.is_saved));
 
         if (data.status === "Completed") {
           setCompletedMode("generate");
@@ -453,7 +457,7 @@ const CreateReelContent = () => {
     completedModeRef.current = "generate";
     setCompletedMode(null);
     setGenerationStatus("generating");
-    setIsApproved(false);
+    setIsSaved(false);
     setGenerationStartTime(Date.now());
     setElapsedSeconds(0);
     setVideoUrl(null);
@@ -482,6 +486,8 @@ const CreateReelContent = () => {
       }
       const data = await res.json();
       setReelId(data.reel_id);
+      hasResumedRef.current = true;
+      router.replace(`/create?reelId=${data.reel_id}`);
       startGeneration(data.reel_id, selectedProduct.name);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Failed to start generation";
@@ -494,7 +500,7 @@ const CreateReelContent = () => {
     if (!reelId) return;
     completedModeRef.current = completedMode ?? "generate";
     captionOnlyRegenRef.current = target === "caption";
-    setIsApproved(false);
+    setIsSaved(false);
     setGenerationStartTime(Date.now());
     setElapsedSeconds(0);
     setGenerationTime(null);
@@ -580,11 +586,13 @@ const CreateReelContent = () => {
       if (xhr.status === 200) {
         const data = JSON.parse(xhr.responseText);
         setReelId(data.reel_id);
+        hasResumedRef.current = true;
+        router.replace(`/create?reelId=${data.reel_id}`);
         setUploadStatus("done");
         completedModeRef.current = "upload";
         setCompletedMode(null);
         setGenerationStatus("generating");
-        setIsApproved(false);
+        setIsSaved(false);
         setGenerationStartTime(Date.now());
         setElapsedSeconds(0);
         setVideoUrl(null);
@@ -610,8 +618,9 @@ const CreateReelContent = () => {
     xhr.send(form);
   };
 
-  const previewAndApproveContent = async () => {
+  const saveReel = async () => {
     if (!reelId) return;
+    setIsSaving(true);
     try {
       const token = localStorage.getItem("rf_token");
       const response = await fetch(
@@ -627,19 +636,21 @@ const CreateReelContent = () => {
       );
       if (!response.ok) {
         const error = await response.json().catch(() => null);
-        throw new Error(error?.detail || "Could not approve Reel");
+        throw new Error(error?.detail || "Could not save Reel");
       }
-      setIsApproved(true);
+      setIsSaved(true);
       toast({
-        title: "Approved & Saved!",
-        description: "Reel queued for distribution.",
+        title: "Saved!",
+        description: "This reel now appears in your Library.",
       });
     } catch (error) {
       toast({
-        title: "Approval failed",
-        description: error instanceof Error ? error.message : "Could not approve Reel",
+        title: "Save failed",
+        description: error instanceof Error ? error.message : "Could not save Reel",
         variant: "destructive",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1033,18 +1044,40 @@ const CreateReelContent = () => {
             </motion.div>
           )}
 
-          {/* Caption + Approve */}
+          {/* Save — persists this reel into the Library. Kept as its own
+              block, separate from the caption card, so it reads as "save
+              the whole project" rather than "confirm this caption". */}
+          {completedMode !== null && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              {isSaved ? (
+                <div className="flex items-center justify-center gap-2 rounded-2xl border border-success/30 bg-success/10 px-4 py-3 text-sm font-medium text-success">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Saved to Library
+                </div>
+              ) : (
+                <Button
+                  onClick={saveReel}
+                  disabled={isSaving}
+                  className="gradient-primary h-11 w-full gap-2 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
+                >
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {isSaving ? "Saving…" : "Save Reel"}
+                </Button>
+              )}
+            </motion.div>
+          )}
+
+          {/* Caption */}
           {completedMode !== null && (
             <CaptionBlock
               caption={caption}
               onCaptionChange={setCaption}
               captionTextareaRef={captionTextareaRef}
               isRegeneratingCaption={isRegeneratingCaption}
-              isApproved={isApproved}
+              isSaved={isSaved}
               selectedPlatforms={selectedPlatforms}
               onTogglePlatform={togglePlatform}
               onRegenCaption={() => regenerateContent("caption")}
-              onApprove={previewAndApproveContent}
               onPublish={handlePublish}
             />
           )}
@@ -1077,7 +1110,7 @@ const CreateReelContent = () => {
         </div>
 
         {/* ============ RIGHT: Video Preview ============ */}
-        <div className="lg:col-span-2 lg:sticky lg:top-4 lg:h-[calc(100vh-4rem)] flex flex-col gap-3">
+        <div className="h-[70vh] min-h-[420px] lg:col-span-2 lg:sticky lg:top-4 lg:h-[calc(100vh-4rem)] flex flex-col gap-3">
           <div className="relative flex-1 flex flex-col rounded-3xl border border-border bg-gradient-to-b from-card to-card/60 p-3 shadow-elevated overflow-hidden">
             <div className="flex items-center justify-between px-1 pb-2 shrink-0">
               <div className="flex items-center gap-1.5">

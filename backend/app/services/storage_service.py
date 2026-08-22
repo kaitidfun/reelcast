@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import UploadFile
 
@@ -58,6 +59,15 @@ def _get_s3_client():
             aws_access_key_id=R2_ACCESS_KEY_ID,
             aws_secret_access_key=R2_SECRET_ACCESS_KEY,
             region_name="auto",
+            # Default 60s read_timeout is too tight for streaming video bodies
+            # over this network (a stall between chunks past 60s kills the
+            # whole download, not just the slow chunk) — widen it and retry
+            # transient connection failures instead of failing the request.
+            config=Config(
+                connect_timeout=30,
+                read_timeout=300,
+                retries={"max_attempts": 3, "mode": "standard"},
+            ),
         )
         logger.info("Cloudflare R2 S3 client initialized.")
     return _s3_client
@@ -282,19 +292,25 @@ async def delete_file(object_key: str, *, bucket: Optional[str] = None) -> bool:
         return False
 
 
-def get_file(object_key: str, *, bucket: Optional[str] = None) -> dict:
+def get_file(object_key: str, *, bucket: Optional[str] = None, range_header: Optional[str] = None) -> dict:
     """
     Fetch an object from R2 by its key.
 
     Returns the boto3 get_object response (contains 'Body' stream and metadata).
+    Passing range_header (a raw HTTP "Range: bytes=..." value) fetches only that
+    byte range from R2 instead of the whole object — required for video seeking
+    and for browsers that probe a range before deciding how to play a file.
 
     Raises:
         RuntimeError: If the file cannot be retrieved.
     """
     target_bucket = bucket or R2_BUCKET_NAME
+    kwargs = {"Bucket": target_bucket, "Key": object_key}
+    if range_header:
+        kwargs["Range"] = range_header
     try:
         s3 = _get_s3_client()
-        response = s3.get_object(Bucket=target_bucket, Key=object_key)
+        response = s3.get_object(**kwargs)
         return response
     except (BotoCoreError, ClientError) as exc:
         logger.error("R2 get failed for '%s': %s", object_key, exc)

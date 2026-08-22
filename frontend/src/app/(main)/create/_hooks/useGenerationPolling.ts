@@ -3,14 +3,10 @@
 import { useEffect, MutableRefObject } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useGenerationQueue } from "@/contexts/GenerationQueueContext";
+import { resolveVideoUrl } from "@/lib/reel-status";
 import type { GenerationStatus } from "../_types";
 
-export const resolveVideoUrl = (url: string | null | undefined) => {
-  if (!url) return null;
-  return url.startsWith("http")
-    ? url
-    : `http://localhost:8000/api/upload/videos/${url}`;
-};
+export { resolveVideoUrl };
 
 export const formatCaptionAndHashtags = (
   captionAndHashtags: { caption?: string; hashtags?: string[] } | null | undefined

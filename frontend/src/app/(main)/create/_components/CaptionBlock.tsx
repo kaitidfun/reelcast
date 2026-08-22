@@ -28,11 +28,10 @@ type Props = {
   onCaptionChange: (val: string) => void;
   captionTextareaRef: RefObject<HTMLTextAreaElement>;
   isRegeneratingCaption: boolean;
-  isApproved: boolean;
+  isSaved: boolean;
   selectedPlatforms: string[];
   onTogglePlatform: (id: string) => void;
   onRegenCaption: () => void;
-  onApprove: () => void;
   onPublish: () => void;
 };
 
@@ -41,11 +40,10 @@ export function CaptionBlock({
   onCaptionChange,
   captionTextareaRef,
   isRegeneratingCaption,
-  isApproved,
+  isSaved,
   selectedPlatforms,
   onTogglePlatform,
   onRegenCaption,
-  onApprove,
   onPublish,
 }: Props) {
   return (
@@ -77,7 +75,7 @@ export function CaptionBlock({
         }`}
       />
 
-      {isApproved && (
+      {isSaved && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: "auto" }}
@@ -120,16 +118,12 @@ export function CaptionBlock({
         </motion.div>
       )}
 
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="outline" onClick={onRegenCaption} size="sm" className="gap-1.5 h-9 text-xs">
+      <div className={isSaved ? "grid grid-cols-2 gap-2" : ""}>
+        <Button variant="outline" onClick={onRegenCaption} size="sm" className="gap-1.5 h-9 text-xs w-full">
           <RefreshCw className="h-3 w-3" />
           Retry AI Text
         </Button>
-        {!isApproved ? (
-          <Button onClick={onApprove} size="sm" className="gradient-primary text-primary-foreground shadow-glow h-9 text-xs">
-            Approve
-          </Button>
-        ) : (
+        {isSaved && (
           <Button
             onClick={onPublish}
             disabled={selectedPlatforms.length === 0}

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -156,6 +156,7 @@ def serve_generic_image(
 @router.get("/videos/{object_key:path}")
 def serve_generic_video(
     object_key: str,
+    request: Request,
     download: bool = False,
 ):
     """
@@ -169,12 +170,20 @@ def serve_generic_video(
         download:   If True, adds Content-Disposition: attachment so the browser
                     downloads the file instead of playing it inline.
                     Frontend passes ?download=true to trigger this path.
+
+    Honors an incoming Range header (fetching only that byte range from R2 and
+    replying 206) instead of always streaming the whole file — the response
+    previously advertised Accept-Ranges: bytes without actually supporting
+    range requests, which left <video> elements stuck waiting on the partial
+    response a browser's range probe expects.
     """
     if not object_key:
         raise HTTPException(status_code=400, detail="No object key provided")
 
+    range_header = request.headers.get("range")
+
     try:
-        file_obj = get_file(object_key)
+        file_obj = get_file(object_key, range_header=range_header)
     except RuntimeError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
@@ -184,7 +193,6 @@ def serve_generic_video(
     filename = object_key.split("/")[-1] or "reel.mp4"
 
     headers: dict = {
-        # Allow partial-content requests (required for HTML5 video seeking)
         "Accept-Ranges": "bytes",
         "Cache-Control": "public, max-age=3600",
     }
@@ -194,8 +202,15 @@ def serve_generic_video(
         # because the HTML <a download> attribute is ignored for cross-origin URLs.
         headers["Content-Disposition"] = f'attachment; filename="{filename}"'
 
+    status_code = 200
+    if range_header and "ContentRange" in file_obj:
+        status_code = 206
+        headers["Content-Range"] = file_obj["ContentRange"]
+        headers["Content-Length"] = str(file_obj["ContentLength"])
+
     return StreamingResponse(
         file_obj["Body"],
+        status_code=status_code,
         media_type=content_type,
         headers=headers,
     )
