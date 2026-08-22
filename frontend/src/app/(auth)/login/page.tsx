@@ -23,6 +23,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from "@/components/ui/input-otp";
 import authHero from "@/assets/auth-hero-login.jpg";
 import { validateLoginForm, validateOtpCode } from "@/lib/test-plan";
+import { OAUTH_BACKEND_URL } from "@/lib/api";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -89,7 +90,7 @@ const Login = () => {
       description: "Please wait while we redirect you to the authorization page.",
     });
     // Redirect to backend OAuth endpoint
-    window.location.href = `http://localhost:8000/auth/${provider}/login`;
+    window.location.href = `${OAUTH_BACKEND_URL}/auth/${provider}/login`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

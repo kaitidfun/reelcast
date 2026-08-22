@@ -53,6 +53,8 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost
 // by the provider. Keep ordinary browser API requests local during ngrok-based
 // development to avoid ngrok's free-tier browser interstitial.
 export const OAUTH_API_BASE_URL = process.env.NEXT_PUBLIC_OAUTH_API_URL || API_BASE_URL;
+// Member sign-in routes live at /auth rather than below /api.
+export const OAUTH_BACKEND_URL = OAUTH_API_BASE_URL.replace(/\/api\/?$/, "");
 
 function getAuthHeaders(): HeadersInit {
   if (typeof window === "undefined") return {};

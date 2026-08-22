@@ -21,16 +21,29 @@ class LazadaProvider(ProviderClient):
         return f"{self.settings().lazada_authorize_url}?{urlencode({'response_type': 'code', 'client_id': self.settings().lazada_app_key, 'redirect_uri': redirect_uri, 'state': state})}"
 
     async def exchange_code(self, *, code: str, redirect_uri: str) -> TokenExchangeResponse:
+        # Lazada's token API is not a generic OAuth token endpoint. The
+        # authorization code is an API parameter and must be included in the
+        # SHA-256 signature; sending it in an unsigned form body is rejected.
+        del redirect_uri
         self.require("lazada_token_url", "lazada_app_key", "lazada_app_secret")
         path = "/auth/token/create"
-        params = {"app_key": self.settings().lazada_app_key, "sign_method": "sha256", "timestamp": str(int(time.time() * 1000))}
+        params = {
+            "app_key": self.settings().lazada_app_key,
+            "code": code,
+            "sign_method": "sha256",
+            "timestamp": str(int(time.time() * 1000)),
+        }
         params["sign"] = self._sign(path, params)
-        data = await self.request("POST", self.settings().lazada_token_url, params=params,
-                                  data={"code": code, "grant_type": "authorization_code", "redirect_uri": redirect_uri})
+        data = await self.request("POST", self.settings().lazada_token_url, params=params)
         token = data.get("access_token")
         info = data.get("country_user_info") or []
         user = info[0] if isinstance(info, list) and info else {}
-        shop_id = data.get("seller_id") or data.get("account_id") or user.get("user_id")
+        shop_id = (
+            data.get("seller_id")
+            or data.get("account_id")
+            or user.get("seller_id")
+            or user.get("user_id")
+        )
         if not token or not shop_id:
             raise ProviderError(self.platform, "provider token response did not include a shop identifier")
         return TokenExchangeResponse(access_token=str(token), refresh_token=data.get("refresh_token"),
