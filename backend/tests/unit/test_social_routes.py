@@ -50,6 +50,10 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("client_key=test-client-key", url)
         self.assertIn("state=xyz", url)
 
+    def test_tiktok_scope_covers_publish_and_tracking(self) -> None:
+        scopes = set(oauth_platforms.PLATFORM_CONFIGS["tiktok"]["scope"].split(","))
+        self.assertTrue({"user.info.basic", "video.publish", "video.list"}.issubset(scopes))
+
     async def test_exchange_code_raises_on_missing_access_token(self) -> None:
         with patch("app.services.oauth_platforms.is_configured", return_value=True), \
              patch("app.services.oauth_platforms.httpx.AsyncClient") as mock_client_cls:

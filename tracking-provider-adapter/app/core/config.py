@@ -37,13 +37,6 @@ class Settings(BaseSettings):
     shopee_shop_id: str = ""
     lazada_app_key: str = ""
     lazada_app_secret: str = ""
-    tiktok_client_key: str = ""
-    tiktok_client_secret: str = ""
-    youtube_client_id: str = ""
-    youtube_client_secret: str = ""
-    meta_app_id: str = ""
-    meta_app_secret: str = ""
-
     # Kept configurable so deployments can select the provider region/version
     # without changing code.  The .env.example contains the current defaults.
     tiktok_shop_api_base_url: str = ""

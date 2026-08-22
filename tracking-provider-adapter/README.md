@@ -30,6 +30,15 @@ pytest
 
 Every provider response is normalized to records with a stable `external_ref`.  Commerce adapters use an order ID; social adapters use a video/post/media ID.  Missing provider fields become zero.  Invalid requests use Pydantic validation; upstream timeouts, rejected access tokens, rate limits, and provider errors are returned as safe HTTP errors without response bodies or credential values.
 
+## Social OAuth token reuse
+
+Connect TikTok, YouTube, Facebook, or Instagram only from ReelCast's
+**Distribute** page. The backend completes OAuth and stores the member token
+encrypted in `social_accounts`; on a tracking sync it passes that token to this
+adapter through a server-to-server request. Do not configure social OAuth
+client IDs or secrets in this adapter — they belong exclusively in
+`backend/.env.local`.
+
 ## Shop callback setup
 
 Register these callback URLs in the matching provider console:

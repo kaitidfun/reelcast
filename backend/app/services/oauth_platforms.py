@@ -40,7 +40,9 @@ PLATFORM_CONFIGS: dict[str, dict] = {
         # video.publish covers Content Posting API uploads; user.info.basic
         # is needed to resolve the account's open_id for the Query Creator
         # Info step the Content Posting API requires before a direct post.
-        "scope": "user.info.basic,video.publish",
+        # A single consent must cover both publishing from Distribute and
+        # reading the member's videos through the tracking adapter.
+        "scope": "user.info.basic,video.publish,video.list",
         "client_id_param": "client_key",
         "client_id": TIKTOK_CLIENT_KEY,
         "client_secret": TIKTOK_CLIENT_SECRET,
