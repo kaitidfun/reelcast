@@ -43,11 +43,20 @@ client IDs or secrets in this adapter — they belong exclusively in
 
 Register these callback URLs in the matching provider console:
 
-- TikTok Shop: `http://localhost:8000/api/tracking/ecommerce/tiktok_shop/callback`
-- Shopee: `http://localhost:8000/api/tracking/ecommerce/shopee/callback`
-- Lazada: `http://localhost:8000/api/tracking/ecommerce/lazada/callback`
+- TikTok Shop: `{BACKEND_URL}/api/tracking/ecommerce/tiktok_shop/callback`
+- Shopee: `{BACKEND_URL}/api/tracking/ecommerce/shopee/callback`
+- Lazada: `{BACKEND_URL}/api/tracking/ecommerce/lazada/callback`
 
-The adapter's authorize URL must receive exactly the callback URL registered with the provider.  TikTok Shop uses its v202309 HMAC signing model, Shopee uses its v2 partner signature, and Lazada uses its Open Platform SHA-256 signature.  Provider URL values are in `.env`, rather than source code, to support changes to versions, regions, or provider environments.
+For local Shop OAuth testing, use a public HTTPS backend URL such as an ngrok
+domain for `BACKEND_URL`.  Set `NEXT_PUBLIC_API_URL` to the same domain plus
+`/api`, so the browser starts and finishes the OAuth flow on one cookie
+domain. The adapter itself can stay on `http://localhost:9000` because it is
+called only by the backend. The adapter's authorize URL must receive exactly
+the callback URL registered with the provider. TikTok Shop uses its v202309
+HMAC signing model, Shopee uses its v2 partner signature, and Lazada uses its
+Open Platform SHA-256 signature. Provider URL values are in `.env`, rather
+than source code, to support changes to versions, regions, or provider
+environments.
 
 Shopee includes `shop_id` in its OAuth callback, but ReelCast's supplied token-exchange contract does not carry that field.  For that contract, set `SHOPEE_SHOP_ID` to the authorised shop ID (or extend the backend callback hand-off to pass the returned `shop_id` before production multi-shop use).
 

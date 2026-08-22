@@ -60,10 +60,12 @@ cp backend/.env.example backend/.env
 > TikTok rejects localhost/127.0.0.1 redirect URIs outright (requires public
 > HTTPS), and Meta requires HTTPS even for localhost. To test any connect
 > flow, run `ngrok http 8000` (free static domain), then set **both**
-> `BACKEND_URL` in `.env` **and** the redirect URI registered in each
-> platform's dev app settings to that same ngrok URL. Only needed for the
-> OAuth roundtrip itself — normal usage, including publishing once an
-> account is connected, never touches ngrok.
+> `BACKEND_URL` in `backend/.env.local` **and** `NEXT_PUBLIC_API_URL` in
+> `frontend/.env.local` to that same ngrok URL (with `/api` appended to the
+> frontend value). Register the resulting redirect URI in each platform's
+> developer settings. Only needed for the OAuth roundtrip itself — normal
+> usage, including publishing once an account is connected, never touches
+> ngrok.
 
 ### E2E Testing — Create `e2e/.env.test`
 
@@ -438,6 +440,35 @@ The frontend displays `Needs setup` until both OAuth URLs for that shop are
 configured, then shows `Connect`. Tokens are encrypted immediately in the
 backend and are never rendered by the UI.
 
+#### Local Shop OAuth with ngrok
+
+The Shop OAuth callback must be reachable by the provider. Start a tunnel to
+the backend with `ngrok http 8000`, then use its public HTTPS domain in both
+places below and restart the affected services:
+
+```env
+# backend/.env.local
+BACKEND_URL=https://your-domain.ngrok-free.app
+FRONTEND_URL=http://localhost:3000
+
+# frontend/.env.local
+NEXT_PUBLIC_API_URL=https://your-domain.ngrok-free.app/api
+```
+
+Keep the frontend local if desired. `NEXT_PUBLIC_API_URL` is required because
+the Connect request and provider callback must use the same public domain for
+the OAuth session cookie. Register these exact callback URLs in the provider
+consoles:
+
+```text
+https://your-domain.ngrok-free.app/api/tracking/ecommerce/tiktok_shop/callback
+https://your-domain.ngrok-free.app/api/tracking/ecommerce/shopee/callback
+https://your-domain.ngrok-free.app/api/tracking/ecommerce/lazada/callback
+```
+
+The adapter remains private on `http://localhost:9000`; do not expose it
+through the tunnel.
+
 ## Feature 3: Social distribution setup
 
 Feature 3 is ready for the production OAuth credentials already named in
@@ -453,6 +484,12 @@ register these callback URLs with the matching platform application:
 {BACKEND_URL}/api/social/facebook/callback
 {BACKEND_URL}/api/social/instagram/callback
 ```
+
+For local development, the ngrok configuration in **Local Shop OAuth with
+ngrok** applies unchanged to these Social Account connections: use the same
+public `BACKEND_URL` and set `NEXT_PUBLIC_API_URL` to that domain plus `/api`.
+This ensures that the browser starts the connection and receives the provider
+callback on the same session-cookie domain.
 
 The Distribution screen disables a platform that is not configured, and the
 authenticated `GET /api/social/readiness` endpoint exposes only a true/false

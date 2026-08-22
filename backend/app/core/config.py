@@ -36,10 +36,17 @@ TOKEN_ENCRYPTION_KEY = os.getenv(
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:tonnoon2005@localhost:5432/reel_cast")
 
 # CORS
-ALLOWED_ORIGINS = [
+# Keep the local defaults, while allowing a public frontend (staging or an
+# ngrok tunnel) to be added without editing source code. Values are comma
+# separated to match standard .env conventions.
+_DEFAULT_ALLOWED_ORIGINS = (
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-]
+)
+_configured_origins = os.getenv("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = tuple(
+    origin.strip() for origin in _configured_origins.split(",") if origin.strip()
+) or _DEFAULT_ALLOWED_ORIGINS
 
 # Email / SMTP
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
