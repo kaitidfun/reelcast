@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useReels } from "@/hooks/useReels";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, OAUTH_API_BASE_URL } from "@/lib/api";
 
 const PLATFORMS = [
   { key: "tiktok", label: "TikTok" },
@@ -144,7 +144,7 @@ const Distribution = () => {
     // the platform's own consent screen, so this can't go through a normal
     // authenticated XHR. The token rides along as a query param instead
     // (see backend/app/routes/social_routes.py for why).
-    window.location.href = `${API_BASE_URL}/social/${platform}/connect?token=${encodeURIComponent(token)}`;
+    window.location.href = `${OAUTH_API_BASE_URL}/social/${platform}/connect?token=${encodeURIComponent(token)}`;
   };
 
   const handleDisconnect = async (accountId: string) => {

@@ -7,7 +7,7 @@ import { BarChart3, CheckCircle2, Eye, Loader2, MousePointerClick, RefreshCw, Sh
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import StatCard from "@/components/StatCard";
-import { API_BASE_URL, disconnectEcommerceAccount, EcommerceAccount, fetchEcommerceAccounts, fetchTrackingAnalysis, fetchTrackingDashboard, fetchTrackingFilterOptions, fetchTrackingReadiness, syncTrackingData, TrackingAnalysis, TrackingDashboard, TrackingFilterOptions } from "@/lib/api";
+import { OAUTH_API_BASE_URL, disconnectEcommerceAccount, EcommerceAccount, fetchEcommerceAccounts, fetchTrackingAnalysis, fetchTrackingDashboard, fetchTrackingFilterOptions, fetchTrackingReadiness, syncTrackingData, TrackingAnalysis, TrackingDashboard, TrackingFilterOptions } from "@/lib/api";
 
 const number = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 const currency = new Intl.NumberFormat("th-TH", { style: "currency", currency: "THB", maximumFractionDigits: 0 });
@@ -111,7 +111,7 @@ export default function Tracking() {
   const connectShop = (platform: string) => {
     const token = localStorage.getItem("rf_token");
     if (!token) return;
-    window.location.href = `${API_BASE_URL}/tracking/ecommerce/${platform}/connect?token=${encodeURIComponent(token)}`;
+    window.location.href = `${OAUTH_API_BASE_URL}/tracking/ecommerce/${platform}/connect?token=${encodeURIComponent(token)}`;
   };
 
   const disconnectShop = async (accountId: string) => {

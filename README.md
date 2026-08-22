@@ -60,7 +60,7 @@ cp backend/.env.example backend/.env
 > TikTok rejects localhost/127.0.0.1 redirect URIs outright (requires public
 > HTTPS), and Meta requires HTTPS even for localhost. To test any connect
 > flow, run `ngrok http 8000` (free static domain), then set **both**
-> `BACKEND_URL` in `backend/.env.local` **and** `NEXT_PUBLIC_API_URL` in
+> `BACKEND_URL` in `backend/.env.local` **and** `NEXT_PUBLIC_OAUTH_API_URL` in
 > `frontend/.env.local` to that same ngrok URL (with `/api` appended to the
 > frontend value). Register the resulting redirect URI in each platform's
 > developer settings. Only needed for the OAuth roundtrip itself — normal
@@ -452,13 +452,15 @@ BACKEND_URL=https://your-domain.ngrok-free.app
 FRONTEND_URL=http://localhost:3000
 
 # frontend/.env.local
-NEXT_PUBLIC_API_URL=https://your-domain.ngrok-free.app/api
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_OAUTH_API_URL=https://your-domain.ngrok-free.app/api
 ```
 
-Keep the frontend local if desired. `NEXT_PUBLIC_API_URL` is required because
-the Connect request and provider callback must use the same public domain for
-the OAuth session cookie. Register these exact callback URLs in the provider
-consoles:
+Keep the frontend and ordinary API requests local if desired.
+`NEXT_PUBLIC_OAUTH_API_URL` is used only by Connect, so the Connect request
+and provider callback share a public domain for the OAuth session cookie while
+normal browser API requests avoid ngrok's free-tier warning page. Register
+these exact callback URLs in the provider consoles:
 
 ```text
 https://your-domain.ngrok-free.app/api/tracking/ecommerce/tiktok_shop/callback
@@ -487,9 +489,9 @@ register these callback URLs with the matching platform application:
 
 For local development, the ngrok configuration in **Local Shop OAuth with
 ngrok** applies unchanged to these Social Account connections: use the same
-public `BACKEND_URL` and set `NEXT_PUBLIC_API_URL` to that domain plus `/api`.
-This ensures that the browser starts the connection and receives the provider
-callback on the same session-cookie domain.
+public `BACKEND_URL` and set `NEXT_PUBLIC_OAUTH_API_URL` to that domain plus
+`/api`. This ensures that the browser starts the connection and receives the
+provider callback on the same session-cookie domain.
 
 The Distribution screen disables a platform that is not configured, and the
 authenticated `GET /api/social/readiness` endpoint exposes only a true/false

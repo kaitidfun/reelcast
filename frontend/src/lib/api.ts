@@ -49,6 +49,10 @@ export async function uploadOwnReel(file: File, product_id?: string) {
   return await res.json();
 }
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+// OAuth starts on the public callback domain so its session cookie is returned
+// by the provider. Keep ordinary browser API requests local during ngrok-based
+// development to avoid ngrok's free-tier browser interstitial.
+export const OAUTH_API_BASE_URL = process.env.NEXT_PUBLIC_OAUTH_API_URL || API_BASE_URL;
 
 function getAuthHeaders(): HeadersInit {
   if (typeof window === "undefined") return {};
