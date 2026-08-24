@@ -19,7 +19,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core import config
-from app.models.models import EcommerceAccount, SocialAccount
+from app.models.models import Distribution, EcommerceAccount, Reel, SocialAccount
 from app.services import social_account_service, tracking_service
 from app.services.crypto_service import decrypt_token
 
@@ -108,11 +108,43 @@ async def exchange_authorization_code(
     }
 
 
-def _metric_payload(metric: dict[str, Any], source_platform: str) -> dict[str, Any]:
+def _distribution_for_social_metric(
+    db: Session, *, user_id: UUID, platform: str, external_ref: str | None,
+) -> Distribution | None:
+    """Resolve a social API metric to the published ReelCast destination.
+
+    Adapters return provider references such as ``youtube:<video id>``.  The
+    publisher persists that id in ``Distribution.platform_post_id``, so this
+    makes the metric safely attributable without trusting an adapter-supplied
+    internal UUID.
+    """
+    prefix = f"{platform}:"
+    if not external_ref or not external_ref.startswith(prefix):
+        return None
+    platform_post_id = external_ref[len(prefix):]
+    if not platform_post_id:
+        return None
+    return (
+        db.query(Distribution)
+        .join(Reel, Distribution.reel_id == Reel.reel_id)
+        .join(SocialAccount, Distribution.account_id == SocialAccount.account_id)
+        .filter(
+            Reel.user_id == user_id,
+            SocialAccount.platform_name == platform,
+            Distribution.platform_post_id == platform_post_id,
+        )
+        .first()
+    )
+
+
+def _metric_payload(
+    metric: dict[str, Any], source_platform: str, *,
+    db: Session | None = None, user_id: UUID | None = None,
+) -> dict[str, Any]:
     try:
         raw_date = metric.get("record_date")
         record_date = date.fromisoformat(raw_date) if isinstance(raw_date, str) else date.today()
-        return {
+        payload = {
             "source_platform": source_platform,
             "external_ref": str(metric["external_ref"]) if metric.get("external_ref") else None,
             "product_id": UUID(str(metric["product_id"])) if metric.get("product_id") else None,
@@ -124,12 +156,29 @@ def _metric_payload(metric: dict[str, Any], source_platform: str) -> dict[str, A
             "engagement": int(metric.get("engagement", 0)),
             "revenue": float(metric.get("revenue", 0)),
         }
+        # Only social metrics can be resolved via a destination post ID. This
+        # preserves the adapter's explicit IDs while making normal syncs map
+        # back to the distribution created by ReelCast.
+        if (
+            db is not None and user_id is not None
+            and source_platform in {"tiktok", "youtube", "facebook", "instagram"}
+            and payload["distribution_id"] is None
+        ):
+            distribution = _distribution_for_social_metric(
+                db, user_id=user_id, platform=source_platform,
+                external_ref=payload["external_ref"],
+            )
+            if distribution:
+                payload["distribution_id"] = distribution.distribution_id
+                payload["product_id"] = distribution.reel.product_id
+        return payload
     except (TypeError, ValueError, KeyError) as exc:
         raise TrackingProviderError("Adapter returned an invalid metric") from exc
 
 
 async def _request_adapter(
     *, platform: str, account_id: str, external_account_id: str, access_token: str,
+    known_post_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     provider = _PROVIDERS.get(platform)
     if not provider or not provider.url:
@@ -148,6 +197,7 @@ async def _request_adapter(
         "access_token": access_token,
         "from_date": (date.today() - timedelta(days=30)).isoformat(),
         "to_date": date.today().isoformat(),
+        "known_post_ids": known_post_ids or [],
     }
     try:
         async with httpx.AsyncClient(timeout=config.TRACKING_SYNC_TIMEOUT_SECONDS) as client:
@@ -171,16 +221,19 @@ async def _sync_metrics(
     account_id: str,
     external_account_id: str,
     access_token: str,
+    known_post_ids: list[str] | None = None,
 ) -> int:
     metrics = await _request_adapter(
         platform=platform,
         account_id=account_id,
         external_account_id=external_account_id,
         access_token=access_token,
+        known_post_ids=known_post_ids,
     )
     for metric in metrics:
         tracking_service.record_metric(
-            db, user_id=user_id, **_metric_payload(metric, platform),
+            db, user_id=user_id,
+            **_metric_payload(metric, platform, db=db, user_id=user_id),
         )
     return len(metrics)
 
@@ -209,6 +262,22 @@ async def sync_ecommerce_account(db: Session, account: EcommerceAccount) -> int:
 
 async def sync_social_account(db: Session, account: SocialAccount) -> int:
     try:
+        known_post_ids = [
+            row[0]
+            for row in (
+                db.query(Distribution.platform_post_id)
+                .join(Reel, Distribution.reel_id == Reel.reel_id)
+                .filter(
+                    Distribution.account_id == account.account_id,
+                    Distribution.status == "Published",
+                    Distribution.platform_post_id.is_not(None),
+                    Reel.user_id == account.user_id,
+                )
+                .order_by(Distribution.created_at.desc())
+                .limit(50)
+                .all()
+            )
+        ]
         return await _sync_metrics(
             db,
             user_id=account.user_id,
@@ -216,6 +285,7 @@ async def sync_social_account(db: Session, account: SocialAccount) -> int:
             account_id=str(account.account_id),
             external_account_id=account.external_account_id or "",
             access_token=social_account_service.get_decrypted_access_token(account),
+            known_post_ids=known_post_ids,
         )
     except Exception as exc:
         # SocialAccount has no status columns. Avoid persisting tokens/errors;

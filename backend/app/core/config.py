@@ -75,6 +75,13 @@ YOUTUBE_CLIENT_SECRET = os.getenv("YOUTUBE_CLIENT_SECRET", "")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
+# Public base used in captions for opaque outbound redirect URLs. It defaults
+# to the backend so local development works without a separate go subdomain.
+TRACKING_BASE_URL = os.getenv("TRACKING_BASE_URL", BACKEND_URL).rstrip("/")
+# Used only to hash a client IP before persistence. Configure a unique secret
+# outside local development; the fallback keeps existing zero-config setups working.
+TRACKING_HASH_SECRET = os.getenv("TRACKING_HASH_SECRET", SECRET_KEY)
+
 # Feature 5 - Data Tracking connectors
 #
 # TikTok Shop credentials issued in Partner Center. These are kept separate

@@ -29,6 +29,7 @@ class DistributionResponse(BaseModel):
     status: str
     error_message: Optional[str] = None
     retry_count: int = 0
+    platform_post_id: Optional[str] = None
     created_at: Optional[datetime] = None
     # Display-only fields, not real Distribution columns — attached by
     # distribution_routes.list_distributions() via a couple of grouped

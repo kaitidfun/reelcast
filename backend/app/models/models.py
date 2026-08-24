@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, String, Boolean, Integer, Text, Date, Numeric,
-    ForeignKey, Enum, text,
+    ForeignKey, Enum, UniqueConstraint, text,
 )
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP, JSONB
 from sqlalchemy.orm import relationship
@@ -185,6 +185,9 @@ class Product(Base):
     analytics = relationship(
         "Analytics", back_populates="product", cascade="all, delete-orphan",
     )
+    attribution_links = relationship(
+        "AttributionLink", back_populates="product", cascade="all, delete-orphan",
+    )
 
 
 class ProductImage(Base):
@@ -265,6 +268,9 @@ class Reel(Base):
     distributions = relationship(
         "Distribution", back_populates="reel", cascade="all, delete-orphan",
     )
+    attribution_links = relationship(
+        "AttributionLink", back_populates="reel", cascade="all, delete-orphan",
+    )
 
 
 class Distribution(Base):
@@ -297,6 +303,9 @@ class Distribution(Base):
     )
     error_message = Column(Text, nullable=True)
     retry_count = Column(Integer, nullable=False, server_default=text("0"))
+    # ID returned by the destination platform after a successful publish.
+    # It is absent for draft, queued, and failed distributions.
+    platform_post_id = Column(String, nullable=True)
     created_at = Column(
         TIMESTAMP(timezone=True),
         nullable=False,
@@ -309,6 +318,81 @@ class Distribution(Base):
     analytics = relationship(
         "Analytics", back_populates="distribution", cascade="all, delete-orphan",
     )
+    attribution_links = relationship(
+        "AttributionLink", back_populates="distribution", cascade="all, delete-orphan",
+    )
+
+
+class AttributionLink(Base):
+    """A public ReelCast redirect that attributes one distributed post."""
+
+    __tablename__ = "attribution_links"
+    __table_args__ = (
+        UniqueConstraint(
+            "distribution_id", "affiliate_network", "route_type",
+            name="attribution_links_distribution_network_route_unique",
+        ),
+    )
+
+    attribution_link_id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"),
+    )
+    product_id = Column(
+        UUID(as_uuid=True), ForeignKey("products.product_id", ondelete="CASCADE"), nullable=False,
+    )
+    reel_id = Column(
+        UUID(as_uuid=True), ForeignKey("reels.reel_id", ondelete="CASCADE"), nullable=False,
+    )
+    distribution_id = Column(
+        UUID(as_uuid=True), ForeignKey("distributions.distribution_id", ondelete="CASCADE"), nullable=False,
+    )
+    platform = Column(String, nullable=False)
+    affiliate_network = Column(String, nullable=False)
+    # Snapshot the outbound target. Changing a Product later must not change
+    # the destination for a link that was already published.
+    affiliate_url = Column(String, nullable=False)
+    sub_id = Column(String, nullable=False, unique=True, index=True)
+    route_type = Column(String, nullable=False, server_default="direct_link")
+    token = Column(String, nullable=False, unique=True, index=True)
+    created_at = Column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP"),
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True), server_default=text("CURRENT_TIMESTAMP"),
+        onupdate=text("CURRENT_TIMESTAMP"),
+    )
+
+    product = relationship("Product", back_populates="attribution_links")
+    reel = relationship("Reel", back_populates="attribution_links")
+    distribution = relationship("Distribution", back_populates="attribution_links")
+    outbound_clicks = relationship(
+        "OutboundClick", back_populates="attribution_link", cascade="all, delete-orphan",
+    )
+
+
+class OutboundClick(Base):
+    """A request to a ReelCast redirect, not a provider-confirmed affiliate click."""
+
+    __tablename__ = "outbound_clicks"
+
+    outbound_click_id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"),
+    )
+    attribution_link_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("attribution_links.attribution_link_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    clicked_at = Column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP"),
+    )
+    referrer = Column(Text, nullable=True)
+    user_agent = Column(Text, nullable=True)
+    # Never store a raw client IP. This is SHA-256(IP + server-side secret).
+    ip_hash = Column(String, nullable=True)
+
+    attribution_link = relationship("AttributionLink", back_populates="outbound_clicks")
 
 
 class Analytics(Base):

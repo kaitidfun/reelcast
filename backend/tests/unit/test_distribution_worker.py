@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from app.exceptions import DistributionPublishException
-from app.models.models import Distribution, Reel, SocialAccount
+from app.models.models import Distribution, Product, Reel, SocialAccount
 from app.worker import _format_caption, _publishDistribution, checkScheduledDistributions
 
 
@@ -45,8 +45,12 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
             platform_name="tiktok",
             access_token="encrypted-token",
         )
+        self.product = Product(
+            product_id=uuid4(), product_name="Lamp", affiliate_link="https://s.lazada.co.th/example"
+        )
+        self.reel.product_id = self.product.product_id
 
-    def _db_returning(self, distribution=None, reel=None, account=None):
+    def _db_returning(self, distribution=None, reel=None, account=None, product=None):
         db = MagicMock()
 
         def query_side_effect(model):
@@ -55,6 +59,8 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
                 q.filter.return_value.first.return_value = distribution
             elif model is Reel:
                 q.filter.return_value.first.return_value = reel
+            elif model is Product:
+                q.filter.return_value.first.return_value = product
             return q
 
         db.query.side_effect = query_side_effect
@@ -79,7 +85,7 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("no finished video", failed_calls[0].kwargs["error_message"])
 
     async def test_missing_account_marks_failed(self) -> None:
-        db = self._db_returning(distribution=self.distribution, reel=self.reel)
+        db = self._db_returning(distribution=self.distribution, reel=self.reel, product=None)
 
         with patch("app.worker.SessionLocal", return_value=db), \
              patch("app.worker.social_account_service.get_social_account", return_value=None), \
@@ -91,13 +97,13 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Connected account not found", failed_calls[0].kwargs["error_message"])
 
     async def test_successful_publish_marks_published(self) -> None:
-        db = self._db_returning(distribution=self.distribution, reel=self.reel)
+        db = self._db_returning(distribution=self.distribution, reel=self.reel, product=None)
 
         with patch("app.worker.SessionLocal", return_value=db), \
              patch("app.worker.social_account_service.get_social_account", return_value=self.account), \
              patch("app.worker.social_account_service.get_decrypted_access_token", return_value="plain-token"), \
              patch("app.worker.get_presigned_url", return_value="https://cdn.example.com/video.mp4"), \
-             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value="tiktok-post-id")), \
+             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value="tiktok-post-id")) as mock_publish, \
              patch("app.worker.distribution_service.update_distribution") as mock_update:
             await _publishDistribution(str(self.distribution_id))
 
@@ -105,6 +111,44 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Uploading", statuses)
         self.assertIn("Published", statuses)
         self.assertNotIn("Failed", statuses)
+        published_call = next(c for c in mock_update.call_args_list if c.kwargs.get("status") == "Published")
+        self.assertEqual("tiktok-post-id", published_call.kwargs["platform_post_id"])
+        self.assertEqual("Buy now\n\n#sale", mock_publish.call_args.kwargs["caption"])
+
+    async def test_affiliate_product_appends_distribution_tracked_url(self) -> None:
+        db = self._db_returning(distribution=self.distribution, reel=self.reel, product=self.product)
+        link = MagicMock(token="opaque-token")
+
+        with patch("app.worker.SessionLocal", return_value=db), \
+             patch("app.worker.social_account_service.get_social_account", return_value=self.account), \
+             patch("app.worker.social_account_service.get_decrypted_access_token", return_value="plain-token"), \
+             patch("app.worker.get_presigned_url", return_value="https://cdn.example.com/video.mp4"), \
+             patch("app.worker.attribution_service.get_or_create_distribution_link", return_value=link), \
+             patch("app.worker.attribution_service.tracked_url", return_value="https://go.example/r/opaque-token"), \
+             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value="tiktok-post-id")) as mock_publish, \
+             patch("app.worker.distribution_service.update_distribution"):
+            await _publishDistribution(str(self.distribution_id))
+
+        self.assertIn("🛒 Shop here:\nhttps://go.example/r/opaque-token", mock_publish.call_args.kwargs["caption"])
+
+    async def test_tiktok_affiliate_caption_keeps_tracked_url_inside_title_limit(self) -> None:
+        self.reel.caption_and_hashtags = {"caption": "x" * 200, "hashtags": ["#sale"]}
+        db = self._db_returning(distribution=self.distribution, reel=self.reel, product=self.product)
+        link = MagicMock(token="opaque-token")
+
+        with patch("app.worker.SessionLocal", return_value=db), \
+             patch("app.worker.social_account_service.get_social_account", return_value=self.account), \
+             patch("app.worker.social_account_service.get_decrypted_access_token", return_value="plain-token"), \
+             patch("app.worker.get_presigned_url", return_value="https://cdn.example.com/video.mp4"), \
+             patch("app.worker.attribution_service.get_or_create_distribution_link", return_value=link), \
+             patch("app.worker.attribution_service.tracked_url", return_value="https://go.example/r/opaque-token"), \
+             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value="tiktok-post-id")) as mock_publish, \
+             patch("app.worker.distribution_service.update_distribution"):
+            await _publishDistribution(str(self.distribution_id))
+
+        caption = mock_publish.call_args.kwargs["caption"]
+        self.assertLessEqual(len(caption), 150)
+        self.assertTrue(caption.startswith("🛒 Shop here:\nhttps://go.example/r/opaque-token"))
 
     async def test_refreshes_access_token_before_publish_when_refresh_token_saved(self) -> None:
         account_with_refresh = SocialAccount(

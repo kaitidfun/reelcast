@@ -1,7 +1,21 @@
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, computed_field, field_validator
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
+from urllib.parse import urlparse
+
+
+def _validate_affiliate_link(value: Optional[str]) -> Optional[str]:
+    """Accept an optional, ordinary HTTPS affiliate URL without altering it."""
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    parsed = urlparse(normalized)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise ValueError("affiliate_link must be a valid HTTPS URL")
+    return normalized
 
 
 # ────────────────────────── Product Image ──────────────────────────
@@ -33,6 +47,8 @@ class ProductCreate(BaseModel):
     brand_logo_url: Optional[str] = None
     images: Optional[List[ProductImageCreate]] = None
 
+    _validate_affiliate_link_field = field_validator("affiliate_link")(_validate_affiliate_link)
+
 
 class ProductUpdate(BaseModel):
     product_name: Optional[str] = None
@@ -40,6 +56,8 @@ class ProductUpdate(BaseModel):
     affiliate_link: Optional[str] = None
     brand_logo_url: Optional[str] = None
     campaign_id: Optional[UUID] = None
+
+    _validate_affiliate_link_field = field_validator("affiliate_link")(_validate_affiliate_link)
 
 
 class ProductResponse(BaseModel):

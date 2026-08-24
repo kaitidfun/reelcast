@@ -2,9 +2,12 @@ from datetime import date
 
 import httpx
 import pytest
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 from app.schemas import Metric, SyncRequest
 from app.services.base import ProviderClient, ProviderError
+from app.services.youtube import YouTubeProvider
 
 
 class SyncStub:
@@ -77,3 +80,25 @@ async def test_provider_application_error_is_safely_mapped():
     with pytest.raises(ProviderError) as error:
         await provider.request("GET", "https://provider.example")
     assert error.value.reason == "provider returned an error"
+
+
+@pytest.mark.asyncio
+async def test_youtube_sync_reads_a_known_private_post_id_when_search_is_empty():
+    provider = YouTubeProvider()
+    provider.settings = lambda: SimpleNamespace(youtube_api_base_url="https://youtube.example")
+    provider.request = AsyncMock(side_effect=[
+        {"items": []},
+        {"items": [{"id": "private-video", "snippet": {"publishedAt": "2026-08-25T12:00:00Z"}, "statistics": {"viewCount": "3", "likeCount": "1", "commentCount": "2"}}]},
+    ])
+    request = SyncRequest(
+        platform="youtube", account_id="account-1", external_account_id="channel-1",
+        access_token="token", from_date=date(2026, 8, 1), to_date=date(2026, 8, 25),
+        known_post_ids=["private-video"],
+    )
+
+    metrics = await provider.sync(request)
+
+    assert metrics[0].external_ref == "youtube:private-video"
+    assert metrics[0].views == 3
+    assert metrics[0].engagement == 3
+    assert provider.request.await_args_list[1].kwargs["params"]["id"] == "private-video"

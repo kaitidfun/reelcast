@@ -354,6 +354,42 @@ psql -U postgres -d reel_cast -f backend/schema_fixes.sql
 Add new fixes to that file (don't add automatic migrations) whenever a
 model gains a column, so everyone on the team stays in sync.
 
+## ReelCast Commerce Tracking
+
+MVP commerce tracking uses the existing optional Product `affiliate_link`
+field for a Lazada affiliate URL. On publishing a distribution for a product
+with that URL, ReelCast creates one attribution link and places its opaque
+tracked URL before that distribution's platform caption/description, then stores
+the resulting platform post ID. Public `GET /r/{token}` records an **Outbound
+Click** (best effort) and returns an HTTP 302 to the saved Lazada URL.
+
+```text
+Product Affiliate URL
+       ↓
+Distribution
+       ↓
+Attribution Link
+       ↓
+Tracked ReelCast URL
+       ↓
+Outbound Click
+       ↓
+302 Redirect
+       ↓
+Lazada Affiliate URL
+```
+
+Set these server-only backend variables in `backend/.env.local`:
+
+```env
+TRACKING_BASE_URL=http://localhost:8000
+TRACKING_HASH_SECRET=change-me
+```
+
+Use the public `https://go.reelcast.app`-style domain for `TRACKING_BASE_URL`
+when deployed. Raw IP addresses are never stored; the redirect stores only a
+SHA-256 hash of the client IP and `TRACKING_HASH_SECRET` when an IP is present.
+
 ## Feature 5: Data Tracking connector setup
 
 Run `backend/schema_fixes.sql` before using Feature 5. It creates the

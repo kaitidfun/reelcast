@@ -21,7 +21,11 @@ class YouTubeProvider(ProviderClient):
         search = await self.request("GET", self.settings().youtube_api_base_url.rstrip("/") + "/youtube/v3/search",
                                     params={"part": "snippet", "channelId": request.external_account_id, "type": "video",
                                             "publishedAfter": published_after, "publishedBefore": published_before, "maxResults": 50}, headers=headers)
-        ids = [item.get("id", {}).get("videoId") for item in search.get("items", []) if item.get("id", {}).get("videoId")]
+        searched_ids = [item.get("id", {}).get("videoId") for item in search.get("items", []) if item.get("id", {}).get("videoId")]
+        # search.list can omit private videos even when the upload token is
+        # valid.  ReelCast knows the IDs it published, so request those
+        # directly as well and deduplicate before videos.list.
+        ids = list(dict.fromkeys([*searched_ids, *request.known_post_ids]))
         if not ids:
             return []
         detail = await self.request("GET", self.settings().youtube_api_base_url.rstrip("/") + "/youtube/v3/videos",

@@ -72,6 +72,7 @@ def update_distribution(
     scheduled_time: Optional[datetime] = None,
     status: Optional[str] = None,
     error_message: Optional[str] = None,
+    platform_post_id: Optional[str] = None,
 ) -> Distribution:
     if scheduled_time is not None:
         distribution.scheduled_time = scheduled_time
@@ -79,6 +80,8 @@ def update_distribution(
         distribution.status = status
     if error_message is not None:
         distribution.error_message = error_message
+    if platform_post_id is not None:
+        distribution.platform_post_id = platform_post_id
     db.commit()
     db.refresh(distribution)
     return distribution

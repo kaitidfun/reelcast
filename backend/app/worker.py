@@ -33,7 +33,14 @@ from app.services.video_generation_service import (
 from app.services.overlay_service import overlayImagesAndLogos, generateVideoThumbnail
 from app.services.reel_service import update_reel
 from app.services.storage_service import get_presigned_url
-from app.services import distribution_publish_service, distribution_service, social_account_service, tracking_provider_service
+from app.services import (
+    attribution_service,
+    distribution_publish_service,
+    distribution_service,
+    oauth_platforms,
+    social_account_service,
+    tracking_provider_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -669,6 +676,28 @@ async def _publishDistribution(distribution_id: str) -> None:
             access_token = social_account_service.get_decrypted_access_token(account)
             caption = _format_caption(reel.caption_and_hashtags)
 
+            # Product.affiliate_link is the established Product field for an
+            # optional affiliate URL. This creates an opaque, per-distribution
+            # redirect and only changes this platform's outgoing caption.
+            product = (
+                db.query(Product)
+                .filter(Product.product_id == reel.product_id, Product.deleted_at.is_(None))
+                .first()
+            )
+            if product and product.affiliate_link:
+                attribution_link = attribution_service.get_or_create_distribution_link(
+                    db,
+                    product=product,
+                    reel=reel,
+                    distribution=distribution,
+                    platform=account.platform_name,
+                )
+                caption = attribution_service.append_tracked_url(
+                    caption,
+                    attribution_service.tracked_url(attribution_link),
+                    max_length=attribution_service.platform_caption_limit(account.platform_name),
+                )
+
             # Access tokens expire (~1h for Google/TikTok) long before a
             # scheduled distribution gets published. Refresh proactively
             # whenever a refresh_token was saved — best-effort: if the
@@ -703,7 +732,12 @@ async def _publishDistribution(distribution_id: str) -> None:
                 caption=caption,
             )
             logger.info(f"[Distribution] Published {distribution_id} → {account.platform_name}:{platform_post_id}")
-            distribution_service.update_distribution(db, distribution=distribution, status="Published")
+            distribution_service.update_distribution(
+                db,
+                distribution=distribution,
+                status="Published",
+                platform_post_id=platform_post_id,
+            )
 
         except DistributionPublishException as exc:
             logger.error(f"[Distribution] {distribution_id} failed: {exc}")

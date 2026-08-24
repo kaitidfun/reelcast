@@ -81,7 +81,7 @@ export async function fetchHealth() {
 }
 
 export type TrackingTotals = {
-  reels: number;
+  published_distributions: number;
   views: number;
   clicks: number;
   orders: number;

@@ -16,9 +16,11 @@ from sqlalchemy.orm import Session
 
 from app.models.models import (
     Analytics,
+    AttributionLink,
     Campaign,
     Distribution,
     EcommerceAccount,
+    OutboundClick,
     Product,
     Reel,
     User,
@@ -194,25 +196,149 @@ def _apply_tracking_filters(
     return query
 
 
-def _metric_totals(query) -> dict:
-    result = query.with_entities(
-        func.coalesce(func.sum(Analytics.views), 0),
-        func.coalesce(func.sum(Analytics.clicks), 0),
-        func.coalesce(func.sum(Analytics.orders), 0),
-        func.coalesce(func.sum(Analytics.engagement), 0),
-        func.coalesce(func.sum(Analytics.revenue), 0),
-    ).one()
-    totals = {
-        "views": int(result[0] or 0),
-        "clicks": int(result[1] or 0),
-        "orders": int(result[2] or 0),
-        "engagement": int(result[3] or 0),
-        "revenue": float(result[4] or 0),
+def _empty_metrics() -> dict:
+    return {"views": 0, "clicks": 0, "orders": 0, "engagement": 0, "revenue": 0.0}
+
+
+def _add_metrics(target: dict, **values) -> None:
+    """Add metrics without ever treating a provider's generic clicks as commerce clicks."""
+    for field in ("views", "clicks", "orders", "engagement"):
+        target[field] += int(values.get(field, 0) or 0)
+    target["revenue"] += float(values.get("revenue", 0) or 0)
+
+
+def _finalize_metrics(metrics: dict) -> dict:
+    metrics = {**metrics, "revenue": round(float(metrics["revenue"]), 2)}
+    metrics["click_through_rate"] = round(
+        metrics["clicks"] / metrics["views"] * 100, 2,
+    ) if metrics["views"] else 0.0
+    return metrics
+
+
+def _member_outbound_click_query(db: Session, user_id: UUID):
+    """Clicks owned through an attribution link's Reel (never raw redirect traffic)."""
+    return (
+        db.query(OutboundClick, AttributionLink, Product, Reel)
+        .join(AttributionLink, OutboundClick.attribution_link_id == AttributionLink.attribution_link_id)
+        .join(Product, AttributionLink.product_id == Product.product_id)
+        .join(Reel, AttributionLink.reel_id == Reel.reel_id)
+        .filter(Reel.user_id == user_id, Reel.deleted_at.is_(None))
+    )
+
+
+def _apply_outbound_click_filters(
+    query,
+    *,
+    start: date | None,
+    end: date | None,
+    platform: str | None = None,
+    campaign_id: UUID | None = None,
+    product_id: UUID | None = None,
+):
+    if start:
+        query = query.filter(func.date(OutboundClick.clicked_at) >= start)
+    if end:
+        query = query.filter(func.date(OutboundClick.clicked_at) <= end)
+    if platform:
+        query = query.filter(AttributionLink.platform == platform)
+    if campaign_id:
+        query = query.filter(Product.campaign_id == campaign_id)
+    if product_id:
+        query = query.filter(Product.product_id == product_id)
+    return query
+
+
+def _analytics_context(metric: Analytics) -> tuple[Product | None, Reel | None]:
+    """Find the Product/Reel that owns an already-authorized analytics record."""
+    product = metric.product
+    reel = metric.distribution.reel if metric.distribution else None
+    if product is None and reel is not None:
+        product = reel.product
+    return product, reel
+
+
+def _add_group(groups: dict, group: str, *, key, name: str, metrics: dict) -> None:
+    if key is None:
+        return
+    bucket = groups[group].setdefault(str(key), {"id": str(key), "name": name, **_empty_metrics()})
+    _add_metrics(bucket, **metrics)
+
+
+def _build_tracking_breakdown(db: Session, *, user_id: UUID, filters: dict) -> dict:
+    """Merge synchronized social/e-commerce metrics with ReelCast outbound clicks.
+
+    ``Analytics.clicks`` is deliberately excluded.  It is a legacy, provider-
+    specific field and cannot truthfully be shown as an Outbound Click.  The
+    only source for that metric is the redirect's ``outbound_clicks`` table.
+    """
+    analytics_rows = _apply_tracking_filters(
+        _member_metrics_query(db, user_id), **filters,
+    ).all()
+    click_rows = _apply_outbound_click_filters(
+        _member_outbound_click_query(db, user_id), **filters,
+    ).all()
+
+    totals = _empty_metrics()
+    by_date: dict[date, dict] = {}
+    groups = {"platforms": {}, "products": {}, "campaigns": {}, "reels": {}}
+
+    def record(*, record_date: date | None, platform_name: str | None,
+               product: Product | None, reel: Reel | None, metrics: dict) -> None:
+        _add_metrics(totals, **metrics)
+        if record_date:
+            _add_metrics(by_date.setdefault(record_date, _empty_metrics()), **metrics)
+        _add_group(groups, "platforms", key=platform_name or "unknown",
+                   name=platform_name or "Unknown platform", metrics=metrics)
+        if product:
+            _add_group(groups, "products", key=product.product_id,
+                       name=product.product_name, metrics=metrics)
+            if product.campaign:
+                _add_group(groups, "campaigns", key=product.campaign.campaign_id,
+                           name=product.campaign.name, metrics=metrics)
+        if reel:
+            _add_group(groups, "reels", key=reel.reel_id,
+                       name=reel.prompt_text, metrics=metrics)
+
+    for metric in analytics_rows:
+        product, reel = _analytics_context(metric)
+        record(
+            record_date=metric.record_date,
+            platform_name=metric.source_platform,
+            product=product,
+            reel=reel,
+            # Views/engagement/orders/revenue are the synchronized provider
+            # values.  Do not relabel provider clicks as redirect clicks.
+            metrics={
+                "views": metric.views, "engagement": metric.engagement,
+                "orders": metric.orders, "revenue": metric.revenue,
+            },
+        )
+
+    for click, link, product, reel in click_rows:
+        record(
+            record_date=click.clicked_at.date() if click.clicked_at else None,
+            platform_name=link.platform,
+            product=product,
+            reel=reel,
+            metrics={"clicks": 1},
+        )
+
+    def sorted_rows(group: str, *, limit: int | None = None) -> list[dict]:
+        rows = [_finalize_metrics(row) for row in groups[group].values()]
+        rows.sort(key=lambda row: (row["orders"], row["clicks"], row["views"]), reverse=True)
+        return rows[:limit] if limit else rows
+
+    return {
+        "totals": _finalize_metrics(totals),
+        "trend": [
+            {"date": day.isoformat(), **_finalize_metrics(metrics)}
+            for day, metrics in sorted(by_date.items())
+        ],
+        "platforms": sorted_rows("platforms"),
+        "products": sorted_rows("products", limit=5),
+        "campaigns": sorted_rows("campaigns", limit=5),
+        "reels": sorted_rows("reels", limit=5),
     }
-    totals["click_through_rate"] = round(
-        totals["clicks"] / totals["views"] * 100, 2,
-    ) if totals["views"] else 0.0
-    return totals
 
 
 def dashboard(
@@ -229,108 +355,21 @@ def dashboard(
         "start": start, "end": end, "platform": platform,
         "campaign_id": campaign_id, "product_id": product_id,
     }
-    query = _apply_tracking_filters(_member_metrics_query(db, user_id), **filters)
-
-    totals = _metric_totals(query)
-    totals["reels"] = db.query(func.count(Reel.reel_id)).filter(
-        Reel.user_id == user_id, Reel.deleted_at.is_(None)
-    ).scalar() or 0
-
-    trend_rows = (
-        query.with_entities(
-            Analytics.record_date.label("date"),
-            func.coalesce(func.sum(Analytics.views), 0).label("views"),
-            func.coalesce(func.sum(Analytics.clicks), 0).label("clicks"),
-            func.coalesce(func.sum(Analytics.orders), 0).label("orders"),
-            func.coalesce(func.sum(Analytics.engagement), 0).label("engagement"),
-            func.coalesce(func.sum(Analytics.revenue), 0).label("revenue"),
+    breakdown = _build_tracking_breakdown(db, user_id=user_id, filters=filters)
+    totals = breakdown["totals"]
+    # This headline is specifically for successfully published destinations,
+    # not every Reel the member has generated or saved in the library.
+    totals["published_distributions"] = (
+        db.query(func.count(Distribution.distribution_id))
+        .join(Reel, Distribution.reel_id == Reel.reel_id)
+        .filter(
+            Reel.user_id == user_id,
+            Reel.deleted_at.is_(None),
+            Distribution.status == "Published",
         )
-        .filter(Analytics.record_date.is_not(None))
-        .group_by(Analytics.record_date)
-        .order_by(Analytics.record_date)
-        .all()
+        .scalar()
+        or 0
     )
-
-    platform_rows = (
-        query.with_entities(
-            func.coalesce(Analytics.source_platform, "unknown").label("platform"),
-            func.coalesce(func.sum(Analytics.views), 0).label("views"),
-            func.coalesce(func.sum(Analytics.clicks), 0).label("clicks"),
-            func.coalesce(func.sum(Analytics.orders), 0).label("orders"),
-            func.coalesce(func.sum(Analytics.engagement), 0).label("engagement"),
-            func.coalesce(func.sum(Analytics.revenue), 0).label("revenue"),
-        )
-        .group_by(Analytics.source_platform)
-        .order_by(func.sum(Analytics.views).desc())
-        .all()
-    )
-
-    products = (
-        db.query(
-            Product.product_id.label("id"), Product.product_name.label("name"),
-            func.coalesce(func.sum(Analytics.views), 0).label("views"),
-            func.coalesce(func.sum(Analytics.clicks), 0).label("clicks"),
-            func.coalesce(func.sum(Analytics.orders), 0).label("orders"),
-            func.coalesce(func.sum(Analytics.engagement), 0).label("engagement"),
-            func.coalesce(func.sum(Analytics.revenue), 0).label("revenue"),
-        )
-        .join(Analytics, Analytics.product_id == Product.product_id)
-        .filter(Product.user_id == user_id, Product.deleted_at.is_(None))
-        .group_by(Product.product_id, Product.product_name)
-        .order_by(func.sum(Analytics.orders).desc(), func.sum(Analytics.views).desc())
-        .limit(5)
-    )
-    products = _apply_tracking_filters(products, **filters).all()
-
-    campaigns = (
-        db.query(
-            Campaign.campaign_id.label("id"), Campaign.name.label("name"),
-            func.coalesce(func.sum(Analytics.views), 0).label("views"),
-            func.coalesce(func.sum(Analytics.clicks), 0).label("clicks"),
-            func.coalesce(func.sum(Analytics.orders), 0).label("orders"),
-            func.coalesce(func.sum(Analytics.engagement), 0).label("engagement"),
-            func.coalesce(func.sum(Analytics.revenue), 0).label("revenue"),
-        )
-        .join(Product, Product.campaign_id == Campaign.campaign_id)
-        .join(Analytics, Analytics.product_id == Product.product_id)
-        .filter(Campaign.user_id == user_id, Campaign.deleted_at.is_(None))
-        .group_by(Campaign.campaign_id, Campaign.name)
-        .order_by(func.sum(Analytics.orders).desc(), func.sum(Analytics.views).desc())
-        .limit(5)
-    )
-    campaigns = _apply_tracking_filters(campaigns, **filters).all()
-
-    reels = (
-        db.query(
-            Reel.reel_id.label("id"), Reel.prompt_text.label("name"),
-            func.coalesce(func.sum(Analytics.views), 0).label("views"),
-            func.coalesce(func.sum(Analytics.clicks), 0).label("clicks"),
-            func.coalesce(func.sum(Analytics.orders), 0).label("orders"),
-            func.coalesce(func.sum(Analytics.engagement), 0).label("engagement"),
-            func.coalesce(func.sum(Analytics.revenue), 0).label("revenue"),
-        )
-        .join(Distribution, Distribution.reel_id == Reel.reel_id)
-        .join(Analytics, Analytics.distribution_id == Distribution.distribution_id)
-        .outerjoin(Product, Product.product_id == Reel.product_id)
-        .filter(Reel.user_id == user_id, Reel.deleted_at.is_(None))
-        .group_by(Reel.reel_id, Reel.prompt_text)
-        .order_by(func.sum(Analytics.orders).desc(), func.sum(Analytics.views).desc())
-        .limit(5)
-    )
-    reels = _apply_tracking_filters(reels, **filters).all()
-
-    def serialize(rows):
-        return [
-            {
-                "id": str(row.id), "name": row.name, "views": int(row.views or 0),
-                "clicks": int(row.clicks or 0), "orders": int(row.orders or 0),
-                "engagement": int(row.engagement or 0), "revenue": float(row.revenue or 0),
-                "click_through_rate": round(
-                    int(row.clicks or 0) / int(row.views or 0) * 100, 2,
-                ) if row.views else 0.0,
-            }
-            for row in rows
-        ]
 
     latest_sync_at = (
         db.query(func.max(EcommerceAccount.last_synced_at))
@@ -340,29 +379,18 @@ def dashboard(
 
     return {
         "totals": totals,
-        "trend": [
-            {"date": row.date.isoformat(), "views": int(row.views or 0), "clicks": int(row.clicks or 0), "orders": int(row.orders or 0), "engagement": int(row.engagement or 0), "revenue": float(row.revenue or 0)}
-            for row in trend_rows
-        ],
+        "trend": breakdown["trend"],
         "platforms": [
-            {"platform": row.platform, "views": int(row.views or 0), "clicks": int(row.clicks or 0), "orders": int(row.orders or 0), "engagement": int(row.engagement or 0), "revenue": float(row.revenue or 0)}
-            for row in platform_rows
+            {"platform": row["name"], **{key: row[key] for key in _empty_metrics()}}
+            for row in breakdown["platforms"]
         ],
-        "products": serialize(products),
-        "campaigns": serialize(campaigns),
-        "reels": serialize(reels),
-        "has_data": bool(trend_rows),
+        "products": breakdown["products"],
+        "campaigns": breakdown["campaigns"],
+        "reels": breakdown["reels"],
+        "has_data": bool(breakdown["trend"]),
         "last_synced_at": latest_sync_at.isoformat() if latest_sync_at else None,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
-
-
-def _analysis_metric_expression(metric: str):
-    if metric == "ctr":
-        return func.coalesce(
-            func.sum(Analytics.clicks) * 100.0 / func.nullif(func.sum(Analytics.views), 0), 0,
-        )
-    return func.coalesce(func.sum(getattr(Analytics, metric)), 0)
 
 
 def analyze_performance(
@@ -382,63 +410,10 @@ def analyze_performance(
         "start": start, "end": end, "platform": platform,
         "campaign_id": campaign_id, "product_id": product_id,
     }
-    aggregate = _analysis_metric_expression(metric).label("value")
-    columns = (
-        func.coalesce(func.sum(Analytics.views), 0).label("views"),
-        func.coalesce(func.sum(Analytics.clicks), 0).label("clicks"),
-        func.coalesce(func.sum(Analytics.orders), 0).label("orders"),
-        func.coalesce(func.sum(Analytics.engagement), 0).label("engagement"),
-        func.coalesce(func.sum(Analytics.revenue), 0).label("revenue"),
-        aggregate,
-    )
-
-    if level == "product":
-        ranked = (
-            db.query(Product.product_id.label("id"), Product.product_name.label("name"), *columns)
-            .join(Analytics, Analytics.product_id == Product.product_id)
-            .filter(Product.user_id == user_id, Product.deleted_at.is_(None))
-            .group_by(Product.product_id, Product.product_name)
-        )
-    elif level == "campaign":
-        ranked = (
-            db.query(Campaign.campaign_id.label("id"), Campaign.name.label("name"), *columns)
-            .join(Product, Product.campaign_id == Campaign.campaign_id)
-            .join(Analytics, Analytics.product_id == Product.product_id)
-            .filter(Campaign.user_id == user_id, Campaign.deleted_at.is_(None))
-            .group_by(Campaign.campaign_id, Campaign.name)
-        )
-    elif level == "reel":
-        ranked = (
-            db.query(Reel.reel_id.label("id"), Reel.prompt_text.label("name"), *columns)
-            .join(Distribution, Distribution.reel_id == Reel.reel_id)
-            .join(Analytics, Analytics.distribution_id == Distribution.distribution_id)
-            .outerjoin(Product, Product.product_id == Reel.product_id)
-            .filter(Reel.user_id == user_id, Reel.deleted_at.is_(None))
-            .group_by(Reel.reel_id, Reel.prompt_text)
-        )
-    else:
-        ranked = (
-            _member_metrics_query(db, user_id)
-            .with_entities(
-                func.coalesce(Analytics.source_platform, "unknown").label("id"),
-                func.coalesce(Analytics.source_platform, "Unknown platform").label("name"),
-                *columns,
-            )
-            .group_by(Analytics.source_platform)
-        )
-
-    ranked_rows = (
-        _apply_tracking_filters(ranked, **filters)
-        .order_by(aggregate.desc())
-        .all()
-    )
-    trend_rows = (
-        _apply_tracking_filters(_member_metrics_query(db, user_id), **filters)
-        .with_entities(Analytics.record_date.label("date"), _analysis_metric_expression(metric).label("value"))
-        .filter(Analytics.record_date.is_not(None))
-        .group_by(Analytics.record_date)
-        .order_by(Analytics.record_date)
-        .all()
+    breakdown = _build_tracking_breakdown(db, user_id=user_id, filters=filters)
+    group_name = {"product": "products", "campaign": "campaigns", "reel": "reels", "platform": "platforms"}[level]
+    ranked_rows = sorted(
+        breakdown[group_name], key=lambda row: row["click_through_rate"] if metric == "ctr" else row[metric], reverse=True,
     )
 
     return {
@@ -446,19 +421,14 @@ def analyze_performance(
         "metric": metric,
         "rows": [
             {
-                "id": str(row.id), "name": row.name, "value": float(row.value or 0),
-                "views": int(row.views or 0), "clicks": int(row.clicks or 0),
-                "orders": int(row.orders or 0), "engagement": int(row.engagement or 0),
-                "revenue": float(row.revenue or 0),
-                "click_through_rate": round(
-                    int(row.clicks or 0) / int(row.views or 0) * 100, 2,
-                ) if row.views else 0.0,
+                **row,
+                "value": float(row["click_through_rate"] if metric == "ctr" else row[metric]),
             }
             for row in ranked_rows
         ],
         "trend": [
-            {"date": row.date.isoformat(), "value": float(row.value or 0)}
-            for row in trend_rows
+            {"date": row["date"], "value": float(row["click_through_rate"] if metric == "ctr" else row[metric])}
+            for row in breakdown["trend"]
         ],
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }

@@ -30,6 +30,10 @@ class SyncRequest(BaseModel):
     access_token: str = Field(min_length=1, max_length=8192)
     from_date: date
     to_date: date
+    # ReelCast supplies destination IDs it published itself.  This is needed
+    # for private/unlisted social posts that a provider's channel search may
+    # not return, and remains optional for backward-compatible adapter calls.
+    known_post_ids: list[str] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
     def date_range_is_valid(self) -> "SyncRequest":
