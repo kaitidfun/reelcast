@@ -24,8 +24,10 @@ logger = logging.getLogger(__name__)
 
 from app.core.config import (
     BACKEND_URL,
-    META_APP_ID,
-    META_APP_SECRET,
+    FACEBOOK_CLIENT_ID,
+    FACEBOOK_CLIENT_SECRET,
+    INSTAGRAM_CLIENT_ID,
+    INSTAGRAM_CLIENT_SECRET,
     TIKTOK_CLIENT_KEY,
     TIKTOK_CLIENT_SECRET,
     YOUTUBE_CLIENT_ID,
@@ -48,23 +50,24 @@ PLATFORM_CONFIGS: dict[str, dict] = {
         "client_secret": TIKTOK_CLIENT_SECRET,
     },
     "facebook": {
+        # Reuses the same Meta app as F1's "Sign in with Facebook"
+        # (FACEBOOK_CLIENT_ID/SECRET) — see config.py for why that's safe.
         "authorize_url": "https://www.facebook.com/v21.0/dialog/oauth",
         "token_url": "https://graph.facebook.com/v21.0/oauth/access_token",
         "scope": "pages_show_list,pages_read_engagement,pages_manage_posts",
         "client_id_param": "client_id",
-        "client_id": META_APP_ID,
-        "client_secret": META_APP_SECRET,
+        "client_id": FACEBOOK_CLIENT_ID,
+        "client_secret": FACEBOOK_CLIENT_SECRET,
     },
     "instagram": {
-        # Instagram Reels publishing rides on the same Meta app/Facebook Login
-        # as the "facebook" platform above — Instagram Business accounts are
-        # only reachable through the Facebook Page they're linked to.
+        # Separate Meta app from "facebook" above — Instagram Business login
+        # is registered as its own app in this account's Meta setup.
         "authorize_url": "https://www.facebook.com/v21.0/dialog/oauth",
         "token_url": "https://graph.facebook.com/v21.0/oauth/access_token",
         "scope": "instagram_business_basic,instagram_business_content_publish,pages_show_list",
         "client_id_param": "client_id",
-        "client_id": META_APP_ID,
-        "client_secret": META_APP_SECRET,
+        "client_id": INSTAGRAM_CLIENT_ID,
+        "client_secret": INSTAGRAM_CLIENT_SECRET,
     },
     "youtube": {
         "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",

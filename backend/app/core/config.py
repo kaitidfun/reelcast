@@ -66,8 +66,13 @@ FACEBOOK_CLIENT_SECRET = os.getenv("FACEBOOK_CLIENT_SECRET", "dummy-client-secre
 # rather than silently pretending to work.
 TIKTOK_CLIENT_KEY = os.getenv("TIKTOK_CLIENT_KEY", "")
 TIKTOK_CLIENT_SECRET = os.getenv("TIKTOK_CLIENT_SECRET", "")
-META_APP_ID = os.getenv("META_APP_ID", "")
-META_APP_SECRET = os.getenv("META_APP_SECRET", "")
+# Facebook distribution reuses the same Meta app as F1's "Sign in with
+# Facebook" (FACEBOOK_CLIENT_ID/SECRET above) — one App ID/Secret identifies
+# the app regardless of which OAuth flow requests it; scope differs per flow.
+# Instagram is a separate Meta app (Instagram Business login isn't available
+# under the same app as Facebook Login in this account's setup).
+INSTAGRAM_CLIENT_ID = os.getenv("INSTAGRAM_CLIENT_ID", "")
+INSTAGRAM_CLIENT_SECRET = os.getenv("INSTAGRAM_CLIENT_SECRET", "")
 YOUTUBE_CLIENT_ID = os.getenv("YOUTUBE_CLIENT_ID", "")
 YOUTUBE_CLIENT_SECRET = os.getenv("YOUTUBE_CLIENT_SECRET", "")
 

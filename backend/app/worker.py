@@ -33,7 +33,7 @@ from app.services.video_generation_service import (
 from app.services.overlay_service import overlayImagesAndLogos, generateVideoThumbnail
 from app.services.reel_service import update_reel
 from app.services.storage_service import get_presigned_url
-from app.services import distribution_publish_service, distribution_service, social_account_service, tracking_provider_service
+from app.services import distribution_publish_service, distribution_service, oauth_platforms, social_account_service, tracking_provider_service
 
 logger = logging.getLogger(__name__)
 
