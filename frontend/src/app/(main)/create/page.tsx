@@ -706,6 +706,22 @@ const CreateReelContent = () => {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.detail || `Could not queue ${info.label}`);
         }
+        const distribution = await res.json();
+
+        // createDistribution only ever sets status "Pending" — without a
+        // scheduled_time that just sits until Celery Beat's next sweep (up
+        // to 60s later). "Publish Now" means now, so trigger the same
+        // publish-now call the Distribute page's list button uses.
+        if (!isScheduled) {
+          const publishRes = await fetch(
+            `http://localhost:8000/api/distributions/${distribution.distribution_id}/publish-now`,
+            { method: "POST", headers: { Authorization: `Bearer ${token}` } },
+          );
+          if (!publishRes.ok) {
+            const err = await publishRes.json().catch(() => ({}));
+            throw new Error(err.detail || `Could not publish ${info.label}`);
+          }
+        }
         succeeded.push(info.label);
       } catch {
         failed.push(info.label);
