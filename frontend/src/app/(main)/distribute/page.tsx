@@ -22,6 +22,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useReels } from "@/hooks/useReels";
 import { API_BASE_URL, OAUTH_API_BASE_URL } from "@/lib/api";
@@ -82,6 +91,8 @@ const Distribution = () => {
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [disconnectAccount, setDisconnectAccount] = useState<SocialAccount | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -147,14 +158,29 @@ const Distribution = () => {
     window.location.href = `${OAUTH_API_BASE_URL}/social/${platform}/connect?token=${encodeURIComponent(token)}`;
   };
 
-  const handleDisconnect = async (accountId: string) => {
-    const res = await fetch(`${API_BASE_URL}/social/accounts/${accountId}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    if (res.ok) {
+  const handleDisconnect = async () => {
+    if (!disconnectAccount) return;
+    setDisconnecting(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/social/accounts/${disconnectAccount.account_id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.detail || "Could not disconnect account");
+      }
       toast({ title: "Disconnected" });
+      setDisconnectAccount(null);
       loadAll();
+    } catch (error) {
+      toast({
+        title: "Could not disconnect",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setDisconnecting(false);
     }
   };
 
@@ -266,7 +292,7 @@ const Distribution = () => {
                 </div>
                 <div className="mt-4">
                   {account ? (
-                  <Button variant="outline" size="sm" onClick={() => handleDisconnect(account.account_id)}>
+                  <Button variant="outline" size="sm" onClick={() => setDisconnectAccount(account)}>
                     Disconnect
                   </Button>
                 ) : (
@@ -280,6 +306,28 @@ const Distribution = () => {
           })}
         </div>
       </section>
+
+      <AlertDialog
+        open={Boolean(disconnectAccount)}
+        onOpenChange={(open) => { if (!open && !disconnecting) setDisconnectAccount(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect {disconnectAccount?.platform_name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Disconnecting this social media platform will permanently delete its Distribution history.
+              This action cannot be undone or recovered.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={disconnecting}>Cancel</AlertDialogCancel>
+            <Button variant="destructive" onClick={() => void handleDisconnect()} disabled={disconnecting}>
+              {disconnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Disconnect permanently
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Distributions */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
