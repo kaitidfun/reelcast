@@ -91,6 +91,13 @@ const CAMERA_OPTIONS: GuideOption[] = [
   { label: "Static Close-up",    description: "Camera holds still on a tight frame. Lets textures and details take center stage." },
 ];
 
+// CaptionBlock's short platform ids vs. the backend's SocialAccount.platform_name values.
+const PLATFORM_ID_INFO: Record<string, { name: string; label: string }> = {
+  yt: { name: "youtube", label: "YouTube Shorts" },
+  tt: { name: "tiktok", label: "TikTok" },
+  fb: { name: "facebook", label: "Facebook" },
+  ig: { name: "instagram", label: "Instagram" },
+};
 
 const CreateReelContent = () => {
   const searchParams = useSearchParams();
@@ -123,6 +130,8 @@ const CreateReelContent = () => {
   const [isRegeneratingCaption, setIsRegeneratingCaption] = useState(false);
   const [caption, setCaption] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
+  const [connectedAccounts, setConnectedAccounts] = useState<{ account_id: string; platform_name: string }[]>([]);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [showLogo, setShowLogo] = useState(true);
   const [showProduct, setShowProduct] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -173,6 +182,20 @@ const CreateReelContent = () => {
       }
     }
   }, [searchParams, productLibrary]);
+
+  // Connected social accounts — determines which platforms the Publish
+  // button (in CaptionBlock) can actually offer, since publishing needs a
+  // real connected SocialAccount, not just a platform name.
+  useEffect(() => {
+    const token = localStorage.getItem("rf_token");
+    if (!token) return;
+    fetch("http://localhost:8000/api/social/accounts", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : { accounts: [] }))
+      .then((data) => setConnectedAccounts(data.accounts ?? []))
+      .catch(() => setConnectedAccounts([]));
+  }, []);
 
   // Resume an existing reel from ?reelId= (e.g. clicked from the product
   // library's reel history) — reloads its prompt, caption, and video/generation
@@ -654,14 +677,41 @@ const CreateReelContent = () => {
     }
   };
 
-  const handlePublish = () => {
-    const names = [
-      { id: "yt", label: "YouTube Shorts" },
-      { id: "tt", label: "TikTok" },
-      { id: "fb", label: "Facebook" },
-      { id: "ig", label: "Instagram" },
-    ].filter(p => selectedPlatforms.includes(p.id)).map(p => p.label);
-    toast({ title: "Published!", description: `Reel has been distributed to ${names.join(", ")} 🎉` });
+  const handlePublish = async () => {
+    if (!reelId || selectedPlatforms.length === 0) return;
+    setIsPublishing(true);
+    const token = localStorage.getItem("rf_token");
+    const succeeded: string[] = [];
+    const failed: string[] = [];
+
+    for (const platformId of selectedPlatforms) {
+      const info = PLATFORM_ID_INFO[platformId];
+      const account = connectedAccounts.find((a) => a.platform_name === info?.name);
+      if (!info || !account) continue; // CaptionBlock only offers connected platforms, but guard anyway
+
+      try {
+        const res = await fetch("http://localhost:8000/api/distributions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ reel_id: reelId, account_id: account.account_id }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Could not queue ${info.label}`);
+        }
+        succeeded.push(info.label);
+      } catch {
+        failed.push(info.label);
+      }
+    }
+
+    setIsPublishing(false);
+    if (succeeded.length) {
+      toast({ title: "Queued for publishing", description: `${succeeded.join(", ")} — check the Distribute page for status.` });
+    }
+    if (failed.length) {
+      toast({ title: "Some platforms failed to queue", description: failed.join(", "), variant: "destructive" });
+    }
   };
 
   const handleDownload = async () => {
@@ -1076,9 +1126,11 @@ const CreateReelContent = () => {
               isRegeneratingCaption={isRegeneratingCaption}
               isSaved={isSaved}
               selectedPlatforms={selectedPlatforms}
+              connectedPlatforms={connectedAccounts.map((a) => a.platform_name)}
               onTogglePlatform={togglePlatform}
               onRegenCaption={() => regenerateContent("caption")}
               onPublish={handlePublish}
+              isPublishing={isPublishing}
             />
           )}
 

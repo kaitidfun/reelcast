@@ -1,16 +1,17 @@
 "use client";
 
 import { RefObject } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { Brain, Loader2, RefreshCw, Send, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
 const PLATFORM_OPTIONS = [
-  { id: "yt", label: "YouTube Shorts", shortLabel: "YT Shorts",  color: "text-red-500",    activeBg: "bg-red-500/10 border-red-500/40 ring-red-500/20"      },
-  { id: "tt", label: "TikTok",         shortLabel: "TikTok",     color: "text-foreground", activeBg: "bg-foreground/10 border-foreground/30 ring-foreground/20" },
-  { id: "fb", label: "Facebook",       shortLabel: "Facebook",   color: "text-blue-500",   activeBg: "bg-blue-500/10 border-blue-500/40 ring-blue-500/20"   },
-  { id: "ig", label: "Instagram",      shortLabel: "Instagram",  color: "text-pink-500",   activeBg: "bg-pink-500/10 border-pink-500/40 ring-pink-500/20"   },
+  { id: "yt", name: "youtube",   label: "YouTube Shorts", shortLabel: "YT Shorts",  color: "text-red-500",    activeBg: "bg-red-500/10 border-red-500/40 ring-red-500/20"      },
+  { id: "tt", name: "tiktok",    label: "TikTok",         shortLabel: "TikTok",     color: "text-foreground", activeBg: "bg-foreground/10 border-foreground/30 ring-foreground/20" },
+  { id: "fb", name: "facebook",  label: "Facebook",       shortLabel: "Facebook",   color: "text-blue-500",   activeBg: "bg-blue-500/10 border-blue-500/40 ring-blue-500/20"   },
+  { id: "ig", name: "instagram", label: "Instagram",      shortLabel: "Instagram",  color: "text-pink-500",   activeBg: "bg-pink-500/10 border-pink-500/40 ring-pink-500/20"   },
 ];
 
 const PlatformIcon = ({ id }: { id: string }) => {
@@ -30,9 +31,11 @@ type Props = {
   isRegeneratingCaption: boolean;
   isSaved: boolean;
   selectedPlatforms: string[];
+  connectedPlatforms: string[];
   onTogglePlatform: (id: string) => void;
   onRegenCaption: () => void;
   onPublish: () => void;
+  isPublishing: boolean;
 };
 
 export function CaptionBlock({
@@ -42,10 +45,14 @@ export function CaptionBlock({
   isRegeneratingCaption,
   isSaved,
   selectedPlatforms,
+  connectedPlatforms,
   onTogglePlatform,
   onRegenCaption,
   onPublish,
+  isPublishing,
 }: Props) {
+  const availablePlatforms = PLATFORM_OPTIONS.filter((p) => connectedPlatforms.includes(p.name));
+  const selectedConnected = selectedPlatforms.filter((id) => availablePlatforms.some((p) => p.id === id));
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -84,54 +91,66 @@ export function CaptionBlock({
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Target Platforms
           </p>
-          <div className="flex gap-2">
-            {PLATFORM_OPTIONS.map((p) => {
-              const isActive = selectedPlatforms.includes(p.id);
-              return (
-                <div
-                  key={p.id}
-                  onClick={() => onTogglePlatform(p.id)}
-                  className={`relative flex-1 flex flex-col items-center justify-center gap-1.5 rounded-xl border py-3 cursor-pointer transition-all select-none ${
-                    isActive
-                      ? `${p.activeBg} ring-1`
-                      : "border-border/50 hover:border-border hover:bg-muted/20"
-                  }`}
-                >
-                  <span className={`transition-colors ${isActive ? p.color : "text-muted-foreground/35"}`}>
-                    <PlatformIcon id={p.id} />
-                  </span>
-                  <span className={`text-[10px] font-medium text-center leading-tight transition-colors ${isActive ? "text-foreground" : "text-muted-foreground/50"}`}>
-                    {p.shortLabel}
-                  </span>
-                  {isActive && (
-                    <span className="absolute top-1.5 right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary">
-                      <Check className="h-2 w-2 text-primary-foreground" />
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          {selectedPlatforms.length === 0 && (
-            <p className="text-[11px] text-amber-500/80">⚠ Select at least one platform before publishing</p>
+          {availablePlatforms.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">
+              No connected accounts yet.{" "}
+              <Link href="/distribute" className="text-primary underline underline-offset-2">
+                Connect a platform
+              </Link>{" "}
+              to publish this reel.
+            </p>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                {availablePlatforms.map((p) => {
+                  const isActive = selectedConnected.includes(p.id);
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => onTogglePlatform(p.id)}
+                      className={`relative flex-1 flex flex-col items-center justify-center gap-1.5 rounded-xl border py-3 cursor-pointer transition-all select-none ${
+                        isActive
+                          ? `${p.activeBg} ring-1`
+                          : "border-border/50 hover:border-border hover:bg-muted/20"
+                      }`}
+                    >
+                      <span className={`transition-colors ${isActive ? p.color : "text-muted-foreground/35"}`}>
+                        <PlatformIcon id={p.id} />
+                      </span>
+                      <span className={`text-[10px] font-medium text-center leading-tight transition-colors ${isActive ? "text-foreground" : "text-muted-foreground/50"}`}>
+                        {p.shortLabel}
+                      </span>
+                      {isActive && (
+                        <span className="absolute top-1.5 right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary">
+                          <Check className="h-2 w-2 text-primary-foreground" />
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {selectedConnected.length === 0 && (
+                <p className="text-[11px] text-amber-500/80">⚠ Select at least one platform before publishing</p>
+              )}
+            </>
           )}
         </motion.div>
       )}
 
-      <div className={isSaved ? "grid grid-cols-2 gap-2" : ""}>
+      <div className={isSaved && availablePlatforms.length > 0 ? "grid grid-cols-2 gap-2" : ""}>
         <Button variant="outline" onClick={onRegenCaption} size="sm" className="gap-1.5 h-9 text-xs w-full">
           <RefreshCw className="h-3 w-3" />
           Retry AI Text
         </Button>
-        {isSaved && (
+        {isSaved && availablePlatforms.length > 0 && (
           <Button
             onClick={onPublish}
-            disabled={selectedPlatforms.length === 0}
+            disabled={selectedConnected.length === 0 || isPublishing}
             size="sm"
             className="gradient-primary text-primary-foreground shadow-glow h-9 text-xs gap-1.5"
           >
-            <Send className="h-3.5 w-3.5" />
-            Publish · {selectedPlatforms.length}
+            {isPublishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            {isPublishing ? "Publishing…" : `Publish · ${selectedConnected.length}`}
           </Button>
         )}
       </div>
