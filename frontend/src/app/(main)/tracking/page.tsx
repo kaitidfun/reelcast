@@ -7,6 +7,16 @@ import { BarChart3, CheckCircle2, Eye, Loader2, MousePointerClick, RefreshCw, Sh
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import StatCard from "@/components/StatCard";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { OAUTH_API_BASE_URL, disconnectEcommerceAccount, EcommerceAccount, fetchEcommerceAccounts, fetchTrackingAnalysis, fetchTrackingDashboard, fetchTrackingFilterOptions, fetchTrackingReadiness, syncTrackingData, TrackingAnalysis, TrackingDashboard, TrackingFilterOptions } from "@/lib/api";
 
 const number = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
@@ -67,6 +77,8 @@ export default function Tracking() {
   const [analysis, setAnalysis] = useState<TrackingAnalysis | null>(null);
   const [selectedAnalysisItem, setSelectedAnalysisItem] = useState<TrackingAnalysis["rows"][number] | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [shopToDisconnect, setShopToDisconnect] = useState<EcommerceAccount | null>(null);
+  const [disconnectingShop, setDisconnectingShop] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,12 +126,17 @@ export default function Tracking() {
     window.location.href = `${OAUTH_API_BASE_URL}/tracking/ecommerce/${platform}/connect?token=${encodeURIComponent(token)}`;
   };
 
-  const disconnectShop = async (accountId: string) => {
+  const disconnectShop = async () => {
+    if (!shopToDisconnect) return;
+    setDisconnectingShop(true);
     try {
-      await disconnectEcommerceAccount(accountId);
+      await disconnectEcommerceAccount(shopToDisconnect.ecommerce_account_id);
+      setShopToDisconnect(null);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to disconnect shop");
+    } finally {
+      setDisconnectingShop(false);
     }
   };
 
@@ -244,8 +261,29 @@ export default function Tracking() {
 
       <section className="rounded-2xl border border-border bg-card p-5 shadow-card sm:p-6">
         <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10"><ShoppingBag className="h-4 w-4 text-primary" /></div><div><h2 className="font-display text-lg font-semibold text-foreground">E-commerce connections</h2><p className="text-xs text-muted-foreground">Connect stores to synchronize affiliate orders and clicks.</p></div></div>
-        <div className="mt-5 grid gap-3 md:grid-cols-3">{SHOP_PLATFORMS.map((platform) => { const account = accounts.find((item) => item.platform_name === platform.key); const configured = shopOAuthReady[platform.key] ?? false; return <div key={platform.key} className="flex min-h-[156px] flex-col rounded-xl border border-border bg-muted/30 p-4"><div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold text-foreground">{account?.shop_name || platform.label}</p><p className="mt-1 text-xs text-muted-foreground">{account ? (account.last_synced_at ? `Last sync ${new Date(account.last_synced_at).toLocaleString()}` : "Connected - awaiting first sync") : (configured ? "Not connected" : "Needs setup")}</p></div>{account && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}</div>{account?.sync_error && <p className="mt-2 text-xs text-destructive">{account.sync_error}</p>}<div className="mt-auto pt-4">{account ? <button type="button" onClick={() => disconnectShop(account.ecommerce_account_id)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"><Trash2 className="h-3.5 w-3.5" />Disconnect</button> : <button type="button" disabled={!configured} title={configured ? undefined : "Configure this shop OAuth adapter in backend/.env.local first"} onClick={() => connectShop(platform.key)} className="min-h-9 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">{configured ? "Connect" : "Needs setup"}</button>}</div></div>; })}</div>
+        <div className="mt-5 grid gap-3 md:grid-cols-3">{SHOP_PLATFORMS.map((platform) => { const account = accounts.find((item) => item.platform_name === platform.key); const configured = shopOAuthReady[platform.key] ?? false; return <div key={platform.key} className="flex min-h-[156px] flex-col rounded-xl border border-border bg-muted/30 p-4"><div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold text-foreground">{account?.shop_name || platform.label}</p><p className="mt-1 text-xs text-muted-foreground">{account ? (account.last_synced_at ? `Last sync ${new Date(account.last_synced_at).toLocaleString()}` : "Connected - awaiting first sync") : (configured ? "Not connected" : "Needs setup")}</p></div>{account && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}</div>{account?.sync_error && <p className="mt-2 text-xs text-destructive">{account.sync_error}</p>}<div className="mt-auto pt-4">{account ? <button type="button" onClick={() => setShopToDisconnect(account)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"><Trash2 className="h-3.5 w-3.5" />Disconnect</button> : <button type="button" disabled={!configured} title={configured ? undefined : "Configure this shop OAuth adapter in backend/.env.local first"} onClick={() => connectShop(platform.key)} className="min-h-9 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">{configured ? "Connect" : "Needs setup"}</button>}</div></div>; })}</div>
       </section>
+
+      <AlertDialog
+        open={Boolean(shopToDisconnect)}
+        onOpenChange={(open) => { if (!open && !disconnectingShop) setShopToDisconnect(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect {shopToDisconnect?.shop_name || shopToDisconnect?.platform_name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will stop synchronization for this store. You can reconnect it later to resume tracking.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={disconnectingShop}>Cancel</AlertDialogCancel>
+            <Button variant="destructive" onClick={() => void disconnectShop()} disabled={disconnectingShop}>
+              {disconnectingShop ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Disconnect
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {!loading && dashboard && <p className="flex items-center justify-end gap-1 text-xs text-muted-foreground"><MousePointerClick className="h-3 w-3" />{dashboard.last_synced_at ? `Last synchronized ${new Date(dashboard.last_synced_at).toLocaleString()}` : "No successful synchronization yet"} · Updated {new Date(dashboard.generated_at).toLocaleString()}</p>}
     </div>
