@@ -22,6 +22,7 @@ import { GuideChipRow } from "./_components/GuideChipRow";
 import { ProductPickerDialog } from "./_components/ProductPickerDialog";
 import { FullscreenVideoDialog } from "./_components/FullscreenVideoDialog";
 import { CaptionBlock } from "./_components/CaptionBlock";
+import { DistributeBlock } from "./_components/DistributeBlock";
 import {
   buildGuidedPromptPayload,
   hasGuidedSelection,
@@ -132,6 +133,7 @@ const CreateReelContent = () => {
   const [selectedPlatforms, setSelectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
   const [connectedAccounts, setConnectedAccounts] = useState<{ account_id: string; platform_name: string }[]>([]);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [scheduledTime, setScheduledTime] = useState("");
   const [showLogo, setShowLogo] = useState(true);
   const [showProduct, setShowProduct] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -681,19 +683,24 @@ const CreateReelContent = () => {
     if (!reelId || selectedPlatforms.length === 0) return;
     setIsPublishing(true);
     const token = localStorage.getItem("rf_token");
+    const isScheduled = scheduledTime.trim().length > 0;
     const succeeded: string[] = [];
     const failed: string[] = [];
 
     for (const platformId of selectedPlatforms) {
       const info = PLATFORM_ID_INFO[platformId];
       const account = connectedAccounts.find((a) => a.platform_name === info?.name);
-      if (!info || !account) continue; // CaptionBlock only offers connected platforms, but guard anyway
+      if (!info || !account) continue; // DistributeBlock only offers connected platforms, but guard anyway
 
       try {
         const res = await fetch("http://localhost:8000/api/distributions", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ reel_id: reelId, account_id: account.account_id }),
+          body: JSON.stringify({
+            reel_id: reelId,
+            account_id: account.account_id,
+            scheduled_time: isScheduled ? new Date(scheduledTime).toISOString() : null,
+          }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
@@ -707,7 +714,11 @@ const CreateReelContent = () => {
 
     setIsPublishing(false);
     if (succeeded.length) {
-      toast({ title: "Queued for publishing", description: `${succeeded.join(", ")} — check the Distribute page for status.` });
+      setScheduledTime("");
+      toast({
+        title: isScheduled ? "Scheduled!" : "Publishing now",
+        description: `${succeeded.join(", ")} — check the Distribute page for status.`,
+      });
     }
     if (failed.length) {
       toast({ title: "Some platforms failed to queue", description: failed.join(", "), variant: "destructive" });
@@ -1124,41 +1135,25 @@ const CreateReelContent = () => {
               onCaptionChange={setCaption}
               captionTextareaRef={captionTextareaRef}
               isRegeneratingCaption={isRegeneratingCaption}
-              isSaved={isSaved}
+              onRegenCaption={() => regenerateContent("caption")}
+            />
+          )}
+
+          {/* Distribute — separate from Caption entirely; this is the F3
+              publish flow, moved in-page so publishing this reel never
+              requires a detour to the standalone /distribute page. */}
+          {completedMode !== null && isSaved && (
+            <DistributeBlock
               selectedPlatforms={selectedPlatforms}
               connectedPlatforms={connectedAccounts.map((a) => a.platform_name)}
               onTogglePlatform={togglePlatform}
-              onRegenCaption={() => regenerateContent("caption")}
+              scheduledTime={scheduledTime}
+              onScheduledTimeChange={setScheduledTime}
               onPublish={handlePublish}
               isPublishing={isPublishing}
             />
           )}
 
-          {completedMode === "generate" && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-3 shadow-card">
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="button"
-                  onClick={() => regenerateContent("all")}
-                  disabled={generationStatus === "generating" || !selectedProduct || !promptText.trim() || promptText.length > 500}
-                  className="gradient-primary h-10 flex-1 gap-2 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  Re-generate Entire Reel
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => regenerateContent("video")}
-                  disabled={generationStatus === "generating" || !selectedProduct || !promptText.trim() || promptText.length > 500}
-                  className="h-10 flex-1 gap-2 text-sm sm:flex-none sm:px-4"
-                >
-                  <Video className="h-4 w-4" />
-                  Retry Video Only
-                </Button>
-              </div>
-            </motion.div>
-          )}
         </div>
 
         {/* ============ RIGHT: Video Preview ============ */}
@@ -1302,7 +1297,31 @@ const CreateReelContent = () => {
             </motion.div>
           )}
 
-
+          {completedMode === "generate" && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-3 shadow-card shrink-0">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  onClick={() => regenerateContent("all")}
+                  disabled={generationStatus === "generating" || !selectedProduct || !promptText.trim() || promptText.length > 500}
+                  className="gradient-primary h-10 flex-1 gap-2 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Re-generate Entire Reel
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => regenerateContent("video")}
+                  disabled={generationStatus === "generating" || !selectedProduct || !promptText.trim() || promptText.length > 500}
+                  className="h-10 flex-1 gap-2 text-sm sm:flex-none sm:px-4"
+                >
+                  <Video className="h-4 w-4" />
+                  Retry Video Only
+                </Button>
+              </div>
+            </motion.div>
+          )}
         </div>
       </div>
 
