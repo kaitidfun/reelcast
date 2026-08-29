@@ -52,3 +52,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS analytics_source_external_ref_unique
 -- previewAndApproveContent() sets this column true. Existing Completed rows
 -- default to false and won't reappear in Library until re-saved.
 ALTER TABLE reels ADD COLUMN IF NOT EXISTS is_saved BOOLEAN NOT NULL DEFAULT false;
+
+-- 2026-08-29: Include account-level social metrics in dashboard ownership.
+-- Social API responses are posts/media on a connected account and are not
+-- always associated with a Reel or product in ReelCast.
+ALTER TABLE analytics
+    ADD COLUMN IF NOT EXISTS social_account_id UUID
+    REFERENCES social_accounts(account_id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS analytics_social_account_id_index
+    ON analytics (social_account_id);

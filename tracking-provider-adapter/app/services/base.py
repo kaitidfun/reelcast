@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import date, datetime, timezone
+import logging
 from typing import Any
 
 import httpx
 
 from app.core.config import get_settings
 from app.schemas import Metric, SyncRequest, TokenExchangeResponse
+
+
+logger = logging.getLogger(__name__)
 
 
 class ProviderError(Exception):
@@ -50,6 +54,10 @@ class ProviderClient(ABC):
         if response.status_code in (401, 403):
             raise ProviderError(self.platform, "provider rejected the access token", 401)
         if response.is_error:
+            logger.warning(
+                "[Tracking adapter] Provider HTTP error: platform=%s status=%s",
+                self.platform, response.status_code,
+            )
             raise ProviderError(self.platform, "provider returned an error")
         try:
             payload = response.json()
@@ -61,10 +69,22 @@ class ProviderClient(ABC):
         # Inspect only status codes, never echo their message (it can contain account data).
         error = payload.get("error")
         if isinstance(error, str) and error:
+            logger.warning(
+                "[Tracking adapter] Provider payload error: platform=%s status=%s code=%s",
+                self.platform, response.status_code, "string-error",
+            )
             raise ProviderError(self.platform, "provider returned an error")
         if isinstance(error, dict) and error.get("code") not in (None, 0, "0", "ok", "OK"):
+            logger.warning(
+                "[Tracking adapter] Provider payload error: platform=%s status=%s code=%s",
+                self.platform, response.status_code, str(error["code"])[:64],
+            )
             raise ProviderError(self.platform, "provider returned an error")
         if "code" in payload and payload["code"] not in (None, 0, "0", "ok", "OK"):
+            logger.warning(
+                "[Tracking adapter] Provider payload error: platform=%s status=%s code=%s",
+                self.platform, response.status_code, str(payload["code"])[:64],
+            )
             raise ProviderError(self.platform, "provider returned an error")
         return payload
 

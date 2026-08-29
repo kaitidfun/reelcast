@@ -21,6 +21,7 @@ from app.models.models import (
     EcommerceAccount,
     Product,
     Reel,
+    SocialAccount,
     User,
 )
 from app.services.crypto_service import encrypt_token
@@ -103,6 +104,7 @@ def record_metric(
     record_date: date,
     product_id: UUID | None = None,
     distribution_id: UUID | None = None,
+    social_account_id: UUID | None = None,
     views: int = 0,
     clicks: int = 0,
     orders: int = 0,
@@ -121,6 +123,11 @@ def record_metric(
         .first()
     ):
         raise LookupError("Distribution not found")
+    if social_account_id and not db.query(SocialAccount.account_id).filter(
+        SocialAccount.account_id == social_account_id,
+        SocialAccount.user_id == user_id,
+    ).first():
+        raise LookupError("Social account not found")
 
     if external_ref:
         existing = db.query(Analytics).filter(
@@ -132,6 +139,7 @@ def record_metric(
             # Update it rather than double-counting the dashboard totals.
             existing.product_id = product_id
             existing.distribution_id = distribution_id
+            existing.social_account_id = social_account_id
             existing.record_date = record_date
             existing.views = max(0, views)
             existing.clicks = max(0, clicks)
@@ -145,6 +153,7 @@ def record_metric(
     record = Analytics(
         product_id=product_id,
         distribution_id=distribution_id,
+        social_account_id=social_account_id,
         source_platform=source_platform,
         external_ref=external_ref,
         record_date=record_date,
@@ -167,7 +176,12 @@ def _member_metrics_query(db: Session, user_id: UUID):
         .outerjoin(Product, Analytics.product_id == Product.product_id)
         .outerjoin(Distribution, Analytics.distribution_id == Distribution.distribution_id)
         .outerjoin(Reel, Distribution.reel_id == Reel.reel_id)
-        .filter(or_(Product.user_id == user_id, Reel.user_id == user_id))
+        .outerjoin(SocialAccount, Analytics.social_account_id == SocialAccount.account_id)
+        .filter(or_(
+            Product.user_id == user_id,
+            Reel.user_id == user_id,
+            SocialAccount.user_id == user_id,
+        ))
     )
 
 
@@ -232,9 +246,19 @@ def dashboard(
     query = _apply_tracking_filters(_member_metrics_query(db, user_id), **filters)
 
     totals = _metric_totals(query)
-    totals["reels"] = db.query(func.count(Reel.reel_id)).filter(
-        Reel.user_id == user_id, Reel.deleted_at.is_(None)
-    ).scalar() or 0
+    # A Reel can be sent to several platforms, so count distinct Reel ids.
+    # Only a completed platform publish is a successful distribution.
+    totals["reels"] = (
+        db.query(func.count(func.distinct(Reel.reel_id)))
+        .join(Distribution, Distribution.reel_id == Reel.reel_id)
+        .filter(
+            Reel.user_id == user_id,
+            Reel.deleted_at.is_(None),
+            Distribution.status == "Published",
+        )
+        .scalar()
+        or 0
+    )
 
     trend_rows = (
         query.with_entities(

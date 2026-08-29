@@ -98,6 +98,9 @@ class SocialAccount(Base):
     distributions = relationship(
         "Distribution", back_populates="account", cascade="all, delete-orphan",
     )
+    analytics = relationship(
+        "Analytics", back_populates="social_account", cascade="all, delete-orphan",
+    )
 
 
 class Campaign(Base):
@@ -329,6 +332,13 @@ class Analytics(Base):
         ForeignKey("products.product_id", ondelete="CASCADE"),
         nullable=True,
     )
+    # Social metrics are account-level and may not map to a Reel made here.
+    # Keep their source account so the dashboard can still show Engagement.
+    social_account_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("social_accounts.account_id", ondelete="CASCADE"),
+        nullable=True,
+    )
     source_platform = Column(String, nullable=True)
     # Provider event/order/post identifier. Used to make periodic syncs idempotent.
     external_ref = Column(String, nullable=True, index=True)
@@ -351,6 +361,7 @@ class Analytics(Base):
     # Relationships
     distribution = relationship("Distribution", back_populates="analytics")
     product = relationship("Product", back_populates="analytics")
+    social_account = relationship("SocialAccount", back_populates="analytics")
 
 
 class EcommerceAccount(Base):

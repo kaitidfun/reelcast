@@ -19,6 +19,7 @@ from app.routes.tracking_routes import (
     ecommerceAccountCallback,
     analyzeTrackingPerformance,
 )
+from app.services import tracking_provider_service
 from app.schemas.analytics import EcommerceAccountConnect, TrackingMetricCreate
 
 
@@ -128,6 +129,24 @@ class TrackingRouteTests(unittest.TestCase):
             result = asyncio.run(synchronizeTrackingData(db=self.db, current_user=self.user))
         self.assertEqual(expected, result)
         sync.assert_awaited_once_with(self.db, user_id=self.user.user_id)
+
+    def test_social_sync_records_the_connected_account_for_dashboard_ownership(self) -> None:
+        """Native social Engagement must be visible even without a Reel link."""
+        account = SimpleNamespace(
+            account_id=uuid4(), user_id=self.user.user_id,
+            platform_name="instagram", external_account_id="ig-business-id",
+        )
+        with patch(
+            "app.services.tracking_provider_service.social_account_service.get_decrypted_access_token",
+            return_value="decrypted-token",
+        ), patch(
+            "app.services.tracking_provider_service._sync_metrics",
+            new=AsyncMock(return_value=2),
+        ) as sync_metrics:
+            count = asyncio.run(tracking_provider_service.sync_social_account(self.db, account))
+
+        self.assertEqual(2, count)
+        self.assertEqual(account.account_id, sync_metrics.call_args.kwargs["social_account_id"])
 
     def test_F5_UTC01_starts_shop_oauth_without_exposing_provider_token(self) -> None:
         request = SimpleNamespace(session={})

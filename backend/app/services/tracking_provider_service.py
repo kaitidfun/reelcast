@@ -117,6 +117,7 @@ def _metric_payload(metric: dict[str, Any], source_platform: str) -> dict[str, A
             "external_ref": str(metric["external_ref"]) if metric.get("external_ref") else None,
             "product_id": UUID(str(metric["product_id"])) if metric.get("product_id") else None,
             "distribution_id": UUID(str(metric["distribution_id"])) if metric.get("distribution_id") else None,
+            "social_account_id": UUID(str(metric["social_account_id"])) if metric.get("social_account_id") else None,
             "record_date": record_date,
             "views": int(metric.get("views", 0)),
             "clicks": int(metric.get("clicks", 0)),
@@ -171,6 +172,7 @@ async def _sync_metrics(
     account_id: str,
     external_account_id: str,
     access_token: str,
+    social_account_id: UUID | None = None,
 ) -> int:
     metrics = await _request_adapter(
         platform=platform,
@@ -179,8 +181,13 @@ async def _sync_metrics(
         access_token=access_token,
     )
     for metric in metrics:
+        payload = _metric_payload(metric, platform)
+        # Social providers return account-level post metrics. Persist the
+        # connected account so the member's dashboard can show Engagement.
+        if social_account_id:
+            payload["social_account_id"] = social_account_id
         tracking_service.record_metric(
-            db, user_id=user_id, **_metric_payload(metric, platform),
+            db, user_id=user_id, **payload,
         )
     return len(metrics)
 
@@ -216,6 +223,7 @@ async def sync_social_account(db: Session, account: SocialAccount) -> int:
             account_id=str(account.account_id),
             external_account_id=account.external_account_id or "",
             access_token=social_account_service.get_decrypted_access_token(account),
+            social_account_id=account.account_id,
         )
     except Exception as exc:
         # SocialAccount has no status columns. Avoid persisting tokens/errors;

@@ -77,3 +77,15 @@ async def test_provider_application_error_is_safely_mapped():
     with pytest.raises(ProviderError) as error:
         await provider.request("GET", "https://provider.example")
     assert error.value.reason == "provider returned an error"
+
+
+@pytest.mark.asyncio
+async def test_provider_application_error_logs_only_a_safe_error_code(caplog):
+    provider = TransportProvider()
+    provider.client = lambda: httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda _: httpx.Response(200, json={"code": "INVALID_TOKEN", "message": "do not log this"})
+    ))
+    with pytest.raises(ProviderError):
+        await provider.request("GET", "https://provider.example")
+    assert "code=INVALID_TOKEN" in caplog.text
+    assert "do not log this" not in caplog.text

@@ -10,6 +10,7 @@ from datetime import datetime, date
 class AnalyticsCreate(BaseModel):
     distribution_id: Optional[UUID] = None
     product_id: Optional[UUID] = None
+    social_account_id: Optional[UUID] = None
     source_platform: Optional[str] = None
     external_ref: Optional[str] = None
     views: int = 0
@@ -37,6 +38,7 @@ class AnalyticsResponse(BaseModel):
     analytics_id: UUID
     distribution_id: Optional[UUID] = None
     product_id: Optional[UUID] = None
+    social_account_id: Optional[UUID] = None
     source_platform: Optional[str] = None
     external_ref: Optional[str] = None
     views: int = 0
@@ -84,6 +86,7 @@ class TrackingMetricCreate(BaseModel):
 
     product_id: Optional[UUID] = None
     distribution_id: Optional[UUID] = None
+    social_account_id: Optional[UUID] = None
     source_platform: str
     external_ref: Optional[str] = None
     views: int = 0
