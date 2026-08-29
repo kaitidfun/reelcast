@@ -125,10 +125,11 @@ The start script will:
 1. Create the backend virtual environment if needed, then install/update backend dependencies from `backend/requirements.txt`
 2. Install/update frontend dependencies with `bun install`
 3. Start **Redis** via Docker (`docker compose up -d`)
-4. Open a new terminal → activate venv → start **FastAPI** on port 8000
-5. Open a new terminal → activate venv → start **Celery Worker**
-6. Open a new terminal → activate venv → start **Celery Beat** (scheduled Distribution auto-publish — separate process from the Worker, see STEP 4 below)
-7. Open a new terminal → start **Next.js Frontend** on port 3000
+4. Create the `tracking-provider-adapter` virtual environment if needed, install its dependencies, then open a new terminal → start it (FastAPI) on port 9000
+5. Open a new terminal → activate venv → start **FastAPI** backend on port 8000
+6. Open a new terminal → activate venv → start **Celery Worker**
+7. Open a new terminal → activate venv → start **Celery Beat** (F3 scheduled Distribution auto-publish + F5 tracking data sync — separate process from the Worker, see STEP 4 below)
+8. Open a new terminal → start **Next.js Frontend** on port 3000
 
 The start-and-test script installs E2E dependencies and Playwright browsers, starts the services in deterministic test mode, then runs backend unit, frontend unit, UI unit E2E, and non-external system E2E suites.
 
@@ -154,7 +155,23 @@ Verify: Seeing `reelcast_redis  Started` = Success
 
 ---
 
-### STEP 2 — Backend (FastAPI / uvicorn)
+### STEP 2 — Tracking Provider Adapter (F5, FastAPI / uvicorn)
+
+Open a new terminal and navigate to `tracking-provider-adapter` (separate
+virtual environment from `backend`'s — see its own README for first-time
+setup):
+
+```bash
+cd tracking-provider-adapter
+.venv\Scripts\activate
+uvicorn app.main:app --reload --port 9000
+```
+
+Verify: `curl http://localhost:9000/health` returns `{"status":"ok"}`
+
+---
+
+### STEP 3 — Backend (FastAPI / uvicorn)
 
 Open a new terminal and navigate to `backend`:
 
@@ -168,7 +185,7 @@ Verify: Open [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ---
 
-### STEP 3 — Celery Worker
+### STEP 4 — Celery Worker
 
 Open another new terminal and navigate to `backend`:
 
@@ -182,7 +199,7 @@ Verify: Seeing `celery@... ready.` = Success
 
 ---
 
-### STEP 4 — Celery Beat (F3 scheduled distribution)
+### STEP 5 — Celery Beat (F3 scheduled distribution + F5 data tracking)
 
 Open another new terminal and navigate to `backend`:
 
@@ -194,16 +211,19 @@ venv\Scripts\celery -A app.worker.celery_app beat --loglevel=info
 
 Verify: Seeing `Scheduler: Sending due task check-scheduled-distributions` (every 60s) = Success
 
-> **This is a separate process from the Celery Worker in STEP 3 — both must be
+> **This is a separate process from the Celery Worker in STEP 4 — both must be
 > running.** Worker executes tasks; Beat only watches the clock and queues
-> `checkScheduledDistributions` every 60 seconds for the Worker to pick up.
-> Without Beat running, a scheduled Distribution just sits at status
-> `Pending` forever — Publish Now still works fine since that path skips
-> Beat entirely, but nothing will ever auto-publish at its `scheduled_time`.
+> two periodic tasks for the Worker to pick up: `checkScheduledDistributions`
+> every 60 seconds (F3 — auto-publish Distributions once their
+> `scheduled_time` arrives) and `syncTrackingData` every 15 minutes (F5 —
+> refresh connected shop/social performance data). Without Beat running, a
+> scheduled Distribution just sits at status `Pending` forever and tracking
+> data never refreshes on its own — Publish Now still works fine since that
+> path skips Beat entirely.
 
 ---
 
-### STEP 5 — Frontend (Next.js / bun)
+### STEP 6 — Frontend (Next.js / bun)
 
 Open a new terminal and navigate to `frontend`:
 
@@ -216,27 +236,16 @@ Verify: Open [http://localhost:3000](http://localhost:3000)
 
 ---
 
-### STEP 5 — Celery Beat (Scheduled distribution and data tracking)
-
-Open one more terminal in `backend`. This triggers scheduled Reel publishing
-every minute and Feature 5 data synchronization every 15 minutes:
-
-```bash
-cd backend
-venv\Scripts\activate
-venv\Scripts\celery -A app.worker.celery_app beat --loglevel=info
-```
-
----
-
 ## Port Summary
 
-| Service     | URL                        |
-| ----------- | -------------------------- |
-| Frontend    | http://localhost:3000      |
-| Backend API | http://localhost:8000      |
-| API Docs    | http://localhost:8000/docs |
-| Redis       | localhost:6379             |
+| Service       | URL                          |
+| ------------- | ----------------------------- |
+| Frontend      | http://localhost:3000        |
+| Backend API   | http://localhost:8000        |
+| API Docs      | http://localhost:8000/docs   |
+| Tracking Adapter      | http://localhost:9000        |
+| Tracking Adapter Docs | http://localhost:9000/docs   |
+| Redis         | localhost:6379                |
 
 ---
 

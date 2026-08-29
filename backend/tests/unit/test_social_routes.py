@@ -32,11 +32,14 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
     """oauth_platforms.py: authorize URL building and token exchange."""
 
     def test_unconfigured_platform_reports_not_configured(self) -> None:
-        # No client id/secret set in this test env — matches "before the
-        # dev app is registered" state described in the .env.example notes.
-        self.assertFalse(is_configured("tiktok"))
-        with self.assertRaises(OAuthProviderException):
-            build_authorize_url("tiktok", state="abc")
+        # Force an unconfigured state regardless of what's actually in the
+        # developer's .env — real TikTok dev credentials are expected to be
+        # present in local/CI environments now that the app is registered.
+        unconfigured_tiktok = {**oauth_platforms.PLATFORM_CONFIGS["tiktok"], "client_id": "", "client_secret": ""}
+        with patch.dict(oauth_platforms.PLATFORM_CONFIGS, {"tiktok": unconfigured_tiktok}):
+            self.assertFalse(is_configured("tiktok"))
+            with self.assertRaises(OAuthProviderException):
+                build_authorize_url("tiktok", state="abc")
 
     def test_unknown_platform_raises(self) -> None:
         with self.assertRaises(OAuthProviderException):
