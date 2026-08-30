@@ -3,10 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Send, Clock, Plus, Trash2, Loader2, CheckCircle2, Radio } from "lucide-react";
+import { Send, Clock, Trash2, Loader2, CheckCircle2, Radio, Music2, Youtube, Facebook, Instagram, Unplug, Link2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -14,14 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -36,10 +26,10 @@ import { useReels } from "@/hooks/useReels";
 import { API_BASE_URL, OAUTH_API_BASE_URL } from "@/lib/api";
 
 const PLATFORMS = [
-  { key: "tiktok", label: "TikTok" },
-  { key: "youtube", label: "YouTube Shorts" },
-  { key: "facebook", label: "Facebook" },
-  { key: "instagram", label: "Instagram" },
+  { key: "tiktok", label: "TikTok", icon: Music2, iconClassName: "bg-foreground/10 text-foreground" },
+  { key: "youtube", label: "YouTube Shorts", icon: Youtube, iconClassName: "bg-destructive/10 text-destructive" },
+  { key: "facebook", label: "Facebook", icon: Facebook, iconClassName: "bg-info/10 text-info" },
+  { key: "instagram", label: "Instagram", icon: Instagram, iconClassName: "bg-primary/10 text-primary" },
 ];
 
 const STATUS_BADGE: Record<string, string> = {
@@ -74,7 +64,6 @@ const Distribution = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { reels } = useReels({ limit: 100 });
-  const completedReels = reels.filter((r) => r.status === "Completed");
 
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [distributions, setDistributions] = useState<DistributionItem[]>([]);
@@ -86,11 +75,6 @@ const Distribution = () => {
   const [page, setPage] = useState(0);
   const [platformReady, setPlatformReady] = useState<Record<string, boolean>>({});
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [selectedReelId, setSelectedReelId] = useState("");
-  const [selectedAccountId, setSelectedAccountId] = useState("");
-  const [scheduledTime, setScheduledTime] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [disconnectAccount, setDisconnectAccount] = useState<SocialAccount | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
 
@@ -192,43 +176,6 @@ const Distribution = () => {
     }
   };
 
-  const resetCreateForm = () => {
-    setSelectedReelId("");
-    setSelectedAccountId("");
-    setScheduledTime("");
-  };
-
-  const handleCreateDistribution = async () => {
-    if (!selectedReelId || !selectedAccountId) {
-      toast({ title: "Pick a reel and an account first", variant: "destructive" });
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/distributions`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reel_id: selectedReelId,
-          account_id: selectedAccountId,
-          scheduled_time: scheduledTime ? new Date(scheduledTime).toISOString() : null,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Could not schedule distribution");
-      }
-      toast({ title: scheduledTime ? "Scheduled!" : "Queued to publish" });
-      setCreateOpen(false);
-      resetCreateForm();
-      loadAll();
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const handleCancel = async (distributionId: string) => {
     const res = await fetch(`${API_BASE_URL}/distributions/${distributionId}`, {
       method: "DELETE",
@@ -255,61 +202,64 @@ const Distribution = () => {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Distribution</h1>
-          <p className="mt-1 text-muted-foreground">Publish Reels to YouTube Shorts, TikTok, Facebook, and Instagram</p>
-        </div>
-        <Button
-          onClick={() => setCreateOpen(true)}
-          disabled={accounts.length === 0 || completedReels.length === 0}
-          title={accounts.length === 0 ? "Connect an account first" : completedReels.length === 0 ? "No completed reels yet" : undefined}
-          className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto"
-        >
-          <Plus className="h-4 w-4" />
-          Schedule Distribution
-        </Button>
+    <div className="min-w-0 space-y-6 sm:space-y-8">
+      <div className="max-w-3xl">
+        <h1 className="font-display text-2xl font-bold text-foreground sm:text-3xl">Distribution</h1>
+        <p className="mt-1 text-sm text-muted-foreground sm:text-base">Publish Reels to YouTube Shorts, TikTok, Facebook, and Instagram</p>
       </div>
 
       {/* Connected Accounts */}
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-card">
+      <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
             <Radio className="h-4 w-4 text-primary" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h2 className="font-display text-base font-semibold text-foreground">Social media connections</h2>
             <p className="text-xs text-muted-foreground">Connect accounts securely to publish completed Reels.</p>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {PLATFORMS.map((p) => {
             const account = accounts.find((a) => a.platform_name === p.key);
             const configured = platformReady[p.key] ?? false;
+            const PlatformIcon = p.icon;
             return (
-              <div key={p.key} className="rounded-xl border border-border bg-muted/30 p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
+              <div key={p.key} className="min-w-0 rounded-xl border border-border bg-muted/30 p-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${p.iconClassName}`}>
+                    <PlatformIcon className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-foreground">{p.label}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="truncate text-xs text-muted-foreground">
                       {account ? "Connected" : configured ? "Not connected" : "Needs setup"}
                     </p>
                   </div>
                   {account && <CheckCircle2 className="h-4 w-4 text-success shrink-0" />}
-                </div>
-                <div className="mt-4">
                   {account ? (
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setDisconnectAccount(account)}>
-                      Disconnect
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setDisconnectAccount(account)}
+                      title={`Disconnect ${p.label}`}
+                      aria-label={`Disconnect ${p.label}`}
+                      className="h-9 w-9 shrink-0"
+                    >
+                      <Unplug className="h-4 w-4" />
                     </Button>
-                  </div>
-                ) : (
-                  <Button size="sm" disabled={!configured} title={configured ? undefined : "Add this platform's OAuth credentials to backend/.env.local and restart the backend"} onClick={() => handleConnect(p.key)} className="gradient-primary text-primary-foreground">
-                    {configured ? "Connect" : "Needs setup"}
-                  </Button>
-                )}
+                  ) : (
+                    <Button
+                      size="icon"
+                      disabled={!configured}
+                      title={configured ? `Connect ${p.label}` : "Add this platform's OAuth credentials to backend/.env.local and restart the backend"}
+                      aria-label={configured ? `Connect ${p.label}` : `${p.label} needs setup`}
+                      onClick={() => handleConnect(p.key)}
+                      className="gradient-primary h-9 w-9 shrink-0 text-primary-foreground"
+                    >
+                      {configured ? <Link2 className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}
+                    </Button>
+                  )}
                 </div>
               </div>
             );
@@ -321,7 +271,7 @@ const Distribution = () => {
         open={Boolean(disconnectAccount)}
         onOpenChange={(open) => { if (!open && !disconnecting) setDisconnectAccount(null); }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6">
           <AlertDialogHeader>
             <AlertDialogTitle>Disconnect {disconnectAccount?.platform_name}?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -329,9 +279,9 @@ const Distribution = () => {
               This action cannot be undone or recovered.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={disconnecting}>Cancel</AlertDialogCancel>
-            <Button variant="destructive" onClick={() => void handleDisconnect()} disabled={disconnecting}>
+          <AlertDialogFooter className="gap-2 sm:space-x-0">
+            <AlertDialogCancel disabled={disconnecting} className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+            <Button variant="destructive" onClick={() => void handleDisconnect()} disabled={disconnecting} className="w-full sm:w-auto">
               {disconnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Disconnect permanently
             </Button>
@@ -340,13 +290,13 @@ const Distribution = () => {
       </AlertDialog>
 
       {/* Distributions */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <div className="flex flex-col gap-3 mb-4 lg:flex-row lg:items-center lg:justify-between">
+      <motion.div className="min-w-0" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-info" />
             <h2 className="font-display text-lg font-semibold text-foreground">Distributions</h2>
           </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:w-[40rem]">
+          <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:max-w-2xl">
             <Select value={filterReelId} onValueChange={(value) => { setFilterReelId(value); setPage(0); }}>
               <SelectTrigger aria-label="Filter by reel"><SelectValue placeholder="All reels" /></SelectTrigger>
               <SelectContent>
@@ -372,13 +322,13 @@ const Distribution = () => {
         </div>
 
         {loading ? (
-          <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">Loading…</div>
+          <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground sm:p-12 sm:text-base">Loading…</div>
         ) : distributions.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center text-muted-foreground">
-            No distributions yet — schedule one above once you have a connected account and a completed reel.
+          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground sm:p-12 sm:text-base">
+            No distributions yet. Publish a completed Reel to a connected account from the Create page.
           </div>
         ) : (
-          <div className="rounded-2xl border border-border bg-card shadow-card overflow-hidden">
+          <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-card">
             <div className="divide-y divide-border">
               {distributions.map((d, i) => (
                 <motion.div
@@ -388,7 +338,7 @@ const Distribution = () => {
                   transition={{ delay: Math.min(i * 0.04, 0.3) }}
                   className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-4 sm:px-6 sm:py-4"
                 >
-                  <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                  <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
                     <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${
                       d.status === "Published" ? "bg-success/10 ring-success/20" : "bg-info/10 ring-info/20"
                     }`}>
@@ -396,24 +346,24 @@ const Distribution = () => {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">{d.reel_prompt || "(reel)"}</p>
-                      <p className="text-xs text-muted-foreground capitalize">
+                      <p className="break-words text-xs text-muted-foreground capitalize">
                         {d.platform_name || "unknown platform"}
                         {d.error_message ? ` — ${d.error_message}` : ""}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3">
                     <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_BADGE[d.status] ?? "bg-muted text-muted-foreground ring-1 ring-border"}`}>
                       {d.status}
                     </span>
                     {d.scheduled_time && (
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
                         <Clock className="h-3.5 w-3.5" />
                         {new Date(d.scheduled_time).toLocaleString()}
                       </span>
                     )}
                     {(d.status === "Pending" || d.status === "Failed") && (
-                      <Button variant="outline" size="sm" onClick={() => handlePublishNow(d.distribution_id)}>
+                      <Button variant="outline" size="sm" onClick={() => handlePublishNow(d.distribution_id)} className="flex-1 sm:flex-none">
                         Publish now
                       </Button>
                     )}
@@ -430,64 +380,15 @@ const Distribution = () => {
         )}
 
         {total > PAGE_SIZE && (
-          <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
-            <span>Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}</span>
-            <div className="flex gap-2">
+          <div className="mt-4 flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span className="tabular-nums">Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}</span>
+            <div className="grid grid-cols-2 gap-2 sm:flex">
               <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((current) => current - 1)}>Previous</Button>
               <Button variant="outline" size="sm" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage((current) => current + 1)}>Next</Button>
             </div>
           </div>
         )}
       </motion.div>
-
-      {/* Schedule dialog */}
-      <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) resetCreateForm(); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Schedule Distribution</DialogTitle>
-            <DialogDescription>Pick a finished Reel and a connected account.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label className="mb-2 block">Reel</Label>
-              <Select value={selectedReelId} onValueChange={setSelectedReelId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a completed reel" />
-                </SelectTrigger>
-                <SelectContent>
-                  {completedReels.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>{r.title.slice(0, 60)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="mb-2 block">Account</Label>
-              <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a connected account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((a) => (
-                    <SelectItem key={a.account_id} value={a.account_id} className="capitalize">{a.platform_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="mb-2 block">Schedule for (optional — leave blank to publish ASAP)</Label>
-              <Input type="datetime-local" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateDistribution} disabled={submitting} className="gradient-primary text-primary-foreground gap-2">
-              {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              Schedule
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

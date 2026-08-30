@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { BarChart3, CheckCircle2, Eye, Loader2, MousePointerClick, RefreshCw, ShoppingBag, ShoppingCart, Trash2 } from "lucide-react";
+import { BarChart3, CheckCircle2, Eye, Link2, Loader2, MousePointerClick, Music2, Package, RefreshCw, Settings2, ShoppingBag, ShoppingCart, Unplug } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import StatCard from "@/components/StatCard";
@@ -22,9 +22,9 @@ import { OAUTH_API_BASE_URL, disconnectEcommerceAccount, EcommerceAccount, fetch
 const number = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 const currency = new Intl.NumberFormat("th-TH", { style: "currency", currency: "THB", maximumFractionDigits: 0 });
 const SHOP_PLATFORMS = [
-  { key: "tiktok_shop", label: "TikTok Shop" },
-  { key: "shopee", label: "Shopee" },
-  { key: "lazada", label: "Lazada" },
+  { key: "tiktok_shop", label: "TikTok Shop", icon: Music2, iconClassName: "bg-foreground/10 text-foreground" },
+  { key: "shopee", label: "Shopee", icon: ShoppingBag, iconClassName: "bg-destructive/10 text-destructive" },
+  { key: "lazada", label: "Lazada", icon: Package, iconClassName: "bg-info/10 text-info" },
 ] as const;
 const ECOMMERCE_PLATFORM_KEYS = new Set(["tiktok_shop", "shopee", "lazada"]);
 
@@ -259,9 +259,15 @@ export default function Tracking() {
         </div>}
       </section>
 
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-card sm:p-6">
-        <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10"><ShoppingBag className="h-4 w-4 text-primary" /></div><div><h2 className="font-display text-lg font-semibold text-foreground">E-commerce connections</h2><p className="text-xs text-muted-foreground">Connect stores to synchronize affiliate orders and clicks.</p></div></div>
-        <div className="mt-5 grid gap-3 md:grid-cols-3">{SHOP_PLATFORMS.map((platform) => { const account = accounts.find((item) => item.platform_name === platform.key); const configured = shopOAuthReady[platform.key] ?? false; return <div key={platform.key} className="flex min-h-[156px] flex-col rounded-xl border border-border bg-muted/30 p-4"><div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold text-foreground">{account?.shop_name || platform.label}</p><p className="mt-1 text-xs text-muted-foreground">{account ? (account.last_synced_at ? `Last sync ${new Date(account.last_synced_at).toLocaleString()}` : "Connected - awaiting first sync") : (configured ? "Not connected" : "Needs setup")}</p></div>{account && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}</div>{account?.sync_error && <p className="mt-2 text-xs text-destructive">{account.sync_error}</p>}<div className="mt-auto pt-4">{account ? <button type="button" onClick={() => setShopToDisconnect(account)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"><Trash2 className="h-3.5 w-3.5" />Disconnect</button> : <button type="button" disabled={!configured} title={configured ? undefined : "Configure this shop OAuth adapter in backend/.env.local first"} onClick={() => connectShop(platform.key)} className="min-h-9 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">{configured ? "Connect" : "Needs setup"}</button>}</div></div>; })}</div>
+      <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5">
+        <div className="flex items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10"><ShoppingBag className="h-4 w-4 text-primary" /></div><div className="min-w-0"><h2 className="font-display text-base font-semibold text-foreground">E-commerce connections</h2><p className="text-xs text-muted-foreground">Connect stores to synchronize affiliate orders and clicks.</p></div></div>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{SHOP_PLATFORMS.map((platform) => {
+          const account = accounts.find((item) => item.platform_name === platform.key);
+          const configured = shopOAuthReady[platform.key] ?? false;
+          const PlatformIcon = platform.icon;
+          const connectionStatus = account?.sync_error || (account ? (account.last_synced_at ? `Last sync ${new Date(account.last_synced_at).toLocaleString()}` : "Connected - awaiting first sync") : (configured ? "Not connected" : "Needs setup"));
+          return <div key={platform.key} className="min-w-0 rounded-xl border border-border bg-muted/30 p-3"><div className="flex min-w-0 items-center gap-3"><div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${platform.iconClassName}`}><PlatformIcon className="h-5 w-5" aria-hidden="true" /></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-foreground" title={account?.shop_name || platform.label}>{account?.shop_name || platform.label}</p><p className={`truncate text-xs ${account?.sync_error ? "text-destructive" : "text-muted-foreground"}`} title={connectionStatus}>{connectionStatus}</p></div>{account && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}{account ? <Button variant="outline" size="icon" onClick={() => setShopToDisconnect(account)} title={`Disconnect ${account.shop_name || platform.label}`} aria-label={`Disconnect ${account.shop_name || platform.label}`} className="h-9 w-9 shrink-0"><Unplug className="h-4 w-4" /></Button> : <Button size="icon" disabled={!configured} title={configured ? `Connect ${platform.label}` : "Configure this shop OAuth adapter in backend/.env.local first"} aria-label={configured ? `Connect ${platform.label}` : `${platform.label} needs setup`} onClick={() => connectShop(platform.key)} className="gradient-primary h-9 w-9 shrink-0 text-primary-foreground">{configured ? <Link2 className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}</Button>}</div></div>;
+        })}</div>
       </section>
 
       <AlertDialog
