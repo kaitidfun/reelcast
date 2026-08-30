@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { ArrowLeft, Package } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { API_BASE_URL } from "@/lib/api";
-
-type ProductItem = { id: string; name: string; thumbnail: string | null };
+import { getProductStatus } from "@/lib/test-plan";
+import { ProductCard, type ProductCardData } from "@/components/ProductCard";
 
 const authHeaders = (): Record<string, string> => {
   const token = localStorage.getItem("rf_token");
@@ -20,7 +19,7 @@ export default function DistributedCampaignProductsPage() {
   const campaignId = Array.isArray(params?.campaignId) ? params.campaignId[0] : (params?.campaignId as string) ?? "";
 
   const [campaignName, setCampaignName] = useState("");
-  const [products, setProducts] = useState<ProductItem[]>([]);
+  const [products, setProducts] = useState<ProductCardData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,24 +36,36 @@ export default function DistributedCampaignProductsPage() {
 
         if (libRes.ok) {
           const lib = await libRes.json();
-          const byId = new Map<string, ProductItem>(
+          const byId = new Map<string, ProductCardData>(
             lib.products.map((p: any) => {
               const primaryImage = p.images?.find((img: any) => img.is_primary)?.image_url || p.images?.[0]?.image_url;
+              const productName = p.product_name?.trim() || "";
               return [
                 p.product_id,
                 {
                   id: p.product_id,
-                  name: p.product_name?.trim() || "Untitled Product",
+                  name: productName || "Untitled Product",
+                  keyPoints: p.description || "",
+                  affiliateLink: p.affiliate_link || "",
+                  status: p.status ?? getProductStatus({
+                    productName,
+                    description: p.description,
+                    affiliateLink: p.affiliate_link,
+                    imageCount: p.images?.length || 0,
+                  }),
                   thumbnail: primaryImage
                     ? `http://localhost:8000/api/upload/images/${primaryImage}`
                     : p.brand_logo_url
                       ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}`
                       : null,
+                  reelsGenerated: p.reel_count ?? 0,
+                  createdAt: p.created_at || new Date().toISOString(),
+                  updatedAt: p.updated_at || new Date().toISOString(),
                 },
               ];
             })
           );
-          setProducts(productIds.map((id) => byId.get(id)).filter((p): p is ProductItem => Boolean(p)));
+          setProducts(productIds.map((id) => byId.get(id)).filter((p): p is ProductCardData => Boolean(p)));
         }
       } catch (e) {
         console.error("Failed to load distributed products:", e);
@@ -68,7 +79,7 @@ export default function DistributedCampaignProductsPage() {
   if (loading) return <div className="p-12 text-center text-muted-foreground">Loading…</div>;
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto max-w-6xl">
       <div className="mb-6 flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.push("/distribute")} aria-label="Back to Distribute">
           <ArrowLeft className="h-4 w-4" />
@@ -84,27 +95,14 @@ export default function DistributedCampaignProductsPage() {
           No distributed reels for this campaign yet.
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {products.map((product, i) => (
-            <motion.div
+            <ProductCard
               key={product.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
+              product={product}
+              index={i}
               onClick={() => router.push(`/distribute/product/${product.id}`)}
-              className="group cursor-pointer rounded-2xl border border-border bg-card overflow-hidden card-shine transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"
-            >
-              <div className="aspect-square bg-muted flex items-center justify-center">
-                {product.thumbnail ? (
-                  <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover" />
-                ) : (
-                  <Package className="h-10 w-10 text-muted-foreground/30" />
-                )}
-              </div>
-              <div className="p-3">
-                <p className="truncate text-sm font-medium text-foreground group-hover:text-primary transition-colors">{product.name}</p>
-              </div>
-            </motion.div>
+            />
           ))}
         </div>
       )}
