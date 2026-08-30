@@ -50,9 +50,8 @@ PLATFORM_CONFIGS: dict[str, dict] = {
         "client_secret": TIKTOK_CLIENT_SECRET,
     },
     "facebook": {
-        # Page publishing requires a Facebook Login for Business configuration
-        # in addition to the Meta App ID/secret. The configuration owns the
-        # Page permissions requested below.
+        # This dedicated Meta app owns the Page permissions requested below;
+        # it is separate from the app used for ordinary Sign in with Facebook.
         "authorize_url": "https://www.facebook.com/v21.0/dialog/oauth",
         "token_url": "https://graph.facebook.com/v21.0/oauth/access_token",
         "scope": "pages_show_list,pages_read_engagement,pages_manage_posts",

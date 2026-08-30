@@ -70,6 +70,11 @@ FACEBOOK_SOCIAL_CLIENT_SECRET = os.getenv("FACEBOOK_SOCIAL_CLIENT_SECRET", "")
 # rather than silently pretending to work.
 TIKTOK_CLIENT_KEY = os.getenv("TIKTOK_CLIENT_KEY", "")
 TIKTOK_CLIENT_SECRET = os.getenv("TIKTOK_CLIENT_SECRET", "")
+# TikTok verifies this public text file before enabling Content Posting API
+# in Sandbox. Both values are supplied by TikTok Developer Portal and are
+# intentionally separate from the OAuth client credentials above.
+TIKTOK_URL_VERIFICATION_FILENAME = os.getenv("TIKTOK_URL_VERIFICATION_FILENAME", "")
+TIKTOK_URL_VERIFICATION_CONTENT = os.getenv("TIKTOK_URL_VERIFICATION_CONTENT", "")
 # Facebook distribution uses FACEBOOK_SOCIAL_* above, rather than the F1
 # "Sign in with Facebook" application credentials.
 # Instagram is a separate Meta app (Instagram Business login isn't available

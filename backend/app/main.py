@@ -5,11 +5,17 @@ setup_windows_ssl()
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 import urllib.parse
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.core.config import ALLOWED_ORIGINS, SESSION_SECRET_KEY, FRONTEND_URL
+from app.core.config import (
+    ALLOWED_ORIGINS,
+    FRONTEND_URL,
+    SESSION_SECRET_KEY,
+    TIKTOK_URL_VERIFICATION_CONTENT,
+    TIKTOK_URL_VERIFICATION_FILENAME,
+)
 from app.exceptions import (
     InvalidEmailFormatException,
     InvalidPromptLengthException,
@@ -45,6 +51,24 @@ def get_db():
 
 # App setup
 app = FastAPI(title="ReelCast Auth API")
+
+
+# TikTok URL-property verification requests a text file at the root of the
+# verified backend host. Register this exact route only when both values were
+# set in backend/.env.local; otherwise no arbitrary root route is exposed.
+if (
+    TIKTOK_URL_VERIFICATION_FILENAME
+    and TIKTOK_URL_VERIFICATION_CONTENT
+    and "/" not in TIKTOK_URL_VERIFICATION_FILENAME
+    and "\\" not in TIKTOK_URL_VERIFICATION_FILENAME
+):
+    @app.get(f"/{TIKTOK_URL_VERIFICATION_FILENAME}", include_in_schema=False)
+    @app.get(
+        f"/api/social/tiktok/callback/{TIKTOK_URL_VERIFICATION_FILENAME}",
+        include_in_schema=False,
+    )
+    def tiktok_url_verification() -> PlainTextResponse:
+        return PlainTextResponse(TIKTOK_URL_VERIFICATION_CONTENT)
 
 
 @app.exception_handler(OAuthProviderException)

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Iterable
 
 import httpx
 
@@ -27,39 +28,128 @@ logger = logging.getLogger(__name__)
 _TIMEOUT = 60
 _IG_POLL_ATTEMPTS = 10
 _IG_POLL_INTERVAL_SECONDS = 3
+_TIKTOK_UPLOAD_CHUNK_BYTES = 10 * 1024 * 1024
+_TIKTOK_MIN_CHUNK_BYTES = 5 * 1024 * 1024
+
+
+def _tiktok_response_error(payload: dict) -> str | None:
+    """Return TikTok's API-level error even when it arrived with HTTP 200."""
+    error = payload.get("error") or {}
+    if error.get("code") and error["code"] != "ok":
+        return error.get("message") or error["code"]
+    return None
+
+
+def _tiktok_upload_chunks(video: bytes) -> Iterable[tuple[int, bytes]]:
+    """Yield compliant sequential chunks for TikTok's FILE_UPLOAD endpoint."""
+    if not video:
+        raise DistributionPublishException("TikTok video is empty")
+
+    if len(video) <= _TIKTOK_MIN_CHUNK_BYTES:
+        yield 0, video
+        return
+
+    chunks = [
+        video[offset : offset + _TIKTOK_UPLOAD_CHUNK_BYTES]
+        for offset in range(0, len(video), _TIKTOK_UPLOAD_CHUNK_BYTES)
+    ]
+    # TikTok permits a final chunk larger than chunk_size, but not a trailing
+    # chunk below 5 MB. Merge that tail into its predecessor.
+    if len(chunks) > 1 and len(chunks[-1]) < _TIKTOK_MIN_CHUNK_BYTES:
+        chunks[-2] += chunks.pop()
+
+    offset = 0
+    for chunk in chunks:
+        yield offset, chunk
+        offset += len(chunk)
 
 
 async def publish_to_tiktok(access_token: str, video_url: str, caption: str) -> str:
     """
-    TikTok Content Posting API — Direct Post via PULL_FROM_URL (TikTok
-    fetches the video itself from our R2 URL rather than us uploading bytes).
+    TikTok Content Posting API — Direct Post via FILE_UPLOAD.
 
-    Unaudited apps are forced to SELF_ONLY visibility regardless of what's
-    requested here — see PLATFORM_CONFIGS / F3 research notes.
+    ReelCast stores generated videos in R2, whose host is not necessarily the
+    verified TikTok URL property. Uploading the bytes avoids a fragile
+    PULL_FROM_URL dependency on a particular R2/ngrok hostname.
+
+    Sandbox and unaudited apps are limited by TikTok to SELF_ONLY. We query
+    creator_info first, as required by the Direct Post flow, and only post if
+    the creator currently permits that option.
     """
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.post(
+        async with httpx.AsyncClient(timeout=120) as client:
+            video_response = await client.get(video_url)
+            video_response.raise_for_status()
+            video_bytes = video_response.content
+            mime_type = video_response.headers.get("content-type", "video/mp4").split(";", 1)[0]
+            if mime_type not in {"video/mp4", "video/quicktime", "video/webm"}:
+                mime_type = "video/mp4"
+
+            creator_response = await client.post(
+                "https://open.tiktokapis.com/v2/post/publish/creator_info/query/",
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json; charset=UTF-8",
+                },
+                json={},
+            )
+            creator_response.raise_for_status()
+            creator_payload = creator_response.json()
+            creator_error = _tiktok_response_error(creator_payload)
+            if creator_error:
+                raise DistributionPublishException(f"TikTok creator info failed: {creator_error}")
+            privacy_options = creator_payload.get("data", {}).get("privacy_level_options", [])
+            if "SELF_ONLY" not in privacy_options:
+                raise DistributionPublishException(
+                    "TikTok did not allow SELF_ONLY for this creator; reconnect the account and try again"
+                )
+
+            chunks = list(_tiktok_upload_chunks(video_bytes))
+            init_response = await client.post(
                 "https://open.tiktokapis.com/v2/post/publish/video/init/",
                 headers={
                     "Authorization": f"Bearer {access_token}",
-                    "Content-Type": "application/json",
+                    "Content-Type": "application/json; charset=UTF-8",
                 },
                 json={
                     "post_info": {
-                        "title": caption[:150],
+                        "title": caption[:2200],
                         "privacy_level": "SELF_ONLY",
+                        "disable_comment": False,
+                        "disable_duet": False,
+                        "disable_stitch": False,
                     },
                     "source_info": {
-                        "source": "PULL_FROM_URL",
-                        "video_url": video_url,
+                        "source": "FILE_UPLOAD",
+                        "video_size": len(video_bytes),
+                        "chunk_size": min(_TIKTOK_UPLOAD_CHUNK_BYTES, len(video_bytes)),
+                        "total_chunk_count": len(chunks),
                     },
                 },
             )
-        resp.raise_for_status()
-        publish_id = resp.json().get("data", {}).get("publish_id")
-        if not publish_id:
-            raise DistributionPublishException(f"TikTok did not return a publish_id: {resp.text[:200]}")
+            init_response.raise_for_status()
+            init_payload = init_response.json()
+            init_error = _tiktok_response_error(init_payload)
+            if init_error:
+                raise DistributionPublishException(f"TikTok publish failed: {init_error}")
+            init_data = init_payload.get("data", {})
+            publish_id = init_data.get("publish_id")
+            upload_url = init_data.get("upload_url")
+            if not publish_id or not upload_url:
+                raise DistributionPublishException("TikTok did not return a publish_id and upload_url")
+
+            total_size = len(video_bytes)
+            for offset, chunk in chunks:
+                upload_response = await client.put(
+                    upload_url,
+                    headers={
+                        "Content-Type": mime_type,
+                        "Content-Length": str(len(chunk)),
+                        "Content-Range": f"bytes {offset}-{offset + len(chunk) - 1}/{total_size}",
+                    },
+                    content=chunk,
+                )
+                upload_response.raise_for_status()
         return publish_id
     except httpx.HTTPError as exc:
         raise DistributionPublishException(f"TikTok publish failed: {exc}") from exc
