@@ -25,6 +25,7 @@ from app.services.oauth_platforms import (
     build_authorize_url,
     exchange_code_for_token,
     fetch_external_account_id,
+    fetch_facebook_page_access_token,
     is_configured,
 )
 
@@ -126,6 +127,20 @@ async def socialAccountCallback(
             f"Could not complete {platform} connection: target account could not be resolved"
         )
 
+    # Facebook's OAuth exchange returns a user token, while publishing to a
+    # Page requires the Page token from /me/accounts. Store that Page token so
+    # the distribution worker sends the credential Graph actually expects.
+    publish_access_token = tokens["access_token"]
+    if platform == "facebook":
+        page_access_token = await fetch_facebook_page_access_token(
+            tokens["access_token"], external_account_id
+        )
+        if not page_access_token:
+            return _error_redirect(
+                "Could not complete Facebook connection: no publish permission for the selected Page"
+            )
+        publish_access_token = page_access_token
+
     existing = social_account_service.get_social_account_by_platform(
         db, user_id=UUID(user_id), platform_name=platform
     )
@@ -133,7 +148,7 @@ async def socialAccountCallback(
         social_account_service.update_social_account_tokens(
             db,
             account=existing,
-            access_token=tokens["access_token"],
+            access_token=publish_access_token,
             refresh_token=tokens.get("refresh_token"),
             external_account_id=external_account_id,
         )
@@ -142,7 +157,7 @@ async def socialAccountCallback(
             db,
             user_id=UUID(user_id),
             platform_name=platform,
-            access_token=tokens["access_token"],
+            access_token=publish_access_token,
             refresh_token=tokens.get("refresh_token"),
             external_account_id=external_account_id,
         )

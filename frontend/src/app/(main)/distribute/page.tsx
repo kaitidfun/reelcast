@@ -292,9 +292,11 @@ const Distribution = () => {
                 </div>
                 <div className="mt-4">
                   {account ? (
-                  <Button variant="outline" size="sm" onClick={() => setDisconnectAccount(account)}>
-                    Disconnect
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setDisconnectAccount(account)}>
+                      Disconnect
+                    </Button>
+                  </div>
                 ) : (
                   <Button size="sm" disabled={!configured} title={configured ? undefined : "Add this platform's OAuth credentials to backend/.env.local and restart the backend"} onClick={() => handleConnect(p.key)} className="gradient-primary text-primary-foreground">
                     {configured ? "Connect" : "Needs setup"}

@@ -54,7 +54,11 @@ PLATFORM_CONFIGS: dict[str, dict] = {
         # it is separate from the app used for ordinary Sign in with Facebook.
         "authorize_url": "https://www.facebook.com/v21.0/dialog/oauth",
         "token_url": "https://graph.facebook.com/v21.0/oauth/access_token",
-        "scope": "pages_show_list,pages_read_engagement,pages_manage_posts",
+        # Pages that belong to a Meta Business Portfolio are not always
+        # returned by /me/accounts, even for a user with Full control. The
+        # Business Management scope permits the /me/assigned_pages fallback
+        # below to resolve those Page assets.
+        "scope": "pages_show_list,pages_read_engagement,pages_manage_posts,business_management",
         "client_id_param": "client_id",
         "client_id": FACEBOOK_SOCIAL_CLIENT_ID,
         "client_secret": FACEBOOK_SOCIAL_CLIENT_SECRET,
@@ -276,9 +280,43 @@ async def fetch_external_account_id(platform: str, access_token: str) -> Optiona
 
 
 async def _list_facebook_pages(client: httpx.AsyncClient, access_token: str) -> list[dict]:
+    """Return publishable Pages, including Business Portfolio Page assets.
+
+    Meta's normal /me/accounts edge only lists Pages directly managed by the
+    user. A Page owned by a Business Portfolio can instead be exposed through
+    /me/assigned_pages, despite the user having Full control in the Page UI.
+    """
     resp = await client.get(
         "https://graph.facebook.com/v21.0/me/accounts",
-        params={"access_token": access_token},
+        params={"fields": "id,name,access_token", "access_token": access_token},
     )
     resp.raise_for_status()
-    return resp.json().get("data", [])
+    pages = resp.json().get("data", [])
+    if pages:
+        return pages
+
+    assigned_resp = await client.get(
+        "https://graph.facebook.com/v21.0/me/assigned_pages",
+        params={"fields": "id,name,access_token", "access_token": access_token},
+    )
+    assigned_resp.raise_for_status()
+    return assigned_resp.json().get("data", [])
+
+
+async def fetch_facebook_page_access_token(user_access_token: str, page_id: str) -> Optional[str]:
+    """Resolve the Page token required to publish to a selected Facebook Page.
+
+    The OAuth exchange returns a user token. Graph's /{page-id}/videos endpoint
+    instead requires the Page access token returned by /me/accounts, so keeping
+    the user token made an otherwise valid connection fail at publish time.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            pages = await _list_facebook_pages(client, user_access_token)
+    except httpx.HTTPError as exc:
+        logger.warning("[OAuth] Could not resolve Facebook Page access token: %s", exc)
+        return None
+
+    page = next((item for item in pages if str(item.get("id")) == str(page_id)), None)
+    token = page.get("access_token") if page else None
+    return token if isinstance(token, str) and token else None

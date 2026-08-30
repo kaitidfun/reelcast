@@ -23,6 +23,7 @@ from app.services.oauth_platforms import (
     build_authorize_url,
     exchange_code_for_token,
     fetch_external_account_id,
+    fetch_facebook_page_access_token,
     is_configured,
     refresh_access_token,
 )
@@ -75,6 +76,7 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(is_configured("facebook"))
             url = build_authorize_url("facebook", state="state-123")
         self.assertIn("pages_manage_posts", url)
+        self.assertIn("business_management", url)
 
     async def test_exchange_code_raises_on_missing_access_token(self) -> None:
         with patch("app.services.oauth_platforms.is_configured", return_value=True), \
@@ -151,6 +153,57 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
         mock_client.get.assert_awaited_once_with(
             "https://graph.instagram.com/v21.0/me",
             params={"fields": "user_id", "access_token": "some-token"},
+        )
+
+    async def test_fetch_facebook_page_access_token_uses_me_accounts_page_token(self) -> None:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "data": [
+                {"id": "other-page", "access_token": "other-token"},
+                {"id": "page-123", "access_token": "page-token"},
+            ]
+        }
+        mock_response.raise_for_status.return_value = None
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+
+        with patch("app.services.oauth_platforms.httpx.AsyncClient") as mock_client_cls:
+            mock_client_cls.return_value.__aenter__.return_value = mock_client
+            result = await fetch_facebook_page_access_token("user-token", "page-123")
+
+        self.assertEqual("page-token", result)
+        mock_client.get.assert_awaited_once_with(
+            "https://graph.facebook.com/v21.0/me/accounts",
+            params={"fields": "id,name,access_token", "access_token": "user-token"},
+        )
+
+    async def test_fetch_facebook_page_access_token_falls_back_to_business_assigned_page(self) -> None:
+        direct_pages = MagicMock()
+        direct_pages.json.return_value = {"data": []}
+        direct_pages.raise_for_status.return_value = None
+        assigned_pages = MagicMock()
+        assigned_pages.json.return_value = {
+            "data": [{"id": "portfolio-page", "access_token": "portfolio-page-token"}]
+        }
+        assigned_pages.raise_for_status.return_value = None
+        mock_client = AsyncMock()
+        mock_client.get.side_effect = [direct_pages, assigned_pages]
+
+        with patch("app.services.oauth_platforms.httpx.AsyncClient") as mock_client_cls:
+            mock_client_cls.return_value.__aenter__.return_value = mock_client
+            result = await fetch_facebook_page_access_token("user-token", "portfolio-page")
+
+        self.assertEqual("portfolio-page-token", result)
+        self.assertEqual(
+            [
+                (("https://graph.facebook.com/v21.0/me/accounts",), {
+                    "params": {"fields": "id,name,access_token", "access_token": "user-token"}
+                }),
+                (("https://graph.facebook.com/v21.0/me/assigned_pages",), {
+                    "params": {"fields": "id,name,access_token", "access_token": "user-token"}
+                }),
+            ],
+            [(call.args, call.kwargs) for call in mock_client.get.await_args_list],
         )
 
     async def test_fetch_external_account_id_swallows_http_errors(self) -> None:

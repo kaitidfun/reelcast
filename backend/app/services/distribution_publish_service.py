@@ -32,12 +32,52 @@ _TIKTOK_UPLOAD_CHUNK_BYTES = 10 * 1024 * 1024
 _TIKTOK_MIN_CHUNK_BYTES = 5 * 1024 * 1024
 
 
+def _provider_error_detail(response: httpx.Response) -> str:
+    """Return a safe, actionable provider error without exposing credentials."""
+    try:
+        payload = response.json()
+    except ValueError:
+        return response.text[:500] or "no error details returned"
+
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if isinstance(error, dict):
+        message = error.get("message") or "provider rejected the request"
+        code = error.get("code")
+        trace_id = error.get("fbtrace_id") or error.get("log_id") or error.get("logid")
+        details = f"{code}: {message}" if code is not None else str(message)
+        return f"{details} (trace: {trace_id})" if trace_id else details
+    return str(payload)[:500]
+
+
 def _tiktok_response_error(payload: dict) -> str | None:
     """Return TikTok's API-level error even when it arrived with HTTP 200."""
     error = payload.get("error") or {}
     if error.get("code") and error["code"] != "ok":
         return error.get("message") or error["code"]
     return None
+
+
+def _require_tiktok_success(response: httpx.Response, *, action: str) -> dict:
+    """Raise a useful provider error while retaining TikTok's code/log id."""
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+
+    error = payload.get("error") or {}
+    if error.get("code") and error["code"] != "ok":
+        details = error.get("message") or error["code"]
+        log_id = error.get("log_id") or error.get("logid")
+        suffix = f" (TikTok log id: {log_id})" if log_id else ""
+        raise DistributionPublishException(f"TikTok {action} failed: {error['code']}: {details}{suffix}")
+
+    try:
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise DistributionPublishException(
+            f"TikTok {action} failed with HTTP {response.status_code}"
+        ) from exc
+    return payload
 
 
 def _tiktok_upload_chunks(video: bytes) -> Iterable[tuple[int, bytes]]:
@@ -93,8 +133,7 @@ async def publish_to_tiktok(access_token: str, video_url: str, caption: str) -> 
                 },
                 json={},
             )
-            creator_response.raise_for_status()
-            creator_payload = creator_response.json()
+            creator_payload = _require_tiktok_success(creator_response, action="creator info request")
             creator_error = _tiktok_response_error(creator_payload)
             if creator_error:
                 raise DistributionPublishException(f"TikTok creator info failed: {creator_error}")
@@ -127,8 +166,7 @@ async def publish_to_tiktok(access_token: str, video_url: str, caption: str) -> 
                     },
                 },
             )
-            init_response.raise_for_status()
-            init_payload = init_response.json()
+            init_payload = _require_tiktok_success(init_response, action="publish initialization")
             init_error = _tiktok_response_error(init_payload)
             if init_error:
                 raise DistributionPublishException(f"TikTok publish failed: {init_error}")
@@ -149,7 +187,7 @@ async def publish_to_tiktok(access_token: str, video_url: str, caption: str) -> 
                     },
                     content=chunk,
                 )
-                upload_response.raise_for_status()
+                _require_tiktok_success(upload_response, action="video upload")
         return publish_id
     except httpx.HTTPError as exc:
         raise DistributionPublishException(f"TikTok publish failed: {exc}") from exc
@@ -227,6 +265,11 @@ async def publish_to_facebook(access_token: str, page_id: str, video_url: str, c
         if not post_id:
             raise DistributionPublishException(f"Facebook did not return a post id: {resp.text[:200]}")
         return post_id
+    except httpx.HTTPStatusError as exc:
+        detail = _provider_error_detail(exc.response)
+        raise DistributionPublishException(
+            f"Facebook publish failed: HTTP {exc.response.status_code}: {detail}"
+        ) from exc
     except httpx.HTTPError as exc:
         raise DistributionPublishException(f"Facebook publish failed: {exc}") from exc
 
