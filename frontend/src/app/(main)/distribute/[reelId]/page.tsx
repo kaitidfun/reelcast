@@ -300,9 +300,11 @@ const DistributeStatusContent = () => {
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-5">
         {videoUrl && (
-          <div className="lg:col-span-2 lg:sticky lg:top-4">
-            <div className="mx-auto w-full max-w-[220px] overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 shadow-elevated">
-              <video src={videoUrl} className="aspect-[9/16] w-full object-cover" controls loop playsInline muted />
+          <div className="lg:col-span-2">
+            <div className="rounded-3xl border border-border bg-gradient-to-b from-card to-card/60 p-3 shadow-elevated lg:sticky lg:top-4">
+              <div className="relative mx-auto aspect-[9/16] max-w-[300px] overflow-hidden rounded-[28px] border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 ring-1 ring-inset ring-white/5">
+                <video src={videoUrl} className="absolute inset-0 h-full w-full object-cover" controls loop playsInline muted />
+              </div>
             </div>
           </div>
         )}
