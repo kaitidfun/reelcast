@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Clock, Trash2, Loader2, CheckCircle2, Radio, Music2, Youtube, Facebook, Instagram, Unplug, Link2, Settings2 } from "lucide-react";
+import { Send, Clock, Trash2, Loader2, CheckCircle2, Radio, Music2, Youtube, Facebook, Instagram, Unplug, Link2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -346,11 +346,12 @@ const Distribution = () => {
                     <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${
                       d.status === "Published" ? "bg-success/10 ring-success/20" : "bg-info/10 ring-info/20"
                     }`}>
-                      <PlatformIcon platform={d.platform_name ?? ""} className={`h-4.5 w-4.5 ${d.status === "Published" ? "text-success" : "text-info"}`} />
+                      <Send className={`h-4 w-4 ${d.status === "Published" ? "text-success" : "text-info"}`} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">{d.reel_name || d.reel_prompt || "(reel)"}</p>
-                      <p className="break-words text-xs text-muted-foreground capitalize">
+                      <p className="flex items-center gap-1 break-words text-xs text-muted-foreground capitalize">
+                        <PlatformIcon platform={d.platform_name ?? ""} className="h-3 w-3 shrink-0" />
                         {platformLabel(d.platform_name)}
                         {d.error_message ? ` — ${d.error_message}` : ""}
                       </p>

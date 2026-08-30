@@ -287,7 +287,7 @@ const DistributeStatusContent = () => {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-5xl">
       <div className="mb-4 flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.push("/distribute")} aria-label="Back to Distribute">
           <ArrowLeft className="h-4 w-4" />
@@ -298,14 +298,16 @@ const DistributeStatusContent = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[140px_1fr]">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-5">
         {videoUrl && (
-          <div className="mx-auto w-full max-w-[140px] overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-            <video src={videoUrl} className="aspect-[9/16] w-full object-cover" controls loop playsInline muted />
+          <div className="lg:col-span-2 lg:sticky lg:top-4">
+            <div className="mx-auto w-full max-w-[220px] overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 shadow-elevated">
+              <video src={videoUrl} className="aspect-[9/16] w-full object-cover" controls loop playsInline muted />
+            </div>
           </div>
         )}
 
-        <div className="space-y-3">
+        <div className={`space-y-3 ${videoUrl ? "lg:col-span-3" : "lg:col-span-5"}`}>
           {items.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
               No distributions found for this reel.{" "}
