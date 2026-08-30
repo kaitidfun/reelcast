@@ -356,10 +356,19 @@ def dashboard(
             for row in rows
         ]
 
-    latest_sync_at = (
+    latest_ecommerce_sync_at = (
         db.query(func.max(EcommerceAccount.last_synced_at))
         .filter(EcommerceAccount.user_id == user_id)
         .scalar()
+    )
+    latest_social_sync_at = (
+        db.query(func.max(SocialAccount.last_synced_at))
+        .filter(SocialAccount.user_id == user_id)
+        .scalar()
+    )
+    latest_sync_at = max(
+        (value for value in (latest_ecommerce_sync_at, latest_social_sync_at) if value is not None),
+        default=None,
     )
 
     return {

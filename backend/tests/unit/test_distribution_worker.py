@@ -105,6 +105,8 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Uploading", statuses)
         self.assertIn("Published", statuses)
         self.assertNotIn("Failed", statuses)
+        published_call = next(call for call in mock_update.call_args_list if call.kwargs.get("status") == "Published")
+        self.assertEqual("tiktok-post-id", published_call.kwargs["platform_post_id"])
 
     async def test_refreshes_access_token_before_publish_when_refresh_token_saved(self) -> None:
         account_with_refresh = SocialAccount(

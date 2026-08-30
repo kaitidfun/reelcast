@@ -703,7 +703,12 @@ async def _publishDistribution(distribution_id: str) -> None:
                 caption=caption,
             )
             logger.info(f"[Distribution] Published {distribution_id} → {account.platform_name}:{platform_post_id}")
-            distribution_service.update_distribution(db, distribution=distribution, status="Published")
+            distribution_service.update_distribution(
+                db,
+                distribution=distribution,
+                status="Published",
+                platform_post_id=str(platform_post_id),
+            )
 
         except DistributionPublishException as exc:
             logger.error(f"[Distribution] {distribution_id} failed: {exc}")

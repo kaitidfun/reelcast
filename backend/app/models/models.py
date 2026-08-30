@@ -87,6 +87,10 @@ class SocialAccount(Base):
     # requires the Page/IG Business account id, which the connect callback
     # resolves via a follow-up API call right after the token exchange.
     external_account_id = Column(String, nullable=True)
+    # Sync state is kept on the connection so Tracking can report whether a
+    # platform was actually refreshed, instead of only showing old metrics.
+    last_synced_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    sync_error = Column(Text, nullable=True)
     created_at = Column(
         TIMESTAMP(timezone=True),
         nullable=False,
@@ -299,6 +303,10 @@ class Distribution(Base):
         server_default="Pending",
     )
     error_message = Column(Text, nullable=True)
+    # The post/video/media id returned by the destination platform.  This is
+    # the durable link that lets a later tracking sync attach native metrics
+    # to the ReelCast distribution that created the post.
+    platform_post_id = Column(String, nullable=True)
     retry_count = Column(Integer, nullable=False, server_default=text("0"))
     created_at = Column(
         TIMESTAMP(timezone=True),

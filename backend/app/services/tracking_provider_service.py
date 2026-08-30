@@ -19,7 +19,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core import config
-from app.models.models import EcommerceAccount, SocialAccount
+from app.models.models import Distribution, EcommerceAccount, Reel, SocialAccount
 from app.services import social_account_service, tracking_service
 from app.services.crypto_service import decrypt_token
 
@@ -180,12 +180,40 @@ async def _sync_metrics(
         external_account_id=external_account_id,
         access_token=access_token,
     )
+    distribution_links: dict[str, tuple[UUID, UUID | None]] = {}
+    if social_account_id:
+        # Native social APIs return a post id, not our distribution UUID.
+        # Match that id to the one saved when the Reel was published so data
+        # from every connected platform contributes to the Reel/product views.
+        published = (
+            db.query(
+                Distribution.distribution_id,
+                Distribution.platform_post_id,
+                Reel.product_id,
+            )
+            .join(Reel, Distribution.reel_id == Reel.reel_id)
+            .filter(
+                Distribution.account_id == social_account_id,
+                Distribution.status == "Published",
+                Distribution.platform_post_id.is_not(None),
+                Reel.user_id == user_id,
+            )
+            .all()
+        )
+        distribution_links = {
+            f"{platform}:{row.platform_post_id}": (row.distribution_id, row.product_id)
+            for row in published
+        }
+
     for metric in metrics:
         payload = _metric_payload(metric, platform)
         # Social providers return account-level post metrics. Persist the
         # connected account so the member's dashboard can show Engagement.
         if social_account_id:
             payload["social_account_id"] = social_account_id
+            linked_distribution = distribution_links.get(payload["external_ref"] or "")
+            if linked_distribution:
+                payload["distribution_id"], payload["product_id"] = linked_distribution
         tracking_service.record_metric(
             db, user_id=user_id, **payload,
         )
@@ -216,7 +244,7 @@ async def sync_ecommerce_account(db: Session, account: EcommerceAccount) -> int:
 
 async def sync_social_account(db: Session, account: SocialAccount) -> int:
     try:
-        return await _sync_metrics(
+        count = await _sync_metrics(
             db,
             user_id=account.user_id,
             platform=account.platform_name,
@@ -225,9 +253,13 @@ async def sync_social_account(db: Session, account: SocialAccount) -> int:
             access_token=social_account_service.get_decrypted_access_token(account),
             social_account_id=account.account_id,
         )
+        account.last_synced_at = datetime.now(timezone.utc)
+        account.sync_error = None
+        db.commit()
+        return count
     except Exception as exc:
-        # SocialAccount has no status columns. Avoid persisting tokens/errors;
-        # its metrics simply remain at their last successful values.
+        account.sync_error = str(exc)
+        db.commit()
         logger.warning("[Tracking] %s social sync failed: %s", account.platform_name, exc)
         return 0
 

@@ -9,11 +9,11 @@ from app.services.distribution_publish_service import publish_to_tiktok
 
 class _Response:
     def __init__(self, *, payload: dict | None = None, content: bytes = b"", headers: dict | None = None) -> None:
-        self._payload = payload or {}
+        self._payload = payload
         self.content = content
         self.headers = headers or {}
 
-    def json(self) -> dict:
+    def json(self) -> dict | None:
         return self._payload
 
     def raise_for_status(self) -> None:
@@ -65,6 +65,17 @@ class TikTokPublishTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("SELF_ONLY", init_body["post_info"]["privacy_level"])
         self.assertEqual(1, len(client.uploads))
         self.assertEqual("bytes 0-10/11", client.uploads[0]["headers"]["Content-Range"])
+
+    async def test_direct_post_accepts_an_empty_201_upload_response(self) -> None:
+        """TikTok's upload endpoint commonly responds 201 with no JSON body."""
+        client = _TikTokClient({
+            "data": {"privacy_level_options": ["SELF_ONLY"]},
+            "error": {"code": "ok"},
+        })
+        with patch("app.services.distribution_publish_service.httpx.AsyncClient", return_value=client):
+            publish_id = await publish_to_tiktok("token", "https://storage.example/video.mp4", "A caption")
+
+        self.assertEqual("publish-123", publish_id)
 
     async def test_direct_post_rejects_creator_without_self_only_access(self) -> None:
         client = _TikTokClient({

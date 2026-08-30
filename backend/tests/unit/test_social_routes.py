@@ -62,7 +62,11 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
         config = oauth_platforms.PLATFORM_CONFIGS["instagram"]
         self.assertEqual("https://www.instagram.com/oauth/authorize", config["authorize_url"])
         self.assertEqual(
-            {"instagram_business_basic", "instagram_business_content_publish"},
+            {
+                "instagram_business_basic",
+                "instagram_business_content_publish",
+                "instagram_business_manage_insights",
+            },
             set(config["scope"].split(",")),
         )
 
@@ -76,6 +80,7 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(is_configured("facebook"))
             url = build_authorize_url("facebook", state="state-123")
         self.assertIn("pages_manage_posts", url)
+        self.assertIn("read_insights", url)
         self.assertIn("business_management", url)
 
     async def test_exchange_code_raises_on_missing_access_token(self) -> None:

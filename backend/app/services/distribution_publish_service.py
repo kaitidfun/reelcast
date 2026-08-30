@@ -52,31 +52,39 @@ def _provider_error_detail(response: httpx.Response) -> str:
 def _tiktok_response_error(payload: dict) -> str | None:
     """Return TikTok's API-level error even when it arrived with HTTP 200."""
     error = payload.get("error") or {}
-    if error.get("code") and error["code"] != "ok":
+    if isinstance(error, dict) and error.get("code") and error["code"] != "ok":
         return error.get("message") or error["code"]
     return None
 
 
 def _require_tiktok_success(response: httpx.Response, *, action: str) -> dict:
-    """Raise a useful provider error while retaining TikTok's code/log id."""
-    try:
-        payload = response.json()
-    except ValueError:
-        payload = {}
+    """Raise a useful provider error while retaining TikTok's code/log id.
 
-    error = payload.get("error") or {}
-    if error.get("code") and error["code"] != "ok":
-        details = error.get("message") or error["code"]
-        log_id = error.get("log_id") or error.get("logid")
-        suffix = f" (TikTok log id: {log_id})" if log_id else ""
-        raise DistributionPublishException(f"TikTok {action} failed: {error['code']}: {details}{suffix}")
-
+    The upload host correctly returns ``201 Created`` with no response body.
+    That is successful transport completion, not an invalid API response.
+    """
     try:
         response.raise_for_status()
     except httpx.HTTPError as exc:
         raise DistributionPublishException(
             f"TikTok {action} failed with HTTP {response.status_code}"
         ) from exc
+
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    if payload is None:
+        return {}
+    if not isinstance(payload, dict):
+        raise DistributionPublishException(f"TikTok {action} returned an invalid response")
+
+    error = payload.get("error") or {}
+    if isinstance(error, dict) and error.get("code") and error["code"] != "ok":
+        details = error.get("message") or error["code"]
+        log_id = error.get("log_id") or error.get("logid")
+        suffix = f" (TikTok log id: {log_id})" if log_id else ""
+        raise DistributionPublishException(f"TikTok {action} failed: {error['code']}: {details}{suffix}")
     return payload
 
 

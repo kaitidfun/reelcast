@@ -61,3 +61,15 @@ ALTER TABLE analytics
     REFERENCES social_accounts(account_id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS analytics_social_account_id_index
     ON analytics (social_account_id);
+
+-- 2026-08-30: Persist published post ids and social sync state.
+-- A provider returns its own post/video/media id during publication.  Saving
+-- that identifier allows the next sync to assign its metrics to the exact
+-- ReelCast distribution, rather than leaving new Facebook/Instagram/TikTok
+-- Reels as anonymous account-level rows.
+ALTER TABLE distributions ADD COLUMN IF NOT EXISTS platform_post_id VARCHAR;
+CREATE INDEX IF NOT EXISTS distributions_platform_post_id_index
+    ON distributions (platform_post_id)
+    WHERE platform_post_id IS NOT NULL;
+ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS last_synced_at TIMESTAMPTZ;
+ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS sync_error TEXT;

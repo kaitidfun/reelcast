@@ -14,12 +14,30 @@ class TikTokProvider(ProviderClient):
     async def sync(self, request: SyncRequest) -> list[Metric]:
         self.require("tiktok_api_base_url")
         fields = "id,create_time,like_count,comment_count,share_count,view_count"
-        data = await self.request("POST", self.settings().tiktok_api_base_url.rstrip("/") + "/v2/video/list/",
-                                  params={"fields": fields}, json={"max_count": 100},
-                                  headers={"Authorization": f"Bearer {request.access_token}", "Content-Type": "application/json"})
-        videos = data.get("data", {}).get("videos", [])
-        if not isinstance(videos, list):
-            raise ProviderError(self.platform, "provider returned invalid videos")
+        endpoint = self.settings().tiktok_api_base_url.rstrip("/") + "/v2/video/list/"
+        cursor = 0
+        videos: list[dict] = []
+        # TikTok accepts at most 20 records per request.  The old max_count
+        # of 100 can make the entire sync fail, leaving newly published Reels
+        # with no metrics at all.
+        for _ in range(10):
+            data = await self.request(
+                "POST", endpoint,
+                params={"fields": fields},
+                json={"max_count": 20, "cursor": cursor},
+                headers={"Authorization": f"Bearer {request.access_token}", "Content-Type": "application/json"},
+            )
+            page = data.get("data", {})
+            page_videos = page.get("videos", [])
+            if not isinstance(page_videos, list):
+                raise ProviderError(self.platform, "provider returned invalid videos")
+            videos.extend(item for item in page_videos if isinstance(item, dict))
+            if not page.get("has_more"):
+                break
+            next_cursor = page.get("cursor")
+            if not isinstance(next_cursor, int) or next_cursor == cursor:
+                break
+            cursor = next_cursor
         metrics: list[Metric] = []
         for video in videos:
             record_date = provider_date(video.get("create_time"), request.from_date)

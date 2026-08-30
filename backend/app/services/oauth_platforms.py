@@ -58,7 +58,7 @@ PLATFORM_CONFIGS: dict[str, dict] = {
         # returned by /me/accounts, even for a user with Full control. The
         # Business Management scope permits the /me/assigned_pages fallback
         # below to resolve those Page assets.
-        "scope": "pages_show_list,pages_read_engagement,pages_manage_posts,business_management",
+        "scope": "pages_show_list,pages_read_engagement,pages_manage_posts,read_insights,business_management",
         "client_id_param": "client_id",
         "client_id": FACEBOOK_SOCIAL_CLIENT_ID,
         "client_secret": FACEBOOK_SOCIAL_CLIENT_SECRET,
@@ -68,7 +68,7 @@ PLATFORM_CONFIGS: dict[str, dict] = {
         # authorize ReelCast directly; this is not the Facebook Page flow.
         "authorize_url": "https://www.instagram.com/oauth/authorize",
         "token_url": "https://api.instagram.com/oauth/access_token",
-        "scope": "instagram_business_basic,instagram_business_content_publish",
+        "scope": "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights",
         "client_id_param": "client_id",
         "client_id": INSTAGRAM_CLIENT_ID,
         "client_secret": INSTAGRAM_CLIENT_SECRET,
