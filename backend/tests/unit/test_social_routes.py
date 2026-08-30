@@ -57,6 +57,17 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
         scopes = set(oauth_platforms.PLATFORM_CONFIGS["tiktok"]["scope"].split(","))
         self.assertTrue({"user.info.basic", "video.publish", "video.list"}.issubset(scopes))
 
+    def test_facebook_page_oauth_uses_page_permissions(self) -> None:
+        configured = {
+            **oauth_platforms.PLATFORM_CONFIGS["facebook"],
+            "client_id": "facebook-app-id",
+            "client_secret": "facebook-secret",
+        }
+        with patch.dict(oauth_platforms.PLATFORM_CONFIGS, {"facebook": configured}):
+            self.assertTrue(is_configured("facebook"))
+            url = build_authorize_url("facebook", state="state-123")
+        self.assertIn("pages_manage_posts", url)
+
     async def test_exchange_code_raises_on_missing_access_token(self) -> None:
         with patch("app.services.oauth_platforms.is_configured", return_value=True), \
              patch("app.services.oauth_platforms.httpx.AsyncClient") as mock_client_cls:

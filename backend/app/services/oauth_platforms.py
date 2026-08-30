@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 from app.core.config import (
     BACKEND_URL,
-    FACEBOOK_CLIENT_ID,
-    FACEBOOK_CLIENT_SECRET,
+    FACEBOOK_SOCIAL_CLIENT_ID,
+    FACEBOOK_SOCIAL_CLIENT_SECRET,
     INSTAGRAM_CLIENT_ID,
     INSTAGRAM_CLIENT_SECRET,
     TIKTOK_CLIENT_KEY,
@@ -50,14 +50,15 @@ PLATFORM_CONFIGS: dict[str, dict] = {
         "client_secret": TIKTOK_CLIENT_SECRET,
     },
     "facebook": {
-        # Reuses the same Meta app as F1's "Sign in with Facebook"
-        # (FACEBOOK_CLIENT_ID/SECRET) — see config.py for why that's safe.
+        # Page publishing requires a Facebook Login for Business configuration
+        # in addition to the Meta App ID/secret. The configuration owns the
+        # Page permissions requested below.
         "authorize_url": "https://www.facebook.com/v21.0/dialog/oauth",
         "token_url": "https://graph.facebook.com/v21.0/oauth/access_token",
         "scope": "pages_show_list,pages_read_engagement,pages_manage_posts",
         "client_id_param": "client_id",
-        "client_id": FACEBOOK_CLIENT_ID,
-        "client_secret": FACEBOOK_CLIENT_SECRET,
+        "client_id": FACEBOOK_SOCIAL_CLIENT_ID,
+        "client_secret": FACEBOOK_SOCIAL_CLIENT_SECRET,
     },
     "instagram": {
         # Separate Meta app from "facebook" above — Instagram Business login
@@ -97,7 +98,9 @@ def _get_config(platform: str) -> dict:
 def is_configured(platform: str) -> bool:
     """True once real client credentials have been set for this platform."""
     cfg = _get_config(platform)
-    return bool(cfg["client_id"] and cfg["client_secret"])
+    return bool(
+        cfg["client_id"] and cfg["client_secret"]
+    )
 
 
 def build_redirect_uri(platform: str) -> str:
@@ -118,6 +121,8 @@ def build_authorize_url(platform: str, state: str) -> str:
         "response_type": "code",
         "state": state,
     }
+    if cfg.get("config_id"):
+        params["config_id"] = cfg["config_id"]
     params.update(cfg.get("extra_authorize_params", {}))
     return f"{cfg['authorize_url']}?{urlencode(params)}"
 

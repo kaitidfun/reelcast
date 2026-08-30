@@ -59,6 +59,10 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "dummy-client-id")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "dummy-client-secret")
 FACEBOOK_CLIENT_ID = os.getenv("FACEBOOK_CLIENT_ID", "dummy-client-id")
 FACEBOOK_CLIENT_SECRET = os.getenv("FACEBOOK_CLIENT_SECRET", "dummy-client-secret")
+# Social Page publishing and insights are intentionally a separate Meta app
+# from ordinary "Sign in with Facebook".
+FACEBOOK_SOCIAL_CLIENT_ID = os.getenv("FACEBOOK_SOCIAL_CLIENT_ID", "")
+FACEBOOK_SOCIAL_CLIENT_SECRET = os.getenv("FACEBOOK_SOCIAL_CLIENT_SECRET", "")
 
 # Feature 3 — Multi-Platform Distribution: "connect account" OAuth apps.
 # Empty until the real dev apps are registered (see project notes) — the
@@ -66,9 +70,8 @@ FACEBOOK_CLIENT_SECRET = os.getenv("FACEBOOK_CLIENT_SECRET", "dummy-client-secre
 # rather than silently pretending to work.
 TIKTOK_CLIENT_KEY = os.getenv("TIKTOK_CLIENT_KEY", "")
 TIKTOK_CLIENT_SECRET = os.getenv("TIKTOK_CLIENT_SECRET", "")
-# Facebook distribution reuses the same Meta app as F1's "Sign in with
-# Facebook" (FACEBOOK_CLIENT_ID/SECRET above) — one App ID/Secret identifies
-# the app regardless of which OAuth flow requests it; scope differs per flow.
+# Facebook distribution uses FACEBOOK_SOCIAL_* above, rather than the F1
+# "Sign in with Facebook" application credentials.
 # Instagram is a separate Meta app (Instagram Business login isn't available
 # under the same app as Facebook Login in this account's setup).
 INSTAGRAM_CLIENT_ID = os.getenv("INSTAGRAM_CLIENT_ID", "")
