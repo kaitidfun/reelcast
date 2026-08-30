@@ -37,15 +37,22 @@ class CreateDistributionTests(unittest.TestCase):
             createDistribution(self.req, db=self.db, current_user=self.user)
         self.assertEqual(400, ctx.exception.status_code)
 
+    def test_unsaved_reel_rejected(self) -> None:
+        reel = Reel(reel_id=self.req.reel_id, user_id=self.user.user_id, status="Completed", prompt_text="x", is_saved=False)
+        self.db.query.return_value.filter.return_value.first.return_value = reel
+        with self.assertRaises(HTTPException) as ctx:
+            createDistribution(self.req, db=self.db, current_user=self.user)
+        self.assertEqual(400, ctx.exception.status_code)
+
     def test_missing_account_raises_404(self) -> None:
-        reel = Reel(reel_id=self.req.reel_id, user_id=self.user.user_id, status="Completed", prompt_text="x")
+        reel = Reel(reel_id=self.req.reel_id, user_id=self.user.user_id, status="Completed", prompt_text="x", is_saved=True)
         self.db.query.return_value.filter.return_value.first.side_effect = [reel, None]
         with self.assertRaises(HTTPException) as ctx:
             createDistribution(self.req, db=self.db, current_user=self.user)
         self.assertEqual(404, ctx.exception.status_code)
 
     def test_creates_distribution_when_reel_and_account_valid(self) -> None:
-        reel = Reel(reel_id=self.req.reel_id, user_id=self.user.user_id, status="Completed", prompt_text="x")
+        reel = Reel(reel_id=self.req.reel_id, user_id=self.user.user_id, status="Completed", prompt_text="x", is_saved=True)
         account = SocialAccount(account_id=self.req.account_id, user_id=self.user.user_id, platform_name="tiktok", access_token="enc")
         self.db.query.return_value.filter.return_value.first.side_effect = [reel, account]
 

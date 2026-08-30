@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { motion } from "framer-motion";
-import { Send, Check, Loader2, Clock } from "lucide-react";
+import { Send, Check, Loader2, Clock, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,10 +23,15 @@ const PlatformIcon = ({ id }: { id: string }) => {
   }
 };
 
+type SocialAccount = { account_id: string; platform_name: string };
+
 type Props = {
   selectedPlatforms: string[];
-  connectedPlatforms: string[];
+  accounts: SocialAccount[];
+  platformReady: Record<string, boolean>;
   onTogglePlatform: (id: string) => void;
+  onConnect: (platform: string) => void;
+  onDisconnect: (accountId: string) => void;
   scheduledTime: string;
   onScheduledTimeChange: (val: string) => void;
   onPublish: () => void;
@@ -36,15 +40,19 @@ type Props = {
 
 export function DistributeBlock({
   selectedPlatforms,
-  connectedPlatforms,
+  accounts,
+  platformReady,
   onTogglePlatform,
+  onConnect,
+  onDisconnect,
   scheduledTime,
   onScheduledTimeChange,
   onPublish,
   isPublishing,
 }: Props) {
-  const availablePlatforms = PLATFORM_OPTIONS.filter((p) => connectedPlatforms.includes(p.name));
-  const selectedConnected = selectedPlatforms.filter((id) => availablePlatforms.some((p) => p.id === id));
+  const selectedConnected = selectedPlatforms.filter((id) =>
+    accounts.some((a) => a.platform_name === PLATFORM_OPTIONS.find((p) => p.id === id)?.name)
+  );
   const isScheduled = scheduledTime.trim().length > 0;
 
   return (
@@ -60,74 +68,93 @@ export function DistributeBlock({
         </label>
       </div>
 
-      {availablePlatforms.length === 0 ? (
-        <p className="text-[11px] text-muted-foreground">
-          No connected accounts yet.{" "}
-          <Link href="/distribute" className="text-primary underline underline-offset-2">
-            Connect a platform
-          </Link>{" "}
-          to publish this reel.
-        </p>
-      ) : (
-        <>
-          <div className="flex gap-2">
-            {availablePlatforms.map((p) => {
-              const isActive = selectedConnected.includes(p.id);
-              return (
-                <div
-                  key={p.id}
-                  onClick={() => onTogglePlatform(p.id)}
-                  className={`relative flex-1 flex flex-col items-center justify-center gap-1.5 rounded-xl border py-3 cursor-pointer transition-all select-none ${
-                    isActive
-                      ? `${p.activeBg} ring-1`
-                      : "border-border/50 hover:border-border hover:bg-muted/20"
-                  }`}
+      {/* Each card is both the account's Connect/Disconnect control and,
+          once connected, a toggle for whether this publish targets it —
+          keeps account management and platform selection in one place. */}
+      <div className="grid grid-cols-2 gap-2">
+        {PLATFORM_OPTIONS.map((p) => {
+          const account = accounts.find((a) => a.platform_name === p.name);
+          const configured = platformReady[p.name] ?? false;
+          const isActive = Boolean(account) && selectedPlatforms.includes(p.id);
+          return (
+            <div
+              key={p.id}
+              className={`relative flex flex-col items-center gap-1.5 rounded-xl border py-2.5 transition-all select-none ${
+                isActive ? `${p.activeBg} ring-1` : "border-border/50"
+              } ${account ? "" : "opacity-70"}`}
+            >
+              <div
+                onClick={() => account && onTogglePlatform(p.id)}
+                className={`flex flex-col items-center gap-1.5 ${account ? "cursor-pointer" : ""}`}
+              >
+                <span className={`transition-colors ${isActive ? p.color : "text-muted-foreground/35"}`}>
+                  <PlatformIcon id={p.id} />
+                </span>
+                <span className={`text-[10px] font-medium text-center leading-tight transition-colors ${isActive ? "text-foreground" : "text-muted-foreground/50"}`}>
+                  {p.shortLabel}
+                </span>
+              </div>
+              {isActive && (
+                <span className="absolute top-1.5 right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary">
+                  <Check className="h-2 w-2 text-primary-foreground" />
+                </span>
+              )}
+              {account ? (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onDisconnect(account.account_id); }}
+                  className="text-[9px] text-muted-foreground underline underline-offset-2 hover:text-destructive"
                 >
-                  <span className={`transition-colors ${isActive ? p.color : "text-muted-foreground/35"}`}>
-                    <PlatformIcon id={p.id} />
-                  </span>
-                  <span className={`text-[10px] font-medium text-center leading-tight transition-colors ${isActive ? "text-foreground" : "text-muted-foreground/50"}`}>
-                    {p.shortLabel}
-                  </span>
-                  {isActive && (
-                    <span className="absolute top-1.5 right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary">
-                      <Check className="h-2 w-2 text-primary-foreground" />
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          {selectedConnected.length === 0 && (
-            <p className="text-[11px] text-amber-500/80">⚠ Select at least one platform before publishing</p>
-          )}
-
-          <div>
-            <Label className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              Schedule for (optional — leave blank to publish now)
-            </Label>
-            <Input
-              type="datetime-local"
-              value={scheduledTime}
-              onChange={(e) => onScheduledTimeChange(e.target.value)}
-              className="h-9 text-xs"
-            />
-          </div>
-
-          <Button
-            onClick={onPublish}
-            disabled={selectedConnected.length === 0 || isPublishing}
-            size="sm"
-            className="gradient-primary text-primary-foreground shadow-glow h-9 w-full text-xs gap-1.5"
-          >
-            {isPublishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-            {isPublishing
-              ? (isScheduled ? "Scheduling…" : "Publishing…")
-              : (isScheduled ? `Schedule · ${selectedConnected.length}` : `Publish Now · ${selectedConnected.length}`)}
-          </Button>
-        </>
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!configured}
+                  title={configured ? undefined : "Add this platform's OAuth credentials to backend/.env.local and restart the backend"}
+                  onClick={() => onConnect(p.name)}
+                  className="flex items-center gap-1 text-[9px] font-semibold text-primary disabled:text-muted-foreground/50 disabled:cursor-not-allowed"
+                >
+                  <Link2 className="h-2.5 w-2.5" />
+                  {configured ? "Connect" : "Needs setup"}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {accounts.length > 0 && selectedConnected.length === 0 && (
+        <p className="text-[11px] text-amber-500/80">⚠ Select at least one platform before publishing</p>
       )}
+      {accounts.length === 0 && (
+        <p className="text-[11px] text-muted-foreground">Connect an account above to publish this reel.</p>
+      )}
+
+      <div>
+        <Label className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <Clock className="h-3 w-3" />
+          Schedule for (optional — leave blank to publish now)
+        </Label>
+        <Input
+          type="datetime-local"
+          value={scheduledTime}
+          onChange={(e) => onScheduledTimeChange(e.target.value)}
+          onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
+          className="h-9 text-xs cursor-pointer [&::selection]:bg-transparent"
+        />
+      </div>
+
+      <Button
+        onClick={onPublish}
+        disabled={selectedConnected.length === 0 || isPublishing}
+        size="sm"
+        className="gradient-primary text-primary-foreground shadow-glow h-9 w-full text-xs gap-1.5"
+      >
+        {isPublishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+        {isPublishing
+          ? (isScheduled ? "Scheduling…" : "Publishing…")
+          : (isScheduled ? `Schedule · ${selectedConnected.length}` : `Publish Now · ${selectedConnected.length}`)}
+      </Button>
     </motion.div>
   );
 }

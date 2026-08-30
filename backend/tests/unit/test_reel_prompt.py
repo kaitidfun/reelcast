@@ -109,9 +109,12 @@ class ReelGenerationTests(unittest.TestCase):
     def test_F2_UTC06_TC01_approves_content(self, get_reel) -> None:
         get_reel.return_value = SimpleNamespace(
             reel_id=uuid4(),
+            prompt_text="a reel",
             final_commercial_video_url="video.mp4",
             raw_video_url=None,
             uploaded_video_url=None,
+            first_frame_url=None,
+            caption_and_hashtags={"caption": "Buy now", "hashtags": ["#sale"]},
             is_saved=False,
         )
 

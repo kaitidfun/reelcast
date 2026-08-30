@@ -125,6 +125,32 @@ def update_reel(
     return reel
 
 
+def save_reel(db: Session, *, reel: Reel, caption_and_hashtags: Optional[dict] = None) -> Reel:
+    """
+    Snapshot the reel's current (live) prompt/caption/video into its saved_*
+    columns and mark it saved — the action behind the Create page's Save
+    button. Library, the Distribute picker, and publishing all read the
+    saved_* columns, not the live ones, so this is the only thing that makes
+    a reel (re)appear there.
+
+    caption_and_hashtags, if given, is written to the live column first —
+    the caption textarea's edits are only ever local React state until this
+    call, since there's no other endpoint that persists a manually-typed
+    caption (only regenerating it via Gemini does).
+    """
+    if caption_and_hashtags is not None:
+        reel.caption_and_hashtags = caption_and_hashtags
+    reel.saved_prompt_text = reel.prompt_text
+    reel.saved_caption_and_hashtags = reel.caption_and_hashtags
+    reel.saved_raw_video_url = reel.raw_video_url
+    reel.saved_first_frame_url = reel.first_frame_url
+    reel.saved_final_commercial_video_url = reel.final_commercial_video_url
+    reel.is_saved = True
+    db.commit()
+    db.refresh(reel)
+    return reel
+
+
 def increment_retry(db: Session, *, reel: Reel) -> Reel:
     reel.retry_count = (reel.retry_count or 0) + 1
     db.commit()

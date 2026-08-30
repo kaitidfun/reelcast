@@ -353,12 +353,16 @@ async def _generateReels(
             ai_response = reel.caption_and_hashtags
 
         # ── Step 4: Persist completed reel ───────────────────────────────────
+        # is_saved reset to False here — any (re)generation invalidates the
+        # previous Save snapshot (see reel_service.save_reel) until the
+        # member explicitly saves this new content.
         update_reel(
             db,
             reel=reel,
             caption_and_hashtags=ai_response,
             final_commercial_video_url=final_video_url,
             status="Completed",
+            is_saved=False,
         )
         logger.info(f"Reel {reel_id} completed successfully")
 
@@ -649,10 +653,14 @@ async def _publishDistribution(distribution_id: str) -> None:
             db, account_id=distribution.account_id, user_id=reel.user_id
         ) if reel else None
 
-        if not reel or not reel.final_commercial_video_url:
+        # Publish exactly the saved snapshot, never the live/draft columns —
+        # otherwise a regeneration racing with this task (Beat picked it up,
+        # then the member started editing again) could publish content they
+        # never actually approved. See reel_service.save_reel.
+        if not reel or not reel.saved_final_commercial_video_url:
             distribution_service.update_distribution(
                 db, distribution=distribution, status="Failed",
-                error_message="Reel has no finished video to publish",
+                error_message="Reel has no saved video to publish",
             )
             return
         if not account:
@@ -665,9 +673,9 @@ async def _publishDistribution(distribution_id: str) -> None:
         distribution_service.update_distribution(db, distribution=distribution, status="Uploading")
 
         try:
-            video_url = get_presigned_url(reel.final_commercial_video_url)
+            video_url = get_presigned_url(reel.saved_final_commercial_video_url)
             access_token = social_account_service.get_decrypted_access_token(account)
-            caption = _format_caption(reel.caption_and_hashtags)
+            caption = _format_caption(reel.saved_caption_and_hashtags)
 
             # Access tokens expire (~1h for Google/TikTok) long before a
             # scheduled distribution gets published. Refresh proactively

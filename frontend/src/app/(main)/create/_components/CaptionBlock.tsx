@@ -38,14 +38,10 @@ export function CaptionBlock({
       <Textarea
         ref={captionTextareaRef}
         value={caption}
-        onChange={(e) => {
-          onCaptionChange(e.target.value);
-          e.target.style.height = "auto";
-          e.target.style.height = `${e.target.scrollHeight}px`;
-        }}
-        rows={4}
+        onChange={(e) => onCaptionChange(e.target.value)}
+        rows={3}
         disabled={isRegeneratingCaption}
-        className={`bg-muted/40 border-border resize-none text-[11px] leading-relaxed overflow-hidden transition-opacity ${
+        className={`bg-muted/40 border-border resize-none text-[11px] leading-relaxed h-20 overflow-y-auto transition-opacity ${
           isRegeneratingCaption ? "opacity-40" : ""
         }`}
       />

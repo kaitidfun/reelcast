@@ -252,6 +252,17 @@ class Reel(Base):
     # A Completed reel only appears in the Library once the member explicitly
     # saves it from the Create page — not automatically on generation finishing.
     is_saved = Column(Boolean, nullable=False, server_default=text("false"))
+    # Snapshot of prompt/caption/video as of the last explicit Save — Library,
+    # the Distribute picker, and publishing all read these instead of the
+    # live columns above, so editing the prompt or regenerating content
+    # doesn't retroactively change what's already been saved/shared until
+    # the member explicitly saves again. Worker sets is_saved back to false
+    # whenever a (re)generation completes, which is what "invalidates" these.
+    saved_prompt_text = Column(Text, nullable=True)
+    saved_caption_and_hashtags = Column(JSONB, nullable=True)
+    saved_raw_video_url = Column(String, nullable=True)
+    saved_first_frame_url = Column(String, nullable=True)
+    saved_final_commercial_video_url = Column(String, nullable=True)
     created_at = Column(
         TIMESTAMP(timezone=True),
         nullable=False,

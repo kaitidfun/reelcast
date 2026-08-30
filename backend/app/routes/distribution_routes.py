@@ -38,8 +38,10 @@ def _attach_display_fields(db: Session, items: list[Distribution]) -> None:
     reel_ids = {d.reel_id for d in items if d.reel_id}
     account_ids = {d.account_id for d in items if d.account_id}
 
+    # saved_prompt_text, not the live one — a Distribution always publishes
+    # the saved snapshot (see worker.py), so its display label should match.
     reel_prompts = (
-        dict(db.query(Reel.reel_id, Reel.prompt_text).filter(Reel.reel_id.in_(reel_ids)).all())
+        dict(db.query(Reel.reel_id, Reel.saved_prompt_text).filter(Reel.reel_id.in_(reel_ids)).all())
         if reel_ids else {}
     )
     platform_names = (
@@ -83,6 +85,8 @@ def createDistribution(
         raise HTTPException(status_code=404, detail="Reel not found")
     if reel.status != "Completed":
         raise HTTPException(status_code=400, detail="Only a Completed reel can be distributed")
+    if not reel.is_saved:
+        raise HTTPException(status_code=400, detail="Save this reel before distributing it")
 
     account = (
         db.query(SocialAccount)
