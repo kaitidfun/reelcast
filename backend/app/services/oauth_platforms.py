@@ -168,11 +168,47 @@ async def exchange_code_for_token(platform: str, code: str) -> dict[str, Optiona
     access_token = data.get("access_token")
     if not access_token:
         raise OAuthProviderException(f"{platform} did not return an access token")
+    refresh_token = data.get("refresh_token")
+
+    if platform == "instagram":
+        # Instagram's initial token is short-lived (~1hr) and Meta doesn't
+        # issue a separate refresh_token credential for it. Exchange
+        # immediately for a long-lived one (~60 days) and store that same
+        # value as this account's "refresh_token" too, so worker.py's
+        # proactive-refresh block (gated on `if refresh_token:`) covers
+        # Instagram as well — its self-refresh endpoint takes the current
+        # long-lived access_token as input, which is exactly what gets
+        # threaded through as refresh_token here.
+        access_token = await _exchange_instagram_long_lived_token(access_token)
+        refresh_token = access_token
 
     return {
         "access_token": access_token,
-        "refresh_token": data.get("refresh_token"),
+        "refresh_token": refresh_token,
     }
+
+
+async def _exchange_instagram_long_lived_token(short_lived_token: str) -> str:
+    """~1hr short-lived token -> ~60-day long-lived token. Falls back to the
+    short-lived token on failure rather than failing the whole connection —
+    the account still works, just needs reconnecting sooner."""
+    cfg = PLATFORM_CONFIGS["instagram"]
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                "https://graph.instagram.com/access_token",
+                params={
+                    "grant_type": "ig_exchange_token",
+                    "client_secret": cfg["client_secret"],
+                    "access_token": short_lived_token,
+                },
+            )
+        resp.raise_for_status()
+        long_lived = resp.json().get("access_token")
+        return long_lived or short_lived_token
+    except httpx.HTTPError as exc:
+        logger.warning("[OAuth] Could not exchange Instagram token for a long-lived one: %s", exc)
+        return short_lived_token
 
 
 async def refresh_access_token(platform: str, refresh_token: str) -> dict[str, Optional[str]]:
@@ -181,12 +217,17 @@ async def refresh_access_token(platform: str, refresh_token: str) -> dict[str, O
 
     Google and TikTok access tokens expire (~1 hour); a connected account
     is otherwise unusable for publishing past that window even though a
-    valid refresh_token was saved at connect time and never used. Meta
-    (Facebook/Instagram) long-lived tokens use a different exchange
-    mechanism entirely (fb_exchange_token, not grant_type=refresh_token) —
-    not implemented here since neither platform is configured yet; callers
-    should treat a failure from this function as non-fatal and fall back
-    to the existing access_token.
+    valid refresh_token was saved at connect time and never used.
+
+    Instagram has no separate refresh_token credential — its long-lived
+    access_token refreshes itself via a dedicated endpoint (must be at
+    least 24h old, not yet expired); `refresh_token` here is that same
+    long-lived access_token (see exchange_code_for_token/
+    _exchange_instagram_long_lived_token). Facebook long-lived tokens use
+    yet another mechanism (fb_exchange_token) — not implemented since
+    Facebook's proactive-refresh path isn't exercised yet (no refresh_token
+    is ever stored for it); callers should treat a failure from this
+    function as non-fatal and fall back to the existing access_token.
 
     Returns:
         {"access_token": str, "refresh_token": str | None} — refresh_token
@@ -197,6 +238,22 @@ async def refresh_access_token(platform: str, refresh_token: str) -> dict[str, O
         OAuthProviderException: If the platform is unconfigured or the
             token endpoint rejects the refresh_token.
     """
+    if platform == "instagram":
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(
+                    "https://graph.instagram.com/refresh_access_token",
+                    params={"grant_type": "ig_refresh_token", "access_token": refresh_token},
+                )
+            resp.raise_for_status()
+            data = resp.json()
+        except httpx.HTTPError as exc:
+            raise OAuthProviderException("instagram rejected the token refresh") from exc
+        access_token = data.get("access_token")
+        if not access_token:
+            raise OAuthProviderException("instagram did not return a refreshed access token")
+        return {"access_token": access_token, "refresh_token": access_token}
+
     cfg = _get_config(platform)
     if not is_configured(platform):
         raise OAuthProviderException(

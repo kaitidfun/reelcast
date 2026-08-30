@@ -12,11 +12,12 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_db
 from app.exceptions import DistributionNotFoundException
-from app.models.models import Distribution, Reel, SocialAccount, User
+from app.models.models import Campaign, Distribution, Product, Reel, SocialAccount, User
 from app.schemas.distribution import (
     DistributionCreate,
     DistributionListResponse,
@@ -132,6 +133,58 @@ def listDistributions(
     items = query.order_by(Distribution.created_at.desc()).offset(skip).limit(limit).all()
     _attach_display_fields(db, items)
     return DistributionListResponse(distributions=items, total=total)
+
+
+@router.get("/recent-campaigns")
+def recentDistributedCampaigns(
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Campaign ids ordered by their most recent distribution (through
+    Campaign -> Product -> Reel -> Distribution), for the Distribute page's
+    "Recently Distributed Campaigns" section. Id-only on purpose — the
+    frontend already has a richer campaign-card fetch (GET /api/library);
+    this just supplies the relevance order and which ids qualify.
+    """
+    rows = (
+        db.query(Campaign.campaign_id, func.max(Distribution.created_at).label("last_dist"))
+        .join(Product, Product.campaign_id == Campaign.campaign_id)
+        .join(Reel, Reel.product_id == Product.product_id)
+        .join(Distribution, Distribution.reel_id == Reel.reel_id)
+        .filter(Campaign.user_id == current_user.user_id)
+        .group_by(Campaign.campaign_id)
+        .order_by(func.max(Distribution.created_at).desc())
+        .limit(limit)
+        .all()
+    )
+    return {"campaign_ids": [str(r.campaign_id) for r in rows]}
+
+
+@router.get("/campaigns/{campaign_id}/products")
+def recentDistributedProductsForCampaign(
+    campaign_id: UUID,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Product ids within one campaign that have at least one distributed reel,
+    ordered by most recent distribution — backs the campaign drill-down page.
+    Id-only, same reasoning as recent-campaigns above.
+    """
+    rows = (
+        db.query(Product.product_id, func.max(Distribution.created_at).label("last_dist"))
+        .join(Reel, Reel.product_id == Product.product_id)
+        .join(Distribution, Distribution.reel_id == Reel.reel_id)
+        .filter(Product.campaign_id == campaign_id, Product.user_id == current_user.user_id)
+        .group_by(Product.product_id)
+        .order_by(func.max(Distribution.created_at).desc())
+        .limit(limit)
+        .all()
+    )
+    return {"product_ids": [str(r.product_id) for r in rows]}
 
 
 @router.delete("/{distribution_id}", status_code=status.HTTP_204_NO_CONTENT)

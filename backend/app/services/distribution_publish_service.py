@@ -347,6 +347,11 @@ async def publish_to_instagram(access_token: str, ig_user_id: str, video_url: st
                 logger.warning("[Distribution] Could not fetch Instagram permalink for %s: %s", media_id, exc)
 
         return media_id, permalink
+    except httpx.HTTPStatusError as exc:
+        detail = _provider_error_detail(exc.response)
+        raise DistributionPublishException(
+            f"Instagram publish failed: HTTP {exc.response.status_code}: {detail}"
+        ) from exc
     except httpx.HTTPError as exc:
         raise DistributionPublishException(f"Instagram publish failed: {exc}") from exc
 

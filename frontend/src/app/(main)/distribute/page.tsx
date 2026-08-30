@@ -23,9 +23,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useReels } from "@/hooks/useReels";
+import { useCampaigns } from "@/hooks/useCampaigns";
 import { API_BASE_URL, OAUTH_API_BASE_URL } from "@/lib/api";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { platformLabel } from "@/lib/platforms";
+import { ReelCard } from "@/components/ReelCard";
+import { CampaignCard } from "@/components/CampaignCard";
+
+const HISTORY_COLLAPSED_SIZE = 5;
 
 const PLATFORMS = [
   { key: "tiktok", label: "TikTok", icon: Music2, iconClassName: "bg-foreground/10 text-foreground" },
@@ -67,11 +72,15 @@ const Distribution = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { reels } = useReels({ limit: 100 });
+  const { reels: recentDistributedReels, reload: reloadRecentReels } = useReels({ limit: 4, distributedOnly: true });
+  const { campaigns } = useCampaigns();
+  const [recentCampaignIds, setRecentCampaignIds] = useState<string[]>([]);
 
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [distributions, setDistributions] = useState<DistributionItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [filterReelId, setFilterReelId] = useState("all");
   const [filterAccountId, setFilterAccountId] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -117,6 +126,15 @@ const Distribution = () => {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    const headers = authHeaders();
+    if (!headers.Authorization) return;
+    fetch(`${API_BASE_URL}/distributions/recent-campaigns?limit=6`, { headers })
+      .then((res) => (res.ok ? res.json() : { campaign_ids: [] }))
+      .then((data) => setRecentCampaignIds(data.campaign_ids ?? []))
+      .catch(() => setRecentCampaignIds([]));
+  }, []);
 
   // Publishing runs in Celery after the page has loaded. Poll only while a
   // distribution is active so the final status appears without a manual reload.
@@ -203,6 +221,12 @@ const Distribution = () => {
       toast({ title: "Could not publish", description: err.detail, variant: "destructive" });
     }
   };
+
+  const recentCampaigns = recentCampaignIds
+    .map((id) => campaigns.find((c) => c.id === id))
+    .filter((c): c is NonNullable<typeof c> => Boolean(c));
+
+  const visibleDistributions = historyExpanded ? distributions : distributions.slice(0, HISTORY_COLLAPSED_SIZE);
 
   return (
     <div className="min-w-0 space-y-6 sm:space-y-8">
@@ -333,7 +357,7 @@ const Distribution = () => {
         ) : (
           <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-card">
             <div className="divide-y divide-border">
-              {distributions.map((d, i) => (
+              {visibleDistributions.map((d, i) => (
                 <motion.div
                   key={d.distribution_id}
                   initial={{ opacity: 0, x: -10 }}
@@ -384,7 +408,13 @@ const Distribution = () => {
           </div>
         )}
 
-        {total > PAGE_SIZE && (
+        {!historyExpanded && distributions.length > HISTORY_COLLAPSED_SIZE && (
+          <div className="mt-4 flex justify-center">
+            <Button variant="outline" size="sm" onClick={() => setHistoryExpanded(true)}>Show all</Button>
+          </div>
+        )}
+
+        {historyExpanded && total > PAGE_SIZE && (
           <div className="mt-4 flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span className="tabular-nums">Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}</span>
             <div className="grid grid-cols-2 gap-2 sm:flex">
@@ -394,6 +424,43 @@ const Distribution = () => {
           </div>
         )}
       </motion.div>
+
+      {/* Recently Distributed Reels */}
+      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="space-y-4">
+        <h2 className="font-display text-lg font-semibold text-foreground">Recently Distributed Reels</h2>
+        {recentDistributedReels.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
+            No reels have been distributed yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {recentDistributedReels.map((reel) => (
+              <ReelCard key={reel.id} reel={reel} onClick={() => router.push(`/distribute/${reel.id}`)} onChanged={reloadRecentReels} />
+            ))}
+          </div>
+        )}
+      </motion.section>
+
+      {/* Recently Distributed Campaigns */}
+      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-4">
+        <h2 className="font-display text-lg font-semibold text-foreground">Recently Distributed Campaigns</h2>
+        {recentCampaigns.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
+            No campaigns have been distributed yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {recentCampaigns.map((campaign, i) => (
+              <CampaignCard
+                key={campaign.id}
+                campaign={campaign}
+                index={i}
+                onClick={() => router.push(`/distribute/campaign/${campaign.id}`)}
+              />
+            ))}
+          </div>
+        )}
+      </motion.section>
     </div>
   );
 };

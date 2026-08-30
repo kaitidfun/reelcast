@@ -236,13 +236,17 @@ def _saved_view(reel: Reel) -> ReelResponse:
 def listReels(
     status_filter: Optional[str] = Query(None, alias="status"),
     product_id: Optional[UUID] = None,
+    distributed: bool = False,
     skip: int = 0,
     limit: int = 20,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    List the current user's Reels, most recent first.
+    List the current user's Reels, most recent first (or, with
+    distributed=true, most-recently-distributed first — backs the Distribute
+    page's "Recently Distributed Reels" section and its per-product
+    drill-down).
 
     Backs the Dashboard's "Recent Reels" feed and the Feature 3 distribution
     reel-picker — both need a way to browse past generations instead of only
@@ -255,6 +259,7 @@ def listReels(
         user_id=current_user.user_id,
         product_id=product_id,
         status=status_filter,
+        distributed_only=distributed,
         skip=skip,
         limit=limit,
     )

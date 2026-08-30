@@ -8,7 +8,7 @@ from typing import Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.models import Reel
+from app.models.models import Distribution, Reel
 
 
 def create_reel(
@@ -48,6 +48,7 @@ def get_reels(
     user_id: UUID,
     product_id: Optional[UUID] = None,
     status: Optional[str] = None,
+    distributed_only: bool = False,
     skip: int = 0,
     limit: int = 50,
 ) -> tuple[list[Reel], int]:
@@ -65,6 +66,28 @@ def get_reels(
         base = base.filter(Reel.product_id == product_id)
     if status:
         base = base.filter(Reel.status == status)
+
+    if distributed_only:
+        # Ordered by each reel's most recent distribution, not its own
+        # created_at — a reel distributed again today should resurface even
+        # if it was originally generated weeks ago.
+        last_dist = (
+            db.query(
+                Distribution.reel_id.label("reel_id"),
+                func.max(Distribution.created_at).label("last_distributed_at"),
+            )
+            .group_by(Distribution.reel_id)
+            .subquery()
+        )
+        base = base.join(last_dist, Reel.reel_id == last_dist.c.reel_id)
+        total = base.with_entities(func.count(Reel.reel_id)).scalar()
+        items = (
+            base.order_by(last_dist.c.last_distributed_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+        return items, total
 
     total = base.with_entities(func.count(Reel.reel_id)).scalar()
     items = base.order_by(Reel.created_at.desc()).offset(skip).limit(limit).all()
