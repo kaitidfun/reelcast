@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Loader2, Save, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { API_BASE_URL, OAUTH_API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/api";
 
 import type { GenerationStatus } from "../_types";
 import { useGenerationPolling, resolveVideoUrl, formatCaptionAndHashtags } from "../_hooks/useGenerationPolling";
@@ -52,7 +52,6 @@ const PublishReelContent = () => {
 
   const [selectedPlatforms, setSelectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
-  const [platformReady, setPlatformReady] = useState<Record<string, boolean>>({});
   const [scheduledTime, setScheduledTime] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
 
@@ -60,12 +59,8 @@ const PublishReelContent = () => {
     const token = localStorage.getItem("rf_token");
     if (!token) return;
     try {
-      const [accountsRes, readinessRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/social/accounts`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/social/readiness`, { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
-      if (accountsRes.ok) setAccounts((await accountsRes.json()).accounts ?? []);
-      if (readinessRes.ok) setPlatformReady((await readinessRes.json()).platforms ?? {});
+      const res = await fetch(`${API_BASE_URL}/social/accounts`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setAccounts((await res.json()).accounts ?? []);
     } catch (e) {
       console.error("Failed to load connected accounts:", e);
     }
@@ -213,24 +208,6 @@ const PublishReelContent = () => {
   const togglePlatform = (id: string) =>
     setSelectedPlatforms((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
 
-  const handleConnect = (platform: string) => {
-    const token = localStorage.getItem("rf_token");
-    if (!token) return;
-    window.location.href = `${OAUTH_API_BASE_URL}/social/${platform}/connect?token=${encodeURIComponent(token)}`;
-  };
-
-  const handleDisconnect = async (accountId: string) => {
-    const token = localStorage.getItem("rf_token");
-    const res = await fetch(`${API_BASE_URL}/social/accounts/${accountId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-      toast({ title: "Disconnected" });
-      loadAccounts();
-    }
-  };
-
   const handlePublish = async () => {
     if (!reelId || selectedPlatforms.length === 0) return;
     setIsPublishing(true);
@@ -288,15 +265,15 @@ const PublishReelContent = () => {
     }
 
     setIsPublishing(false);
-    if (succeeded.length) {
-      setScheduledTime("");
-      toast({
-        title: isScheduled ? "Scheduled!" : "Publishing now",
-        description: `${succeeded.join(", ")} — check the Distribute page for status.`,
-      });
-    }
     if (failed.length) {
       toast({ title: "Some platforms failed to queue", description: failed.join(", "), variant: "destructive" });
+    }
+    if (succeeded.length) {
+      toast({
+        title: isScheduled ? "Scheduled!" : "Publishing now",
+        description: succeeded.join(", "),
+      });
+      router.push(`/distribute/${reelId}`);
     }
   };
 
@@ -381,10 +358,7 @@ const PublishReelContent = () => {
           <DistributeBlock
             selectedPlatforms={selectedPlatforms}
             accounts={accounts}
-            platformReady={platformReady}
             onTogglePlatform={togglePlatform}
-            onConnect={handleConnect}
-            onDisconnect={handleDisconnect}
             scheduledTime={scheduledTime}
             onScheduledTimeChange={setScheduledTime}
             onPublish={handlePublish}

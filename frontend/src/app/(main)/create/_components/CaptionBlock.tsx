@@ -41,7 +41,7 @@ export function CaptionBlock({
         onChange={(e) => onCaptionChange(e.target.value)}
         rows={3}
         disabled={isRegeneratingCaption}
-        className={`bg-muted/40 border-border resize-none text-[11px] leading-relaxed h-20 overflow-y-auto transition-opacity ${
+        className={`bg-muted/40 border-border resize-none text-[11px] leading-relaxed h-40 overflow-y-auto transition-opacity ${
           isRegeneratingCaption ? "opacity-40" : ""
         }`}
       />

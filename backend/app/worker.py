@@ -703,7 +703,7 @@ async def _publishDistribution(distribution_id: str) -> None:
                         f"using existing access token: {refresh_err}"
                     )
 
-            platform_post_id = await distribution_publish_service.publish(
+            platform_post_id, post_url = await distribution_publish_service.publish(
                 account.platform_name,
                 access_token=access_token,
                 external_account_id=account.external_account_id,
@@ -716,6 +716,7 @@ async def _publishDistribution(distribution_id: str) -> None:
                 distribution=distribution,
                 status="Published",
                 platform_post_id=str(platform_post_id),
+                post_url=post_url,
             )
 
         except DistributionPublishException as exc:

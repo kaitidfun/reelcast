@@ -19,6 +19,10 @@ class DistributionUpdate(BaseModel):
     error_message: Optional[str] = None
 
 
+class DistributionReschedule(BaseModel):
+    scheduled_time: datetime
+
+
 class DistributionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -30,11 +34,15 @@ class DistributionResponse(BaseModel):
     error_message: Optional[str] = None
     retry_count: int = 0
     created_at: Optional[datetime] = None
+    # Public permalink to the published post, when the platform's API made
+    # one available at publish time — see distribution_publish_service.
+    post_url: Optional[str] = None
     # Display-only fields, not real Distribution columns — attached by
     # distribution_routes.list_distributions() via a couple of grouped
     # lookups so the frontend doesn't have to cross-reference reel_id and
     # account_id against separate /api/reels and /api/social/accounts calls.
     reel_prompt: Optional[str] = None
+    reel_name: Optional[str] = None
     platform_name: Optional[str] = None
 
 

@@ -103,3 +103,10 @@ ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS sync_error TEXT;
 -- Member-chosen project name, prompted for on a reel's first Save only.
 -- Library/Home cards fall back to prompt_text while this is empty.
 ALTER TABLE reels ADD COLUMN IF NOT EXISTS name VARCHAR;
+
+-- 2026-08-30: distributions.post_url
+-- Public permalink to the published post, captured at publish time so the
+-- per-reel distribution status page can link straight to it instead of
+-- trying to reconstruct a URL from platform_post_id client-side (which
+-- doesn't work for Instagram — its media id isn't its permalink id).
+ALTER TABLE distributions ADD COLUMN IF NOT EXISTS post_url VARCHAR;

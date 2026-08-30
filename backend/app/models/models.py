@@ -323,6 +323,11 @@ class Distribution(Base):
     # the durable link that lets a later tracking sync attach native metrics
     # to the ReelCast distribution that created the post.
     platform_post_id = Column(String, nullable=True)
+    # Public permalink to the published post, when the platform's API makes
+    # one available at publish time (Instagram needs a follow-up call for
+    # this since its media id isn't the id used in its public URLs; TikTok's
+    # direct-post flow doesn't reliably return one at all — stays null there).
+    post_url = Column(String, nullable=True)
     retry_count = Column(Integer, nullable=False, server_default=text("0"))
     created_at = Column(
         TIMESTAMP(timezone=True),

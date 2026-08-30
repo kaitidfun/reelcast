@@ -112,7 +112,7 @@ def _tiktok_upload_chunks(video: bytes) -> Iterable[tuple[int, bytes]]:
         offset += len(chunk)
 
 
-async def publish_to_tiktok(access_token: str, video_url: str, caption: str) -> str:
+async def publish_to_tiktok(access_token: str, video_url: str, caption: str) -> tuple[str, str | None]:
     """
     TikTok Content Posting API — Direct Post via FILE_UPLOAD.
 
@@ -123,6 +123,9 @@ async def publish_to_tiktok(access_token: str, video_url: str, caption: str) -> 
     Sandbox and unaudited apps are limited by TikTok to SELF_ONLY. We query
     creator_info first, as required by the Direct Post flow, and only post if
     the creator currently permits that option.
+
+    Returns (publish_id, None) — the Direct Post API doesn't hand back a
+    public video URL; the caller has to check the TikTok app/inbox for it.
     """
     try:
         async with httpx.AsyncClient(timeout=120) as client:
@@ -196,12 +199,12 @@ async def publish_to_tiktok(access_token: str, video_url: str, caption: str) -> 
                     content=chunk,
                 )
                 _require_tiktok_success(upload_response, action="video upload")
-        return publish_id
+        return publish_id, None
     except httpx.HTTPError as exc:
         raise DistributionPublishException(f"TikTok publish failed: {exc}") from exc
 
 
-async def publish_to_youtube(access_token: str, video_url: str, caption: str) -> str:
+async def publish_to_youtube(access_token: str, video_url: str, caption: str) -> tuple[str, str]:
     """
     YouTube Data API v3 videos.insert (resumable upload). Vertical + <60s +
     "#Shorts" in the title auto-classifies the upload as a Short — there's
@@ -247,12 +250,12 @@ async def publish_to_youtube(access_token: str, video_url: str, caption: str) ->
         video_id = upload_resp.json().get("id")
         if not video_id:
             raise DistributionPublishException("YouTube upload did not return a video id")
-        return video_id
+        return video_id, f"https://www.youtube.com/shorts/{video_id}"
     except httpx.HTTPError as exc:
         raise DistributionPublishException(f"YouTube publish failed: {exc}") from exc
 
 
-async def publish_to_facebook(access_token: str, page_id: str, video_url: str, caption: str) -> str:
+async def publish_to_facebook(access_token: str, page_id: str, video_url: str, caption: str) -> tuple[str, str]:
     """Facebook Page video upload. Reels only publish to a Page — personal profiles and Groups aren't supported by the API."""
     if not page_id:
         raise DistributionPublishException(
@@ -272,7 +275,7 @@ async def publish_to_facebook(access_token: str, page_id: str, video_url: str, c
         post_id = resp.json().get("id")
         if not post_id:
             raise DistributionPublishException(f"Facebook did not return a post id: {resp.text[:200]}")
-        return post_id
+        return post_id, f"https://www.facebook.com/{post_id}"
     except httpx.HTTPStatusError as exc:
         detail = _provider_error_detail(exc.response)
         raise DistributionPublishException(
@@ -282,7 +285,7 @@ async def publish_to_facebook(access_token: str, page_id: str, video_url: str, c
         raise DistributionPublishException(f"Facebook publish failed: {exc}") from exc
 
 
-async def publish_to_instagram(access_token: str, ig_user_id: str, video_url: str, caption: str) -> str:
+async def publish_to_instagram(access_token: str, ig_user_id: str, video_url: str, caption: str) -> tuple[str, str | None]:
     """
     Instagram API with Instagram Login — container flow: create a media
     container, poll until Instagram finishes processing it, then publish it.
@@ -324,17 +327,35 @@ async def publish_to_instagram(access_token: str, ig_user_id: str, video_url: st
                 f"https://graph.instagram.com/v21.0/{ig_user_id}/media_publish",
                 data={"creation_id": creation_id, "access_token": access_token},
             )
-        publish_resp.raise_for_status()
-        media_id = publish_resp.json().get("id")
-        if not media_id:
-            raise DistributionPublishException("Instagram did not return a published media id")
-        return media_id
+            publish_resp.raise_for_status()
+            media_id = publish_resp.json().get("id")
+            if not media_id:
+                raise DistributionPublishException("Instagram did not return a published media id")
+
+            # media_id here is not the id used in Instagram's public URLs —
+            # a follow-up call for permalink is the only reliable way to get
+            # a link that actually resolves.
+            permalink: str | None = None
+            try:
+                permalink_resp = await client.get(
+                    f"https://graph.instagram.com/v21.0/{media_id}",
+                    params={"fields": "permalink", "access_token": access_token},
+                )
+                permalink_resp.raise_for_status()
+                permalink = permalink_resp.json().get("permalink")
+            except httpx.HTTPError as exc:
+                logger.warning("[Distribution] Could not fetch Instagram permalink for %s: %s", media_id, exc)
+
+        return media_id, permalink
     except httpx.HTTPError as exc:
         raise DistributionPublishException(f"Instagram publish failed: {exc}") from exc
 
 
-async def publish(platform: str, *, access_token: str, external_account_id: str | None, video_url: str, caption: str) -> str:
-    """Dispatch to the right platform's publish function. Returns the platform's post/video id."""
+async def publish(
+    platform: str, *, access_token: str, external_account_id: str | None, video_url: str, caption: str
+) -> tuple[str, str | None]:
+    """Dispatch to the right platform's publish function. Returns (post_id, post_url) — post_url is
+    None when the platform's API doesn't hand back a usable public link (see publish_to_tiktok)."""
     if platform == "tiktok":
         return await publish_to_tiktok(access_token, video_url, caption)
     if platform == "youtube":

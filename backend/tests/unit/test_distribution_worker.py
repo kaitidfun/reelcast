@@ -100,7 +100,7 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
              patch("app.worker.social_account_service.get_social_account", return_value=self.account), \
              patch("app.worker.social_account_service.get_decrypted_access_token", return_value="plain-token"), \
              patch("app.worker.get_presigned_url", return_value="https://cdn.example.com/video.mp4"), \
-             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value="tiktok-post-id")), \
+             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value=("tiktok-post-id", None))), \
              patch("app.worker.distribution_service.update_distribution") as mock_update:
             await _publishDistribution(str(self.distribution_id))
 
@@ -110,6 +110,7 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("Failed", statuses)
         published_call = next(call for call in mock_update.call_args_list if call.kwargs.get("status") == "Published")
         self.assertEqual("tiktok-post-id", published_call.kwargs["platform_post_id"])
+        self.assertIsNone(published_call.kwargs["post_url"])
 
     async def test_refreshes_access_token_before_publish_when_refresh_token_saved(self) -> None:
         account_with_refresh = SocialAccount(
@@ -131,7 +132,7 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
              ) as mock_refresh, \
              patch("app.worker.social_account_service.update_social_account_tokens") as mock_update_tokens, \
              patch("app.worker.get_presigned_url", return_value="https://cdn.example.com/video.mp4"), \
-             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value="yt-video-id")) as mock_publish, \
+             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value=("yt-video-id", "https://www.youtube.com/shorts/yt-video-id"))) as mock_publish, \
              patch("app.worker.distribution_service.update_distribution"):
             await _publishDistribution(str(self.distribution_id))
 
@@ -160,7 +161,7 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
                  new=AsyncMock(side_effect=Exception("refresh endpoint down")),
              ), \
              patch("app.worker.get_presigned_url", return_value="https://cdn.example.com/video.mp4"), \
-             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value="yt-video-id")) as mock_publish, \
+             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value=("yt-video-id", "https://www.youtube.com/shorts/yt-video-id"))) as mock_publish, \
              patch("app.worker.distribution_service.update_distribution") as mock_update:
             await _publishDistribution(str(self.distribution_id))
 

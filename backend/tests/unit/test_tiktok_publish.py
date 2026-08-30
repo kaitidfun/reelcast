@@ -56,9 +56,10 @@ class TikTokPublishTests(unittest.IsolatedAsyncioTestCase):
             "error": {"code": "ok"},
         })
         with patch("app.services.distribution_publish_service.httpx.AsyncClient", return_value=client):
-            publish_id = await publish_to_tiktok("token", "https://storage.example/video.mp4", "A caption")
+            publish_id, post_url = await publish_to_tiktok("token", "https://storage.example/video.mp4", "A caption")
 
         self.assertEqual("publish-123", publish_id)
+        self.assertIsNone(post_url)
         self.assertEqual(2, len(client.posts))
         init_body = client.posts[1][1]["json"]
         self.assertEqual("FILE_UPLOAD", init_body["source_info"]["source"])
@@ -73,9 +74,10 @@ class TikTokPublishTests(unittest.IsolatedAsyncioTestCase):
             "error": {"code": "ok"},
         })
         with patch("app.services.distribution_publish_service.httpx.AsyncClient", return_value=client):
-            publish_id = await publish_to_tiktok("token", "https://storage.example/video.mp4", "A caption")
+            publish_id, post_url = await publish_to_tiktok("token", "https://storage.example/video.mp4", "A caption")
 
         self.assertEqual("publish-123", publish_id)
+        self.assertIsNone(post_url)
 
     async def test_direct_post_rejects_creator_without_self_only_access(self) -> None:
         client = _TikTokClient({

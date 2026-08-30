@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Send, Clock, Trash2, Loader2, CheckCircle2, Radio, Music2, Youtube, Facebook, Instagram, Unplug, Link2, Settings2 } from "lucide-react";
+import { Clock, Trash2, Loader2, CheckCircle2, Radio, Music2, Youtube, Facebook, Instagram, Unplug, Link2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -24,6 +24,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useReels } from "@/hooks/useReels";
 import { API_BASE_URL, OAUTH_API_BASE_URL } from "@/lib/api";
+import { PlatformIcon } from "@/components/PlatformIcon";
+import { platformLabel } from "@/lib/platforms";
 
 const PLATFORMS = [
   { key: "tiktok", label: "TikTok", icon: Music2, iconClassName: "bg-foreground/10 text-foreground" },
@@ -51,6 +53,7 @@ type DistributionItem = {
   status: string;
   error_message: string | null;
   reel_prompt: string | null;
+  reel_name: string | null;
   platform_name: string | null;
 };
 
@@ -336,23 +339,24 @@ const Distribution = () => {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: Math.min(i * 0.04, 0.3) }}
-                  className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-4 sm:px-6 sm:py-4"
+                  onClick={() => d.reel_id && router.push(`/distribute/${d.reel_id}`)}
+                  className={`flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-4 sm:px-6 sm:py-4 ${d.reel_id ? "cursor-pointer hover:bg-muted/20" : ""} transition-colors`}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
                     <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${
                       d.status === "Published" ? "bg-success/10 ring-success/20" : "bg-info/10 ring-info/20"
                     }`}>
-                      <Send className={`h-4 w-4 ${d.status === "Published" ? "text-success" : "text-info"}`} />
+                      <PlatformIcon platform={d.platform_name ?? ""} className={`h-4.5 w-4.5 ${d.status === "Published" ? "text-success" : "text-info"}`} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">{d.reel_prompt || "(reel)"}</p>
+                      <p className="truncate text-sm font-medium text-foreground">{d.reel_name || d.reel_prompt || "(reel)"}</p>
                       <p className="break-words text-xs text-muted-foreground capitalize">
-                        {d.platform_name || "unknown platform"}
+                        {platformLabel(d.platform_name)}
                         {d.error_message ? ` — ${d.error_message}` : ""}
                       </p>
                     </div>
                   </div>
-                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3">
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3" onClick={(e) => e.stopPropagation()}>
                     <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_BADGE[d.status] ?? "bg-muted text-muted-foreground ring-1 ring-border"}`}>
                       {d.status}
                     </span>

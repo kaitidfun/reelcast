@@ -20,6 +20,7 @@ from app.models.models import Distribution, Reel, SocialAccount, User
 from app.schemas.distribution import (
     DistributionCreate,
     DistributionListResponse,
+    DistributionReschedule,
     DistributionResponse,
 )
 from app.services import distribution_service
@@ -38,10 +39,11 @@ def _attach_display_fields(db: Session, items: list[Distribution]) -> None:
     reel_ids = {d.reel_id for d in items if d.reel_id}
     account_ids = {d.account_id for d in items if d.account_id}
 
-    # saved_prompt_text, not the live one — a Distribution always publishes
-    # the saved snapshot (see worker.py), so its display label should match.
-    reel_prompts = (
-        dict(db.query(Reel.reel_id, Reel.saved_prompt_text).filter(Reel.reel_id.in_(reel_ids)).all())
+    # saved_prompt_text/name, not the live ones — a Distribution always
+    # publishes the saved snapshot (see worker.py), so its display label
+    # should match.
+    reel_rows = (
+        dict((r.reel_id, r) for r in db.query(Reel.reel_id, Reel.saved_prompt_text, Reel.name).filter(Reel.reel_id.in_(reel_ids)).all())
         if reel_ids else {}
     )
     platform_names = (
@@ -49,7 +51,9 @@ def _attach_display_fields(db: Session, items: list[Distribution]) -> None:
         if account_ids else {}
     )
     for d in items:
-        d.reel_prompt = reel_prompts.get(d.reel_id)
+        reel_row = reel_rows.get(d.reel_id)
+        d.reel_prompt = reel_row.saved_prompt_text if reel_row else None
+        d.reel_name = reel_row.name if reel_row else None
         d.platform_name = platform_names.get(d.account_id)
 
 
@@ -140,6 +144,22 @@ def cancelDistribution(
     if distribution.status == "Uploading":
         raise HTTPException(status_code=409, detail="Cannot cancel a distribution that's actively publishing")
     distribution_service.delete_distribution(db, distribution_id=distribution.distribution_id)
+
+
+@router.patch("/{distribution_id}", response_model=DistributionResponse)
+def rescheduleDistribution(
+    distribution_id: UUID,
+    req: DistributionReschedule,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Change when a still-pending distribution goes out. Publish Now is the
+    separate lever for "just do it immediately" — this only ever moves the
+    scheduled time, never clears it."""
+    distribution = _get_owned_distribution(db, distribution_id=distribution_id, user_id=current_user.user_id)
+    if distribution.status not in ("Pending", "Failed"):
+        raise HTTPException(status_code=409, detail=f"Cannot reschedule a distribution that's {distribution.status}")
+    return distribution_service.update_distribution(db, distribution=distribution, scheduled_time=req.scheduled_time)
 
 
 @router.post("/{distribution_id}/publish-now", response_model=DistributionResponse)
