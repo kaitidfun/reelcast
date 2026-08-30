@@ -233,10 +233,9 @@ async def publish_to_facebook(access_token: str, page_id: str, video_url: str, c
 
 async def publish_to_instagram(access_token: str, ig_user_id: str, video_url: str, caption: str) -> str:
     """
-    Instagram Graph API Reels — container flow: create a media container,
-    poll until Instagram finishes processing it, then publish it. Only
-    Instagram Business accounts support this; Personal/Creator accounts
-    can't publish via the API at all.
+    Instagram API with Instagram Login — container flow: create a media
+    container, poll until Instagram finishes processing it, then publish it.
+    Only Professional accounts (Business or Creator) can publish via the API.
     """
     if not ig_user_id:
         raise DistributionPublishException(
@@ -245,7 +244,7 @@ async def publish_to_instagram(access_token: str, ig_user_id: str, video_url: st
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             container_resp = await client.post(
-                f"https://graph.facebook.com/v21.0/{ig_user_id}/media",
+                f"https://graph.instagram.com/v21.0/{ig_user_id}/media",
                 data={
                     "media_type": "REELS",
                     "video_url": video_url,
@@ -261,7 +260,7 @@ async def publish_to_instagram(access_token: str, ig_user_id: str, video_url: st
             for _ in range(_IG_POLL_ATTEMPTS):
                 await asyncio.sleep(_IG_POLL_INTERVAL_SECONDS)
                 status_resp = await client.get(
-                    f"https://graph.facebook.com/v21.0/{creation_id}",
+                    f"https://graph.instagram.com/v21.0/{creation_id}",
                     params={"fields": "status_code", "access_token": access_token},
                 )
                 status_resp.raise_for_status()
@@ -271,7 +270,7 @@ async def publish_to_instagram(access_token: str, ig_user_id: str, video_url: st
                 raise DistributionPublishException("Instagram container did not finish processing in time")
 
             publish_resp = await client.post(
-                f"https://graph.facebook.com/v21.0/{ig_user_id}/media_publish",
+                f"https://graph.instagram.com/v21.0/{ig_user_id}/media_publish",
                 data={"creation_id": creation_id, "access_token": access_token},
             )
         publish_resp.raise_for_status()

@@ -60,11 +60,11 @@ PLATFORM_CONFIGS: dict[str, dict] = {
         "client_secret": FACEBOOK_SOCIAL_CLIENT_SECRET,
     },
     "instagram": {
-        # Separate Meta app from "facebook" above — Instagram Business login
-        # is registered as its own app in this account's Meta setup.
-        "authorize_url": "https://www.facebook.com/v21.0/dialog/oauth",
-        "token_url": "https://graph.facebook.com/v21.0/oauth/access_token",
-        "scope": "instagram_business_basic,instagram_business_content_publish,pages_show_list",
+        # Instagram API with Instagram Login. Professional Instagram accounts
+        # authorize ReelCast directly; this is not the Facebook Page flow.
+        "authorize_url": "https://www.instagram.com/oauth/authorize",
+        "token_url": "https://api.instagram.com/oauth/access_token",
+        "scope": "instagram_business_basic,instagram_business_content_publish",
         "client_id_param": "client_id",
         "client_id": INSTAGRAM_CLIENT_ID,
         "client_secret": INSTAGRAM_CLIENT_SECRET,
@@ -243,16 +243,12 @@ async def fetch_external_account_id(platform: str, access_token: str) -> Optiona
                 return pages[0]["id"] if pages else None
 
             if platform == "instagram":
-                pages = await _list_facebook_pages(client, access_token)
-                if not pages:
-                    return None
                 resp = await client.get(
-                    f"https://graph.facebook.com/v21.0/{pages[0]['id']}",
-                    params={"fields": "instagram_business_account", "access_token": access_token},
+                    "https://graph.instagram.com/v21.0/me",
+                    params={"fields": "user_id", "access_token": access_token},
                 )
                 resp.raise_for_status()
-                ig_account = resp.json().get("instagram_business_account")
-                return ig_account["id"] if ig_account else None
+                return resp.json().get("user_id")
 
             if platform == "youtube":
                 resp = await client.get(

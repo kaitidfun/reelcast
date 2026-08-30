@@ -57,6 +57,14 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
         scopes = set(oauth_platforms.PLATFORM_CONFIGS["tiktok"]["scope"].split(","))
         self.assertTrue({"user.info.basic", "video.publish", "video.list"}.issubset(scopes))
 
+    def test_instagram_uses_instagram_login_scopes(self) -> None:
+        config = oauth_platforms.PLATFORM_CONFIGS["instagram"]
+        self.assertEqual("https://www.instagram.com/oauth/authorize", config["authorize_url"])
+        self.assertEqual(
+            {"instagram_business_basic", "instagram_business_content_publish"},
+            set(config["scope"].split(",")),
+        )
+
     def test_facebook_page_oauth_uses_page_permissions(self) -> None:
         configured = {
             **oauth_platforms.PLATFORM_CONFIGS["facebook"],
@@ -127,6 +135,23 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
             result = await fetch_external_account_id("youtube", "some-token")
 
         self.assertEqual("UC12345", result)
+
+    async def test_fetch_external_account_id_instagram_returns_professional_user_id(self) -> None:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"user_id": "ig-user-123"}
+        mock_response.raise_for_status.return_value = None
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+
+        with patch("app.services.oauth_platforms.httpx.AsyncClient") as mock_client_cls:
+            mock_client_cls.return_value.__aenter__.return_value = mock_client
+            result = await fetch_external_account_id("instagram", "some-token")
+
+        self.assertEqual("ig-user-123", result)
+        mock_client.get.assert_awaited_once_with(
+            "https://graph.instagram.com/v21.0/me",
+            params={"fields": "user_id", "access_token": "some-token"},
+        )
 
     async def test_fetch_external_account_id_swallows_http_errors(self) -> None:
         mock_client = AsyncMock()
