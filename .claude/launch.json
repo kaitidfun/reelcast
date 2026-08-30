@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "D:\\uni\\senier project\\reelcastcast\\backend\\dev.cmd",
+      "runtimeArgs": [],
+      "port": 8000
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "D:\\uni\\senier project\\reelcastcast\\frontend\\dev.cmd",
+      "runtimeArgs": [],
+      "port": 3000
+    },
+    {
+      "name": "tracking-adapter",
+      "runtimeExecutable": "D:\\uni\\senier project\\reelcastcast\\tracking-provider-adapter\\dev.cmd",
+      "runtimeArgs": [],
+      "port": 9000
+    }
+  ]
+}

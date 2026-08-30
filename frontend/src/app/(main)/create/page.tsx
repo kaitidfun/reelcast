@@ -17,12 +17,10 @@ import { useToast } from "@/hooks/use-toast";
 
 import type { LibraryProduct, GenerationStatus, GuideOption } from "./_types";
 import { useProductLibrary } from "./_hooks/useProductLibrary";
-import { useGenerationPolling, resolveVideoUrl, formatCaptionAndHashtags } from "./_hooks/useGenerationPolling";
+import { useGenerationPolling, resolveVideoUrl } from "./_hooks/useGenerationPolling";
 import { GuideChipRow } from "./_components/GuideChipRow";
 import { ProductPickerDialog } from "./_components/ProductPickerDialog";
 import { FullscreenVideoDialog } from "./_components/FullscreenVideoDialog";
-import { CaptionBlock } from "./_components/CaptionBlock";
-import { DistributeBlock } from "./_components/DistributeBlock";
 import {
   buildGuidedPromptPayload,
   hasGuidedSelection,
@@ -92,14 +90,6 @@ const CAMERA_OPTIONS: GuideOption[] = [
   { label: "Static Close-up",    description: "Camera holds still on a tight frame. Lets textures and details take center stage." },
 ];
 
-// CaptionBlock's short platform ids vs. the backend's SocialAccount.platform_name values.
-const PLATFORM_ID_INFO: Record<string, { name: string; label: string }> = {
-  yt: { name: "youtube", label: "YouTube Shorts" },
-  tt: { name: "tiktok", label: "TikTok" },
-  fb: { name: "facebook", label: "Facebook" },
-  ig: { name: "instagram", label: "Instagram" },
-};
-
 const CreateReelContent = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -127,13 +117,13 @@ const CreateReelContent = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [completedMode, setCompletedMode] = useState<"generate" | "upload" | null>(null);
   const completedModeRef = useRef<"generate" | "upload">("generate");
+  // Regeneration only ever targets the video on this page now — caption
+  // editing/regen lives on the Step 2 Publish page.
   const captionOnlyRegenRef = useRef(false);
-  const [isRegeneratingCaption, setIsRegeneratingCaption] = useState(false);
-  const [caption, setCaption] = useState("");
-  const [selectedPlatforms, setSelectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
-  const [connectedAccounts, setConnectedAccounts] = useState<{ account_id: string; platform_name: string }[]>([]);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [scheduledTime, setScheduledTime] = useState("");
+  const [isRegeneratingCaption] = useState(false);
+  // Target platform for generation's aspect-ratio/prompt tuning — not the
+  // Distribute platform picker, which now lives entirely on Step 2.
+  const [selectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
   const [showLogo, setShowLogo] = useState(true);
   const [showProduct, setShowProduct] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -162,7 +152,6 @@ const CreateReelContent = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const uploadInputRef = useRef<HTMLInputElement>(null);
-  const captionTextareaRef = useRef<HTMLTextAreaElement>(null);
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Product picker
@@ -185,19 +174,23 @@ const CreateReelContent = () => {
     }
   }, [searchParams, productLibrary]);
 
-  // Connected social accounts — determines which platforms the Publish
-  // button (in CaptionBlock) can actually offer, since publishing needs a
-  // real connected SocialAccount, not just a platform name.
+  // Fallback product pre-select for a resumed reel (?reelId= only, no
+  // ?productId=) — e.g. the Home page's Recent Reels card and /reels only
+  // link with reelId, unlike the Library product page which adds productId
+  // itself. Without this, selectedProduct stays null and Generate/Regenerate
+  // stay disabled even though the reel clearly already has a product.
+  const [resumedProductId, setResumedProductId] = useState<string | null>(null);
   useEffect(() => {
-    const token = localStorage.getItem("rf_token");
-    if (!token) return;
-    fetch("http://localhost:8000/api/social/accounts", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? res.json() : { accounts: [] }))
-      .then((data) => setConnectedAccounts(data.accounts ?? []))
-      .catch(() => setConnectedAccounts([]));
-  }, []);
+    if (!resumedProductId || productLibrary.length === 0 || hasPreselectedRef.current) return;
+    for (const campaign of productLibrary) {
+      const prod = campaign.products.find(p => p.id === resumedProductId);
+      if (prod) {
+        setSelectedProduct(prod);
+        hasPreselectedRef.current = true;
+        break;
+      }
+    }
+  }, [resumedProductId, productLibrary]);
 
   // Resume an existing reel from ?reelId= (e.g. clicked from the product
   // library's reel history) — reloads its prompt, caption, and video/generation
@@ -220,8 +213,8 @@ const CreateReelContent = () => {
 
         setReelId(data.reel_id);
         setPromptText(data.prompt_text || "");
-        setCaption(formatCaptionAndHashtags(data.caption_and_hashtags));
         setIsSaved(Boolean(data.is_saved));
+        if (data.product_id) setResumedProductId(data.product_id);
 
         if (data.status === "Completed") {
           setCompletedMode("generate");
@@ -267,17 +260,12 @@ const CreateReelContent = () => {
     generationStartTime,
     captionOnlyRegenRef,
     completedModeRef,
-    onCompleted: ({ isCaptionRegen, finalVideoUrl, rawVideoUrl: raw, caption: newCaption, generationTime: gt, completedMode: cm }) => {
-      if (!isCaptionRegen) {
-        setGenerationStatus("done");
-        setCompletedMode(cm);
-        setGenerationTime(gt);
-        if (finalVideoUrl) { setVideoUrl(finalVideoUrl); setIsPlaying(true); }
-        if (raw) setRawVideoUrl(raw);
-      } else {
-        setIsRegeneratingCaption(false);
-      }
-      if (newCaption) setCaption(newCaption);
+    onCompleted: ({ finalVideoUrl, rawVideoUrl: raw, generationTime: gt, completedMode: cm }) => {
+      setGenerationStatus("done");
+      setCompletedMode(cm);
+      setGenerationTime(gt);
+      if (finalVideoUrl) { setVideoUrl(finalVideoUrl); setIsPlaying(true); }
+      if (raw) setRawVideoUrl(raw);
     },
     onFailed: (_, gt) => {
       setGenerationStatus("idle");
@@ -341,11 +329,6 @@ const CreateReelContent = () => {
 
   // Auto-resize textareas
   useEffect(() => {
-    const el = captionTextareaRef.current;
-    if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }
-  }, [caption]);
-
-  useEffect(() => {
     const el = promptTextareaRef.current;
     if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }
   }, [promptText]);
@@ -372,9 +355,6 @@ const CreateReelContent = () => {
     if (playIconTimerRef.current) clearTimeout(playIconTimerRef.current);
     playIconTimerRef.current = setTimeout(() => setShowPlayIcon(false), 1200);
   };
-
-  const togglePlatform = (id: string) =>
-    setSelectedPlatforms(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
 
   /** Shared chip hover handler for Guide Me rows */
   const handleChipHover = (opt: GuideOption | null, pos?: { x: number; y: number }) => {
@@ -521,23 +501,18 @@ const CreateReelContent = () => {
     }
   };
 
-  const regenerateContent = async (target: "video" | "caption" | "all") => {
+  const regenerateContent = async (target: "video" | "all") => {
     if (!reelId) return;
     completedModeRef.current = completedMode ?? "generate";
-    captionOnlyRegenRef.current = target === "caption";
     setIsSaved(false);
     setGenerationStartTime(Date.now());
     setElapsedSeconds(0);
     setGenerationTime(null);
-    if (target === "caption") {
-      setIsRegeneratingCaption(true);
-    } else {
-      setCompletedMode(null);
-      setVideoUrl(null);
-      setRawVideoUrl(null);
-      setIsPlaying(false);
-      setGenerationStatus("generating");
-    }
+    setCompletedMode(null);
+    setVideoUrl(null);
+    setRawVideoUrl(null);
+    setIsPlaying(false);
+    setGenerationStatus("generating");
     try {
       const token = localStorage.getItem("rf_token");
       const res = await fetch(`http://localhost:8000/api/reels/${reelId}/regenerate`, {
@@ -549,7 +524,7 @@ const CreateReelContent = () => {
           overlay_position: overlayPosition,
           duration,
           with_audio: withAudio,
-          prompt_text: target !== "caption" ? promptText : undefined,
+          prompt_text: promptText,
         }),
       });
       if (!res.ok) {
@@ -676,68 +651,6 @@ const CreateReelContent = () => {
       });
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handlePublish = async () => {
-    if (!reelId || selectedPlatforms.length === 0) return;
-    setIsPublishing(true);
-    const token = localStorage.getItem("rf_token");
-    const isScheduled = scheduledTime.trim().length > 0;
-    const succeeded: string[] = [];
-    const failed: string[] = [];
-
-    for (const platformId of selectedPlatforms) {
-      const info = PLATFORM_ID_INFO[platformId];
-      const account = connectedAccounts.find((a) => a.platform_name === info?.name);
-      if (!info || !account) continue; // DistributeBlock only offers connected platforms, but guard anyway
-
-      try {
-        const res = await fetch("http://localhost:8000/api/distributions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            reel_id: reelId,
-            account_id: account.account_id,
-            scheduled_time: isScheduled ? new Date(scheduledTime).toISOString() : null,
-          }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || `Could not queue ${info.label}`);
-        }
-        const distribution = await res.json();
-
-        // createDistribution only ever sets status "Pending" — without a
-        // scheduled_time that just sits until Celery Beat's next sweep (up
-        // to 60s later). "Publish Now" means now, so trigger the same
-        // publish-now call the Distribute page's list button uses.
-        if (!isScheduled) {
-          const publishRes = await fetch(
-            `http://localhost:8000/api/distributions/${distribution.distribution_id}/publish-now`,
-            { method: "POST", headers: { Authorization: `Bearer ${token}` } },
-          );
-          if (!publishRes.ok) {
-            const err = await publishRes.json().catch(() => ({}));
-            throw new Error(err.detail || `Could not publish ${info.label}`);
-          }
-        }
-        succeeded.push(info.label);
-      } catch {
-        failed.push(info.label);
-      }
-    }
-
-    setIsPublishing(false);
-    if (succeeded.length) {
-      setScheduledTime("");
-      toast({
-        title: isScheduled ? "Scheduled!" : "Publishing now",
-        description: `${succeeded.join(", ")} — check the Distribute page for status.`,
-      });
-    }
-    if (failed.length) {
-      toast({ title: "Some platforms failed to queue", description: failed.join(", "), variant: "destructive" });
     }
   };
 
@@ -1121,53 +1034,31 @@ const CreateReelContent = () => {
             </motion.div>
           )}
 
-          {/* Save — persists this reel into the Library. Kept as its own
-              block, separate from the caption card, so it reads as "save
-              the whole project" rather than "confirm this caption". */}
+          {/* Footer actions — "Save to Library" persists this reel as-is;
+              "Continue to Publish" hands off to Step 2, where caption
+              editing and distribution live. Kept as two separate actions so
+              saving to the Library never implies the member is ready to
+              publish anywhere yet. */}
           {completedMode !== null && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-              {isSaved ? (
-                <div className="flex items-center justify-center gap-2 rounded-2xl border border-success/30 bg-success/10 px-4 py-3 text-sm font-medium text-success">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Saved to Library
-                </div>
-              ) : (
-                <Button
-                  onClick={saveReel}
-                  disabled={isSaving}
-                  className="gradient-primary h-11 w-full gap-2 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
-                >
-                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  {isSaving ? "Saving…" : "Save Reel"}
-                </Button>
-              )}
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex gap-2">
+              <Button
+                onClick={saveReel}
+                disabled={isSaving}
+                variant={isSaved ? "outline" : "default"}
+                className={`h-11 flex-1 gap-2 text-sm ${isSaved ? "border-success/30 bg-success/10 text-success hover:bg-success/15" : "gradient-primary text-primary-foreground shadow-glow hover:shadow-glow-lg"}`}
+              >
+                {isSaved ? <CheckCircle2 className="h-4 w-4" /> : isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {isSaved ? "Saved to Library" : isSaving ? "Saving…" : "Save to Library"}
+              </Button>
+              <Button
+                onClick={() => router.push(`/create/publish?reelId=${reelId}`)}
+                disabled={!reelId}
+                className="gradient-primary h-11 flex-1 gap-2 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
+              >
+                Continue to Publish
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </motion.div>
-          )}
-
-          {/* Caption */}
-          {completedMode !== null && (
-            <CaptionBlock
-              caption={caption}
-              onCaptionChange={setCaption}
-              captionTextareaRef={captionTextareaRef}
-              isRegeneratingCaption={isRegeneratingCaption}
-              onRegenCaption={() => regenerateContent("caption")}
-            />
-          )}
-
-          {/* Distribute — separate from Caption entirely; this is the F3
-              publish flow, moved in-page so publishing this reel never
-              requires a detour to the standalone /distribute page. */}
-          {completedMode !== null && isSaved && (
-            <DistributeBlock
-              selectedPlatforms={selectedPlatforms}
-              connectedPlatforms={connectedAccounts.map((a) => a.platform_name)}
-              onTogglePlatform={togglePlatform}
-              scheduledTime={scheduledTime}
-              onScheduledTimeChange={setScheduledTime}
-              onPublish={handlePublish}
-              isPublishing={isPublishing}
-            />
           )}
 
         </div>

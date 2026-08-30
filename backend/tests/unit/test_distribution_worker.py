@@ -38,6 +38,9 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
             prompt_text="a reel",
             final_commercial_video_url="videos/reels/final/abc.mp4",
             caption_and_hashtags={"caption": "Buy now", "hashtags": ["#sale"]},
+            is_saved=True,
+            saved_final_commercial_video_url="videos/reels/final/abc.mp4",
+            saved_caption_and_hashtags={"caption": "Buy now", "hashtags": ["#sale"]},
         )
         self.account = SocialAccount(
             account_id=self.account_id,
@@ -76,7 +79,7 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
 
         failed_calls = [c for c in mock_update.call_args_list if c.kwargs.get("status") == "Failed"]
         self.assertEqual(1, len(failed_calls))
-        self.assertIn("no finished video", failed_calls[0].kwargs["error_message"])
+        self.assertIn("no saved video", failed_calls[0].kwargs["error_message"])
 
     async def test_missing_account_marks_failed(self) -> None:
         db = self._db_returning(distribution=self.distribution, reel=self.reel)

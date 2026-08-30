@@ -62,6 +62,31 @@ ALTER TABLE analytics
 CREATE INDEX IF NOT EXISTS analytics_social_account_id_index
     ON analytics (social_account_id);
 
+-- 2026-08-29: reels.saved_* snapshot columns
+-- True versioning for Save: Library/Distribute/publishing now read these
+-- instead of the live prompt_text/caption_and_hashtags/*_video_url columns,
+-- so editing or regenerating a reel after saving it doesn't change what's
+-- already visible/publishable until the member explicitly saves again.
+-- previewAndApproveContent() copies live -> saved_* on Save; the worker
+-- resets is_saved to false whenever a (re)generation completes.
+ALTER TABLE reels ADD COLUMN IF NOT EXISTS saved_prompt_text TEXT;
+ALTER TABLE reels ADD COLUMN IF NOT EXISTS saved_caption_and_hashtags JSONB;
+ALTER TABLE reels ADD COLUMN IF NOT EXISTS saved_raw_video_url VARCHAR;
+ALTER TABLE reels ADD COLUMN IF NOT EXISTS saved_first_frame_url VARCHAR;
+ALTER TABLE reels ADD COLUMN IF NOT EXISTS saved_final_commercial_video_url VARCHAR;
+
+-- Backfill: reels saved (is_saved=true) before this column existed have no
+-- saved_* snapshot yet, so they'd show blank/broken in Library and the
+-- Distribute picker until re-saved. Copy their live columns in once. Safe to
+-- re-run — only touches rows whose snapshot is still empty.
+UPDATE reels
+SET saved_prompt_text = prompt_text,
+    saved_caption_and_hashtags = caption_and_hashtags,
+    saved_raw_video_url = raw_video_url,
+    saved_first_frame_url = first_frame_url,
+    saved_final_commercial_video_url = final_commercial_video_url
+WHERE is_saved = true AND saved_final_commercial_video_url IS NULL;
+
 -- 2026-08-30: Persist published post ids and social sync state.
 -- A provider returns its own post/video/media id during publication.  Saving
 -- that identifier allows the next sync to assign its metrics to the exact

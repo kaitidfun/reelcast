@@ -27,6 +27,7 @@ from app.services.reel_service import (
     get_reel,
     get_reels,
     increment_retry,
+    save_reel,
     update_reel,
 )
 from app.services.upload_service import (
@@ -164,12 +165,20 @@ class ReelRegenerateRequest(BaseModel):
 
 class PreviewDecisionRequest(BaseModel):
     decision: bool
+    # Whatever the member currently has typed in the caption textarea —
+    # optional because Save can also be triggered without ever opening the
+    # caption editor, in which case the AI-generated caption is saved as-is.
+    caption: Optional[str] = Field(None, max_length=2200)
 
 
 class ReelResponse(BaseModel):
     reel_id: UUID
     status: str
     prompt_text: str
+    # Lets the Create page re-select the reel's product on resume (see
+    # frontend's resume effect) — the product a reel belongs to never
+    # changes on Save, so this is read the same way for live and saved views.
+    product_id: Optional[UUID] = None
     error_message: Optional[str] = None
     final_commercial_video_url: Optional[str] = None
     # raw_video_url: pre-overlay video (no logo) — used by frontend for
@@ -188,6 +197,28 @@ class ReelListResponse(BaseModel):
     total: int
 
 
+def _saved_view(reel: Reel) -> ReelResponse:
+    """
+    Represent a Reel using its saved_* snapshot instead of the live columns —
+    what Library, the Distribute picker, and any other "browse past reels"
+    surface should show, so an in-progress edit/regeneration never changes
+    what's already been saved until the member saves again.
+    """
+    return ReelResponse(
+        reel_id=reel.reel_id,
+        status=reel.status,
+        prompt_text=reel.saved_prompt_text or "",
+        product_id=reel.product_id,
+        error_message=reel.error_message,
+        final_commercial_video_url=reel.saved_final_commercial_video_url,
+        raw_video_url=reel.saved_raw_video_url,
+        first_frame_url=reel.saved_first_frame_url,
+        caption_and_hashtags=reel.saved_caption_and_hashtags,
+        is_saved=reel.is_saved,
+        created_at=reel.created_at,
+    )
+
+
 @router.get("", response_model=ReelListResponse)
 def listReels(
     status_filter: Optional[str] = Query(None, alias="status"),
@@ -200,9 +231,11 @@ def listReels(
     """
     List the current user's Reels, most recent first.
 
-    Backs the Dashboard's "Recent Reels" feed and (later) the Feature 3
-    distribution reel-picker — both need a way to browse past generations
-    instead of only fetching a single reel by ID.
+    Backs the Dashboard's "Recent Reels" feed and the Feature 3 distribution
+    reel-picker — both need a way to browse past generations instead of only
+    fetching a single reel by ID. Only ever returns the saved_* snapshot
+    (see _saved_view) since every returned reel is_saved=True by construction
+    of get_reels().
     """
     items, total = get_reels(
         db=db,
@@ -212,7 +245,7 @@ def listReels(
         skip=skip,
         limit=limit,
     )
-    return ReelListResponse(reels=items, total=total)
+    return ReelListResponse(reels=[_saved_view(r) for r in items], total=total)
 
 
 @router.post("/generate", response_model=ReelResponse)
@@ -452,10 +485,11 @@ def previewAndApproveContent(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Saves the reel into the member's Library — a Completed reel doesn't
-    appear in Library/browse listings (get_reels()) until this is called
-    with decision=True. Endpoint path/name kept as-is (matches F2-MD06 in
-    the design doc); only the persisted effect of decision=True changed.
+    Snapshots the reel's live prompt/caption/video into its saved_* columns —
+    a Completed reel doesn't appear in Library/browse listings (get_reels())
+    until this is called with decision=True. Endpoint path/name kept as-is
+    (matches F2-MD06 in the design doc); only the persisted effect of
+    decision=True changed.
     """
     reel = get_reel(db=db, reel_id=reel_id, user_id=current_user.user_id)
     if not reel or not (
@@ -466,7 +500,12 @@ def previewAndApproveContent(
         raise MediaNotFoundException()
 
     if request.decision:
-        update_reel(db, reel=reel, is_saved=True)
+        caption_payload = (
+            {"caption": request.caption, "hashtags": []}
+            if request.caption is not None
+            else None
+        )
+        save_reel(db, reel=reel, caption_and_hashtags=caption_payload)
 
     return {
         "approved": request.decision,
