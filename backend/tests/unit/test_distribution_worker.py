@@ -186,6 +186,23 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         # every other exception's message is surfaced in this codebase.
         self.assertEqual("DistributionPublishException: platform rejected it", failed_calls[0].kwargs["error_message"])
 
+    async def test_unexpected_publish_exception_marks_failed_instead_of_staying_uploading(self) -> None:
+        db = self._db_returning(distribution=self.distribution, reel=self.reel)
+
+        with patch("app.worker.SessionLocal", return_value=db), \
+             patch("app.worker.social_account_service.get_social_account", return_value=self.account), \
+             patch("app.worker.social_account_service.get_decrypted_access_token", return_value="plain-token"), \
+             patch("app.worker.get_presigned_url", return_value="https://cdn.example.com/video.mp4"), \
+             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(side_effect=RuntimeError("boom"))), \
+             patch("app.worker.distribution_service.increment_retry") as mock_retry, \
+             patch("app.worker.distribution_service.update_distribution") as mock_update:
+            await _publishDistribution(str(self.distribution_id))
+
+        mock_retry.assert_called_once()
+        failed_calls = [call for call in mock_update.call_args_list if call.kwargs.get("status") == "Failed"]
+        self.assertEqual(1, len(failed_calls))
+        self.assertEqual("Unexpected publishing error (RuntimeError)", failed_calls[0].kwargs["error_message"])
+
 
 class CheckScheduledDistributionsTests(unittest.TestCase):
     """Celery Beat's periodic task — claims due distributions and queues them."""

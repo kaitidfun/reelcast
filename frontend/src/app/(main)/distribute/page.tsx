@@ -94,8 +94,8 @@ const Distribution = () => {
   const [disconnectAccount, setDisconnectAccount] = useState<SocialAccount | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
 
-  const loadAll = useCallback(async () => {
-    setLoading(true);
+  const loadAll = useCallback(async (background = false) => {
+    if (!background) setLoading(true);
     try {
       const headers = authHeaders();
       if (!headers.Authorization) return;
@@ -123,13 +123,21 @@ const Distribution = () => {
     } catch (e) {
       console.error("Failed to load distribution data:", e);
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, [filterAccountId, filterReelId, filterStatus, page]);
 
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  // Publishing runs in Celery after the page has loaded. Poll only while a
+  // distribution is active so the final status appears without a manual reload.
+  useEffect(() => {
+    if (!distributions.some((distribution) => distribution.status === "Uploading")) return;
+    const timer = window.setInterval(() => { void loadAll(true); }, 5000);
+    return () => window.clearInterval(timer);
+  }, [distributions, loadAll]);
 
   // The OAuth connect flow (backend redirect, not fetch) lands back here
   // with ?connected=<platform> or ?error=<message> — surface it once, then

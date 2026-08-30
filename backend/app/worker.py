@@ -711,6 +711,18 @@ async def _publishDistribution(distribution_id: str) -> None:
             distribution_service.update_distribution(
                 db, distribution=distribution, status="Failed", error_message=str(exc)
             )
+        except Exception as exc:
+            # Do not leave a claimed distribution at Uploading when an
+            # unexpected worker error occurs after a provider accepts media.
+            # Keep request/provider details in server logs only.
+            logger.exception("[Distribution] %s crashed while publishing", distribution_id)
+            distribution_service.increment_retry(db, distribution=distribution)
+            distribution_service.update_distribution(
+                db,
+                distribution=distribution,
+                status="Failed",
+                error_message=f"Unexpected publishing error ({type(exc).__name__})",
+            )
     finally:
         db.close()
 
