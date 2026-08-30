@@ -110,6 +110,7 @@ class ReelGenerationTests(unittest.TestCase):
         get_reel.return_value = SimpleNamespace(
             reel_id=uuid4(),
             prompt_text="a reel",
+            name=None,
             final_commercial_video_url="video.mp4",
             raw_video_url=None,
             uploaded_video_url=None,
@@ -132,6 +133,7 @@ class ReelGenerationTests(unittest.TestCase):
     def test_F2_UTC06_TC02_rejects_content(self, get_reel) -> None:
         get_reel.return_value = SimpleNamespace(
             reel_id=uuid4(),
+            name=None,
             final_commercial_video_url="video.mp4",
             raw_video_url=None,
             uploaded_video_url=None,

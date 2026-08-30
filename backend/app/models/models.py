@@ -237,6 +237,11 @@ class Reel(Base):
         nullable=True,
     )
     prompt_text = Column(Text, nullable=False)
+    # Member-chosen project name — prompted for on the first Save only, and
+    # editable afterward from the Library/Home card. Cards fall back to
+    # prompt_text when this is empty (reels saved before this field existed,
+    # or a first save the member skipped naming).
+    name = Column(String, nullable=True)
     caption_and_hashtags = Column(JSONB, nullable=True)
     uploaded_video_url = Column(String, nullable=True)
     b_roll_url = Column(String, nullable=True)

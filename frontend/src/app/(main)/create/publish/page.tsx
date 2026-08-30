@@ -13,6 +13,7 @@ import type { GenerationStatus } from "../_types";
 import { useGenerationPolling, resolveVideoUrl, formatCaptionAndHashtags } from "../_hooks/useGenerationPolling";
 import { CaptionBlock } from "../_components/CaptionBlock";
 import { DistributeBlock } from "../_components/DistributeBlock";
+import { ReelNameDialog } from "@/components/ReelNameDialog";
 
 // CaptionBlock/DistributeBlock's short platform ids vs. the backend's
 // SocialAccount.platform_name values.
@@ -45,6 +46,9 @@ const PublishReelContent = () => {
 
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [nameDialogOpen, setNameDialogOpen] = useState(false);
+  const namePromptedRef = useRef(false);
+  const nameResolveRef = useRef<((name: string | undefined) => void) | null>(null);
 
   const [selectedPlatforms, setSelectedPlatforms] = useState(["yt", "tt", "fb", "ig"]);
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
@@ -88,6 +92,8 @@ const PublishReelContent = () => {
 
         setCaption(formatCaptionAndHashtags(data.caption_and_hashtags));
         setIsSaved(Boolean(data.is_saved));
+        // Already saved before — the name prompt only fires on the first save.
+        if (data.is_saved) namePromptedRef.current = true;
         setVideoUrl(resolveVideoUrl(data.final_commercial_video_url));
         setRawVideoUrl(resolveVideoUrl(data.raw_video_url));
 
@@ -153,8 +159,7 @@ const PublishReelContent = () => {
     }
   };
 
-  /** Snapshots the current caption/video into saved_*. Returns whether it worked. */
-  const doSave = async (): Promise<boolean> => {
+  const performSave = async (name?: string): Promise<boolean> => {
     if (!reelId) return false;
     setIsSaving(true);
     try {
@@ -162,7 +167,7 @@ const PublishReelContent = () => {
       const res = await fetch(`http://localhost:8000/api/reels/${reelId}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ decision: true, caption }),
+        body: JSON.stringify({ decision: true, caption, ...(name ? { name } : {}) }),
       });
       if (!res.ok) {
         const error = await res.json().catch(() => null);
@@ -180,6 +185,24 @@ const PublishReelContent = () => {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  /**
+   * Snapshots the current caption/video into saved_*. Returns whether it
+   * worked. On this reel's very first save, pauses for the name dialog
+   * (skippable) before actually saving — used by both the standalone Save
+   * button and handlePublish (publish always saves first).
+   */
+  const doSave = async (): Promise<boolean> => {
+    if (!isSaved && !namePromptedRef.current) {
+      namePromptedRef.current = true;
+      setNameDialogOpen(true);
+      const name = await new Promise<string | undefined>((resolve) => {
+        nameResolveRef.current = resolve;
+      });
+      return performSave(name);
+    }
+    return performSave();
   };
 
   const saveReel = async () => {
@@ -369,6 +392,15 @@ const PublishReelContent = () => {
           />
         </div>
       </div>
+
+      <ReelNameDialog
+        open={nameDialogOpen}
+        onOpenChange={setNameDialogOpen}
+        mode="first-save"
+        onConfirm={(name) => { setNameDialogOpen(false); nameResolveRef.current?.(name); }}
+        onSkip={() => { setNameDialogOpen(false); nameResolveRef.current?.(undefined); }}
+        saving={isSaving}
+      />
     </div>
   );
 };

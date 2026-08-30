@@ -125,7 +125,9 @@ def update_reel(
     return reel
 
 
-def save_reel(db: Session, *, reel: Reel, caption_and_hashtags: Optional[dict] = None) -> Reel:
+def save_reel(
+    db: Session, *, reel: Reel, caption_and_hashtags: Optional[dict] = None, name: Optional[str] = None
+) -> Reel:
     """
     Snapshot the reel's current (live) prompt/caption/video into its saved_*
     columns and mark it saved — the action behind the Create page's Save
@@ -137,15 +139,29 @@ def save_reel(db: Session, *, reel: Reel, caption_and_hashtags: Optional[dict] =
     the caption textarea's edits are only ever local React state until this
     call, since there's no other endpoint that persists a manually-typed
     caption (only regenerating it via Gemini does).
+
+    name, if given, is only ever applied the first time this reel is named
+    (reel.name still empty) — the member is only prompted to name a reel on
+    its first save; renaming afterward goes through rename_reel() instead,
+    which isn't gated this way.
     """
     if caption_and_hashtags is not None:
         reel.caption_and_hashtags = caption_and_hashtags
+    if name and not reel.name:
+        reel.name = name
     reel.saved_prompt_text = reel.prompt_text
     reel.saved_caption_and_hashtags = reel.caption_and_hashtags
     reel.saved_raw_video_url = reel.raw_video_url
     reel.saved_first_frame_url = reel.first_frame_url
     reel.saved_final_commercial_video_url = reel.final_commercial_video_url
     reel.is_saved = True
+    db.commit()
+    db.refresh(reel)
+    return reel
+
+
+def rename_reel(db: Session, *, reel: Reel, name: str) -> Reel:
+    reel.name = name
     db.commit()
     db.refresh(reel)
     return reel

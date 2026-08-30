@@ -98,3 +98,8 @@ CREATE INDEX IF NOT EXISTS distributions_platform_post_id_index
     WHERE platform_post_id IS NOT NULL;
 ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS last_synced_at TIMESTAMPTZ;
 ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS sync_error TEXT;
+
+-- 2026-08-30: reels.name
+-- Member-chosen project name, prompted for on a reel's first Save only.
+-- Library/Home cards fall back to prompt_text while this is empty.
+ALTER TABLE reels ADD COLUMN IF NOT EXISTS name VARCHAR;

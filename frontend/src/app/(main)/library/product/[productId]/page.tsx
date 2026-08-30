@@ -57,7 +57,7 @@ const ProductReels = () => {
 
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const { reels, loading: reelsLoading } = useReels({ productId: id });
+  const { reels, loading: reelsLoading, reload: reloadReels } = useReels({ productId: id });
 
   const fetchProduct = useCallback(async () => {
     try {
@@ -224,7 +224,7 @@ const ProductReels = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
             >
-              <ReelCard reel={reel} onClick={() => handleOpenReel(reel.id)} />
+              <ReelCard reel={reel} onClick={() => handleOpenReel(reel.id)} onChanged={reloadReels} />
             </motion.div>
           ))}
         </div>

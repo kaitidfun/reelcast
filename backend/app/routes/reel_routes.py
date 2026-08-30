@@ -27,7 +27,9 @@ from app.services.reel_service import (
     get_reel,
     get_reels,
     increment_retry,
+    rename_reel,
     save_reel,
+    soft_delete_reel,
     update_reel,
 )
 from app.services.upload_service import (
@@ -169,12 +171,22 @@ class PreviewDecisionRequest(BaseModel):
     # optional because Save can also be triggered without ever opening the
     # caption editor, in which case the AI-generated caption is saved as-is.
     caption: Optional[str] = Field(None, max_length=2200)
+    # Project name — only actually applied on the reel's first save (see
+    # reel_service.save_reel); ignored once the reel already has a name.
+    name: Optional[str] = Field(None, max_length=200)
+
+
+class ReelRenameRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
 
 
 class ReelResponse(BaseModel):
     reel_id: UUID
     status: str
     prompt_text: str
+    # Member-chosen project name — falls back to prompt_text on cards while
+    # empty (see models.Reel.name).
+    name: Optional[str] = None
     # Lets the Create page re-select the reel's product on resume (see
     # frontend's resume effect) — the product a reel belongs to never
     # changes on Save, so this is read the same way for live and saved views.
@@ -208,6 +220,7 @@ def _saved_view(reel: Reel) -> ReelResponse:
         reel_id=reel.reel_id,
         status=reel.status,
         prompt_text=reel.saved_prompt_text or "",
+        name=reel.name,
         product_id=reel.product_id,
         error_message=reel.error_message,
         final_commercial_video_url=reel.saved_final_commercial_video_url,
@@ -505,14 +518,42 @@ def previewAndApproveContent(
             if request.caption is not None
             else None
         )
-        save_reel(db, reel=reel, caption_and_hashtags=caption_payload)
+        save_reel(db, reel=reel, caption_and_hashtags=caption_payload, name=request.name)
 
     return {
         "approved": request.decision,
         "queued_for_distribution": request.decision,
         "reel_id": reel.reel_id,
         "is_saved": reel.is_saved,
+        "name": reel.name,
     }
+
+
+@router.put("/{reel_id}", response_model=ReelResponse)
+def renameReel(
+    reel_id: UUID,
+    request: ReelRenameRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Rename a reel's project name — independent of Save, works anytime."""
+    reel = get_reel(db=db, reel_id=reel_id, user_id=current_user.user_id)
+    if not reel:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reel not found")
+    rename_reel(db, reel=reel, name=request.name.strip())
+    return _saved_view(reel) if reel.is_saved else reel
+
+
+@router.delete("/{reel_id}", status_code=status.HTTP_204_NO_CONTENT)
+def deleteReel(
+    reel_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    reel = get_reel(db=db, reel_id=reel_id, user_id=current_user.user_id)
+    if not reel:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reel not found")
+    soft_delete_reel(db, reel=reel)
 
 
 @router.post("/generate-prompt", response_model=PromptResponse)

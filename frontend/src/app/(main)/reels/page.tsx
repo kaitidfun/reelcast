@@ -17,7 +17,7 @@ import { ReelCard } from "@/components/ReelCard";
 
 const AllReels = () => {
   const router = useRouter();
-  const { reels, loading } = useReels({ limit: 200 });
+  const { reels, loading, reload } = useReels({ limit: 200 });
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -80,7 +80,7 @@ const AllReels = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(i * 0.03, 0.3) }}
             >
-              <ReelCard reel={reel} onClick={() => router.push(`/create?reelId=${encodeURIComponent(reel.id)}`)} />
+              <ReelCard reel={reel} onClick={() => router.push(`/create?reelId=${encodeURIComponent(reel.id)}`)} onChanged={reload} />
             </motion.div>
           ))}
         </div>

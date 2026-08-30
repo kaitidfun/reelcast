@@ -29,7 +29,8 @@ export function useReels(params: { limit?: number; productId?: string } = {}) {
       setReels(
         (data.reels ?? []).map((r: any) => ({
           id: r.reel_id,
-          title: r.prompt_text?.trim() || "(no prompt)",
+          title: r.name?.trim() || r.prompt_text?.trim() || "(no prompt)",
+          name: r.name ?? null,
           status: r.status,
           thumbnail: resolveVideoUrl(r.first_frame_url),
           createdAt: r.created_at,

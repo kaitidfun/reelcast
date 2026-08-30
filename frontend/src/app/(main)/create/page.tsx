@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
+import { ReelNameDialog } from "@/components/ReelNameDialog";
 
 import type { LibraryProduct, GenerationStatus, GuideOption } from "./_types";
 import { useProductLibrary } from "./_hooks/useProductLibrary";
@@ -115,6 +116,8 @@ const CreateReelContent = () => {
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [nameDialogOpen, setNameDialogOpen] = useState(false);
+  const namePromptedRef = useRef(false);
   const [completedMode, setCompletedMode] = useState<"generate" | "upload" | null>(null);
   const completedModeRef = useRef<"generate" | "upload">("generate");
   // Regeneration only ever targets the video on this page now — caption
@@ -214,6 +217,9 @@ const CreateReelContent = () => {
         setReelId(data.reel_id);
         setPromptText(data.prompt_text || "");
         setIsSaved(Boolean(data.is_saved));
+        // Already saved before (in an earlier session, or before this reload)
+        // — the name prompt only ever fires on the reel's very first save.
+        if (data.is_saved) namePromptedRef.current = true;
         if (data.product_id) setResumedProductId(data.product_id);
 
         if (data.status === "Completed") {
@@ -618,7 +624,7 @@ const CreateReelContent = () => {
     xhr.send(form);
   };
 
-  const saveReel = async () => {
+  const performSave = async (name?: string) => {
     if (!reelId) return;
     setIsSaving(true);
     try {
@@ -631,7 +637,7 @@ const CreateReelContent = () => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ decision: true }),
+          body: JSON.stringify({ decision: true, ...(name ? { name } : {}) }),
         },
       );
       if (!response.ok) {
@@ -652,6 +658,17 @@ const CreateReelContent = () => {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // Only the very first save ever prompts for a project name — skip or name
+  // it, either way this never fires again for this reel after today.
+  const saveReel = () => {
+    if (!isSaved && !namePromptedRef.current) {
+      namePromptedRef.current = true;
+      setNameDialogOpen(true);
+      return;
+    }
+    performSave();
   };
 
   const handleDownload = async () => {
@@ -1060,6 +1077,15 @@ const CreateReelContent = () => {
               </Button>
             </motion.div>
           )}
+
+          <ReelNameDialog
+            open={nameDialogOpen}
+            onOpenChange={setNameDialogOpen}
+            mode="first-save"
+            onConfirm={(name) => { setNameDialogOpen(false); performSave(name); }}
+            onSkip={() => { setNameDialogOpen(false); performSave(); }}
+            saving={isSaving}
+          />
 
         </div>
 
