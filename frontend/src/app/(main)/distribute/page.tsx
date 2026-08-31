@@ -36,7 +36,7 @@ const PLATFORMS = [
   { key: "tiktok", label: "TikTok", icon: Music2, iconClassName: "bg-foreground/10 text-foreground" },
   { key: "youtube", label: "YouTube Shorts", icon: Youtube, iconClassName: "bg-destructive/10 text-destructive" },
   { key: "facebook", label: "Facebook", icon: Facebook, iconClassName: "bg-info/10 text-info" },
-  { key: "instagram", label: "Instagram", icon: Instagram, iconClassName: "bg-primary/10 text-primary" },
+  { key: "instagram", label: "Instagram", icon: Instagram, iconClassName: "bg-pink-500/10 text-pink-500" },
 ];
 
 const STATUS_BADGE: Record<string, string> = {
