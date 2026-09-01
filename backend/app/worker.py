@@ -617,6 +617,17 @@ def _format_caption(caption_and_hashtags: dict | None) -> str:
     return f"{caption}\n\n{' '.join(hashtags)}".strip()
 
 
+def _prepend_affiliate_link(caption: str, affiliate_link: str | None) -> str:
+    """Place a product's affiliate link on the first line of its post copy."""
+    link = (affiliate_link or "").strip()
+    body = caption.strip()
+    if not link:
+        return body
+    if not body:
+        return link
+    return f"{link}\n\n{body}"
+
+
 @celery_app.task(name="app.worker.publishDistribution")
 def publishDistribution(distribution_id: str):
     """Celery task: publish one Distribution to its connected platform."""
@@ -675,7 +686,10 @@ async def _publishDistribution(distribution_id: str) -> None:
         try:
             video_url = get_presigned_url(reel.saved_final_commercial_video_url)
             access_token = social_account_service.get_decrypted_access_token(account)
-            caption = _format_caption(reel.saved_caption_and_hashtags)
+            caption = _prepend_affiliate_link(
+                _format_caption(reel.saved_caption_and_hashtags),
+                reel.product.affiliate_link if reel.product else None,
+            )
 
             # Access tokens expire (~1h for Google/TikTok) long before a
             # scheduled distribution gets published. Refresh proactively

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from app.exceptions import DistributionPublishException
-from app.models.models import Distribution, Reel, SocialAccount
+from app.models.models import Distribution, Product, Reel, SocialAccount
 from app.worker import _format_caption, _publishDistribution, checkScheduledDistributions
 
 
@@ -16,6 +16,18 @@ class FormatCaptionTests(unittest.TestCase):
     def test_joins_caption_and_hashtags(self) -> None:
         result = _format_caption({"caption": "Check this out", "hashtags": ["#reel", "#new"]})
         self.assertEqual("Check this out\n\n#reel #new", result)
+
+    def test_affiliate_link_is_first_line(self) -> None:
+        from app.worker import _prepend_affiliate_link
+
+        result = _prepend_affiliate_link("Check this out\n\n#reel", " https://example.com/buy ")
+
+        self.assertEqual("https://example.com/buy\n\nCheck this out\n\n#reel", result)
+
+    def test_empty_caption_contains_only_affiliate_link(self) -> None:
+        from app.worker import _prepend_affiliate_link
+
+        self.assertEqual("https://example.com/buy", _prepend_affiliate_link("", "https://example.com/buy"))
 
 
 class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
@@ -41,6 +53,11 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
             is_saved=True,
             saved_final_commercial_video_url="videos/reels/final/abc.mp4",
             saved_caption_and_hashtags={"caption": "Buy now", "hashtags": ["#sale"]},
+        )
+        self.reel.product = Product(
+            product_id=uuid4(),
+            product_name="Featured product",
+            affiliate_link="https://example.com/affiliate",
         )
         self.account = SocialAccount(
             account_id=self.account_id,
@@ -100,7 +117,7 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
              patch("app.worker.social_account_service.get_social_account", return_value=self.account), \
              patch("app.worker.social_account_service.get_decrypted_access_token", return_value="plain-token"), \
              patch("app.worker.get_presigned_url", return_value="https://cdn.example.com/video.mp4"), \
-             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value=("tiktok-post-id", None))), \
+             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value=("tiktok-post-id", None))) as mock_publish, \
              patch("app.worker.distribution_service.update_distribution") as mock_update:
             await _publishDistribution(str(self.distribution_id))
 
@@ -111,6 +128,10 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         published_call = next(call for call in mock_update.call_args_list if call.kwargs.get("status") == "Published")
         self.assertEqual("tiktok-post-id", published_call.kwargs["platform_post_id"])
         self.assertIsNone(published_call.kwargs["post_url"])
+        self.assertEqual(
+            "https://example.com/affiliate\n\nBuy now\n\n#sale",
+            mock_publish.call_args.kwargs["caption"],
+        )
 
     async def test_refreshes_access_token_before_publish_when_refresh_token_saved(self) -> None:
         account_with_refresh = SocialAccount(
