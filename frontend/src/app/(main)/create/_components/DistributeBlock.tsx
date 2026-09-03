@@ -1,13 +1,24 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Send, Check, Loader2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { PLATFORM_OPTIONS } from "@/lib/platforms";
+import { PLATFORM_OPTIONS, connectSocialPlatform } from "@/lib/platforms";
 
 type SocialAccount = { account_id: string; platform_name: string };
 
@@ -19,6 +30,9 @@ type Props = {
   onScheduledTimeChange: (val: string) => void;
   onPublish: () => void;
   isPublishing: boolean;
+  // Where the OAuth round-trip should land the browser back on once a
+  // platform is connected from here — this page, not the Settings page.
+  connectReturnTo?: string;
 };
 
 export function DistributeBlock({
@@ -29,7 +43,9 @@ export function DistributeBlock({
   onScheduledTimeChange,
   onPublish,
   isPublishing,
+  connectReturnTo,
 }: Props) {
+  const [connectPrompt, setConnectPrompt] = useState<(typeof PLATFORM_OPTIONS)[number] | null>(null);
   const isConnected = (name: string) => accounts.some((a) => a.platform_name === name);
   const selectedConnected = selectedPlatforms.filter((id) =>
     isConnected(PLATFORM_OPTIONS.find((p) => p.id === id)?.name ?? "")
@@ -57,12 +73,11 @@ export function DistributeBlock({
             <button
               type="button"
               key={p.id}
-              onClick={() => connected && onTogglePlatform(p.id)}
-              disabled={!connected}
-              title={connected ? undefined : `${p.label} not connected — connect it from the Distribute page`}
-              className={`relative flex flex-col items-center gap-1 rounded-xl border py-2.5 transition-all select-none ${
+              onClick={() => (connected ? onTogglePlatform(p.id) : setConnectPrompt(p))}
+              title={connected ? undefined : `${p.label} not connected — tap to connect it`}
+              className={`relative flex flex-col items-center gap-1 rounded-xl border py-2.5 transition-all select-none cursor-pointer ${
                 isActive ? `${p.activeBg} ring-1` : "border-border/50 hover:border-border hover:bg-muted/20"
-              } ${connected ? "cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
+              } ${connected ? "" : "opacity-40"}`}
             >
               <span className={`transition-colors ${isActive ? p.color : "text-muted-foreground/35"}`}>
                 <PlatformIcon platform={p.name} />
@@ -82,11 +97,11 @@ export function DistributeBlock({
 
       {accounts.length === 0 ? (
         <p className="text-[11px] text-muted-foreground">
-          No connected accounts yet.{" "}
-          <Link href="/distribute" className="text-primary underline underline-offset-2">
-            Connect a platform
-          </Link>{" "}
-          to publish this reel.
+          No connected accounts yet. Tap a platform above to connect it, or manage connections in{" "}
+          <Link href="/account" className="text-primary underline underline-offset-2">
+            Settings
+          </Link>
+          .
         </p>
       ) : selectedConnected.length === 0 ? (
         <p className="text-[11px] text-amber-500/80">⚠ Select at least one platform before publishing</p>
@@ -117,6 +132,26 @@ export function DistributeBlock({
           ? (isScheduled ? "Scheduling…" : "Publishing…")
           : (isScheduled ? `Schedule · ${selectedConnected.length}` : `Publish Now · ${selectedConnected.length}`)}
       </Button>
+
+      <AlertDialog open={Boolean(connectPrompt)} onOpenChange={(open) => !open && setConnectPrompt(null)}>
+        <AlertDialogContent className="w-[calc(100%-2rem)] sm:max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Connect {connectPrompt?.label}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You'll need to connect {connectPrompt?.label} before publishing to it. Connect it now?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:space-x-0">
+            <AlertDialogCancel className="w-full sm:w-auto">Not now</AlertDialogCancel>
+            <AlertDialogAction
+              className="w-full gradient-primary text-primary-foreground sm:w-auto"
+              onClick={() => connectPrompt && connectSocialPlatform(connectPrompt.name, connectReturnTo)}
+            >
+              Connect
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 }

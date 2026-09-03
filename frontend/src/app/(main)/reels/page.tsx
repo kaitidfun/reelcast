@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { useReels } from "@/hooks/useReels";
 import { ReelCard } from "@/components/ReelCard";
+import { reelClickTarget } from "@/lib/reel-status";
 
 const AllReels = () => {
   const router = useRouter();
@@ -80,7 +81,7 @@ const AllReels = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(i * 0.03, 0.3) }}
             >
-              <ReelCard reel={reel} onClick={() => router.push(`/create?reelId=${encodeURIComponent(reel.id)}`)} onChanged={reload} />
+              <ReelCard reel={reel} onClick={() => router.push(reelClickTarget(reel))} onChanged={reload} />
             </motion.div>
           ))}
         </div>

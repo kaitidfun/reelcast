@@ -301,7 +301,7 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
         ):
             response = connectSocialAccount("tiktok", request, token="valid-jwt", db=self.db)
 
-        self.assertIn("/distribute?error=", response.headers["location"])
+        self.assertIn("/account?error=", response.headers["location"])
         self.assertEqual({}, request.session)
 
     async def test_callback_rejects_state_mismatch(self) -> None:
@@ -355,7 +355,7 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
                 "facebook", request, code="abc", state="s1", error=None, db=self.db
             )
 
-        self.assertIn("/distribute?error=", response.headers["location"])
+        self.assertIn("/account?error=", response.headers["location"])
         self.db.add.assert_not_called()
 
     def test_list_social_accounts_returns_current_user_accounts_only(self) -> None:

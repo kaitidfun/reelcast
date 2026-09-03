@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, Loader2, Save, CheckCircle2 } from "lucide-react";
+import { Pencil, Loader2, Save, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { API_BASE_URL } from "@/lib/api";
@@ -294,14 +294,20 @@ const PublishReelContent = () => {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <div className="mb-4 flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.push(`/create?reelId=${reelId}`)} aria-label="Back to Create">
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-xl font-bold text-foreground sm:text-2xl">Publish</h1>
           <p className="text-xs text-muted-foreground sm:text-sm">Write a caption and share this reel to your connected accounts.</p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => router.push(`/create?reelId=${reelId}`)}
+          className="gap-1.5 text-xs"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          Edit reel
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
@@ -363,6 +369,7 @@ const PublishReelContent = () => {
             onScheduledTimeChange={setScheduledTime}
             onPublish={handlePublish}
             isPublishing={isPublishing}
+            connectReturnTo={`/create/publish?reelId=${reelId}`}
           />
         </div>
       </div>

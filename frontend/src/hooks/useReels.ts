@@ -33,6 +33,7 @@ export function useReels(params: { limit?: number; productId?: string; distribut
           title: r.name?.trim() || r.prompt_text?.trim() || "(no prompt)",
           name: r.name ?? null,
           status: r.status,
+          hasDistribution: Boolean(r.has_distribution),
           thumbnail: resolveVideoUrl(r.first_frame_url),
           createdAt: r.created_at,
         }))

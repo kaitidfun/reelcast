@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { validateProfileImage } from "@/lib/test-plan";
+import { SocialConnections } from "@/components/SocialConnections";
 
 const API_URL = "http://localhost:8000";
 
@@ -376,6 +377,11 @@ const Account = () => {
             </div>
           </CardContent>
         </Card>
+      </motion.div>
+
+      {/* Connected social accounts */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
+        <SocialConnections />
       </motion.div>
 
       {/* Logout */}

@@ -21,7 +21,7 @@ from app.exceptions import (
     UnsupportedVideoFormatException,
     VideoSizeExceededException,
 )
-from app.models.models import User, Reel, Product
+from app.models.models import User, Reel, Product, Distribution
 from app.services.reel_service import (
     create_reel,
     get_reel,
@@ -199,6 +199,12 @@ class ReelResponse(BaseModel):
     first_frame_url: Optional[str] = None
     caption_and_hashtags: Optional[dict] = None
     is_saved: bool = False
+    # Whether this reel has ever been distributed to any platform — lets the
+    # frontend route a reel card straight to the publish flow (never
+    # distributed) or the distribution status page (already distributed)
+    # instead of always opening the editor. Only populated by listReels();
+    # other endpoints returning ReelResponse leave this at its default.
+    has_distribution: bool = False
     created_at: Optional[datetime] = None
     class Config:
         from_attributes = True
@@ -263,7 +269,22 @@ def listReels(
         skip=skip,
         limit=limit,
     )
-    return ReelListResponse(reels=[_saved_view(r) for r in items], total=total)
+    distributed_ids = set()
+    if items:
+        reel_ids = [r.reel_id for r in items]
+        distributed_ids = {
+            row[0]
+            for row in db.query(Distribution.reel_id)
+            .filter(Distribution.reel_id.in_(reel_ids))
+            .distinct()
+            .all()
+        }
+    views = []
+    for r in items:
+        view = _saved_view(r)
+        view.has_distribution = r.reel_id in distributed_ids
+        views.append(view)
+    return ReelListResponse(reels=views, total=total)
 
 
 @router.post("/generate", response_model=ReelResponse)

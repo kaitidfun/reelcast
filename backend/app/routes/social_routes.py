@@ -38,10 +38,34 @@ router = APIRouter(prefix="/api/social", tags=["Social Accounts"])
 _SESSION_USER_KEY = "reelcast_connect_user_id"
 _SESSION_STATE_KEY = "reelcast_connect_state"
 _SESSION_PLATFORM_KEY = "reelcast_connect_platform"
+_SESSION_RETURN_TO_KEY = "reelcast_connect_return_to"
+
+_DEFAULT_RETURN_TO = "/account"
 
 
-def _error_redirect(message: str) -> RedirectResponse:
-    return RedirectResponse(url=f"{FRONTEND_URL}/distribute?error={urllib.parse.quote(message)}")
+def _safe_return_to(value: str | None) -> str:
+    """
+    Only ever redirect back to a same-origin relative path — `value` rides
+    through an unauthenticated query param and session cookie, so treat it
+    as untrusted input rather than a trustworthy internal redirect target.
+    """
+    if value and value.startswith("/") and not value.startswith("//") and "://" not in value:
+        return value
+    return _DEFAULT_RETURN_TO
+
+
+def _append_query(path: str, key: str, value: str) -> str:
+    # `path` (return_to) may itself already carry a query string (e.g.
+    # /create/publish?reelId=...), so a literal "?" would silently produce
+    # a malformed URL for any caller other than the plain /account default.
+    separator = "&" if "?" in path else "?"
+    return f"{path}{separator}{key}={urllib.parse.quote(value)}"
+
+
+def _error_redirect(message: str, return_to: str = _DEFAULT_RETURN_TO) -> RedirectResponse:
+    return RedirectResponse(
+        url=f"{FRONTEND_URL}{_append_query(_safe_return_to(return_to), 'error', message)}"
+    )
 
 
 @router.get("/readiness")
@@ -54,7 +78,13 @@ def social_platform_readiness(
 
 
 @router.get("/{platform}/connect")
-def connectSocialAccount(platform: str, request: Request, token: str, db: Session = Depends(get_db)):
+def connectSocialAccount(
+    platform: str,
+    request: Request,
+    token: str,
+    return_to: str | None = None,
+    db: Session = Depends(get_db),
+):
     """
     Start the OAuth connect flow for a platform.
 
@@ -63,6 +93,10 @@ def connectSocialAccount(platform: str, request: Request, token: str, db: Sessio
     on the platform's consent screen, so the usual Authorization header
     isn't available here. The caller's JWT is passed as a query param and
     decoded manually instead of via the normal get_current_user dependency.
+
+    `return_to` lets a caller other than the Settings page (e.g. the Publish
+    page's "connect this platform" prompt) land back where it started once
+    the OAuth round-trip finishes, instead of always landing on /account.
     """
     if platform not in PLATFORM_CONFIGS:
         raise OAuthProviderException(f"Unsupported platform: {platform}")
@@ -78,20 +112,23 @@ def connectSocialAccount(platform: str, request: Request, token: str, db: Sessio
         raise OAuthProviderException("Invalid or expired session")
 
     state = secrets.token_urlsafe(16)
+    safe_return_to = _safe_return_to(return_to)
     request.session[_SESSION_USER_KEY] = str(user.user_id)
     request.session[_SESSION_STATE_KEY] = state
     request.session[_SESSION_PLATFORM_KEY] = platform
+    request.session[_SESSION_RETURN_TO_KEY] = safe_return_to
 
     try:
         return RedirectResponse(url=build_authorize_url(platform, state))
     except OAuthProviderException as exc:
         # This is an expected Feature 3 error, not a failed ReelCast login.
-        # Return to the Distribution page so its error toast can explain how
-        # to proceed (for example, by configuring the platform credentials).
+        # Return to wherever the connect attempt started so its error toast
+        # can explain how to proceed (for example, configuring credentials).
         request.session.pop(_SESSION_USER_KEY, None)
         request.session.pop(_SESSION_STATE_KEY, None)
         request.session.pop(_SESSION_PLATFORM_KEY, None)
-        return _error_redirect(str(exc))
+        request.session.pop(_SESSION_RETURN_TO_KEY, None)
+        return _error_redirect(str(exc), safe_return_to)
 
 
 @router.get("/{platform}/callback")
@@ -103,20 +140,22 @@ async def socialAccountCallback(
     error: str | None = None,
     db: Session = Depends(get_db),
 ):
+    return_to = _safe_return_to(request.session.pop(_SESSION_RETURN_TO_KEY, None))
+
     if error:
-        return _error_redirect(f"{platform} authorization was cancelled or denied")
+        return _error_redirect(f"{platform} authorization was cancelled or denied", return_to)
 
     expected_state = request.session.pop(_SESSION_STATE_KEY, None)
     expected_platform = request.session.pop(_SESSION_PLATFORM_KEY, None)
     user_id = request.session.pop(_SESSION_USER_KEY, None)
 
     if not user_id or not code or not state or state != expected_state or platform != expected_platform:
-        return _error_redirect("Connection session expired — please try connecting again")
+        return _error_redirect("Connection session expired — please try connecting again", return_to)
 
     try:
         tokens = await exchange_code_for_token(platform, code)
     except OAuthProviderException as exc:
-        return _error_redirect(str(exc))
+        return _error_redirect(str(exc), return_to)
 
     external_account_id = await fetch_external_account_id(platform, tokens["access_token"])
     if not external_account_id:
@@ -124,7 +163,8 @@ async def socialAccountCallback(
         # Do not show this account as Connected until the platform-specific
         # Page, Business account, channel, or open_id has been resolved.
         return _error_redirect(
-            f"Could not complete {platform} connection: target account could not be resolved"
+            f"Could not complete {platform} connection: target account could not be resolved",
+            return_to,
         )
 
     # Facebook's OAuth exchange returns a user token, while publishing to a
@@ -137,7 +177,8 @@ async def socialAccountCallback(
         )
         if not page_access_token:
             return _error_redirect(
-                "Could not complete Facebook connection: no publish permission for the selected Page"
+                "Could not complete Facebook connection: no publish permission for the selected Page",
+                return_to,
             )
         publish_access_token = page_access_token
 
@@ -162,7 +203,7 @@ async def socialAccountCallback(
             external_account_id=external_account_id,
         )
 
-    return RedirectResponse(url=f"{FRONTEND_URL}/distribute?connected={platform}")
+    return RedirectResponse(url=f"{FRONTEND_URL}{_append_query(return_to, 'connected', platform)}")
 
 
 @router.get("/accounts", response_model=SocialAccountListResponse)

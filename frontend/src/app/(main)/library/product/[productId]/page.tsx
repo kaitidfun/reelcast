@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useReels } from "@/hooks/useReels";
-import { ReelCard } from "@/components/ReelCard";
+import { ReelCard, type ReelCardData } from "@/components/ReelCard";
 import { REEL_STATUS_BADGE } from "@/lib/reel-status";
 
 const formatDate = (iso: string | null) => {
@@ -126,8 +126,12 @@ const ProductReels = () => {
     router.push(`/create?productId=${encodeURIComponent(id)}&productName=${encodeURIComponent(product.name)}&campaignId=${encodeURIComponent(product.campaignId || "")}`);
   };
 
-  const handleOpenReel = (reelId: string) => {
-    router.push(`/create?reelId=${encodeURIComponent(reelId)}&productId=${encodeURIComponent(id)}&productName=${encodeURIComponent(product.name)}&campaignId=${encodeURIComponent(product.campaignId || "")}`);
+  const handleOpenReel = (reel: ReelCardData) => {
+    if (reel.status === "Completed") {
+      router.push(reel.hasDistribution ? `/distribute/${reel.id}` : `/create/publish?reelId=${reel.id}`);
+      return;
+    }
+    router.push(`/create?reelId=${encodeURIComponent(reel.id)}&productId=${encodeURIComponent(id)}&productName=${encodeURIComponent(product.name)}&campaignId=${encodeURIComponent(product.campaignId || "")}`);
   };
 
   return (
@@ -224,7 +228,7 @@ const ProductReels = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
             >
-              <ReelCard reel={reel} onClick={() => handleOpenReel(reel.id)} onChanged={reloadReels} />
+              <ReelCard reel={reel} onClick={() => handleOpenReel(reel)} onChanged={reloadReels} />
             </motion.div>
           ))}
         </div>
@@ -236,7 +240,7 @@ const ProductReels = () => {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }}
-              onClick={() => handleOpenReel(reel.id)}
+              onClick={() => handleOpenReel(reel)}
               className="flex items-center gap-4 p-4 hover:bg-muted/30 transition-colors cursor-pointer"
             >
               <div className="relative h-16 w-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">

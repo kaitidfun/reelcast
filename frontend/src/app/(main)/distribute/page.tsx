@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { Send, Clock, Trash2, Loader2, CheckCircle2, Radio, Music2, Youtube, Facebook, Instagram, Unplug, Link2, Settings2 } from "lucide-react";
+import { Send, Clock, Trash2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -12,32 +13,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useReels } from "@/hooks/useReels";
 import { useCampaigns } from "@/hooks/useCampaigns";
-import { API_BASE_URL, OAUTH_API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/api";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { platformLabel } from "@/lib/platforms";
 import { ReelCard } from "@/components/ReelCard";
 import { CampaignCard } from "@/components/CampaignCard";
 
 const HISTORY_COLLAPSED_SIZE = 5;
-
-const PLATFORMS = [
-  { key: "tiktok", label: "TikTok", icon: Music2, iconClassName: "bg-foreground/10 text-foreground" },
-  { key: "youtube", label: "YouTube Shorts", icon: Youtube, iconClassName: "bg-destructive/10 text-destructive" },
-  { key: "facebook", label: "Facebook", icon: Facebook, iconClassName: "bg-info/10 text-info" },
-  { key: "instagram", label: "Instagram", icon: Instagram, iconClassName: "bg-pink-500/10 text-pink-500" },
-];
+const CONNECTABLE_PLATFORM_COUNT = 4;
 
 const STATUS_BADGE: Record<string, string> = {
   Pending: "bg-warning/10 text-warning ring-1 ring-warning/20",
@@ -70,7 +56,6 @@ const authHeaders = (): Record<string, string> => {
 const Distribution = () => {
   const { toast } = useToast();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { reels } = useReels({ limit: 100 });
   const { reels: recentDistributedReels, reload: reloadRecentReels } = useReels({ limit: 4, distributedOnly: true });
   const { campaigns } = useCampaigns();
@@ -85,10 +70,6 @@ const Distribution = () => {
   const [filterAccountId, setFilterAccountId] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [page, setPage] = useState(0);
-  const [platformReady, setPlatformReady] = useState<Record<string, boolean>>({});
-
-  const [disconnectAccount, setDisconnectAccount] = useState<SocialAccount | null>(null);
-  const [disconnecting, setDisconnecting] = useState(false);
 
   const loadAll = useCallback(async (background = false) => {
     if (!background) setLoading(true);
@@ -102,19 +83,15 @@ const Distribution = () => {
       if (filterReelId !== "all") distributionParams.set("reel_id", filterReelId);
       if (filterAccountId !== "all") distributionParams.set("account_id", filterAccountId);
       if (filterStatus !== "all") distributionParams.set("status_filter", filterStatus);
-      const [accountsRes, distRes, readinessRes] = await Promise.all([
+      const [accountsRes, distRes] = await Promise.all([
         fetch(`${API_BASE_URL}/social/accounts`, { headers }),
         fetch(`${API_BASE_URL}/distributions?${distributionParams.toString()}`, { headers }),
-        fetch(`${API_BASE_URL}/social/readiness`, { headers }),
       ]);
       if (accountsRes.ok) setAccounts((await accountsRes.json()).accounts ?? []);
       if (distRes.ok) {
         const data = await distRes.json();
         setDistributions(data.distributions ?? []);
         setTotal(data.total ?? 0);
-      }
-      if (readinessRes.ok) {
-        setPlatformReady((await readinessRes.json()).platforms ?? {});
       }
     } catch (e) {
       console.error("Failed to load distribution data:", e);
@@ -143,59 +120,6 @@ const Distribution = () => {
     const timer = window.setInterval(() => { void loadAll(true); }, 5000);
     return () => window.clearInterval(timer);
   }, [distributions, loadAll]);
-
-  // The OAuth connect flow (backend redirect, not fetch) lands back here
-  // with ?connected=<platform> or ?error=<message> — surface it once, then
-  // strip the query param so a refresh doesn't re-show the toast.
-  useEffect(() => {
-    const connected = searchParams?.get("connected");
-    const error = searchParams?.get("error");
-    if (connected) {
-      toast({ title: `${connected} connected!` });
-      loadAll();
-      router.replace("/distribute");
-    } else if (error) {
-      toast({ title: "Connection failed", description: error, variant: "destructive" });
-      router.replace("/distribute");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
-
-  const handleConnect = (platform: string) => {
-    const token = localStorage.getItem("rf_token");
-    if (!token) return;
-    // Full navigation, not fetch — the browser needs to actually land on
-    // the platform's own consent screen, so this can't go through a normal
-    // authenticated XHR. The token rides along as a query param instead
-    // (see backend/app/routes/social_routes.py for why).
-    window.location.href = `${OAUTH_API_BASE_URL}/social/${platform}/connect?token=${encodeURIComponent(token)}`;
-  };
-
-  const handleDisconnect = async () => {
-    if (!disconnectAccount) return;
-    setDisconnecting(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/social/accounts/${disconnectAccount.account_id}`, {
-        method: "DELETE",
-        headers: authHeaders(),
-      });
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}));
-        throw new Error(error.detail || "Could not disconnect account");
-      }
-      toast({ title: "Disconnected" });
-      setDisconnectAccount(null);
-      loadAll();
-    } catch (error) {
-      toast({
-        title: "Could not disconnect",
-        description: error instanceof Error ? error.message : "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setDisconnecting(false);
-    }
-  };
 
   const handleCancel = async (distributionId: string) => {
     const res = await fetch(`${API_BASE_URL}/distributions/${distributionId}`, {
@@ -235,86 +159,19 @@ const Distribution = () => {
         <p className="mt-1 text-sm text-muted-foreground sm:text-base">Publish Reels to YouTube Shorts, TikTok, Facebook, and Instagram</p>
       </div>
 
-      {/* Connected Accounts */}
-      <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
-            <Radio className="h-4 w-4 text-primary" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="font-display text-base font-semibold text-foreground">Social media connections</h2>
-            <p className="text-xs text-muted-foreground">Connect accounts securely to publish completed Reels.</p>
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {PLATFORMS.map((p) => {
-            const account = accounts.find((a) => a.platform_name === p.key);
-            const configured = platformReady[p.key] ?? false;
-            const PlatformIcon = p.icon;
-            return (
-              <div key={p.key} className="min-w-0 rounded-xl border border-border bg-muted/30 p-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${p.iconClassName}`}>
-                    <PlatformIcon className="h-5 w-5" aria-hidden="true" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground">{p.label}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {account ? "Connected" : configured ? "Not connected" : "Needs setup"}
-                    </p>
-                  </div>
-                  {account && <CheckCircle2 className="h-4 w-4 text-success shrink-0" />}
-                  {account ? (
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setDisconnectAccount(account)}
-                      title={`Disconnect ${p.label}`}
-                      aria-label={`Disconnect ${p.label}`}
-                      className="h-9 w-9 shrink-0"
-                    >
-                      <Unplug className="h-4 w-4" />
-                    </Button>
-                  ) : (
-                    <Button
-                      size="icon"
-                      disabled={!configured}
-                      title={configured ? `Connect ${p.label}` : "Add this platform's OAuth credentials to backend/.env.local and restart the backend"}
-                      aria-label={configured ? `Connect ${p.label}` : `${p.label} needs setup`}
-                      onClick={() => handleConnect(p.key)}
-                      className="gradient-primary h-9 w-9 shrink-0 text-primary-foreground"
-                    >
-                      {configured ? <Link2 className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <AlertDialog
-        open={Boolean(disconnectAccount)}
-        onOpenChange={(open) => { if (!open && !disconnecting) setDisconnectAccount(null); }}
+      {/* Connection status strip — full connect/disconnect controls live on Settings now */}
+      <Link
+        href="/account"
+        className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-card transition-colors hover:border-primary/30 sm:px-5"
       >
-        <AlertDialogContent className="w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Disconnect {disconnectAccount?.platform_name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Disconnecting this social media platform will permanently delete its Distribution history.
-              This action cannot be undone or recovered.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:space-x-0">
-            <AlertDialogCancel disabled={disconnecting} className="w-full sm:w-auto">Cancel</AlertDialogCancel>
-            <Button variant="destructive" onClick={() => void handleDisconnect()} disabled={disconnecting} className="w-full sm:w-auto">
-              {disconnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Disconnect permanently
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <span className="min-w-0 truncate text-sm text-foreground">
+          <span className="font-semibold">{accounts.length}/{CONNECTABLE_PLATFORM_COUNT}</span> platforms connected
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-primary">
+          <Settings2 className="h-3.5 w-3.5" />
+          Manage in Settings
+        </span>
+      </Link>
 
       {/* Distributions */}
       <motion.div className="min-w-0" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>

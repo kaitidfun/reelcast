@@ -10,6 +10,7 @@ import { useReels } from "@/hooks/useReels";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { ReelCard } from "@/components/ReelCard";
 import { CampaignCard } from "@/components/CampaignCard";
+import { reelClickTarget } from "@/lib/reel-status";
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -130,7 +131,7 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {visibleReels.map((reel) => (
-              <ReelCard key={reel.id} reel={reel} onClick={() => router.push(`/create?reelId=${encodeURIComponent(reel.id)}`)} onChanged={reloadReels} />
+              <ReelCard key={reel.id} reel={reel} onClick={() => router.push(reelClickTarget(reel))} onChanged={reloadReels} />
             ))}
           </div>
         )}

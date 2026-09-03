@@ -288,13 +288,35 @@ const DistributeStatusContent = () => {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-4 flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/distribute")} aria-label="Back to Distribute">
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="min-w-0">
-          <h1 className="font-display text-xl font-bold text-foreground sm:text-2xl truncate">{reelTitle}</h1>
-          <p className="text-xs text-muted-foreground sm:text-sm">Distribution status across your connected platforms.</p>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => router.push("/distribute")} aria-label="Back to Distribute">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="min-w-0">
+            <h1 className="font-display text-xl font-bold text-foreground sm:text-2xl truncate">{reelTitle}</h1>
+            <p className="text-xs text-muted-foreground sm:text-sm">Distribution status across your connected platforms.</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/create/publish?reelId=${reelId}`)}
+            className="gap-1.5 text-xs"
+          >
+            <Send className="h-3.5 w-3.5" />
+            Publish to more platforms
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/create?reelId=${reelId}`)}
+            className="gap-1.5 text-xs"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Edit reel
+          </Button>
         </div>
       </div>
 

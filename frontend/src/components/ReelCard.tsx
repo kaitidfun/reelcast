@@ -14,6 +14,10 @@ export type ReelCardData = {
   // dialog. `title` above is the display fallback (name || prompt text).
   name: string | null;
   status: string;
+  // Whether this reel has ever been distributed to any platform — drives
+  // the "Not published" badge and where clicking the card goes (see
+  // lib/reel-status.ts's reelClickTarget).
+  hasDistribution: boolean;
   thumbnail: string | null;
   createdAt: string | null;
 };
@@ -105,6 +109,11 @@ export function ReelCard({ reel, onClick, onChanged }: { reel: ReelCardData; onC
             {reel.status}
           </Badge>
         </div>
+        {reel.status === "Completed" && !reel.hasDistribution && (
+          <div className="absolute bottom-2 left-2 rounded-full bg-background/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground backdrop-blur">
+            Not published
+          </div>
+        )}
         {reel.thumbnail && (
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
             <div className="h-12 w-12 rounded-full bg-background/80 backdrop-blur flex items-center justify-center">
