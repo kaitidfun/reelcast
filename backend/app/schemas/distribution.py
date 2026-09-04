@@ -49,3 +49,5 @@ class DistributionResponse(BaseModel):
 class DistributionListResponse(BaseModel):
     distributions: List[DistributionResponse]
     total: int
+    matched_reel_ids: List[UUID]
+    matched_campaign_ids: List[UUID]

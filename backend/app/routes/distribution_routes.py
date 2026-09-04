@@ -12,7 +12,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_db
@@ -27,6 +27,13 @@ from app.schemas.distribution import (
 from app.services import distribution_service
 
 router = APIRouter(prefix="/api/distributions", tags=["Distributions"])
+
+PLATFORM_SEARCH_LABELS = {
+    "youtube": "YouTube Shorts",
+    "tiktok": "TikTok",
+    "facebook": "Facebook",
+    "instagram": "Instagram",
+}
 
 
 def _attach_display_fields(db: Session, items: list[Distribution]) -> None:
@@ -114,6 +121,7 @@ def listDistributions(
     reel_id: Optional[UUID] = None,
     account_id: Optional[UUID] = None,
     status_filter: Optional[str] = None,
+    search: Optional[str] = None,
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
@@ -128,11 +136,51 @@ def listDistributions(
         query = query.filter(Distribution.account_id == account_id)
     if status_filter:
         query = query.filter(Distribution.status == status_filter)
+    if search and (search_term := search.strip()):
+        pattern = f"%{search_term}%"
+        normalized_search = search_term.casefold()
+        matching_platforms = [
+            platform
+            for platform, label in PLATFORM_SEARCH_LABELS.items()
+            if normalized_search in label.casefold()
+        ]
+        search_conditions = [
+            Reel.name.ilike(pattern),
+            SocialAccount.platform_name.ilike(pattern),
+            cast(Distribution.status, String).ilike(pattern),
+        ]
+        if matching_platforms:
+            search_conditions.append(SocialAccount.platform_name.in_(matching_platforms))
+        query = query.outerjoin(
+            SocialAccount,
+            Distribution.account_id == SocialAccount.account_id,
+        ).filter(
+            or_(*search_conditions)
+        )
 
+    matched_reel_ids = [
+        row[0]
+        for row in query.with_entities(Distribution.reel_id).distinct().all()
+        if row[0] is not None
+    ]
+    matched_campaign_ids = [
+        row[0]
+        for row in query.join(Product, Reel.product_id == Product.product_id)
+        .join(Campaign, Product.campaign_id == Campaign.campaign_id)
+        .with_entities(Campaign.campaign_id)
+        .distinct()
+        .all()
+        if row[0] is not None
+    ]
     total = query.count()
     items = query.order_by(Distribution.created_at.desc()).offset(skip).limit(limit).all()
     _attach_display_fields(db, items)
-    return DistributionListResponse(distributions=items, total=total)
+    return DistributionListResponse(
+        distributions=items,
+        total=total,
+        matched_reel_ids=matched_reel_ids,
+        matched_campaign_ids=matched_campaign_ids,
+    )
 
 
 @router.get("/recent-campaigns")

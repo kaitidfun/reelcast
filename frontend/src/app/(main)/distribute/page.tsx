@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Send, Clock, Trash2, Settings2 } from "lucide-react";
+import { Send, Clock, Trash2, Settings2, LayoutGrid, Clapperboard, Share2, CircleDot, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -35,6 +36,8 @@ const STATUS_BADGE: Record<string, string> = {
 const DISTRIBUTION_STATUSES = ["Pending", "Uploading", "Published", "Failed"];
 const PAGE_SIZE = 10;
 
+type DistributionView = "platforms" | "reels" | "campaigns";
+
 type SocialAccount = { account_id: string; platform_name: string };
 type DistributionItem = {
   distribution_id: string;
@@ -57,12 +60,14 @@ const Distribution = () => {
   const { toast } = useToast();
   const router = useRouter();
   const { reels } = useReels({ limit: 100 });
-  const { reels: recentDistributedReels, reload: reloadRecentReels } = useReels({ limit: 4, distributedOnly: true });
-  const { campaigns } = useCampaigns();
-  const [recentCampaignIds, setRecentCampaignIds] = useState<string[]>([]);
+  const { reels: distributedReels, loading: distributedReelsLoading, reload: reloadDistributedReels } = useReels({ limit: 200, distributedOnly: true });
+  const { campaigns, loading: campaignsLoading } = useCampaigns();
+  const [distributedCampaignIds, setDistributedCampaignIds] = useState<string[]>([]);
 
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [distributions, setDistributions] = useState<DistributionItem[]>([]);
+  const [matchedReelIds, setMatchedReelIds] = useState<string[]>([]);
+  const [matchedCampaignIds, setMatchedCampaignIds] = useState<string[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [historyExpanded, setHistoryExpanded] = useState(false);
@@ -70,6 +75,9 @@ const Distribution = () => {
   const [filterAccountId, setFilterAccountId] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [page, setPage] = useState(0);
+  const [distributionView, setDistributionView] = useState<DistributionView>("platforms");
+  const [search, setSearch] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const loadAll = useCallback(async (background = false) => {
     if (!background) setLoading(true);
@@ -83,6 +91,7 @@ const Distribution = () => {
       if (filterReelId !== "all") distributionParams.set("reel_id", filterReelId);
       if (filterAccountId !== "all") distributionParams.set("account_id", filterAccountId);
       if (filterStatus !== "all") distributionParams.set("status_filter", filterStatus);
+      if (searchQuery) distributionParams.set("search", searchQuery);
       const [accountsRes, distRes] = await Promise.all([
         fetch(`${API_BASE_URL}/social/accounts`, { headers }),
         fetch(`${API_BASE_URL}/distributions?${distributionParams.toString()}`, { headers }),
@@ -92,13 +101,23 @@ const Distribution = () => {
         const data = await distRes.json();
         setDistributions(data.distributions ?? []);
         setTotal(data.total ?? 0);
+        setMatchedReelIds(data.matched_reel_ids ?? []);
+        setMatchedCampaignIds(data.matched_campaign_ids ?? []);
       }
     } catch (e) {
       console.error("Failed to load distribution data:", e);
     } finally {
       if (!background) setLoading(false);
     }
-  }, [filterAccountId, filterReelId, filterStatus, page]);
+  }, [filterAccountId, filterReelId, filterStatus, page, searchQuery]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearchQuery(search.trim());
+      setPage(0);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     loadAll();
@@ -107,10 +126,10 @@ const Distribution = () => {
   useEffect(() => {
     const headers = authHeaders();
     if (!headers.Authorization) return;
-    fetch(`${API_BASE_URL}/distributions/recent-campaigns?limit=6`, { headers })
+    fetch(`${API_BASE_URL}/distributions/recent-campaigns?limit=200`, { headers })
       .then((res) => (res.ok ? res.json() : { campaign_ids: [] }))
-      .then((data) => setRecentCampaignIds(data.campaign_ids ?? []))
-      .catch(() => setRecentCampaignIds([]));
+      .then((data) => setDistributedCampaignIds(data.campaign_ids ?? []))
+      .catch(() => setDistributedCampaignIds([]));
   }, []);
 
   // Publishing runs in Celery after the page has loaded. Poll only while a
@@ -146,11 +165,17 @@ const Distribution = () => {
     }
   };
 
-  const recentCampaigns = recentCampaignIds
+  const filteredDistributedReels = distributedReels.filter((reel) => matchedReelIds.includes(reel.id));
+  const filteredDistributedCampaigns = distributedCampaignIds
     .map((id) => campaigns.find((c) => c.id === id))
-    .filter((c): c is NonNullable<typeof c> => Boolean(c));
+    .filter((campaign): campaign is NonNullable<typeof campaign> => (
+      campaign !== undefined && matchedCampaignIds.includes(campaign.id)
+    ));
 
   const visibleDistributions = historyExpanded ? distributions : distributions.slice(0, HISTORY_COLLAPSED_SIZE);
+  const hasActiveFilters = Boolean(
+    searchQuery || filterReelId !== "all" || filterAccountId !== "all" || filterStatus !== "all"
+  );
 
   return (
     <div className="min-w-0 space-y-6 sm:space-y-8">
@@ -165,7 +190,7 @@ const Distribution = () => {
         className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-card transition-colors hover:border-primary/30 sm:px-5"
       >
         <span className="min-w-0 truncate text-sm text-foreground">
-          <span className="font-semibold">{accounts.length}/{CONNECTABLE_PLATFORM_COUNT}</span> platforms connected
+          <span className="font-semibold">{accounts.length}/{CONNECTABLE_PLATFORM_COUNT}</span> platforms Connected
         </span>
         <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-primary">
           <Settings2 className="h-3.5 w-3.5" />
@@ -173,43 +198,81 @@ const Distribution = () => {
         </span>
       </Link>
 
-      {/* Distributions */}
-      <motion.div className="min-w-0" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-info" />
-            <h2 className="font-display text-lg font-semibold text-foreground">Distributions</h2>
-          </div>
-          <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:max-w-2xl">
-            <Select value={filterReelId} onValueChange={(value) => { setFilterReelId(value); setPage(0); }}>
-              <SelectTrigger aria-label="Filter by reel"><SelectValue placeholder="All reels" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All reels</SelectItem>
-                {reels.map((reel) => <SelectItem key={reel.id} value={reel.id}>{reel.title.slice(0, 40)}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filterAccountId} onValueChange={(value) => { setFilterAccountId(value); setPage(0); }}>
-              <SelectTrigger aria-label="Filter by account"><SelectValue placeholder="All accounts" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All accounts</SelectItem>
-                {accounts.map((account) => <SelectItem key={account.account_id} value={account.account_id} className="capitalize">{account.platform_name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filterStatus} onValueChange={(value) => { setFilterStatus(value); setPage(0); }}>
-              <SelectTrigger aria-label="Filter by status"><SelectValue placeholder="All statuses" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                {DISTRIBUTION_STATUSES.map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4 text-info" />
+          <h2 className="font-display text-lg font-semibold text-foreground">
+            {distributionView === "platforms" && "Distributed Platforms"}
+            {distributionView === "reels" && "Distributed Reels"}
+            {distributionView === "campaigns" && "Distributed Campaigns"}
+          </h2>
         </div>
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-4 lg:max-w-4xl">
+          <Select value={distributionView} onValueChange={(value) => setDistributionView(value as DistributionView)}>
+            <SelectTrigger className="justify-start gap-2 [&>svg:last-child]:ml-auto" aria-label="Filter by distribution type">
+              <LayoutGrid className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="platforms">Distributed Platforms</SelectItem>
+              <SelectItem value="reels">Distributed Reels</SelectItem>
+              <SelectItem value="campaigns">Distributed Campaigns</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterReelId} onValueChange={(value) => { setFilterReelId(value); setPage(0); }}>
+            <SelectTrigger className="justify-start gap-2 [&>svg:last-child]:ml-auto" aria-label="Filter by reel">
+              <Clapperboard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <SelectValue placeholder="All Reels" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Reels</SelectItem>
+              {reels.map((reel) => <SelectItem key={reel.id} value={reel.id}>{reel.title.slice(0, 40)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterAccountId} onValueChange={(value) => { setFilterAccountId(value); setPage(0); }}>
+            <SelectTrigger className="justify-start gap-2 [&>svg:last-child]:ml-auto" aria-label="Filter by platform">
+              <Share2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <SelectValue placeholder="All Platforms" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Platforms</SelectItem>
+              {accounts.map((account) => <SelectItem key={account.account_id} value={account.account_id} className="capitalize">{account.platform_name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={(value) => { setFilterStatus(value); setPage(0); }}>
+            <SelectTrigger className="justify-start gap-2 [&>svg:last-child]:ml-auto" aria-label="Filter by status">
+              <CircleDot className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              {DISTRIBUTION_STATUSES.map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
+      <div className="relative min-w-[220px]">
+        <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search reels, platforms, or statuses…"
+          aria-label="Search distributions"
+          className="h-10 border-border bg-card pl-10"
+        />
+      </div>
+
+      {/* Distributed Platforms */}
+      {distributionView === "platforms" && (
+        <motion.div className="min-w-0" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         {loading ? (
           <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground sm:p-12 sm:text-base">Loading…</div>
         ) : distributions.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground sm:p-12 sm:text-base">
-            No distributions yet. Publish a completed Reel to a connected account from the Create page.
+            {hasActiveFilters
+              ? "No distributions match your search and filters."
+              : "No distributions yet. Publish a completed Reel to a connected account from the Create page."}
           </div>
         ) : (
           <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-card">
@@ -280,44 +343,51 @@ const Distribution = () => {
             </div>
           </div>
         )}
-      </motion.div>
+        </motion.div>
+      )}
 
-      {/* Recently Distributed Reels */}
-      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="space-y-4">
-        <h2 className="font-display text-lg font-semibold text-foreground">Recently Distributed Reels</h2>
-        {recentDistributedReels.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
-            No reels have been distributed yet.
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {recentDistributedReels.map((reel) => (
-              <ReelCard key={reel.id} reel={reel} onClick={() => router.push(`/distribute/${reel.id}`)} onChanged={reloadRecentReels} />
-            ))}
-          </div>
-        )}
-      </motion.section>
+      {/* Distributed Reels */}
+      {distributionView === "reels" && (
+        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="min-w-0">
+          {loading || distributedReelsLoading ? (
+            <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground sm:p-12 sm:text-base">Loading…</div>
+          ) : filteredDistributedReels.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
+              {hasActiveFilters ? "No distributed reels match your search and filters." : "No reels have been distributed yet."}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              {filteredDistributedReels.map((reel) => (
+                <ReelCard key={reel.id} reel={reel} onClick={() => router.push(`/distribute/${reel.id}`)} onChanged={reloadDistributedReels} />
+              ))}
+            </div>
+          )}
+        </motion.section>
+      )}
 
-      {/* Recently Distributed Campaigns */}
-      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-4">
-        <h2 className="font-display text-lg font-semibold text-foreground">Recently Distributed Campaigns</h2>
-        {recentCampaigns.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
-            No campaigns have been distributed yet.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {recentCampaigns.map((campaign, i) => (
-              <CampaignCard
-                key={campaign.id}
-                campaign={campaign}
-                index={i}
-                onClick={() => router.push(`/distribute/campaign/${campaign.id}`)}
-              />
-            ))}
-          </div>
-        )}
-      </motion.section>
+      {/* Distributed Campaigns */}
+      {distributionView === "campaigns" && (
+        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="min-w-0">
+          {loading || campaignsLoading ? (
+            <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground sm:p-12 sm:text-base">Loading…</div>
+          ) : filteredDistributedCampaigns.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
+              {hasActiveFilters ? "No distributed campaigns match your search and filters." : "No campaigns have been distributed yet."}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredDistributedCampaigns.map((campaign, i) => (
+                <CampaignCard
+                  key={campaign.id}
+                  campaign={campaign}
+                  index={i}
+                  onClick={() => router.push(`/distribute/campaign/${campaign.id}`)}
+                />
+              ))}
+            </div>
+          )}
+        </motion.section>
+      )}
     </div>
   );
 };

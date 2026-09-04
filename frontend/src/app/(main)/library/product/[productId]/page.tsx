@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   List,
   Film,
+  CircleDot,
 } from "lucide-react";
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
@@ -188,7 +189,8 @@ const ProductReels = () => {
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-          <SelectTrigger className="w-full sm:w-[160px] bg-card h-10">
+          <SelectTrigger className="h-10 w-full justify-start gap-2 bg-card sm:w-[160px] [&>svg:last-child]:ml-auto">
+            <CircleDot className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
