@@ -343,10 +343,10 @@ const Distribution = () => {
                     <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_BADGE[d.status] ?? "bg-muted text-muted-foreground ring-1 ring-border"}`}>
                       {d.status}
                     </span>
-                    {d.scheduled_time && (
+                    {(d.scheduled_time || d.created_at) && (
                       <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
                         <Clock className="h-3.5 w-3.5" />
-                        {new Date(d.scheduled_time).toLocaleString()}
+                        {new Date((d.scheduled_time || d.created_at) as string).toLocaleString()}
                       </span>
                     )}
                     {(d.status === "Pending" || d.status === "Failed") && (
