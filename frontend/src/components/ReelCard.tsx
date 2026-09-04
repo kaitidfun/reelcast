@@ -109,9 +109,15 @@ export function ReelCard({ reel, onClick, onChanged }: { reel: ReelCardData; onC
             {reel.status}
           </Badge>
         </div>
-        {reel.status === "Completed" && !reel.hasDistribution && (
-          <div className="absolute bottom-2 left-2 rounded-full bg-background/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground backdrop-blur">
-            Not published
+        {reel.status === "Completed" && (
+          <div
+            className={`absolute bottom-2 left-2 rounded-full px-2 py-0.5 text-[10px] font-medium backdrop-blur ${
+              reel.hasDistribution
+                ? "bg-success/20 text-success"
+                : "bg-background/70 text-muted-foreground"
+            }`}
+          >
+            {reel.hasDistribution ? "Published" : "Not published"}
           </div>
         )}
         {reel.thumbnail && (

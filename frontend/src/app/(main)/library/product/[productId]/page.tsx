@@ -94,6 +94,7 @@ const ProductReels = () => {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [publishFilter, setPublishFilter] = useState<string>("all");
   const [view, setView] = useState<"grid" | "list">("grid");
 
   const filteredReels = useMemo(() => {
@@ -101,9 +102,12 @@ const ProductReels = () => {
     return reels.filter((r) => {
       const matchesSearch = !q || r.title.toLowerCase().includes(q);
       const matchesStatus = statusFilter === "all" || r.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesPublish =
+        publishFilter === "all" ||
+        (publishFilter === "published" ? r.hasDistribution : !r.hasDistribution);
+      return matchesSearch && matchesStatus && matchesPublish;
     });
-  }, [reels, search, statusFilter]);
+  }, [reels, search, statusFilter, publishFilter]);
 
   if (loading) {
     return <div className="p-12 text-center text-muted-foreground">Loading...</div>;
@@ -197,6 +201,16 @@ const ProductReels = () => {
             <SelectItem value="Generating">Generating</SelectItem>
             <SelectItem value="Pending">Pending</SelectItem>
             <SelectItem value="Failed">Failed</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={publishFilter} onValueChange={setPublishFilter}>
+          <SelectTrigger className="w-full sm:w-[170px] bg-card h-10">
+            <SelectValue placeholder="Publish status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Published or not</SelectItem>
+            <SelectItem value="published">Published</SelectItem>
+            <SelectItem value="unpublished">Not published</SelectItem>
           </SelectContent>
         </Select>
         <ToggleGroup
