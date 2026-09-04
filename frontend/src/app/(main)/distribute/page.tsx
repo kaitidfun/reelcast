@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Send, Clock, Trash2, Search, Settings2, List, Layers } from "lucide-react";
+import { Send, Clock, Trash2, Search, Settings2, List, Layers, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -220,7 +220,7 @@ const Distribution = () => {
       >
         <div className="flex min-w-0 items-center gap-3">
           <span className="min-w-0 truncate text-sm text-foreground">
-            <span className="font-semibold">{accounts.length}/{CONNECTABLE_PLATFORM_COUNT}</span> platforms connected
+            <span className="font-semibold">{accounts.length}/{CONNECTABLE_PLATFORM_COUNT}</span> Platforms Connected
           </span>
           <div className="flex items-center gap-1.5">
             {PLATFORM_OPTIONS.map((p) => {
@@ -264,7 +264,7 @@ const Distribution = () => {
                 <List className="!h-3.5 !w-3.5" /> List
               </ToggleGroupItem>
               <ToggleGroupItem value="grouped" aria-label="Grouped by reel" className="h-8 gap-1.5 rounded-md px-2.5 text-xs data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-                <Layers className="!h-3.5 !w-3.5" /> By reel
+                <Layers className="!h-3.5 !w-3.5" /> By Reel
               </ToggleGroupItem>
             </ToggleGroup>
             {STATUS_CHIPS.map((chip) => (
@@ -293,11 +293,12 @@ const Distribution = () => {
               />
             </div>
             <Select value={filterAccountId} onValueChange={setFilterAccountId}>
-              <SelectTrigger aria-label="Filter by platform" className="h-9 w-[150px] shrink-0 text-xs">
+              <SelectTrigger aria-label="Filter by platform" className="h-9 w-[150px] shrink-0 justify-start gap-2 text-xs [&>svg:last-child]:ml-auto">
+                <Share2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <SelectValue placeholder="All platforms" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All platforms</SelectItem>
+                <SelectItem value="all">All Platforms</SelectItem>
                 {accounts.map((account) => <SelectItem key={account.account_id} value={account.account_id} className="capitalize">{account.platform_name}</SelectItem>)}
               </SelectContent>
             </Select>
