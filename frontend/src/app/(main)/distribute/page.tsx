@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Clock, Search, Settings2 } from "lucide-react";
+import { Send, Clock, Trash2, Search, Settings2, List, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,17 +14,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useToast } from "@/hooks/use-toast";
 import { useReels } from "@/hooks/useReels";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { API_BASE_URL } from "@/lib/api";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { PLATFORM_OPTIONS } from "@/lib/platforms";
+import { platformLabel, PLATFORM_OPTIONS } from "@/lib/platforms";
 import { ReelCard } from "@/components/ReelCard";
 import { CampaignCard } from "@/components/CampaignCard";
 
 const HISTORY_COLLAPSED_SIZE = 5;
 const CONNECTABLE_PLATFORM_COUNT = 4;
 
+const STATUS_BADGE: Record<string, string> = {
+  Pending: "bg-warning/10 text-warning ring-1 ring-warning/20",
+  Uploading: "bg-info/10 text-info ring-1 ring-info/20",
+  Published: "bg-success/10 text-success ring-1 ring-success/20",
+  Failed: "bg-destructive/10 text-destructive ring-1 ring-destructive/20",
+};
 const PLATFORM_BADGE: Record<string, string> = {
   Pending: "bg-warning/15 text-warning ring-warning/30",
   Uploading: "bg-info/15 text-info ring-info/30",
@@ -32,10 +40,22 @@ const PLATFORM_BADGE: Record<string, string> = {
   Failed: "bg-destructive/15 text-destructive ring-destructive/30",
 };
 
+const DISTRIBUTION_STATUSES = ["Pending", "Uploading", "Published", "Failed"];
 const STATUS_CHIPS = ["all", "Pending", "Uploading", "Published", "Failed"] as const;
 const PAGE_SIZE = 10;
 
 type SocialAccount = { account_id: string; platform_name: string };
+type DistributionItem = {
+  distribution_id: string;
+  reel_id: string | null;
+  account_id: string | null;
+  scheduled_time: string | null;
+  status: string;
+  error_message: string | null;
+  reel_prompt: string | null;
+  reel_name: string | null;
+  platform_name: string | null;
+};
 type PlatformDistribution = {
   distribution_id: string;
   account_id: string | null;
@@ -60,57 +80,92 @@ const authHeaders = (): Record<string, string> => {
 };
 
 const Distribution = () => {
+  const { toast } = useToast();
   const router = useRouter();
+  const { reels } = useReels({ limit: 100 });
   const { reels: recentDistributedReels, reload: reloadRecentReels } = useReels({ limit: 4, distributedOnly: true });
   const { campaigns } = useCampaigns();
   const [recentCampaignIds, setRecentCampaignIds] = useState<string[]>([]);
 
+  const [viewMode, setViewMode] = useState<"flat" | "grouped">("flat");
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
-  const [groups, setGroups] = useState<ReelDistributionGroup[]>([]);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [filterAccountId, setFilterAccountId] = useState("all");
+  const [page, setPage] = useState(0);
+
+  // Flat (default) view — one row per platform per reel, same as before.
+  const [distributions, setDistributions] = useState<DistributionItem[]>([]);
+  const [distTotal, setDistTotal] = useState(0);
+  const [filterReelId, setFilterReelId] = useState("all");
+  const [filterStatusFlat, setFilterStatusFlat] = useState("all");
+
+  // Grouped view — one row per reel, opt-in via the toggle.
+  const [groups, setGroups] = useState<ReelDistributionGroup[]>([]);
+  const [groupsTotal, setGroupsTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [filterAccountId, setFilterAccountId] = useState("all");
-  const [filterStatus, setFilterStatus] = useState<(typeof STATUS_CHIPS)[number]>("all");
-  const [page, setPage] = useState(0);
+  const [filterStatusGrouped, setFilterStatusGrouped] = useState<(typeof STATUS_CHIPS)[number]>("all");
 
   // Debounce search typing before it drives a fetch.
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 350);
     return () => window.clearTimeout(timer);
   }, [search]);
-  useEffect(() => { setPage(0); }, [debouncedSearch, filterAccountId, filterStatus]);
+  useEffect(() => {
+    setPage(0);
+  }, [viewMode, filterAccountId, filterReelId, filterStatusFlat, debouncedSearch, filterStatusGrouped]);
 
   const loadAll = useCallback(async (background = false) => {
     if (!background) setLoading(true);
     try {
       const headers = authHeaders();
       if (!headers.Authorization) return;
-      const groupParams = new URLSearchParams({
-        skip: String(page * PAGE_SIZE),
-        limit: String(PAGE_SIZE),
-      });
-      if (debouncedSearch) groupParams.set("search", debouncedSearch);
-      if (filterAccountId !== "all") groupParams.set("account_id", filterAccountId);
-      if (filterStatus !== "all") groupParams.set("status_filter", filterStatus);
-      const [accountsRes, groupsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/social/accounts`, { headers }),
-        fetch(`${API_BASE_URL}/distributions/by-reel?${groupParams.toString()}`, { headers }),
-      ]);
-      if (accountsRes.ok) setAccounts((await accountsRes.json()).accounts ?? []);
-      if (groupsRes.ok) {
-        const data = await groupsRes.json();
-        setGroups(data.reels ?? []);
-        setTotal(data.total ?? 0);
+      const accountsPromise = fetch(`${API_BASE_URL}/social/accounts`, { headers });
+
+      if (viewMode === "flat") {
+        const distributionParams = new URLSearchParams({
+          skip: String(page * PAGE_SIZE),
+          limit: String(PAGE_SIZE),
+        });
+        if (filterReelId !== "all") distributionParams.set("reel_id", filterReelId);
+        if (filterAccountId !== "all") distributionParams.set("account_id", filterAccountId);
+        if (filterStatusFlat !== "all") distributionParams.set("status_filter", filterStatusFlat);
+        const [accountsRes, distRes] = await Promise.all([
+          accountsPromise,
+          fetch(`${API_BASE_URL}/distributions?${distributionParams.toString()}`, { headers }),
+        ]);
+        if (accountsRes.ok) setAccounts((await accountsRes.json()).accounts ?? []);
+        if (distRes.ok) {
+          const data = await distRes.json();
+          setDistributions(data.distributions ?? []);
+          setDistTotal(data.total ?? 0);
+        }
+      } else {
+        const groupParams = new URLSearchParams({
+          skip: String(page * PAGE_SIZE),
+          limit: String(PAGE_SIZE),
+        });
+        if (debouncedSearch) groupParams.set("search", debouncedSearch);
+        if (filterAccountId !== "all") groupParams.set("account_id", filterAccountId);
+        if (filterStatusGrouped !== "all") groupParams.set("status_filter", filterStatusGrouped);
+        const [accountsRes, groupsRes] = await Promise.all([
+          accountsPromise,
+          fetch(`${API_BASE_URL}/distributions/by-reel?${groupParams.toString()}`, { headers }),
+        ]);
+        if (accountsRes.ok) setAccounts((await accountsRes.json()).accounts ?? []);
+        if (groupsRes.ok) {
+          const data = await groupsRes.json();
+          setGroups(data.reels ?? []);
+          setGroupsTotal(data.total ?? 0);
+        }
       }
     } catch (e) {
       console.error("Failed to load distribution data:", e);
     } finally {
       if (!background) setLoading(false);
     }
-  }, [filterAccountId, filterStatus, debouncedSearch, page]);
+  }, [viewMode, filterAccountId, filterReelId, filterStatusFlat, filterStatusGrouped, debouncedSearch, page]);
 
   useEffect(() => {
     loadAll();
@@ -128,17 +183,53 @@ const Distribution = () => {
   // Publishing runs in Celery after the page has loaded. Poll only while a
   // distribution is active so the final status appears without a manual reload.
   useEffect(() => {
-    const anyUploading = groups.some((group) => group.platforms.some((p) => p.status === "Uploading"));
+    const anyUploading =
+      viewMode === "flat"
+        ? distributions.some((d) => d.status === "Uploading")
+        : groups.some((group) => group.platforms.some((p) => p.status === "Uploading"));
     if (!anyUploading) return;
     const timer = window.setInterval(() => { void loadAll(true); }, 5000);
     return () => window.clearInterval(timer);
-  }, [groups, loadAll]);
+  }, [viewMode, distributions, groups, loadAll]);
+
+  const handleCancel = async (distributionId: string) => {
+    const res = await fetch(`${API_BASE_URL}/distributions/${distributionId}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    if (res.ok) {
+      toast({ title: "Cancelled" });
+      loadAll();
+    }
+  };
+
+  const handlePublishNow = async (distributionId: string) => {
+    const res = await fetch(`${API_BASE_URL}/distributions/${distributionId}/publish-now`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    if (res.ok) {
+      toast({ title: "Publishing…" });
+      loadAll();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast({ title: "Could not publish", description: err.detail, variant: "destructive" });
+    }
+  };
 
   const recentCampaigns = recentCampaignIds
     .map((id) => campaigns.find((c) => c.id === id))
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
 
+  const total = viewMode === "flat" ? distTotal : groupsTotal;
+  const visibleDistributions = historyExpanded ? distributions : distributions.slice(0, HISTORY_COLLAPSED_SIZE);
   const visibleGroups = historyExpanded ? groups : groups.slice(0, HISTORY_COLLAPSED_SIZE);
+  const isEmpty = viewMode === "flat" ? distributions.length === 0 : groups.length === 0;
+  const rowCount = viewMode === "flat" ? distributions.length : groups.length;
+  const filtersActive =
+    viewMode === "flat"
+      ? filterReelId !== "all" || filterAccountId !== "all" || filterStatusFlat !== "all"
+      : Boolean(search) || filterStatusGrouped !== "all" || filterAccountId !== "all";
 
   return (
     <div className="min-w-0 space-y-6 sm:space-y-8">
@@ -181,57 +272,150 @@ const Distribution = () => {
 
       {/* Distributions */}
       <motion.div className="min-w-0" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <div className="mb-4 flex items-center gap-2">
-          <Clock className="h-4 w-4 text-info" />
-          <h2 className="font-display text-lg font-semibold text-foreground">Distributions</h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-info" />
+            <h2 className="font-display text-lg font-semibold text-foreground">Distributions</h2>
+          </div>
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(v) => v && setViewMode(v as "flat" | "grouped")}
+            className="bg-card border border-border rounded-lg p-0.5 h-9"
+          >
+            <ToggleGroupItem value="flat" aria-label="Flat list" className="h-8 gap-1.5 rounded-md px-2.5 text-xs data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+              <List className="!h-3.5 !w-3.5" /> List
+            </ToggleGroupItem>
+            <ToggleGroupItem value="grouped" aria-label="Grouped by reel" className="h-8 gap-1.5 rounded-md px-2.5 text-xs data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+              <Layers className="!h-3.5 !w-3.5" /> By reel
+            </ToggleGroupItem>
+          </ToggleGroup>
         </div>
 
-        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {STATUS_CHIPS.map((chip) => (
-              <button
-                key={chip}
-                type="button"
-                onClick={() => setFilterStatus(chip)}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  filterStatus === chip
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground hover:bg-muted/70"
-                }`}
-              >
-                {chip === "all" ? "All" : chip}
-              </button>
-            ))}
-          </div>
-          <div className="flex w-full gap-2 sm:w-auto">
-            <div className="relative min-w-0 flex-1 sm:w-56">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search reels…"
-                className="h-9 pl-8 text-xs"
-              />
-            </div>
-            <Select value={filterAccountId} onValueChange={setFilterAccountId}>
-              <SelectTrigger aria-label="Filter by platform" className="h-9 w-[150px] shrink-0 text-xs">
-                <SelectValue placeholder="All platforms" />
-              </SelectTrigger>
+        {viewMode === "flat" ? (
+          <div className="mb-4 grid w-full grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:max-w-2xl">
+            <Select value={filterReelId} onValueChange={setFilterReelId}>
+              <SelectTrigger aria-label="Filter by reel"><SelectValue placeholder="All reels" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All platforms</SelectItem>
+                <SelectItem value="all">All reels</SelectItem>
+                {reels.map((reel) => <SelectItem key={reel.id} value={reel.id}>{reel.title.slice(0, 40)}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterAccountId} onValueChange={setFilterAccountId}>
+              <SelectTrigger aria-label="Filter by account"><SelectValue placeholder="All accounts" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All accounts</SelectItem>
                 {accounts.map((account) => <SelectItem key={account.account_id} value={account.account_id} className="capitalize">{account.platform_name}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Select value={filterStatusFlat} onValueChange={setFilterStatusFlat}>
+              <SelectTrigger aria-label="Filter by status"><SelectValue placeholder="All statuses" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {DISTRIBUTION_STATUSES.map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
-        </div>
+        ) : (
+          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {STATUS_CHIPS.map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => setFilterStatusGrouped(chip)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                    filterStatusGrouped === chip
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/70"
+                  }`}
+                >
+                  {chip === "all" ? "All" : chip}
+                </button>
+              ))}
+            </div>
+            <div className="flex w-full gap-2 sm:w-auto">
+              <div className="relative min-w-0 flex-1 sm:w-56">
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search reels…"
+                  className="h-9 pl-8 text-xs"
+                />
+              </div>
+              <Select value={filterAccountId} onValueChange={setFilterAccountId}>
+                <SelectTrigger aria-label="Filter by platform" className="h-9 w-[150px] shrink-0 text-xs">
+                  <SelectValue placeholder="All platforms" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All platforms</SelectItem>
+                  {accounts.map((account) => <SelectItem key={account.account_id} value={account.account_id} className="capitalize">{account.platform_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground sm:p-12 sm:text-base">Loading…</div>
-        ) : groups.length === 0 ? (
+        ) : isEmpty ? (
           <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground sm:p-12 sm:text-base">
-            {search || filterStatus !== "all" || filterAccountId !== "all"
+            {filtersActive
               ? "No distributions match your filters."
               : "No distributions yet. Publish a completed Reel to a connected account from the Create page."}
+          </div>
+        ) : viewMode === "flat" ? (
+          <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-card">
+            <div className="divide-y divide-border">
+              {visibleDistributions.map((d, i) => (
+                <motion.div
+                  key={d.distribution_id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: Math.min(i * 0.04, 0.3) }}
+                  onClick={() => d.reel_id && router.push(`/distribute/${d.reel_id}`)}
+                  className={`flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-4 sm:px-6 sm:py-4 ${d.reel_id ? "cursor-pointer hover:bg-muted/20" : ""} transition-colors`}
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${
+                      d.status === "Published" ? "bg-success/10 ring-success/20" : "bg-info/10 ring-info/20"
+                    }`}>
+                      <Send className={`h-4 w-4 ${d.status === "Published" ? "text-success" : "text-info"}`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">{d.reel_name || d.reel_prompt || "(reel)"}</p>
+                      <p className="flex items-center gap-1 break-words text-xs text-muted-foreground capitalize">
+                        <PlatformIcon platform={d.platform_name ?? ""} className="h-3 w-3 shrink-0" />
+                        {platformLabel(d.platform_name)}
+                        {d.error_message ? ` — ${d.error_message}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3" onClick={(e) => e.stopPropagation()}>
+                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_BADGE[d.status] ?? "bg-muted text-muted-foreground ring-1 ring-border"}`}>
+                      {d.status}
+                    </span>
+                    {d.scheduled_time && (
+                      <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="h-3.5 w-3.5" />
+                        {new Date(d.scheduled_time).toLocaleString()}
+                      </span>
+                    )}
+                    {(d.status === "Pending" || d.status === "Failed") && (
+                      <Button variant="outline" size="sm" onClick={() => handlePublishNow(d.distribution_id)} className="flex-1 sm:flex-none">
+                        Publish now
+                      </Button>
+                    )}
+                    {d.status !== "Uploading" && d.status !== "Published" && (
+                      <Button variant="ghost" size="icon" onClick={() => handleCancel(d.distribution_id)} title="Cancel">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-card">
@@ -268,7 +452,7 @@ const Distribution = () => {
           </div>
         )}
 
-        {!historyExpanded && groups.length > HISTORY_COLLAPSED_SIZE && (
+        {!historyExpanded && rowCount > HISTORY_COLLAPSED_SIZE && (
           <div className="mt-4 flex justify-center">
             <Button variant="outline" size="sm" onClick={() => setHistoryExpanded(true)}>Show all</Button>
           </div>
