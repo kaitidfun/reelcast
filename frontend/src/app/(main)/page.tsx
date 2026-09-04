@@ -11,6 +11,16 @@ import { useCampaigns } from "@/hooks/useCampaigns";
 import { ReelCard } from "@/components/ReelCard";
 import { CampaignCard } from "@/components/CampaignCard";
 import { reelClickTarget } from "@/lib/reel-status";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const RECENT_REELS_COLLAPSED_SIZE = 4;
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -22,15 +32,24 @@ export default function Home() {
   const router = useRouter();
   const firstName = user?.displayName?.split(" ")[0] ?? "Creator";
   const [searchQuery, setSearchQuery] = useState("");
+  const [publishFilter, setPublishFilter] = useState("all");
+  const [reelsExpanded, setReelsExpanded] = useState(false);
   const { reels, loading: reelsLoading, reload: reloadReels } = useReels();
   const { campaigns } = useCampaigns();
   const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
   const isSearching = normalizedQuery.length > 0;
-  const visibleReels = (isSearching
-    ? reels.filter((reel) =>
+  const publishFilteredReels = reels.filter(
+    (reel) =>
+      publishFilter === "all" ||
+      (publishFilter === "published" ? reel.hasDistribution : !reel.hasDistribution),
+  );
+  const visibleReels = isSearching
+    ? publishFilteredReels.filter((reel) =>
         [reel.title, reel.status].some((value) => value.toLocaleLowerCase().includes(normalizedQuery)),
       )
-    : reels.slice(0, 4));
+    : reelsExpanded
+      ? publishFilteredReels
+      : publishFilteredReels.slice(0, RECENT_REELS_COLLAPSED_SIZE);
   const visibleCampaigns = campaigns.filter((campaign) =>
     [campaign.name, campaign.description, ...campaign.products.map((product) => product.name)].some((value) =>
       value.toLocaleLowerCase().includes(normalizedQuery),
@@ -52,26 +71,38 @@ export default function Home() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Here's what's happening in your studio today.</p>
         </div>
-        <div className="relative w-full sm:max-w-md">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search videos, products, campaigns…"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            aria-label="Search videos, products, and campaigns"
-            className="w-full rounded-full border border-border bg-card pl-11 pr-5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
-          />
-          {isSearching && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label="Clear search"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
+        <div className="flex w-full gap-2 sm:max-w-lg">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search videos, products, campaigns…"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              aria-label="Search videos, products, and campaigns"
+              className="w-full rounded-full border border-border bg-card pl-11 pr-5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+            />
+            {isSearching && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <Select value={publishFilter} onValueChange={setPublishFilter}>
+            <SelectTrigger className="h-[42px] w-[150px] shrink-0 rounded-full bg-card text-xs">
+              <SelectValue placeholder="Publish status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Published or not</SelectItem>
+              <SelectItem value="published">Published</SelectItem>
+              <SelectItem value="unpublished">Not published</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </motion.div>
 
@@ -114,11 +145,9 @@ export default function Home() {
       <motion.section {...fadeUp} transition={{ duration: 0.4, delay: 0.2 }} className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold text-foreground">Recent Videos</h2>
-          {!isSearching && reels.length > 4 && (
-            <Link href="/reels" className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
-              View all
-            </Link>
-          )}
+          <Link href="/reels" className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+            View all
+          </Link>
         </div>
         {reelsLoading ? (
           <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
@@ -133,6 +162,11 @@ export default function Home() {
             {visibleReels.map((reel) => (
               <ReelCard key={reel.id} reel={reel} onClick={() => router.push(reelClickTarget(reel))} onChanged={reloadReels} />
             ))}
+          </div>
+        )}
+        {!isSearching && !reelsExpanded && publishFilteredReels.length > RECENT_REELS_COLLAPSED_SIZE && (
+          <div className="flex justify-center">
+            <Button variant="outline" size="sm" onClick={() => setReelsExpanded(true)}>Show all</Button>
           </div>
         )}
       </motion.section>

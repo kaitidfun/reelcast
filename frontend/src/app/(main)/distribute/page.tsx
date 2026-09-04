@@ -25,6 +25,8 @@ import { ReelCard } from "@/components/ReelCard";
 import { CampaignCard } from "@/components/CampaignCard";
 
 const HISTORY_COLLAPSED_SIZE = 5;
+const RECENT_REELS_COLLAPSED_SIZE = 4;
+const RECENT_CAMPAIGNS_COLLAPSED_SIZE = 6;
 const CONNECTABLE_PLATFORM_COUNT = 4;
 
 const STATUS_BADGE: Record<string, string> = {
@@ -77,9 +79,11 @@ const authHeaders = (): Record<string, string> => {
 const Distribution = () => {
   const { toast } = useToast();
   const router = useRouter();
-  const { reels: recentDistributedReels, reload: reloadRecentReels } = useReels({ limit: 4, distributedOnly: true });
+  const { reels: recentDistributedReels, reload: reloadRecentReels } = useReels({ limit: 20, distributedOnly: true });
   const { campaigns } = useCampaigns();
   const [recentCampaignIds, setRecentCampaignIds] = useState<string[]>([]);
+  const [reelsExpanded, setReelsExpanded] = useState(false);
+  const [campaignsExpanded, setCampaignsExpanded] = useState(false);
 
   const [viewMode, setViewMode] = useState<"flat" | "grouped">("flat");
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
@@ -138,7 +142,7 @@ const Distribution = () => {
   useEffect(() => {
     const headers = authHeaders();
     if (!headers.Authorization) return;
-    fetch(`${API_BASE_URL}/distributions/recent-campaigns?limit=6`, { headers })
+    fetch(`${API_BASE_URL}/distributions/recent-campaigns?limit=20`, { headers })
       .then((res) => (res.ok ? res.json() : { campaign_ids: [] }))
       .then((data) => setRecentCampaignIds(data.campaign_ids ?? []))
       .catch(() => setRecentCampaignIds([]));
@@ -421,9 +425,14 @@ const Distribution = () => {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {recentDistributedReels.map((reel) => (
+            {(reelsExpanded ? recentDistributedReels : recentDistributedReels.slice(0, RECENT_REELS_COLLAPSED_SIZE)).map((reel) => (
               <ReelCard key={reel.id} reel={reel} onClick={() => router.push(`/distribute/${reel.id}`)} onChanged={reloadRecentReels} />
             ))}
+          </div>
+        )}
+        {!reelsExpanded && recentDistributedReels.length > RECENT_REELS_COLLAPSED_SIZE && (
+          <div className="flex justify-center">
+            <Button variant="outline" size="sm" onClick={() => setReelsExpanded(true)}>Show all</Button>
           </div>
         )}
       </motion.section>
@@ -437,7 +446,7 @@ const Distribution = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {recentCampaigns.map((campaign, i) => (
+            {(campaignsExpanded ? recentCampaigns : recentCampaigns.slice(0, RECENT_CAMPAIGNS_COLLAPSED_SIZE)).map((campaign, i) => (
               <CampaignCard
                 key={campaign.id}
                 campaign={campaign}
@@ -445,6 +454,11 @@ const Distribution = () => {
                 onClick={() => router.push(`/distribute/campaign/${campaign.id}`)}
               />
             ))}
+          </div>
+        )}
+        {!campaignsExpanded && recentCampaigns.length > RECENT_CAMPAIGNS_COLLAPSED_SIZE && (
+          <div className="flex justify-center">
+            <Button variant="outline" size="sm" onClick={() => setCampaignsExpanded(true)}>Show all</Button>
           </div>
         )}
       </motion.section>
