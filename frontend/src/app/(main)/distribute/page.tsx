@@ -18,7 +18,7 @@ import { useReels } from "@/hooks/useReels";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { API_BASE_URL } from "@/lib/api";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { platformLabel } from "@/lib/platforms";
+import { platformLabel, PLATFORM_OPTIONS } from "@/lib/platforms";
 import { ReelCard } from "@/components/ReelCard";
 import { CampaignCard } from "@/components/CampaignCard";
 
@@ -162,11 +162,29 @@ const Distribution = () => {
       {/* Connection status strip — full connect/disconnect controls live on Settings now */}
       <Link
         href="/account"
-        className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-card transition-colors hover:border-primary/30 sm:px-5"
+        className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-card transition-colors hover:border-primary/30 sm:px-5"
       >
-        <span className="min-w-0 truncate text-sm text-foreground">
-          <span className="font-semibold">{accounts.length}/{CONNECTABLE_PLATFORM_COUNT}</span> platforms connected
-        </span>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="min-w-0 truncate text-sm text-foreground">
+            <span className="font-semibold">{accounts.length}/{CONNECTABLE_PLATFORM_COUNT}</span> platforms connected
+          </span>
+          <div className="flex items-center gap-1.5">
+            {PLATFORM_OPTIONS.map((p) => {
+              const connected = accounts.some((a) => a.platform_name === p.name);
+              return (
+                <span
+                  key={p.id}
+                  title={`${p.label}${connected ? " — connected" : " — not connected"}`}
+                  className={`flex h-7 w-7 items-center justify-center rounded-lg ${
+                    connected ? `${p.activeBg} ${p.color}` : "bg-muted text-muted-foreground/40"
+                  }`}
+                >
+                  <PlatformIcon platform={p.name} className="h-3.5 w-3.5" />
+                </span>
+              );
+            })}
+          </div>
+        </div>
         <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-primary">
           <Settings2 className="h-3.5 w-3.5" />
           Manage in Settings

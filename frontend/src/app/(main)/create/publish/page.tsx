@@ -294,41 +294,41 @@ const PublishReelContent = () => {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display text-xl font-bold text-foreground sm:text-2xl">Publish</h1>
-          <p className="text-xs text-muted-foreground sm:text-sm">Write a caption and share this reel to your connected accounts.</p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => router.push(`/create?reelId=${reelId}`)}
-          className="gap-1.5 text-xs"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-          Edit reel
-        </Button>
+      <div className="mb-4">
+        <h1 className="font-display text-xl font-bold text-foreground sm:text-2xl">Publish</h1>
+        <p className="text-xs text-muted-foreground sm:text-sm">Write a caption and share this reel to your connected accounts.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         {/* LEFT: read-only video preview */}
         <div className="lg:col-span-2">
-          <div className="rounded-3xl border border-border bg-gradient-to-b from-card to-card/60 p-3 shadow-elevated lg:sticky lg:top-4">
-            <div className="relative mx-auto aspect-[9/16] max-w-[300px] overflow-hidden rounded-[28px] border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 ring-1 ring-inset ring-white/5">
-              {videoUrl ? (
-                <video
-                  src={rawVideoUrl ?? videoUrl}
-                  className="absolute inset-0 h-full w-full object-cover"
-                  controls
-                  loop
-                  playsInline
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center p-4 text-center text-xs text-muted-foreground">
-                  No video for this reel yet.
-                </div>
-              )}
+          <div className="space-y-2 lg:sticky lg:top-4">
+            <div className="rounded-3xl border border-border bg-gradient-to-b from-card to-card/60 p-3 shadow-elevated">
+              <div className="relative mx-auto aspect-[9/16] max-w-[300px] overflow-hidden rounded-[28px] border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 ring-1 ring-inset ring-white/5">
+                {videoUrl ? (
+                  <video
+                    src={rawVideoUrl ?? videoUrl}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    controls
+                    loop
+                    playsInline
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center p-4 text-center text-xs text-muted-foreground">
+                    No video for this reel yet.
+                  </div>
+                )}
+              </div>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push(`/create?reelId=${reelId}`)}
+              className="w-full gap-1.5 text-xs"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit reel
+            </Button>
           </div>
         </div>
 

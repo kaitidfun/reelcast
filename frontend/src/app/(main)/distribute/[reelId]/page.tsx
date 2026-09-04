@@ -27,6 +27,7 @@ type DistributionItem = {
   platform_name: string | null;
   reel_prompt: string | null;
   reel_name: string | null;
+  created_at: string | null;
 };
 
 const authHeaders = (): Record<string, string> => {
@@ -168,6 +169,12 @@ const DistributionCard = ({ item, onChanged }: { item: DistributionItem; onChang
           ) : (
             <span>Posted — check the {platformLabel(item.platform_name)} app to view it</span>
           )}
+          {(item.scheduled_time || item.created_at) && (
+            <span className="flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5" />
+              {formatDateTime(item.scheduled_time || item.created_at)}
+            </span>
+          )}
         </div>
       )}
 
@@ -175,6 +182,12 @@ const DistributionCard = ({ item, onChanged }: { item: DistributionItem; onChang
       {item.status === "Failed" && (
         <div className="space-y-2">
           {item.error_message && <p className="text-xs text-destructive/90">{item.error_message}</p>}
+          {(item.scheduled_time || item.created_at) && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              {formatDateTime(item.scheduled_time || item.created_at)}
+            </span>
+          )}
           <Button size="sm" variant="outline" onClick={publishNow} disabled={busy} className="h-8 gap-1.5 text-xs">
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
             Retry
@@ -288,50 +301,70 @@ const DistributeStatusContent = () => {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/distribute")} aria-label="Back to Distribute">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div className="min-w-0">
-            <h1 className="font-display text-xl font-bold text-foreground sm:text-2xl truncate">{reelTitle}</h1>
-            <p className="text-xs text-muted-foreground sm:text-sm">Distribution status across your connected platforms.</p>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push(`/create/publish?reelId=${reelId}`)}
-            className="gap-1.5 text-xs"
-          >
-            <Send className="h-3.5 w-3.5" />
-            Publish to more platforms
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push(`/create?reelId=${reelId}`)}
-            className="gap-1.5 text-xs"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-            Edit reel
-          </Button>
+      <div className="mb-4 flex min-w-0 items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={() => router.push("/distribute")} aria-label="Back to Distribute">
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div className="min-w-0">
+          <h1 className="font-display text-xl font-bold text-foreground sm:text-2xl truncate">{reelTitle}</h1>
+          <p className="text-xs text-muted-foreground sm:text-sm">Distribution status across your connected platforms.</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-5">
         {videoUrl && (
-          <div className="lg:col-span-2 lg:sticky lg:top-4">
+          <div className="space-y-2 lg:col-span-2 lg:sticky lg:top-4">
             <div className="rounded-3xl border border-border bg-gradient-to-b from-card to-card/60 p-3 shadow-elevated">
               <div className="relative mx-auto aspect-[9/16] max-w-[300px] overflow-hidden rounded-[28px] border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 ring-1 ring-inset ring-white/5">
                 <video src={videoUrl} className="absolute inset-0 h-full w-full object-cover" controls loop playsInline muted />
               </div>
             </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/create/publish?reelId=${reelId}`)}
+                className="flex-1 gap-1.5 text-xs"
+              >
+                <Send className="h-3.5 w-3.5" />
+                Publish to more platforms
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/create?reelId=${reelId}`)}
+                className="flex-1 gap-1.5 text-xs"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit reel
+              </Button>
+            </div>
           </div>
         )}
 
         <div className={`space-y-3 ${videoUrl ? "lg:col-span-3" : "lg:col-span-5"}`}>
+          {!videoUrl && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/create/publish?reelId=${reelId}`)}
+                className="gap-1.5 text-xs"
+              >
+                <Send className="h-3.5 w-3.5" />
+                Publish to more platforms
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/create?reelId=${reelId}`)}
+                className="gap-1.5 text-xs"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit reel
+              </Button>
+            </div>
+          )}
           {items.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
               No distributions found for this reel.{" "}
