@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Plus, X } from "lucide-react";
+import { Search, Plus, Send } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,6 +12,7 @@ import { ReelCard } from "@/components/ReelCard";
 import { CampaignCard } from "@/components/CampaignCard";
 import { reelClickTarget } from "@/lib/reel-status";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -103,31 +104,21 @@ export default function Home() {
         </Link>
       </motion.div>
 
-      {/* Search + filter — sits above Recent Videos, applies to both sections below */}
+      {/* Search + filter — sits above Recently Reels, applies to both sections below */}
       <motion.div {...fadeUp} transition={{ duration: 0.4, delay: 0.15 }} className="flex gap-2">
         <div className="relative min-w-0 flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search videos, products, campaigns…"
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search reels, products, campaigns…"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            aria-label="Search videos, products, and campaigns"
-            className="w-full rounded-full border border-border bg-card pl-11 pr-5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+            aria-label="Search reels, products, and campaigns"
+            className="h-9 pl-8 text-xs"
           />
-          {isSearching && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label="Clear search"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
         </div>
         <Select value={publishFilter} onValueChange={setPublishFilter}>
-          <SelectTrigger className="h-[42px] w-[150px] shrink-0 rounded-full bg-card text-xs">
+          <SelectTrigger aria-label="Filter by publish status" className="h-9 w-[180px] shrink-0 justify-start gap-2 text-xs [&>svg:last-child]:ml-auto">
+            <Send className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <SelectValue placeholder="Publish status" />
           </SelectTrigger>
           <SelectContent>
@@ -144,9 +135,9 @@ export default function Home() {
         </p>
       )}
 
-      {/* Recent Videos */}
+      {/* Recently Reels */}
       <motion.section {...fadeUp} transition={{ duration: 0.4, delay: 0.2 }} className="space-y-4">
-        <h2 className="font-display text-lg font-semibold text-foreground">Recent Videos</h2>
+        <h2 className="font-display text-lg font-semibold text-foreground">Recently Reels</h2>
         {reelsLoading ? (
           <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
             Loading…

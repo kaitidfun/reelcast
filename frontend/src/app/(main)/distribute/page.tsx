@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Send, Clock, Trash2, Search, Settings2, List, Layers, Share2 } from "lucide-react";
+import { Send, Clock, Trash2, Search, Settings2, List, Layers, Share2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,9 +24,6 @@ import { platformLabel, PLATFORM_OPTIONS } from "@/lib/platforms";
 import { ReelCard } from "@/components/ReelCard";
 import { CampaignCard } from "@/components/CampaignCard";
 
-const HISTORY_COLLAPSED_SIZE = 5;
-const RECENT_REELS_COLLAPSED_SIZE = 4;
-const RECENT_CAMPAIGNS_COLLAPSED_SIZE = 6;
 const CONNECTABLE_PLATFORM_COUNT = 4;
 
 const STATUS_BADGE: Record<string, string> = {
@@ -43,7 +40,9 @@ const PLATFORM_BADGE: Record<string, string> = {
 };
 
 const STATUS_CHIPS = ["all", "Pending", "Uploading", "Published", "Failed"] as const;
-const PAGE_SIZE = 10;
+const DISTRIBUTIONS_PAGE_SIZE = 10;
+const RECENT_REELS_PAGE_SIZE = 6;
+const RECENT_CAMPAIGNS_PAGE_SIZE = 5;
 
 type SocialAccount = { account_id: string; platform_name: string };
 type PlatformDistribution = {
@@ -76,21 +75,67 @@ const authHeaders = (): Record<string, string> => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+type PaginationControlsProps = {
+  page: number;
+  total: number;
+  pageSize: number;
+  itemLabel: string;
+  onPageChange: (page: number) => void;
+};
+
+const PaginationControls = ({ page, total, pageSize, itemLabel, onPageChange }: PaginationControlsProps) => {
+  if (total <= pageSize) return null;
+
+  const pageCount = Math.ceil(total / pageSize);
+  return (
+    <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+      <span className="tabular-nums">
+        Showing {itemLabel} {page * pageSize + 1}-{Math.min((page + 1) * pageSize, total)} of {total}
+      </span>
+      <div className="grid grid-cols-2 gap-2 sm:flex">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1"
+          disabled={page === 0}
+          onClick={() => onPageChange(page - 1)}
+        >
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Previous
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1"
+          disabled={page + 1 >= pageCount}
+          onClick={() => onPageChange(page + 1)}
+        >
+          Next <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 const Distribution = () => {
   const { toast } = useToast();
   const router = useRouter();
-  const { reels: recentDistributedReels, reload: reloadRecentReels } = useReels({ limit: 20, distributedOnly: true });
+  const [reelsPage, setReelsPage] = useState(0);
+  const [campaignsPage, setCampaignsPage] = useState(0);
+  const { reels: recentDistributedReels, total: recentReelsTotal, reload: reloadRecentReels } = useReels({
+    limit: RECENT_REELS_PAGE_SIZE,
+    skip: reelsPage * RECENT_REELS_PAGE_SIZE,
+    distributedOnly: true,
+  });
   const { campaigns } = useCampaigns();
   const [recentCampaignIds, setRecentCampaignIds] = useState<string[]>([]);
-  const [reelsExpanded, setReelsExpanded] = useState(false);
-  const [campaignsExpanded, setCampaignsExpanded] = useState(false);
+  const [recentCampaignTotal, setRecentCampaignTotal] = useState(0);
 
   const [viewMode, setViewMode] = useState<"flat" | "grouped">("flat");
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
+  const [flatRows, setFlatRows] = useState<FlatRow[]>([]);
   const [groups, setGroups] = useState<ReelDistributionGroup[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterAccountId, setFilterAccountId] = useState("all");
@@ -104,28 +149,33 @@ const Distribution = () => {
   }, [search]);
   useEffect(() => {
     setPage(0);
-  }, [filterAccountId, filterStatus, debouncedSearch]);
+  }, [viewMode, filterAccountId, filterStatus, debouncedSearch]);
 
   const loadAll = useCallback(async (background = false) => {
     if (!background) setLoading(true);
     try {
       const headers = authHeaders();
       if (!headers.Authorization) return;
-      const groupParams = new URLSearchParams({
-        skip: String(page * PAGE_SIZE),
-        limit: String(PAGE_SIZE),
+      const historyParams = new URLSearchParams({
+        skip: String(page * DISTRIBUTIONS_PAGE_SIZE),
+        limit: String(DISTRIBUTIONS_PAGE_SIZE),
       });
-      if (debouncedSearch) groupParams.set("search", debouncedSearch);
-      if (filterAccountId !== "all") groupParams.set("account_id", filterAccountId);
-      if (filterStatus !== "all") groupParams.set("status_filter", filterStatus);
-      const [accountsRes, groupsRes] = await Promise.all([
+      if (debouncedSearch) historyParams.set("search", debouncedSearch);
+      if (filterAccountId !== "all") historyParams.set("account_id", filterAccountId);
+      if (filterStatus !== "all") historyParams.set("status_filter", filterStatus);
+      const historyPath = viewMode === "flat" ? "/distributions" : "/distributions/by-reel";
+      const [accountsRes, historyRes] = await Promise.all([
         fetch(`${API_BASE_URL}/social/accounts`, { headers }),
-        fetch(`${API_BASE_URL}/distributions/by-reel?${groupParams.toString()}`, { headers }),
+        fetch(`${API_BASE_URL}${historyPath}?${historyParams.toString()}`, { headers }),
       ]);
       if (accountsRes.ok) setAccounts((await accountsRes.json()).accounts ?? []);
-      if (groupsRes.ok) {
-        const data = await groupsRes.json();
-        setGroups(data.reels ?? []);
+      if (historyRes.ok) {
+        const data = await historyRes.json();
+        if (viewMode === "flat") {
+          setFlatRows(data.distributions ?? []);
+        } else {
+          setGroups(data.reels ?? []);
+        }
         setTotal(data.total ?? 0);
       }
     } catch (e) {
@@ -133,7 +183,7 @@ const Distribution = () => {
     } finally {
       if (!background) setLoading(false);
     }
-  }, [filterAccountId, filterStatus, debouncedSearch, page]);
+  }, [viewMode, filterAccountId, filterStatus, debouncedSearch, page]);
 
   useEffect(() => {
     loadAll();
@@ -142,34 +192,28 @@ const Distribution = () => {
   useEffect(() => {
     const headers = authHeaders();
     if (!headers.Authorization) return;
-    fetch(`${API_BASE_URL}/distributions/recent-campaigns?limit=20`, { headers })
-      .then((res) => (res.ok ? res.json() : { campaign_ids: [] }))
-      .then((data) => setRecentCampaignIds(data.campaign_ids ?? []))
-      .catch(() => setRecentCampaignIds([]));
-  }, []);
-
-  // Flat rows: each group's platforms expanded to standalone rows, newest activity first.
-  const flatRows = useMemo<FlatRow[]>(() => {
-    return groups
-      .flatMap((group) =>
-        group.platforms.map((p) => ({
-          ...p,
-          reel_id: group.reel_id,
-          reel_name: group.reel_name,
-          reel_prompt: group.reel_prompt,
-        })),
-      )
-      .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime());
-  }, [groups]);
+    fetch(`${API_BASE_URL}/distributions/recent-campaigns?skip=${campaignsPage * RECENT_CAMPAIGNS_PAGE_SIZE}&limit=${RECENT_CAMPAIGNS_PAGE_SIZE}`, { headers })
+      .then((res) => (res.ok ? res.json() : { campaign_ids: [], total: 0 }))
+      .then((data) => {
+        setRecentCampaignIds(data.campaign_ids ?? []);
+        setRecentCampaignTotal(data.total ?? 0);
+      })
+      .catch(() => {
+        setRecentCampaignIds([]);
+        setRecentCampaignTotal(0);
+      });
+  }, [campaignsPage]);
 
   // Publishing runs in Celery after the page has loaded. Poll only while a
   // distribution is active so the final status appears without a manual reload.
   useEffect(() => {
-    const anyUploading = groups.some((group) => group.platforms.some((p) => p.status === "Uploading"));
+    const anyUploading = viewMode === "flat"
+      ? flatRows.some((row) => row.status === "Uploading")
+      : groups.some((group) => group.platforms.some((p) => p.status === "Uploading"));
     if (!anyUploading) return;
     const timer = window.setInterval(() => { void loadAll(true); }, 5000);
     return () => window.clearInterval(timer);
-  }, [groups, loadAll]);
+  }, [viewMode, flatRows, groups, loadAll]);
 
   const handleCancel = async (distributionId: string) => {
     const res = await fetch(`${API_BASE_URL}/distributions/${distributionId}`, {
@@ -200,10 +244,7 @@ const Distribution = () => {
     .map((id) => campaigns.find((c) => c.id === id))
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
 
-  const visibleFlatRows = historyExpanded ? flatRows : flatRows.slice(0, HISTORY_COLLAPSED_SIZE);
-  const visibleGroups = historyExpanded ? groups : groups.slice(0, HISTORY_COLLAPSED_SIZE);
   const isEmpty = viewMode === "flat" ? flatRows.length === 0 : groups.length === 0;
-  const rowCount = viewMode === "flat" ? flatRows.length : groups.length;
   const filtersActive = Boolean(search) || filterStatus !== "all" || filterAccountId !== "all";
 
   return (
@@ -316,7 +357,7 @@ const Distribution = () => {
         ) : viewMode === "flat" ? (
           <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-card">
             <div className="divide-y divide-border">
-              {visibleFlatRows.map((d, i) => (
+              {flatRows.map((d, i) => (
                 <motion.div
                   key={d.distribution_id}
                   initial={{ opacity: 0, x: -10 }}
@@ -368,7 +409,7 @@ const Distribution = () => {
         ) : (
           <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-card">
             <div className="divide-y divide-border">
-              {visibleGroups.map((group, i) => (
+              {groups.map((group, i) => (
                 <motion.div
                   key={group.reel_id}
                   initial={{ opacity: 0, x: -10 }}
@@ -400,25 +441,21 @@ const Distribution = () => {
           </div>
         )}
 
-        {!historyExpanded && rowCount > HISTORY_COLLAPSED_SIZE && (
-          <div className="mt-4 flex justify-center">
-            <Button variant="outline" size="sm" onClick={() => setHistoryExpanded(true)}>Show all</Button>
-          </div>
-        )}
-
-        {historyExpanded && total > PAGE_SIZE && (
-          <div className="mt-4 flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span className="tabular-nums">Showing reel {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}</span>
-            <div className="grid grid-cols-2 gap-2 sm:flex">
-              <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((current) => current - 1)}>Previous</Button>
-              <Button variant="outline" size="sm" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage((current) => current + 1)}>Next</Button>
-            </div>
+        {total > DISTRIBUTIONS_PAGE_SIZE && (
+          <div className="mt-4">
+            <PaginationControls
+              page={page}
+              total={total}
+              pageSize={DISTRIBUTIONS_PAGE_SIZE}
+              itemLabel={viewMode === "flat" ? "distributions" : "reels"}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </motion.div>
 
       {/* Recently Distributed Reels */}
-      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="space-y-4">
+      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="w-full max-w-6xl space-y-4">
         <h2 className="font-display text-lg font-semibold text-foreground">Recently Distributed Reels</h2>
         {recentDistributedReels.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
@@ -426,20 +463,22 @@ const Distribution = () => {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {(reelsExpanded ? recentDistributedReels : recentDistributedReels.slice(0, RECENT_REELS_COLLAPSED_SIZE)).map((reel) => (
+            {recentDistributedReels.map((reel) => (
               <ReelCard key={reel.id} reel={reel} onClick={() => router.push(`/distribute/${reel.id}`)} onChanged={reloadRecentReels} />
             ))}
           </div>
         )}
-        {!reelsExpanded && recentDistributedReels.length > RECENT_REELS_COLLAPSED_SIZE && (
-          <div className="flex justify-center">
-            <Button variant="outline" size="sm" onClick={() => setReelsExpanded(true)}>Show all</Button>
-          </div>
-        )}
+        <PaginationControls
+          page={reelsPage}
+          total={recentReelsTotal}
+          pageSize={RECENT_REELS_PAGE_SIZE}
+          itemLabel="reels"
+          onPageChange={setReelsPage}
+        />
       </motion.section>
 
       {/* Recently Distributed Campaigns */}
-      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-4">
+      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="w-full max-w-6xl space-y-4">
         <h2 className="font-display text-lg font-semibold text-foreground">Recently Distributed Campaigns</h2>
         {recentCampaigns.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
@@ -447,7 +486,7 @@ const Distribution = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {(campaignsExpanded ? recentCampaigns : recentCampaigns.slice(0, RECENT_CAMPAIGNS_COLLAPSED_SIZE)).map((campaign, i) => (
+            {recentCampaigns.map((campaign, i) => (
               <CampaignCard
                 key={campaign.id}
                 campaign={campaign}
@@ -457,11 +496,13 @@ const Distribution = () => {
             ))}
           </div>
         )}
-        {!campaignsExpanded && recentCampaigns.length > RECENT_CAMPAIGNS_COLLAPSED_SIZE && (
-          <div className="flex justify-center">
-            <Button variant="outline" size="sm" onClick={() => setCampaignsExpanded(true)}>Show all</Button>
-          </div>
-        )}
+        <PaginationControls
+          page={campaignsPage}
+          total={recentCampaignTotal}
+          pageSize={RECENT_CAMPAIGNS_PAGE_SIZE}
+          itemLabel="campaigns"
+          onPageChange={setCampaignsPage}
+        />
       </motion.section>
     </div>
   );

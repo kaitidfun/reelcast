@@ -4,12 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 import type { ReelCardData } from "@/components/ReelCard";
 import { resolveVideoUrl } from "@/lib/reel-status";
 
-export function useReels(params: { limit?: number; productId?: string; distributedOnly?: boolean } = {}) {
+export function useReels(params: { limit?: number; skip?: number; productId?: string; distributedOnly?: boolean } = {}) {
   const [reels, setReels] = useState<ReelCardData[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const { limit, productId, distributedOnly } = params;
+  const { limit, skip, productId, distributedOnly } = params;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -18,6 +18,7 @@ export function useReels(params: { limit?: number; productId?: string; distribut
       if (!token) return;
       const qs = new URLSearchParams();
       if (limit) qs.set("limit", String(limit));
+      if (skip) qs.set("skip", String(skip));
       if (productId) qs.set("product_id", productId);
       if (distributedOnly) qs.set("distributed", "true");
 
@@ -44,7 +45,7 @@ export function useReels(params: { limit?: number; productId?: string; distribut
     } finally {
       setLoading(false);
     }
-  }, [limit, productId, distributedOnly]);
+  }, [limit, skip, productId, distributedOnly]);
 
   useEffect(() => {
     load();

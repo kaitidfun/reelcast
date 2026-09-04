@@ -116,6 +116,7 @@ def listDistributions(
     reel_id: Optional[UUID] = None,
     account_id: Optional[UUID] = None,
     status_filter: Optional[str] = None,
+    search: Optional[str] = None,
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
@@ -130,6 +131,9 @@ def listDistributions(
         query = query.filter(Distribution.account_id == account_id)
     if status_filter:
         query = query.filter(Distribution.status == status_filter)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(or_(Reel.name.ilike(like), Reel.saved_prompt_text.ilike(like)))
 
     total = query.count()
     items = query.order_by(Distribution.created_at.desc()).offset(skip).limit(limit).all()
@@ -210,7 +214,8 @@ def listDistributionsByReel(
 
 @router.get("/recent-campaigns")
 def recentDistributedCampaigns(
-    limit: int = 10,
+    skip: int = 0,
+    limit: int = 5,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -221,7 +226,7 @@ def recentDistributedCampaigns(
     frontend already has a richer campaign-card fetch (GET /api/library);
     this just supplies the relevance order and which ids qualify.
     """
-    rows = (
+    query = (
         db.query(Campaign.campaign_id, func.max(Distribution.created_at).label("last_dist"))
         .join(Product, Product.campaign_id == Campaign.campaign_id)
         .join(Reel, Reel.product_id == Product.product_id)
@@ -229,10 +234,10 @@ def recentDistributedCampaigns(
         .filter(Campaign.user_id == current_user.user_id)
         .group_by(Campaign.campaign_id)
         .order_by(func.max(Distribution.created_at).desc())
-        .limit(limit)
-        .all()
     )
-    return {"campaign_ids": [str(r.campaign_id) for r in rows]}
+    total = query.count()
+    rows = query.offset(skip).limit(limit).all()
+    return {"campaign_ids": [str(r.campaign_id) for r in rows], "total": total}
 
 
 @router.get("/campaigns/{campaign_id}/products")
