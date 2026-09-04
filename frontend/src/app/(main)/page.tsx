@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 
 const RECENT_REELS_COLLAPSED_SIZE = 4;
+const RECENT_CAMPAIGNS_COLLAPSED_SIZE = 6;
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -34,6 +35,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [publishFilter, setPublishFilter] = useState("all");
   const [reelsExpanded, setReelsExpanded] = useState(false);
+  const [campaignsExpanded, setCampaignsExpanded] = useState(false);
   const { reels, loading: reelsLoading, reload: reloadReels } = useReels();
   const { campaigns } = useCampaigns();
   const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
@@ -50,67 +52,27 @@ export default function Home() {
     : reelsExpanded
       ? publishFilteredReels
       : publishFilteredReels.slice(0, RECENT_REELS_COLLAPSED_SIZE);
-  const visibleCampaigns = campaigns.filter((campaign) =>
+  const searchedCampaigns = campaigns.filter((campaign) =>
     [campaign.name, campaign.description, ...campaign.products.map((product) => product.name)].some((value) =>
       value.toLocaleLowerCase().includes(normalizedQuery),
     ),
   );
+  const visibleCampaigns = isSearching
+    ? searchedCampaigns
+    : campaignsExpanded
+      ? searchedCampaigns
+      : searchedCampaigns.slice(0, RECENT_CAMPAIGNS_COLLAPSED_SIZE);
   const searchResultCount = visibleReels.length + visibleCampaigns.length;
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       {/* Header */}
-      <motion.div
-        {...fadeUp}
-        transition={{ duration: 0.4 }}
-        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
-            Welcome back, {firstName}!
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Here's what's happening in your studio today.</p>
-        </div>
-        <div className="flex w-full gap-2 sm:max-w-lg">
-          <div className="relative min-w-0 flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search videos, products, campaigns…"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              aria-label="Search videos, products, and campaigns"
-              className="w-full rounded-full border border-border bg-card pl-11 pr-5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
-            />
-            {isSearching && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Clear search"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-          <Select value={publishFilter} onValueChange={setPublishFilter}>
-            <SelectTrigger className="h-[42px] w-[150px] shrink-0 rounded-full bg-card text-xs">
-              <SelectValue placeholder="Publish status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Published or not</SelectItem>
-              <SelectItem value="published">Published</SelectItem>
-              <SelectItem value="unpublished">Not published</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      <motion.div {...fadeUp} transition={{ duration: 0.4 }}>
+        <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+          Welcome back, {firstName}!
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">Here's what's happening in your studio today.</p>
       </motion.div>
-
-      {isSearching && (
-        <p className="-mt-4 text-sm text-muted-foreground">
-          {searchResultCount} {searchResultCount === 1 ? "result" : "results"} for “{searchQuery.trim()}”
-        </p>
-      )}
 
       {/* Quick Actions */}
       <motion.div
@@ -141,14 +103,50 @@ export default function Home() {
         </Link>
       </motion.div>
 
+      {/* Search + filter — sits above Recent Videos, applies to both sections below */}
+      <motion.div {...fadeUp} transition={{ duration: 0.4, delay: 0.15 }} className="flex gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search videos, products, campaigns…"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            aria-label="Search videos, products, and campaigns"
+            className="w-full rounded-full border border-border bg-card pl-11 pr-5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+          />
+          {isSearching && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <Select value={publishFilter} onValueChange={setPublishFilter}>
+          <SelectTrigger className="h-[42px] w-[150px] shrink-0 rounded-full bg-card text-xs">
+            <SelectValue placeholder="Publish status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Published or not</SelectItem>
+            <SelectItem value="published">Published</SelectItem>
+            <SelectItem value="unpublished">Not published</SelectItem>
+          </SelectContent>
+        </Select>
+      </motion.div>
+
+      {isSearching && (
+        <p className="-mt-4 text-sm text-muted-foreground">
+          {searchResultCount} {searchResultCount === 1 ? "result" : "results"} for “{searchQuery.trim()}”
+        </p>
+      )}
+
       {/* Recent Videos */}
       <motion.section {...fadeUp} transition={{ duration: 0.4, delay: 0.2 }} className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-foreground">Recent Videos</h2>
-          <Link href="/reels" className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
-            View all
-          </Link>
-        </div>
+        <h2 className="font-display text-lg font-semibold text-foreground">Recent Videos</h2>
         {reelsLoading ? (
           <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
             Loading…
@@ -192,6 +190,11 @@ export default function Home() {
                 onClick={() => router.push(`/library?campaign=${encodeURIComponent(campaign.id)}`)}
               />
             ))}
+          </div>
+        )}
+        {!isSearching && !campaignsExpanded && searchedCampaigns.length > RECENT_CAMPAIGNS_COLLAPSED_SIZE && (
+          <div className="flex justify-center">
+            <Button variant="outline" size="sm" onClick={() => setCampaignsExpanded(true)}>Show all</Button>
           </div>
         )}
       </motion.section>
