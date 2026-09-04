@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Search, Film } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { SearchClearButton } from "@/components/ui/search-clear-button";
 import {
   Select,
   SelectContent,
@@ -50,8 +51,9 @@ const AllReels = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search reels…"
-            className="bg-card pl-10 border-border h-10"
+            className="h-10 border-border bg-card pl-10 pr-10"
           />
+          {search && <SearchClearButton onClear={() => setSearch("")} />}
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-full sm:w-[160px] bg-card h-10">

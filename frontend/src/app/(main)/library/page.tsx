@@ -22,6 +22,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
+import { SearchClearButton } from "@/components/ui/search-clear-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -749,8 +750,9 @@ const ContentLibrary = () => {
                 value={campaignSearch}
                 onChange={(e) => setCampaignSearch(e.target.value)}
                 placeholder="Search campaigns…"
-                className="bg-card pl-10 border-border h-10"
+                className="h-10 border-border bg-card pl-10 pr-10"
               />
+              {campaignSearch && <SearchClearButton onClear={() => setCampaignSearch("")} />}
             </div>
             <Select value={campaignSort} onValueChange={(v) => setCampaignSort(v as SortKey)}>
               <SelectTrigger className="w-full sm:w-[200px] bg-card h-10">
@@ -1030,8 +1032,9 @@ const ContentLibrary = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search products in this campaign…"
-            className="bg-card pl-10 border-border h-10"
+            className="h-10 border-border bg-card pl-10 pr-10"
           />
+          {search && <SearchClearButton onClear={() => setSearch("")} />}
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
           <SelectTrigger className="h-10 w-full justify-start gap-2 bg-card sm:w-[160px] [&>svg:last-child]:ml-auto">

@@ -18,6 +18,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { SearchClearButton } from "@/components/ui/search-clear-button";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -189,8 +190,9 @@ const ProductReels = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search reels…"
-            className="bg-card pl-10 border-border h-10"
+            className="h-10 border-border bg-card pl-10 pr-10"
           />
+          {search && <SearchClearButton onClear={() => setSearch("")} />}
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
           <SelectTrigger className="h-10 w-full justify-start gap-2 bg-card sm:w-[160px] [&>svg:last-child]:ml-auto">

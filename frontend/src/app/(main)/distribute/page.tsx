@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { Send, Clock, Trash2, Search, Settings2, List, Layers, Share2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchClearButton } from "@/components/ui/search-clear-button";
 import {
   Select,
   SelectContent,
@@ -330,8 +331,9 @@ const Distribution = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search reels…"
-                className="h-9 pl-8 text-xs"
+                className="h-9 pl-8 pr-9 text-xs"
               />
+              {search && <SearchClearButton onClear={() => setSearch("")} />}
             </div>
             <Select value={filterAccountId} onValueChange={setFilterAccountId}>
               <SelectTrigger aria-label="Filter by platform" className="h-9 w-[150px] shrink-0 justify-start gap-2 text-xs [&>svg:last-child]:ml-auto">

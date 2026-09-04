@@ -13,6 +13,7 @@ import { CampaignCard } from "@/components/CampaignCard";
 import { reelClickTarget } from "@/lib/reel-status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchClearButton } from "@/components/ui/search-clear-button";
 import {
   Select,
   SelectContent,
@@ -113,8 +114,9 @@ export default function Home() {
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             aria-label="Search reels, products, and campaigns"
-            className="h-9 pl-8 text-xs"
+            className="h-9 pl-8 pr-9 text-xs"
           />
+          {isSearching && <SearchClearButton onClear={() => setSearchQuery("")} />}
         </div>
         <Select value={publishFilter} onValueChange={setPublishFilter}>
           <SelectTrigger aria-label="Filter by publish status" className="h-9 w-[180px] shrink-0 justify-start gap-2 text-xs [&>svg:last-child]:ml-auto">
