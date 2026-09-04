@@ -243,28 +243,26 @@ const Distribution = () => {
 
       {/* Distributions */}
       <motion.div className="min-w-0" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-info" />
-            <h2 className="font-display text-lg font-semibold text-foreground">Distributions</h2>
-          </div>
-          <ToggleGroup
-            type="single"
-            value={viewMode}
-            onValueChange={(v) => v && setViewMode(v as "flat" | "grouped")}
-            className="bg-card border border-border rounded-lg p-0.5 h-9"
-          >
-            <ToggleGroupItem value="flat" aria-label="Flat list" className="h-8 gap-1.5 rounded-md px-2.5 text-xs data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-              <List className="!h-3.5 !w-3.5" /> List
-            </ToggleGroupItem>
-            <ToggleGroupItem value="grouped" aria-label="Grouped by reel" className="h-8 gap-1.5 rounded-md px-2.5 text-xs data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
-              <Layers className="!h-3.5 !w-3.5" /> By reel
-            </ToggleGroupItem>
-          </ToggleGroup>
+        <div className="mb-4 flex items-center gap-2">
+          <Clock className="h-4 w-4 text-info" />
+          <h2 className="font-display text-lg font-semibold text-foreground">Distributions</h2>
         </div>
 
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-1.5">
+            <ToggleGroup
+              type="single"
+              value={viewMode}
+              onValueChange={(v) => v && setViewMode(v as "flat" | "grouped")}
+              className="bg-card border border-border rounded-lg p-0.5 h-9 mr-1"
+            >
+              <ToggleGroupItem value="flat" aria-label="Flat list" className="h-8 gap-1.5 rounded-md px-2.5 text-xs data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+                <List className="!h-3.5 !w-3.5" /> List
+              </ToggleGroupItem>
+              <ToggleGroupItem value="grouped" aria-label="Grouped by reel" className="h-8 gap-1.5 rounded-md px-2.5 text-xs data-[state=on]:bg-primary/15 data-[state=on]:text-primary">
+                <Layers className="!h-3.5 !w-3.5" /> By reel
+              </ToggleGroupItem>
+            </ToggleGroup>
             {STATUS_CHIPS.map((chip) => (
               <button
                 key={chip}
