@@ -12,7 +12,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_db
@@ -23,6 +23,8 @@ from app.schemas.distribution import (
     DistributionListResponse,
     DistributionReschedule,
     DistributionResponse,
+    ReelDistributionGroup,
+    ReelDistributionGroupList,
 )
 from app.services import distribution_service
 
@@ -133,6 +135,77 @@ def listDistributions(
     items = query.order_by(Distribution.created_at.desc()).offset(skip).limit(limit).all()
     _attach_display_fields(db, items)
     return DistributionListResponse(distributions=items, total=total)
+
+
+@router.get("/by-reel", response_model=ReelDistributionGroupList)
+def listDistributionsByReel(
+    search: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    account_id: Optional[UUID] = None,
+    skip: int = 0,
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The Distribute page's history, one row per Reel instead of one row per
+    platform — a reel posted to 4 platforms is a single group with all 4
+    inside it, so the list doesn't balloon with near-duplicate rows.
+
+    `status_filter`/`account_id` narrow which reels qualify (a reel with at
+    least one matching distribution), not which platforms are shown inside
+    a matching reel's group — a reel matching "Failed" still shows its
+    other, successful platforms for context. `search` matches the reel's
+    name or prompt text.
+    """
+    matches = (
+        db.query(
+            Reel.reel_id,
+            Reel.name,
+            Reel.saved_prompt_text,
+            func.max(Distribution.created_at).label("last_match_at"),
+        )
+        .join(Distribution, Distribution.reel_id == Reel.reel_id)
+        .filter(Reel.user_id == current_user.user_id)
+    )
+    if search:
+        like = f"%{search}%"
+        matches = matches.filter(or_(Reel.name.ilike(like), Reel.saved_prompt_text.ilike(like)))
+    if status_filter:
+        matches = matches.filter(Distribution.status == status_filter)
+    if account_id:
+        matches = matches.filter(Distribution.account_id == account_id)
+    matches = matches.group_by(Reel.reel_id, Reel.name, Reel.saved_prompt_text)
+
+    total = matches.count()
+    rows = matches.order_by(func.max(Distribution.created_at).desc()).offset(skip).limit(limit).all()
+    reel_ids = [r.reel_id for r in rows]
+
+    # Every platform for each matching reel, unfiltered — a status/platform
+    # filter decides which reels show up, not which of their platforms do.
+    all_items = (
+        db.query(Distribution).filter(Distribution.reel_id.in_(reel_ids)).order_by(Distribution.created_at.desc()).all()
+        if reel_ids else []
+    )
+    _attach_display_fields(db, all_items)
+    by_reel: dict[UUID, list[Distribution]] = {}
+    for item in all_items:
+        by_reel.setdefault(item.reel_id, []).append(item)
+
+    groups = [
+        ReelDistributionGroup(
+            reel_id=row.reel_id,
+            reel_name=row.name,
+            reel_prompt=row.saved_prompt_text,
+            last_activity_at=max(
+                (d.created_at for d in by_reel.get(row.reel_id, []) if d.created_at),
+                default=row.last_match_at,
+            ),
+            platforms=by_reel.get(row.reel_id, []),
+        )
+        for row in rows
+    ]
+    return ReelDistributionGroupList(reels=groups, total=total)
 
 
 @router.get("/recent-campaigns")

@@ -49,3 +49,20 @@ class DistributionResponse(BaseModel):
 class DistributionListResponse(BaseModel):
     distributions: List[DistributionResponse]
     total: int
+
+
+class ReelDistributionGroup(BaseModel):
+    """One reel's full distribution history, all platforms together — backs
+    the Distribute page's history list, grouped one row per reel instead of
+    one row per platform."""
+
+    reel_id: UUID
+    reel_name: Optional[str] = None
+    reel_prompt: Optional[str] = None
+    last_activity_at: Optional[datetime] = None
+    platforms: List[DistributionResponse]
+
+
+class ReelDistributionGroupList(BaseModel):
+    reels: List[ReelDistributionGroup]
+    total: int

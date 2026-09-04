@@ -13,6 +13,7 @@ from app.routes.distribution_routes import (
     cancelDistribution,
     createDistribution,
     listDistributions,
+    listDistributionsByReel,
     publishNow,
 )
 from app.schemas.distribution import DistributionCreate
@@ -79,6 +80,55 @@ class ListDistributionsTests(unittest.TestCase):
         result = listDistributions(db=db, current_user=user)
         self.assertEqual(0, result.total)
         self.assertEqual([], result.distributions)
+
+
+class ListDistributionsByReelTests(unittest.TestCase):
+    def test_no_matches_returns_empty_groups(self) -> None:
+        db = MagicMock()
+        user = SimpleNamespace(user_id=uuid4())
+        chain = db.query.return_value.join.return_value.filter.return_value.group_by.return_value
+        chain.count.return_value = 0
+        chain.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
+
+        result = listDistributionsByReel(db=db, current_user=user)
+        self.assertEqual(0, result.total)
+        self.assertEqual([], result.reels)
+
+    def test_groups_multiple_platforms_under_one_reel(self) -> None:
+        db = MagicMock()
+        user = SimpleNamespace(user_id=uuid4())
+        reel_id = uuid4()
+
+        matches_chain = db.query.return_value.join.return_value.filter.return_value.group_by.return_value
+        matches_chain.count.return_value = 1
+        matched_row = SimpleNamespace(
+            reel_id=reel_id, name="patrick bag", saved_prompt_text="a patrick bag", last_match_at=None
+        )
+        matches_chain.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [matched_row]
+
+        yt_dist = Distribution(
+            distribution_id=uuid4(), reel_id=reel_id, account_id=uuid4(), status="Published", created_at=None,
+            retry_count=0,
+        )
+        ig_dist = Distribution(
+            distribution_id=uuid4(), reel_id=reel_id, account_id=uuid4(), status="Failed", created_at=None,
+            retry_count=0,
+        )
+        all_items_chain = db.query.return_value.filter.return_value.order_by.return_value
+        all_items_chain.all.return_value = [yt_dist, ig_dist]
+
+        # _attach_display_fields' own two grouped lookups — empty is fine,
+        # this test only cares that both distributions land under one group.
+        db.query.return_value.filter.return_value.all.return_value = []
+
+        result = listDistributionsByReel(db=db, current_user=user)
+
+        self.assertEqual(1, result.total)
+        self.assertEqual(1, len(result.reels))
+        group = result.reels[0]
+        self.assertEqual(reel_id, group.reel_id)
+        self.assertEqual(2, len(group.platforms))
+        self.assertEqual({"Published", "Failed"}, {p.status for p in group.platforms})
 
 
 class CancelDistributionTests(unittest.TestCase):
