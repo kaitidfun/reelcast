@@ -23,7 +23,13 @@ import {
 } from "@/components/ui/select";
 
 const RECENT_REELS_COLLAPSED_SIZE = 4;
-const RECENT_CAMPAIGNS_COLLAPSED_SIZE = 6;
+const RECENT_CAMPAIGNS_COLLAPSED_SIZE = 3;
+
+const createdAtTimestamp = (value: string | null | undefined) => {
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -42,7 +48,10 @@ export default function Home() {
   const { campaigns } = useCampaigns();
   const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
   const isSearching = normalizedQuery.length > 0;
-  const publishFilteredReels = reels.filter(
+  const newestReels = [...reels].sort(
+    (a, b) => createdAtTimestamp(b.createdAt) - createdAtTimestamp(a.createdAt),
+  );
+  const publishFilteredReels = newestReels.filter(
     (reel) =>
       publishFilter === "all" ||
       (publishFilter === "published" ? reel.hasDistribution : !reel.hasDistribution),
@@ -54,7 +63,10 @@ export default function Home() {
     : reelsExpanded
       ? publishFilteredReels
       : publishFilteredReels.slice(0, RECENT_REELS_COLLAPSED_SIZE);
-  const searchedCampaigns = campaigns.filter((campaign) =>
+  const newestCampaigns = [...campaigns].sort(
+    (a, b) => createdAtTimestamp(b.createdAt) - createdAtTimestamp(a.createdAt),
+  );
+  const searchedCampaigns = newestCampaigns.filter((campaign) =>
     [campaign.name, campaign.description, ...campaign.products.map((product) => product.name)].some((value) =>
       value.toLocaleLowerCase().includes(normalizedQuery),
     ),
@@ -164,7 +176,7 @@ export default function Home() {
 
       {/* Campaigns */}
       <motion.section {...fadeUp} transition={{ duration: 0.4, delay: 0.3 }} className="space-y-4">
-        <h2 className="font-display text-lg font-semibold text-foreground">Campaigns</h2>
+        <h2 className="font-display text-lg font-semibold text-foreground">Recently Campaigns</h2>
         {campaigns.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
             No campaigns in your product library yet. <Link href="/library" className="font-medium text-primary hover:text-primary/80">Create one in Library</Link>.
