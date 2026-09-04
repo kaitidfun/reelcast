@@ -73,13 +73,37 @@ class ListDistributionsTests(unittest.TestCase):
     def test_filters_to_current_user_only(self) -> None:
         db = MagicMock()
         user = SimpleNamespace(user_id=uuid4())
+        reel_id = uuid4()
+        campaign_id = uuid4()
         chain = db.query.return_value.join.return_value.filter.return_value
+        chain.with_entities.return_value.distinct.return_value.all.return_value = [(reel_id,)]
+        chain.join.return_value.join.return_value.with_entities.return_value.distinct.return_value.all.return_value = [
+            (campaign_id,)
+        ]
         chain.count.return_value = 0
         chain.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
 
         result = listDistributions(db=db, current_user=user)
         self.assertEqual(0, result.total)
         self.assertEqual([], result.distributions)
+        self.assertEqual([reel_id], result.matched_reel_ids)
+        self.assertEqual([campaign_id], result.matched_campaign_ids)
+
+    def test_searches_reel_platform_and_status_names(self) -> None:
+        db = MagicMock()
+        user = SimpleNamespace(user_id=uuid4())
+        owned_query = db.query.return_value.join.return_value.filter.return_value
+        searched_query = owned_query.outerjoin.return_value.filter.return_value
+        searched_query.count.return_value = 0
+        searched_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
+
+        result = listDistributions(search="published", db=db, current_user=user)
+
+        owned_query.outerjoin.assert_called_once()
+        self.assertEqual(0, result.total)
+        self.assertEqual([], result.distributions)
+        self.assertEqual([], result.matched_reel_ids)
+        self.assertEqual([], result.matched_campaign_ids)
 
 
 class ListDistributionsByReelTests(unittest.TestCase):
