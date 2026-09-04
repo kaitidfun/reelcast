@@ -109,17 +109,6 @@ export function ReelCard({ reel, onClick, onChanged }: { reel: ReelCardData; onC
             {reel.status}
           </Badge>
         </div>
-        {reel.status === "Completed" && (
-          <div
-            className={`absolute bottom-2 left-2 rounded-full px-2 py-0.5 text-[10px] font-medium backdrop-blur ${
-              reel.hasDistribution
-                ? "bg-success/20 text-success"
-                : "bg-background/70 text-muted-foreground"
-            }`}
-          >
-            {reel.hasDistribution ? "Published" : "Not published"}
-          </div>
-        )}
         {reel.thumbnail && (
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
             <div className="h-12 w-12 rounded-full bg-background/80 backdrop-blur flex items-center justify-center">
@@ -130,6 +119,17 @@ export function ReelCard({ reel, onClick, onChanged }: { reel: ReelCardData; onC
       </div>
       <div className="p-3 space-y-1.5">
         <h3 className="text-sm font-medium text-foreground line-clamp-2 min-h-[2.5rem]">{reel.title}</h3>
+        {reel.status === "Completed" && (
+          <span
+            className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              reel.hasDistribution
+                ? "bg-success/15 text-success"
+                : "bg-muted text-muted-foreground"
+            }`}
+          >
+            {reel.hasDistribution ? "Published" : "Not published"}
+          </span>
+        )}
         <p className="text-[11px] text-muted-foreground">{formatDate(reel.createdAt)}</p>
       </div>
 
