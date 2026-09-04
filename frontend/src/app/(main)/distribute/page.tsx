@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -40,22 +40,10 @@ const PLATFORM_BADGE: Record<string, string> = {
   Failed: "bg-destructive/15 text-destructive ring-destructive/30",
 };
 
-const DISTRIBUTION_STATUSES = ["Pending", "Uploading", "Published", "Failed"];
 const STATUS_CHIPS = ["all", "Pending", "Uploading", "Published", "Failed"] as const;
 const PAGE_SIZE = 10;
 
 type SocialAccount = { account_id: string; platform_name: string };
-type DistributionItem = {
-  distribution_id: string;
-  reel_id: string | null;
-  account_id: string | null;
-  scheduled_time: string | null;
-  status: string;
-  error_message: string | null;
-  reel_prompt: string | null;
-  reel_name: string | null;
-  platform_name: string | null;
-};
 type PlatformDistribution = {
   distribution_id: string;
   account_id: string | null;
@@ -73,6 +61,13 @@ type ReelDistributionGroup = {
   last_activity_at: string | null;
   platforms: PlatformDistribution[];
 };
+// One platform's row in the flat list — a group's platform entry plus the
+// reel context it belongs to, so each row still reads like a standalone item.
+type FlatRow = PlatformDistribution & {
+  reel_id: string;
+  reel_name: string | null;
+  reel_prompt: string | null;
+};
 
 const authHeaders = (): Record<string, string> => {
   const token = localStorage.getItem("rf_token");
@@ -82,30 +77,21 @@ const authHeaders = (): Record<string, string> => {
 const Distribution = () => {
   const { toast } = useToast();
   const router = useRouter();
-  const { reels } = useReels({ limit: 100 });
   const { reels: recentDistributedReels, reload: reloadRecentReels } = useReels({ limit: 4, distributedOnly: true });
   const { campaigns } = useCampaigns();
   const [recentCampaignIds, setRecentCampaignIds] = useState<string[]>([]);
 
   const [viewMode, setViewMode] = useState<"flat" | "grouped">("flat");
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
+  const [groups, setGroups] = useState<ReelDistributionGroup[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [historyExpanded, setHistoryExpanded] = useState(false);
-  const [filterAccountId, setFilterAccountId] = useState("all");
-  const [page, setPage] = useState(0);
-
-  // Flat (default) view — one row per platform per reel, same as before.
-  const [distributions, setDistributions] = useState<DistributionItem[]>([]);
-  const [distTotal, setDistTotal] = useState(0);
-  const [filterReelId, setFilterReelId] = useState("all");
-  const [filterStatusFlat, setFilterStatusFlat] = useState("all");
-
-  // Grouped view — one row per reel, opt-in via the toggle.
-  const [groups, setGroups] = useState<ReelDistributionGroup[]>([]);
-  const [groupsTotal, setGroupsTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [filterStatusGrouped, setFilterStatusGrouped] = useState<(typeof STATUS_CHIPS)[number]>("all");
+  const [filterAccountId, setFilterAccountId] = useState("all");
+  const [filterStatus, setFilterStatus] = useState<(typeof STATUS_CHIPS)[number]>("all");
+  const [page, setPage] = useState(0);
 
   // Debounce search typing before it drives a fetch.
   useEffect(() => {
@@ -114,58 +100,36 @@ const Distribution = () => {
   }, [search]);
   useEffect(() => {
     setPage(0);
-  }, [viewMode, filterAccountId, filterReelId, filterStatusFlat, debouncedSearch, filterStatusGrouped]);
+  }, [filterAccountId, filterStatus, debouncedSearch]);
 
   const loadAll = useCallback(async (background = false) => {
     if (!background) setLoading(true);
     try {
       const headers = authHeaders();
       if (!headers.Authorization) return;
-      const accountsPromise = fetch(`${API_BASE_URL}/social/accounts`, { headers });
-
-      if (viewMode === "flat") {
-        const distributionParams = new URLSearchParams({
-          skip: String(page * PAGE_SIZE),
-          limit: String(PAGE_SIZE),
-        });
-        if (filterReelId !== "all") distributionParams.set("reel_id", filterReelId);
-        if (filterAccountId !== "all") distributionParams.set("account_id", filterAccountId);
-        if (filterStatusFlat !== "all") distributionParams.set("status_filter", filterStatusFlat);
-        const [accountsRes, distRes] = await Promise.all([
-          accountsPromise,
-          fetch(`${API_BASE_URL}/distributions?${distributionParams.toString()}`, { headers }),
-        ]);
-        if (accountsRes.ok) setAccounts((await accountsRes.json()).accounts ?? []);
-        if (distRes.ok) {
-          const data = await distRes.json();
-          setDistributions(data.distributions ?? []);
-          setDistTotal(data.total ?? 0);
-        }
-      } else {
-        const groupParams = new URLSearchParams({
-          skip: String(page * PAGE_SIZE),
-          limit: String(PAGE_SIZE),
-        });
-        if (debouncedSearch) groupParams.set("search", debouncedSearch);
-        if (filterAccountId !== "all") groupParams.set("account_id", filterAccountId);
-        if (filterStatusGrouped !== "all") groupParams.set("status_filter", filterStatusGrouped);
-        const [accountsRes, groupsRes] = await Promise.all([
-          accountsPromise,
-          fetch(`${API_BASE_URL}/distributions/by-reel?${groupParams.toString()}`, { headers }),
-        ]);
-        if (accountsRes.ok) setAccounts((await accountsRes.json()).accounts ?? []);
-        if (groupsRes.ok) {
-          const data = await groupsRes.json();
-          setGroups(data.reels ?? []);
-          setGroupsTotal(data.total ?? 0);
-        }
+      const groupParams = new URLSearchParams({
+        skip: String(page * PAGE_SIZE),
+        limit: String(PAGE_SIZE),
+      });
+      if (debouncedSearch) groupParams.set("search", debouncedSearch);
+      if (filterAccountId !== "all") groupParams.set("account_id", filterAccountId);
+      if (filterStatus !== "all") groupParams.set("status_filter", filterStatus);
+      const [accountsRes, groupsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/social/accounts`, { headers }),
+        fetch(`${API_BASE_URL}/distributions/by-reel?${groupParams.toString()}`, { headers }),
+      ]);
+      if (accountsRes.ok) setAccounts((await accountsRes.json()).accounts ?? []);
+      if (groupsRes.ok) {
+        const data = await groupsRes.json();
+        setGroups(data.reels ?? []);
+        setTotal(data.total ?? 0);
       }
     } catch (e) {
       console.error("Failed to load distribution data:", e);
     } finally {
       if (!background) setLoading(false);
     }
-  }, [viewMode, filterAccountId, filterReelId, filterStatusFlat, filterStatusGrouped, debouncedSearch, page]);
+  }, [filterAccountId, filterStatus, debouncedSearch, page]);
 
   useEffect(() => {
     loadAll();
@@ -180,17 +144,28 @@ const Distribution = () => {
       .catch(() => setRecentCampaignIds([]));
   }, []);
 
+  // Flat rows: each group's platforms expanded to standalone rows, newest activity first.
+  const flatRows = useMemo<FlatRow[]>(() => {
+    return groups
+      .flatMap((group) =>
+        group.platforms.map((p) => ({
+          ...p,
+          reel_id: group.reel_id,
+          reel_name: group.reel_name,
+          reel_prompt: group.reel_prompt,
+        })),
+      )
+      .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime());
+  }, [groups]);
+
   // Publishing runs in Celery after the page has loaded. Poll only while a
   // distribution is active so the final status appears without a manual reload.
   useEffect(() => {
-    const anyUploading =
-      viewMode === "flat"
-        ? distributions.some((d) => d.status === "Uploading")
-        : groups.some((group) => group.platforms.some((p) => p.status === "Uploading"));
+    const anyUploading = groups.some((group) => group.platforms.some((p) => p.status === "Uploading"));
     if (!anyUploading) return;
     const timer = window.setInterval(() => { void loadAll(true); }, 5000);
     return () => window.clearInterval(timer);
-  }, [viewMode, distributions, groups, loadAll]);
+  }, [groups, loadAll]);
 
   const handleCancel = async (distributionId: string) => {
     const res = await fetch(`${API_BASE_URL}/distributions/${distributionId}`, {
@@ -221,15 +196,11 @@ const Distribution = () => {
     .map((id) => campaigns.find((c) => c.id === id))
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
 
-  const total = viewMode === "flat" ? distTotal : groupsTotal;
-  const visibleDistributions = historyExpanded ? distributions : distributions.slice(0, HISTORY_COLLAPSED_SIZE);
+  const visibleFlatRows = historyExpanded ? flatRows : flatRows.slice(0, HISTORY_COLLAPSED_SIZE);
   const visibleGroups = historyExpanded ? groups : groups.slice(0, HISTORY_COLLAPSED_SIZE);
-  const isEmpty = viewMode === "flat" ? distributions.length === 0 : groups.length === 0;
-  const rowCount = viewMode === "flat" ? distributions.length : groups.length;
-  const filtersActive =
-    viewMode === "flat"
-      ? filterReelId !== "all" || filterAccountId !== "all" || filterStatusFlat !== "all"
-      : Boolean(search) || filterStatusGrouped !== "all" || filterAccountId !== "all";
+  const isEmpty = viewMode === "flat" ? flatRows.length === 0 : groups.length === 0;
+  const rowCount = viewMode === "flat" ? flatRows.length : groups.length;
+  const filtersActive = Boolean(search) || filterStatus !== "all" || filterAccountId !== "all";
 
   return (
     <div className="min-w-0 space-y-6 sm:space-y-8">
@@ -292,70 +263,44 @@ const Distribution = () => {
           </ToggleGroup>
         </div>
 
-        {viewMode === "flat" ? (
-          <div className="mb-4 grid w-full grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:max-w-2xl">
-            <Select value={filterReelId} onValueChange={setFilterReelId}>
-              <SelectTrigger aria-label="Filter by reel"><SelectValue placeholder="All reels" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All reels</SelectItem>
-                {reels.map((reel) => <SelectItem key={reel.id} value={reel.id}>{reel.title.slice(0, 40)}</SelectItem>)}
-              </SelectContent>
-            </Select>
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {STATUS_CHIPS.map((chip) => (
+              <button
+                key={chip}
+                type="button"
+                onClick={() => setFilterStatus(chip)}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                  filterStatus === chip
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/70"
+                }`}
+              >
+                {chip === "all" ? "All" : chip}
+              </button>
+            ))}
+          </div>
+          <div className="flex w-full gap-2 sm:w-auto">
+            <div className="relative min-w-0 flex-1 sm:w-56">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search reels…"
+                className="h-9 pl-8 text-xs"
+              />
+            </div>
             <Select value={filterAccountId} onValueChange={setFilterAccountId}>
-              <SelectTrigger aria-label="Filter by account"><SelectValue placeholder="All accounts" /></SelectTrigger>
+              <SelectTrigger aria-label="Filter by platform" className="h-9 w-[150px] shrink-0 text-xs">
+                <SelectValue placeholder="All platforms" />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All accounts</SelectItem>
+                <SelectItem value="all">All platforms</SelectItem>
                 {accounts.map((account) => <SelectItem key={account.account_id} value={account.account_id} className="capitalize">{account.platform_name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Select value={filterStatusFlat} onValueChange={setFilterStatusFlat}>
-              <SelectTrigger aria-label="Filter by status"><SelectValue placeholder="All statuses" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                {DISTRIBUTION_STATUSES.map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}
-              </SelectContent>
-            </Select>
           </div>
-        ) : (
-          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {STATUS_CHIPS.map((chip) => (
-                <button
-                  key={chip}
-                  type="button"
-                  onClick={() => setFilterStatusGrouped(chip)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                    filterStatusGrouped === chip
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/70"
-                  }`}
-                >
-                  {chip === "all" ? "All" : chip}
-                </button>
-              ))}
-            </div>
-            <div className="flex w-full gap-2 sm:w-auto">
-              <div className="relative min-w-0 flex-1 sm:w-56">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search reels…"
-                  className="h-9 pl-8 text-xs"
-                />
-              </div>
-              <Select value={filterAccountId} onValueChange={setFilterAccountId}>
-                <SelectTrigger aria-label="Filter by platform" className="h-9 w-[150px] shrink-0 text-xs">
-                  <SelectValue placeholder="All platforms" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All platforms</SelectItem>
-                  {accounts.map((account) => <SelectItem key={account.account_id} value={account.account_id} className="capitalize">{account.platform_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        )}
+        </div>
 
         {loading ? (
           <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground sm:p-12 sm:text-base">Loading…</div>
@@ -368,14 +313,14 @@ const Distribution = () => {
         ) : viewMode === "flat" ? (
           <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-card">
             <div className="divide-y divide-border">
-              {visibleDistributions.map((d, i) => (
+              {visibleFlatRows.map((d, i) => (
                 <motion.div
                   key={d.distribution_id}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: Math.min(i * 0.04, 0.3) }}
-                  onClick={() => d.reel_id && router.push(`/distribute/${d.reel_id}`)}
-                  className={`flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-4 sm:px-6 sm:py-4 ${d.reel_id ? "cursor-pointer hover:bg-muted/20" : ""} transition-colors`}
+                  onClick={() => router.push(`/distribute/${d.reel_id}`)}
+                  className="flex cursor-pointer flex-col gap-3 px-4 py-3.5 transition-colors hover:bg-muted/20 sm:flex-row sm:items-center sm:gap-4 sm:px-6 sm:py-4"
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
                     <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${
@@ -460,7 +405,7 @@ const Distribution = () => {
 
         {historyExpanded && total > PAGE_SIZE && (
           <div className="mt-4 flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span className="tabular-nums">Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}</span>
+            <span className="tabular-nums">Showing reel {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}</span>
             <div className="grid grid-cols-2 gap-2 sm:flex">
               <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((current) => current - 1)}>Previous</Button>
               <Button variant="outline" size="sm" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage((current) => current + 1)}>Next</Button>
