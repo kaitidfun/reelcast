@@ -11,6 +11,7 @@ import {
   List,
   Film,
   CircleDot,
+  Send,
 } from "lucide-react";
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
@@ -208,11 +209,12 @@ const ProductReels = () => {
           </SelectContent>
         </Select>
         <Select value={publishFilter} onValueChange={setPublishFilter}>
-          <SelectTrigger className="w-full sm:w-[170px] bg-card h-10">
+          <SelectTrigger aria-label="Filter by publish status" className="h-10 w-full justify-start gap-2 bg-card sm:w-[200px] [&>svg:last-child]:ml-auto">
+            <Send className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <SelectValue placeholder="Publish status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Published or not</SelectItem>
+            <SelectItem value="all">Published or Not</SelectItem>
             <SelectItem value="published">Published</SelectItem>
             <SelectItem value="unpublished">Not published</SelectItem>
           </SelectContent>
@@ -238,10 +240,11 @@ const ProductReels = () => {
           No reels match your filters.
         </div>
       ) : view === "grid" ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+        <div className="grid w-full max-w-6xl grid-cols-2 gap-4 md:grid-cols-4">
           {filteredReels.map((reel, i) => (
             <motion.div
               key={reel.id}
+              className="min-w-0"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}

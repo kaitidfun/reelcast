@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Plus, Send } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,13 +14,6 @@ import { reelClickTarget } from "@/lib/reel-status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchClearButton } from "@/components/ui/search-clear-button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 const RECENT_REELS_COLLAPSED_SIZE = 8;
 const RECENT_CAMPAIGNS_COLLAPSED_SIZE = 3;
@@ -41,7 +34,6 @@ export default function Home() {
   const router = useRouter();
   const firstName = user?.displayName?.split(" ")[0] ?? "Creator";
   const [searchQuery, setSearchQuery] = useState("");
-  const [publishFilter, setPublishFilter] = useState("all");
   const [reelsExpanded, setReelsExpanded] = useState(false);
   const [campaignsExpanded, setCampaignsExpanded] = useState(false);
   const { reels, loading: reelsLoading, reload: reloadReels } = useReels();
@@ -51,18 +43,13 @@ export default function Home() {
   const newestReels = [...reels].sort(
     (a, b) => createdAtTimestamp(b.createdAt) - createdAtTimestamp(a.createdAt),
   );
-  const publishFilteredReels = newestReels.filter(
-    (reel) =>
-      publishFilter === "all" ||
-      (publishFilter === "published" ? reel.hasDistribution : !reel.hasDistribution),
-  );
   const visibleReels = isSearching
-    ? publishFilteredReels.filter((reel) =>
+    ? newestReels.filter((reel) =>
         [reel.title, reel.status].some((value) => value.toLocaleLowerCase().includes(normalizedQuery)),
       )
     : reelsExpanded
-      ? publishFilteredReels
-      : publishFilteredReels.slice(0, RECENT_REELS_COLLAPSED_SIZE);
+      ? newestReels
+      : newestReels.slice(0, RECENT_REELS_COLLAPSED_SIZE);
   const newestCampaigns = [...campaigns].sort(
     (a, b) => createdAtTimestamp(b.createdAt) - createdAtTimestamp(a.createdAt),
   );
@@ -93,30 +80,17 @@ export default function Home() {
           <p className="text-sm text-muted-foreground mt-1">Here's what's happening in your studio today.</p>
         </div>
 
-        {/* Search and filter apply to both sections below. */}
-        <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-[520px] lg:shrink-0">
-          <div className="relative min-w-0 flex-1">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search reels, products, campaigns…"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              aria-label="Search reels, products, and campaigns"
-              className="h-9 pl-8 pr-9 text-xs"
-            />
-            {isSearching && <SearchClearButton onClear={() => setSearchQuery("")} />}
-          </div>
-          <Select value={publishFilter} onValueChange={setPublishFilter}>
-            <SelectTrigger aria-label="Filter by publish status" className="h-9 w-full shrink-0 justify-start gap-2 text-xs sm:w-[180px] [&>svg:last-child]:ml-auto">
-              <Send className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <SelectValue placeholder="Publish status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Published or not</SelectItem>
-              <SelectItem value="published">Published</SelectItem>
-              <SelectItem value="unpublished">Not published</SelectItem>
-            </SelectContent>
-          </Select>
+        {/* Search applies to both sections below. */}
+        <div className="relative w-full min-w-0 lg:w-[520px] lg:shrink-0">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search reels, products, campaigns…"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            aria-label="Search reels, products, and campaigns"
+            className="h-9 pl-8 pr-9 text-xs"
+          />
+          {isSearching && <SearchClearButton onClear={() => setSearchQuery("")} />}
         </div>
       </motion.div>
 
@@ -173,7 +147,7 @@ export default function Home() {
             ))}
           </div>
         )}
-        {!isSearching && !reelsExpanded && publishFilteredReels.length > RECENT_REELS_COLLAPSED_SIZE && (
+        {!isSearching && !reelsExpanded && newestReels.length > RECENT_REELS_COLLAPSED_SIZE && (
           <div className="flex justify-center">
             <Button variant="outline" size="sm" onClick={() => setReelsExpanded(true)}>Show all</Button>
           </div>
