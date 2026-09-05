@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const RECENT_REELS_COLLAPSED_SIZE = 4;
+const RECENT_REELS_COLLAPSED_SIZE = 8;
 const RECENT_CAMPAIGNS_COLLAPSED_SIZE = 3;
 
 const createdAtTimestamp = (value: string | null | undefined) => {
@@ -81,11 +81,43 @@ export default function Home() {
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       {/* Header */}
-      <motion.div {...fadeUp} transition={{ duration: 0.4 }}>
-        <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
-          Welcome back, {firstName}!
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">Here's what's happening in your studio today.</p>
+      <motion.div
+        {...fadeUp}
+        transition={{ duration: 0.4 }}
+        className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6"
+      >
+        <div className="min-w-0">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+            Welcome back, {firstName}!
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Here's what's happening in your studio today.</p>
+        </div>
+
+        {/* Search and filter apply to both sections below. */}
+        <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-[520px] lg:shrink-0">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search reels, products, campaigns…"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              aria-label="Search reels, products, and campaigns"
+              className="h-9 pl-8 pr-9 text-xs"
+            />
+            {isSearching && <SearchClearButton onClear={() => setSearchQuery("")} />}
+          </div>
+          <Select value={publishFilter} onValueChange={setPublishFilter}>
+            <SelectTrigger aria-label="Filter by publish status" className="h-9 w-full shrink-0 justify-start gap-2 text-xs sm:w-[180px] [&>svg:last-child]:ml-auto">
+              <Send className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <SelectValue placeholder="Publish status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Published or not</SelectItem>
+              <SelectItem value="published">Published</SelectItem>
+              <SelectItem value="unpublished">Not published</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </motion.div>
 
       {/* Quick Actions */}
@@ -115,32 +147,6 @@ export default function Home() {
           <span className="font-display text-lg font-semibold text-foreground">Create new product</span>
           <span className="text-xs text-muted-foreground">Add to your product library</span>
         </Link>
-      </motion.div>
-
-      {/* Search + filter — sits above Recently Reels, applies to both sections below */}
-      <motion.div {...fadeUp} transition={{ duration: 0.4, delay: 0.15 }} className="flex gap-2">
-        <div className="relative min-w-0 flex-1">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search reels, products, campaigns…"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            aria-label="Search reels, products, and campaigns"
-            className="h-9 pl-8 pr-9 text-xs"
-          />
-          {isSearching && <SearchClearButton onClear={() => setSearchQuery("")} />}
-        </div>
-        <Select value={publishFilter} onValueChange={setPublishFilter}>
-          <SelectTrigger aria-label="Filter by publish status" className="h-9 w-[180px] shrink-0 justify-start gap-2 text-xs [&>svg:last-child]:ml-auto">
-            <Send className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <SelectValue placeholder="Publish status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Published or not</SelectItem>
-            <SelectItem value="published">Published</SelectItem>
-            <SelectItem value="unpublished">Not published</SelectItem>
-          </SelectContent>
-        </Select>
       </motion.div>
 
       {isSearching && (
