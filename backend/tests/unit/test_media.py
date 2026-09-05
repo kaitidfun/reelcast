@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import tempfile
+import subprocess
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -9,7 +11,7 @@ from app.exceptions import (
     FFmpegProcessingException,
     InvalidCoordinateException,
 )
-from app.services.overlay_service import overlay_watermark
+from app.services.overlay_service import _FFMPEG_EXE, overlay_watermark
 from app.services.upload_service import (
     MAX_VIDEO_SIZE_BYTES,
     validate_video_file,
@@ -93,3 +95,45 @@ class OverlayTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(output_path, result)
+
+    @patch("app.services.overlay_service.subprocess.run")
+    async def test_native_crash_reports_exit_code_and_stderr_tail(self, run) -> None:
+        run.return_value = SimpleNamespace(
+            returncode=0xC0000005,
+            stderr=b"banner " * 1000 + b"scaler crashed",
+        )
+        with self.assertRaises(FFmpegProcessingException) as caught:
+            await overlay_watermark("input.mp4", "logo.jpg", "center", "output.mp4")
+        message = str(caught.exception)
+        self.assertIn("0xC0000005", message)
+        self.assertTrue(message.endswith("scaler crashed"))
+        self.assertLess(len(message), 4200)
+
+    async def test_jpeg_overlay_with_odd_scaled_height_renders_and_decodes(self) -> None:
+        """750x726 used to scale to 150x145 and crash Windows FFmpeg 7.1."""
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            video, logo, output = (root / name for name in ("input.mp4", "logo.jpg", "output.mp4"))
+            Image.new("RGB", (750, 726), "red").save(logo, subsampling=2)
+            subprocess.run(
+                [_FFMPEG_EXE, "-hide_banner", "-loglevel", "error", "-nostdin",
+                 "-f", "lavfi", "-i", "color=c=blue:s=320x480:r=25:d=1",
+                 "-c:v", "libx264", "-y", str(video)],
+                capture_output=True, check=True, timeout=30,
+            )
+            await overlay_watermark(str(video), str(logo), "bottom-right", str(output))
+            decoded = subprocess.run(
+                [_FFMPEG_EXE, "-hide_banner", "-loglevel", "error", "-xerror",
+                 "-i", str(output), "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"],
+                capture_output=True, check=True, timeout=30,
+            )
+            self.assertEqual(len(decoded.stdout), 25 * 320 * 480 * 3)
+            # Confirm the overlay appears in the first and final frames.
+            for frame in (0, 24):
+                offset = (frame * 320 * 480 + 400 * 320 + 250) * 3
+                red, green, blue = decoded.stdout[offset:offset + 3]
+                self.assertGreater(red, 200)
+                self.assertLess(green, 40)
+                self.assertLess(blue, 40)

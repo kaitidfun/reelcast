@@ -54,6 +54,16 @@ POSITION_COORDS = {
 }
 
 
+def _ffmpeg_failure(operation: str, result: subprocess.CompletedProcess) -> str:
+    """Keep native crash codes and the useful stderr tail in reported errors."""
+    stderr = result.stderr.decode("utf-8", errors="replace").strip()
+    return (
+        f"FFmpeg {operation} failed (exit code {result.returncode}, "
+        f"0x{result.returncode & 0xFFFFFFFF:08X}): "
+        f"{stderr[-4000:] or 'No stderr output'}"
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Download & Cleanup Helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -139,13 +149,15 @@ async def overlay_watermark(
     logger.info(f"Compositing overlay at position '{position}': {overlay_path} (audio={'on' if with_audio else 'stripped'})")
 
     def _process():
-        # Scale overlay to max width then composite onto video
+        # Keep both dimensions even for chroma-subsampled image formats.
+        # FFmpeg 7.1 on Windows can crash scaling a JPEG to an odd height.
         filtergraph = (
-            f"[1:v]scale={OVERLAY_MAX_WIDTH}:-1[logo];"
+            f"[1:v]scale={OVERLAY_MAX_WIDTH}:-2[logo];"
             f"[0:v][logo]overlay=x={overlay_x}:y={overlay_y}[out]"
         )
         cmd = [
             _FFMPEG_EXE,
+            "-hide_banner", "-nostdin",
             "-i", video_path,
             "-i", overlay_path,
             "-filter_complex", filtergraph,
@@ -162,7 +174,7 @@ async def overlay_watermark(
         try:
             result = subprocess.run(cmd, capture_output=True, timeout=120)
             if result.returncode != 0:
-                stderr_msg = result.stderr.decode("utf-8", errors="replace")
+                stderr_msg = _ffmpeg_failure("overlay", result)
                 logger.error(f"FFmpeg error during compositing: {stderr_msg}")
                 raise FFmpegProcessingException(stderr_msg)
             logger.info(f"FFmpeg compositing complete: {output_path}")
@@ -263,6 +275,7 @@ def _extract_first_frame(video_path: str, output_path: str) -> str:
     """Grab the first frame of a video file as a JPEG via FFmpeg."""
     cmd = [
         _FFMPEG_EXE,
+        "-hide_banner", "-nostdin",
         "-i", video_path,
         "-vframes", "1",
         "-q:v", "2",
@@ -271,7 +284,7 @@ def _extract_first_frame(video_path: str, output_path: str) -> str:
     try:
         result = subprocess.run(cmd, capture_output=True, timeout=_THUMBNAIL_TIMEOUT_SECONDS)
         if result.returncode != 0:
-            stderr_msg = result.stderr.decode("utf-8", errors="replace")
+            stderr_msg = _ffmpeg_failure("first-frame extraction", result)
             logger.error(f"FFmpeg error extracting first frame: {stderr_msg}")
             raise FFmpegProcessingException(stderr_msg)
         return output_path
