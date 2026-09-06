@@ -7,6 +7,7 @@ import {
   getProductStatus,
   hasGuidedSelection,
   sortLibraryItems,
+  validateDisplayName,
   validateLoginForm,
   validateOtpCode,
   validateProductImages,
@@ -27,6 +28,12 @@ describe("F1 frontend unit tests", () => {
         acceptTerms: true,
       }),
     ).toBeNull();
+  });
+
+  it("requires a non-blank display name with at most 50 characters", () => {
+    expect(validateDisplayName("Creator")).toBeNull();
+    expect(validateDisplayName("   ")).toBe("Display name cannot be blank");
+    expect(validateDisplayName("a".repeat(51))).toBe("Display name must not exceed 50 characters");
   });
 
   it("F1-UTC01-TC02 rejects invalid email format", () => {

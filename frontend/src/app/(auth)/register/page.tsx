@@ -182,8 +182,9 @@ const Register = () => {
                     id="name"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
+                    maxLength={50}
                     className="pl-10 h-9"
-                    placeholder="username"
+                    placeholder="username (max 50 characters)"
                   />
                 </div>
               </div>

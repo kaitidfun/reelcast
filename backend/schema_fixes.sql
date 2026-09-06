@@ -110,3 +110,16 @@ ALTER TABLE reels ADD COLUMN IF NOT EXISTS name VARCHAR;
 -- trying to reconstruct a URL from platform_post_id client-side (which
 -- doesn't work for Instagram — its media id isn't its permalink id).
 ALTER TABLE distributions ADD COLUMN IF NOT EXISTS post_url VARCHAR;
+
+-- 2026-09-06: Display names are required and limited to 50 characters.
+-- Normalize existing rows before applying the database constraints.
+UPDATE users
+SET display_name = COALESCE(NULLIF(LEFT(BTRIM(display_name), 50), ''), 'Creator')
+WHERE display_name IS NULL
+   OR display_name <> LEFT(BTRIM(display_name), 50)
+   OR BTRIM(display_name) = '';
+ALTER TABLE users ALTER COLUMN display_name TYPE VARCHAR(50);
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_display_name_not_blank;
+ALTER TABLE users
+    ADD CONSTRAINT users_display_name_not_blank
+    CHECK (LENGTH(BTRIM(display_name)) > 0);

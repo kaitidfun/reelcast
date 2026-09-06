@@ -17,7 +17,7 @@ import { User, Mail, Shield, Calendar, LogOut, Save, ShieldCheck, ShieldOff, Cop
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { validateProfileImage } from "@/lib/test-plan";
+import { MAX_DISPLAY_NAME_LENGTH, validateDisplayName, validateProfileImage } from "@/lib/test-plan";
 import { SocialConnections } from "@/components/SocialConnections";
 
 const API_URL = "http://localhost:8000";
@@ -67,10 +67,15 @@ const Account = () => {
   const initials = user.displayName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
   const is2faEnabled = user.is2faEnabled ?? false;
   const hasPassword = user.hasPassword ?? true;
+  const displayNameError = validateDisplayName(displayName);
 
   const getToken = () => localStorage.getItem("rf_token") || "";
 
   const updateAccountProfile = async () => {
+    if (displayNameError) {
+      toast.error(displayNameError);
+      return;
+    }
     try {
       const res = await fetch(`${API_URL}/me`, {
         method: "PUT",
@@ -333,9 +338,9 @@ const Account = () => {
         <Card className="border-border bg-card">
           <CardHeader><CardTitle className="flex items-center gap-2 text-base"><User className="h-4 w-4 text-primary" /> Profile Information</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2"><Label htmlFor="name">Display Name</Label><Input id="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></div>
+            <div className="space-y-2"><Label htmlFor="name">Display Name</Label><Input id="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={MAX_DISPLAY_NAME_LENGTH} aria-invalid={Boolean(displayNameError)} aria-describedby="display-name-help" /><p id="display-name-help" className="text-xs text-muted-foreground">{displayName.trim().length}/{MAX_DISPLAY_NAME_LENGTH} characters</p>{displayNameError && <p className="text-xs text-destructive">{displayNameError}</p>}</div>
             <div className="space-y-2"><Label htmlFor="acc-email">Email</Label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input id="acc-email" value={email} disabled className="pl-10" /></div></div>
-            <Button onClick={updateAccountProfile} className="gradient-primary text-primary-foreground shadow-glow"><Save className="h-4 w-4" /> Save</Button>
+            <Button onClick={updateAccountProfile} disabled={Boolean(displayNameError)} className="gradient-primary text-primary-foreground shadow-glow"><Save className="h-4 w-4" /> Save</Button>
           </CardContent>
         </Card>
       </motion.div>

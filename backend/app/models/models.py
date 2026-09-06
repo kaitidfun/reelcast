@@ -26,7 +26,7 @@ class User(Base):
         server_default=text("gen_random_uuid()"),
     )
     email = Column(String, unique=True, index=True, nullable=True)
-    display_name = Column(String, nullable=False)
+    display_name = Column(String(50), nullable=False)
     hashed_password = Column(String, nullable=True)
     is_email_verified = Column(Boolean, nullable=False, server_default=text("false"))
     is_2fa_enabled = Column(Boolean, nullable=False, server_default=text("false"))

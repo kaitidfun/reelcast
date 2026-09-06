@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 from app.dependencies import get_db
 from app.exceptions import OAuthProviderException
 from app.models.models import User
+from app.schemas.user import MAX_DISPLAY_NAME_LENGTH
 from app.services.auth_service import create_access_token
 from app.core.config import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -69,12 +70,14 @@ async def authenticateMemberWithOAuth(
         if not user_info:
             user_info = await client.parse_id_token(request, token)
         email = user_info.get("email")
-        display_name = user_info.get("name", "Google User")
+        display_name = str(user_info.get("name") or "Google User").strip()
+        display_name = display_name[:MAX_DISPLAY_NAME_LENGTH] or "Google User"
     elif provider == "facebook":
         resp = await client.get("me?fields=id,name", token=token)
         user_info = resp.json()
         email = f"{user_info.get('id')}@facebook.com"
-        display_name = user_info.get("name", "Facebook User")
+        display_name = str(user_info.get("name") or "Facebook User").strip()
+        display_name = display_name[:MAX_DISPLAY_NAME_LENGTH] or "Facebook User"
     else:
         raise OAuthProviderException(f"Unsupported OAuth provider: {provider}")
 

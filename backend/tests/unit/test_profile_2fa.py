@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pyotp
+from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.datastructures import UploadFile
 
@@ -53,6 +54,16 @@ class ProfileUpdateTests(unittest.TestCase):
             )
 
         db.rollback.assert_called_once()
+
+    def test_display_name_must_be_non_blank_and_at_most_50_characters(self) -> None:
+        for value in (None, "", "   ", "a" * 51):
+            with self.subTest(value=value):
+                with self.assertRaises(ValidationError):
+                    UserUpdate(display_name=value)
+
+    def test_display_name_is_trimmed_before_saving(self) -> None:
+        update = UserUpdate(display_name="  New Name  ")
+        self.assertEqual(update.display_name, "New Name")
 
 
 class ProfileImageTests(unittest.IsolatedAsyncioTestCase):

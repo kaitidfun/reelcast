@@ -1,7 +1,20 @@
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
+
+
+MAX_DISPLAY_NAME_LENGTH = 50
+
+
+def normalize_display_name(value: object) -> str:
+    """Trim a display name and reject blank values."""
+    if not isinstance(value, str):
+        raise ValueError("Display name must be a string")
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("Display name cannot be blank")
+    return normalized
 
 
 # ────────────────────────────── User ──────────────────────────────
@@ -10,11 +23,21 @@ from datetime import datetime
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
-    display_name: str
+    display_name: str = Field(max_length=MAX_DISPLAY_NAME_LENGTH)
+
+    @field_validator("display_name", mode="before")
+    @classmethod
+    def validate_display_name(cls, value: str) -> str:
+        return normalize_display_name(value)
 
 
 class UserUpdate(BaseModel):
-    display_name: Optional[str] = None
+    display_name: str = Field(max_length=MAX_DISPLAY_NAME_LENGTH)
+
+    @field_validator("display_name", mode="before")
+    @classmethod
+    def validate_display_name(cls, value: object) -> str:
+        return normalize_display_name(value)
 
 
 class UserResponse(BaseModel):

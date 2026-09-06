@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from authlib.integrations.starlette_client import OAuthError
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.exceptions import (
@@ -56,6 +57,16 @@ class RegistrationValidationTests(unittest.TestCase):
             with self.subTest(password=password):
                 with self.assertRaises(WeakPasswordException):
                     validate_registration_input("johndoe@example.com", password)
+
+    def test_registration_display_name_must_be_non_blank_and_at_most_50_characters(self) -> None:
+        for value in ("", "   ", "a" * 51):
+            with self.subTest(value=value):
+                with self.assertRaises(ValidationError):
+                    UserCreate(
+                        email="johndoe@example.com",
+                        password="StrongPassword123!",
+                        display_name=value,
+                    )
 
 
 class RegistrationRouteTests(unittest.TestCase):

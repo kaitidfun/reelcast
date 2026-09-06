@@ -1,4 +1,5 @@
 export const MAX_PROMPT_LENGTH = 500;
+export const MAX_DISPLAY_NAME_LENGTH = 50;
 export const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
 export const MAX_VIDEO_DURATION_SECONDS = 60;
@@ -20,8 +21,18 @@ export type RegistrationForm = {
   acceptTerms: boolean;
 };
 
+export function validateDisplayName(displayName: string): string | null {
+  if (!displayName.trim()) return "Display name cannot be blank";
+  if (displayName.trim().length > MAX_DISPLAY_NAME_LENGTH) {
+    return `Display name must not exceed ${MAX_DISPLAY_NAME_LENGTH} characters`;
+  }
+  return null;
+}
+
 export function validateRegistrationForm(form: RegistrationForm): string | null {
-  if (!form.displayName.trim() || !form.email.trim() || !form.password) {
+  const displayNameError = validateDisplayName(form.displayName);
+  if (displayNameError) return displayNameError;
+  if (!form.email.trim() || !form.password) {
     return "Please fill in all fields";
   }
   if (!EMAIL_PATTERN.test(form.email.trim())) {
