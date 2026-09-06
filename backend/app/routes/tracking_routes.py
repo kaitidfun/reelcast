@@ -97,6 +97,8 @@ def connectEcommerceAccount(
         return _tracking_error_redirect("Unsupported e-commerce platform")
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") not in (None, "access"):
+            return _tracking_error_redirect("Invalid or expired session")
         email = payload.get("sub")
     except JWTError:
         return _tracking_error_redirect("Invalid or expired session")

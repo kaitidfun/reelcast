@@ -66,6 +66,7 @@ const Account = () => {
 
   const initials = user.displayName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
   const is2faEnabled = user.is2faEnabled ?? false;
+  const hasPassword = user.hasPassword ?? true;
 
   const getToken = () => localStorage.getItem("rf_token") || "";
 
@@ -188,7 +189,7 @@ const Account = () => {
 
   // ===== 2FA Disable Flow =====
   const handleDisable2fa = async () => {
-    if (disableOtp.length !== 6 || !disablePassword) return;
+    if (disableOtp.length !== 6 || (hasPassword && !disablePassword)) return;
     setDisabling(true);
     try {
       const res = await fetch(`${API_URL}/api/2fa/disable`, {
@@ -479,19 +480,21 @@ const Account = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><ShieldOff className="h-5 w-5 text-destructive" /> Disable Two-Factor Authentication</DialogTitle>
-            <DialogDescription>For security, enter your password and a current authenticator code.</DialogDescription>
+            <DialogDescription>{hasPassword
+              ? "For security, enter your password and a current authenticator code."
+              : "Enter a current authenticator code to disable two-factor authentication."}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Account Password</Label>
+            {hasPassword && <div className="space-y-2">
+              <Label htmlFor="disable-password">Account Password</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input type={showDisablePassword ? "text" : "password"} value={disablePassword} onChange={(e) => setDisablePassword(e.target.value)} className="pl-10 pr-10" placeholder="Enter your password" />
+                <Input id="disable-password" type={showDisablePassword ? "text" : "password"} value={disablePassword} onChange={(e) => setDisablePassword(e.target.value)} className="pl-10 pr-10" placeholder="Enter your password" />
                 <button type="button" onClick={() => setShowDisablePassword((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                   {showDisablePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-            </div>
+            </div>}
             <div className="space-y-2">
               <Label>Authenticator Code</Label>
               <div className="flex justify-center">
@@ -510,7 +513,7 @@ const Account = () => {
                 </InputOTP>
               </div>
             </div>
-            <Button className="w-full" variant="destructive" onClick={handleDisable2fa} disabled={disabling || disableOtp.length !== 6 || !disablePassword}>
+            <Button className="w-full" variant="destructive" onClick={handleDisable2fa} disabled={disabling || disableOtp.length !== 6 || (hasPassword && !disablePassword)}>
               {disabling ? <><Loader2 className="h-4 w-4 animate-spin" /> Disabling...</> : "Disable 2FA"}
             </Button>
           </div>

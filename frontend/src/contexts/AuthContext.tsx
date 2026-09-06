@@ -10,6 +10,7 @@ export interface MockUser {
   profileImage: string | null;
   joinedAt: string;
   is2faEnabled?: boolean;
+  hasPassword?: boolean;
 }
 
 const API_URL = "http://localhost:8000";
@@ -63,6 +64,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             : null,
           joinedAt: data.created_at || new Date().toISOString(),
           is2faEnabled: data.is_2fa_enabled ?? false,
+          hasPassword: data.has_password ?? true,
         });
       } else {
         localStorage.removeItem("rf_token");
@@ -127,6 +129,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             : null,
           joinedAt: data.user.created_at || new Date().toISOString(),
           is2faEnabled: data.user.is_2fa_enabled ?? false,
+          hasPassword: data.user.has_password ?? true,
         });
         return { ok: true };
       } else {
@@ -163,6 +166,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             : null,
           joinedAt: data.user.created_at || new Date().toISOString(),
           is2faEnabled: data.user.is_2fa_enabled ?? false,
+          hasPassword: data.user.has_password ?? true,
         });
         return true;
       }

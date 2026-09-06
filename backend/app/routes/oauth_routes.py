@@ -4,6 +4,7 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from app.dependencies import get_db
 from app.exceptions import OAuthProviderException
@@ -86,6 +87,18 @@ async def authenticateMemberWithOAuth(
         db.add(user)
         db.commit()
         db.refresh(user)
+
+    if user.is_2fa_enabled:
+        temp_token = create_access_token(
+            data={"sub": user.email, "type": "2fa_challenge"},
+            expires_delta=timedelta(minutes=5),
+        )
+        # The fragment stays in the browser and is consumed by the login page.
+        challenge = urlencode({"requires_2fa": "1", "temp_token": temp_token})
+        return RedirectResponse(
+            url=f"{FRONTEND_URL}/login#{challenge}",
+            headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"},
+        )
 
     access_token = create_access_token(
         data={"sub": user.email},

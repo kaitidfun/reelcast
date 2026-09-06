@@ -103,6 +103,8 @@ def connectSocialAccount(
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") not in (None, "access"):
+            raise OAuthProviderException("Invalid or expired session")
         email = payload.get("sub")
     except JWTError as exc:
         raise OAuthProviderException("Invalid or expired session") from exc

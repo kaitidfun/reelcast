@@ -25,6 +25,7 @@ class UserResponse(BaseModel):
     display_name: str
     is_email_verified: bool
     is_2fa_enabled: bool = False
+    has_password: bool = True
     profile_image: Optional[str] = None
     created_at: Optional[datetime] = None
 
@@ -58,7 +59,7 @@ class TwoFactorLoginRequest(BaseModel):
 
 class TwoFactorDisableRequest(BaseModel):
     code: str
-    password: str
+    password: str = ""
 
 
 class ChangePasswordRequest(BaseModel):

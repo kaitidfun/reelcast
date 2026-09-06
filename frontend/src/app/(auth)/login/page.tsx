@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -41,6 +41,7 @@ const Login = () => {
   const [tempToken, setTempToken] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [verifying2fa, setVerifying2fa] = useState(false);
+  const socialCallbackHandled = useRef(false);
 
   const searchParams = useSearchParams();
   const tokenFromUrl = searchParams.get("token");
@@ -68,7 +69,25 @@ const Login = () => {
     }
   }, [errorFromUrl, toast]);
   useEffect(() => {
+    if (socialCallbackHandled.current) return;
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    if (fragment.get("requires_2fa") === "1") {
+      socialCallbackHandled.current = true;
+      const challengeToken = fragment.get("temp_token");
+      window.history.replaceState(window.history.state, "", window.location.pathname);
+      setLoading(false);
+      setOtpCode("");
+      if (!challengeToken) {
+        setError("Social login could not be completed. Please sign in again.");
+        return;
+      }
+      setError("");
+      setTempToken(challengeToken);
+      setShow2fa(true);
+      return;
+    }
     if (tokenFromUrl) {
+      socialCallbackHandled.current = true;
       setLoading(true);
       toast({
         title: "Completing social login...",
@@ -151,6 +170,7 @@ const Login = () => {
     setTempToken("");
     setOtpCode("");
     setError("");
+    setLoading(false);
   };
 
   return (

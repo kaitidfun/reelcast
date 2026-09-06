@@ -147,6 +147,7 @@ def verify_2fa_login(body: TwoFactorLoginRequest, db: Session = Depends(get_db))
             "display_name": user.display_name,
             "is_email_verified": user.is_email_verified,
             "is_2fa_enabled": user.is_2fa_enabled,
+            "has_password": bool(user.hashed_password),
         },
     }
 
@@ -159,13 +160,13 @@ def disable_2fa(
 ):
     """
     Disable 2FA for the current user.
-    Requires both the current TOTP code and account password for security.
+    Requires a current TOTP code and the account password when one is set.
     """
     if not current_user.is_2fa_enabled:
         raise HTTPException(status_code=400, detail="2FA is not currently enabled")
 
     # Verify password
-    if not current_user.hashed_password or not verify_password(
+    if current_user.hashed_password and not verify_password(
         body.password, current_user.hashed_password
     ):
         raise HTTPException(status_code=401, detail="Incorrect password")

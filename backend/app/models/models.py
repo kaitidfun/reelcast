@@ -64,6 +64,10 @@ class User(Base):
     def id(self):
         return self.user_id
 
+    @property
+    def has_password(self):
+        return bool(self.hashed_password)
+
 
 class SocialAccount(Base):
     __tablename__ = "social_accounts"
