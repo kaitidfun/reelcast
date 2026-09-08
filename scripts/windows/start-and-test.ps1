@@ -55,7 +55,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Push-Location -Path $BACKEND
 
 Write-Host "Executing backend unit suite..." -ForegroundColor Yellow
-& $VENV_PY tests\run_unit_tests.py
+& $VENV_PY -B -m pytest
 if ($LASTEXITCODE -ne 0) { 
     Write-Host "  ERROR: Backend Unit Tests failed!" -ForegroundColor Red
     exit $LASTEXITCODE 

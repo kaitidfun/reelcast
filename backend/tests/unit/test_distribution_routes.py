@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-import unittest
+import pytest
+from tests.pytest_helpers import PytestAssertions
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -19,8 +21,8 @@ from app.routes.distribution_routes import (
 from app.schemas.distribution import DistributionCreate
 
 
-class CreateDistributionTests(unittest.TestCase):
-    def setUp(self) -> None:
+class TestCreateDistributionTests(PytestAssertions):
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
         self.user = SimpleNamespace(user_id=uuid4())
         self.req = DistributionCreate(reel_id=uuid4(), account_id=uuid4())
@@ -69,7 +71,7 @@ class CreateDistributionTests(unittest.TestCase):
         self.assertEqual("Pending", result.status)
 
 
-class ListDistributionsTests(unittest.TestCase):
+class TestListDistributionsTests(PytestAssertions):
     def test_filters_to_current_user_only(self) -> None:
         db = MagicMock()
         user = SimpleNamespace(user_id=uuid4())
@@ -106,7 +108,7 @@ class ListDistributionsTests(unittest.TestCase):
         self.assertEqual([], result.matched_campaign_ids)
 
 
-class ListDistributionsByReelTests(unittest.TestCase):
+class TestListDistributionsByReelTests(PytestAssertions):
     def test_no_matches_returns_empty_groups(self) -> None:
         db = MagicMock()
         user = SimpleNamespace(user_id=uuid4())
@@ -155,8 +157,8 @@ class ListDistributionsByReelTests(unittest.TestCase):
         self.assertEqual({"Published", "Failed"}, {p.status for p in group.platforms})
 
 
-class CancelDistributionTests(unittest.TestCase):
-    def setUp(self) -> None:
+class TestCancelDistributionTests(PytestAssertions):
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
         self.user = SimpleNamespace(user_id=uuid4())
         self.distribution_id = uuid4()
@@ -181,8 +183,8 @@ class CancelDistributionTests(unittest.TestCase):
         mock_delete.assert_called_once_with(self.db, distribution_id=self.distribution_id)
 
 
-class PublishNowTests(unittest.TestCase):
-    def setUp(self) -> None:
+class TestPublishNowTests(PytestAssertions):
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
         self.user = SimpleNamespace(user_id=uuid4())
         self.distribution_id = uuid4()
@@ -217,7 +219,3 @@ class PublishNowTests(unittest.TestCase):
             publishNow(self.distribution_id, db=self.db, current_user=self.user)
 
         self.assertEqual(409, ctx.exception.status_code)
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import pytest
+from tests.pytest_helpers import PytestAssertions
+
 import io
-import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -23,7 +25,7 @@ from app.routes.upload_routes import updateAccountProfileImage
 from app.schemas.user import TwoFactorVerifyRequest, UserUpdate
 
 
-class ProfileUpdateTests(unittest.TestCase):
+class TestProfileUpdateTests(PytestAssertions):
     """F1-UTC03 display-name behavior."""
 
     def test_F1_UTC03_updates_display_name(self) -> None:
@@ -66,8 +68,8 @@ class ProfileUpdateTests(unittest.TestCase):
         self.assertEqual(update.display_name, "New Name")
 
 
-class ProfileImageTests(unittest.IsolatedAsyncioTestCase):
-    def setUp(self) -> None:
+class TestProfileImageTests(PytestAssertions):
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
         self.user = SimpleNamespace(
             user_id=uuid4(),
@@ -83,6 +85,7 @@ class ProfileImageTests(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
         return_value={"key": "images/users/avatar/profile.jpg"},
     )
+    @pytest.mark.asyncio
     async def test_F1_UTC03_TC01_accepts_valid_jpg(self, _upload_image) -> None:
         result = await updateAccountProfileImage(
             self.upload("profile_valid.jpg", b"x" * (3 * 1024 * 1024)),
@@ -93,6 +96,7 @@ class ProfileImageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("images/users/avatar/profile.jpg", result["profile_image"])
         self.assertEqual(result["profile_image"], self.user.profile_image)
 
+    @pytest.mark.asyncio
     async def test_F1_UTC03_TC02_rejects_gif(self) -> None:
         with self.assertRaises(InvalidImageFormatException):
             await updateAccountProfileImage(
@@ -101,6 +105,7 @@ class ProfileImageTests(unittest.IsolatedAsyncioTestCase):
                 self.db,
             )
 
+    @pytest.mark.asyncio
     async def test_F1_UTC03_TC03_rejects_image_over_5mb(self) -> None:
         with self.assertRaises(FileSizeLimitExceededException):
             await updateAccountProfileImage(
@@ -114,6 +119,7 @@ class ProfileImageTests(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
         return_value={"key": "images/users/avatar/profile.jpg"},
     )
+    @pytest.mark.asyncio
     async def test_F1_UTC03_TC04_maps_image_database_failure(
         self,
         _upload_image,
@@ -128,10 +134,10 @@ class ProfileImageTests(unittest.IsolatedAsyncioTestCase):
             )
 
 
-class TwoFactorTests(unittest.TestCase):
+class TestTwoFactorTests(PytestAssertions):
     """F1-UTC04 TOTP verification behavior."""
 
-    def setUp(self) -> None:
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
         self.user = SimpleNamespace(
             is_2fa_enabled=False,

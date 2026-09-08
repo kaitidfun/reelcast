@@ -1,6 +1,8 @@
+import pytest
+from tests.pytest_helpers import PytestAssertions
+
 """OAuth must complete TOTP verification before accessing member endpoints."""
 
-import unittest
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -22,8 +24,8 @@ from app.routes.twofa_routes import router as twofa_router
 from app.services.auth_service import create_access_token
 
 
-class OAuthTwoFactorTests(unittest.TestCase):
-    def setUp(self):
+class TestOAuthTwoFactorTests(PytestAssertions):
+    def setup_method(self, _method):
         self.user = SimpleNamespace(
             user_id=uuid4(), email="member@example.com", display_name="Member",
             hashed_password=None, is_email_verified=False, is_2fa_enabled=True,
@@ -145,7 +147,8 @@ class OAuthTwoFactorTests(unittest.TestCase):
         self.assertTrue(self.user.is_2fa_enabled)
 
 
-class ConnectionTokenTests(unittest.IsolatedAsyncioTestCase):
+class TestConnectionTokenTests(PytestAssertions):
+    @pytest.mark.asyncio
     async def test_social_connection_rejects_2fa_challenge(self):
         token = create_access_token({"sub": "member@example.com", "type": "2fa_challenge"})
         db = MagicMock()

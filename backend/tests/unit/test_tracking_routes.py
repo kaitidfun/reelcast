@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-import unittest
+import pytest
+from tests.pytest_helpers import PytestAssertions
+
 import asyncio
 from datetime import date
 from types import SimpleNamespace
@@ -23,8 +25,8 @@ from app.services import tracking_provider_service
 from app.schemas.analytics import EcommerceAccountConnect, TrackingMetricCreate
 
 
-class TrackingRouteTests(unittest.TestCase):
-    def setUp(self) -> None:
+class TestTrackingRouteTests(PytestAssertions):
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
         self.user = SimpleNamespace(user_id=uuid4())
 
@@ -175,7 +177,3 @@ class TrackingRouteTests(unittest.TestCase):
         self.assertIn("connected=lazada", response.headers["location"])
         self.assertEqual("provider-token", save.call_args.kwargs["access_token"])
         self.assertEqual(user_id, save.call_args.kwargs["user_id"])
-
-
-if __name__ == "__main__":
-    unittest.main()

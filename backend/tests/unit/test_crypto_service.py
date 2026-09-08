@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-import unittest
+import pytest
+from tests.pytest_helpers import PytestAssertions
+
 
 from app.exceptions import TokenDecryptionException
 from app.services.crypto_service import decrypt_token, encrypt_token
 
 
-class TokenEncryptionTests(unittest.TestCase):
+class TestTokenEncryptionTests(PytestAssertions):
     """Feature 3 prep: SocialAccount token encryption at rest."""
 
     def test_round_trip_returns_original_plaintext(self) -> None:
@@ -25,7 +27,3 @@ class TokenEncryptionTests(unittest.TestCase):
     def test_decrypting_garbage_raises_token_decryption_exception(self) -> None:
         with self.assertRaises(TokenDecryptionException):
             decrypt_token("not-a-real-fernet-token")
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-import unittest
+import pytest
+from tests.pytest_helpers import PytestAssertions
+
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -35,7 +37,7 @@ from app.services.email_service import (
 )
 
 
-class RegistrationValidationTests(unittest.TestCase):
+class TestRegistrationValidationTests(PytestAssertions):
     """F1-UTC01 registration validation."""
 
     def test_F1_UTC01_validates_accepted_data(self) -> None:
@@ -69,8 +71,8 @@ class RegistrationValidationTests(unittest.TestCase):
                     )
 
 
-class RegistrationRouteTests(unittest.TestCase):
-    def setUp(self) -> None:
+class TestRegistrationRouteTests(PytestAssertions):
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
         self.query = self.db.query.return_value.filter.return_value
         self.query.first.return_value = None
@@ -152,10 +154,10 @@ class RegistrationRouteTests(unittest.TestCase):
         self.db.delete.assert_called_once()
 
 
-class AuthenticationTests(unittest.TestCase):
+class TestAuthenticationTests(PytestAssertions):
     """F1-UTC02 authentication behavior."""
 
-    def setUp(self) -> None:
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
         self.query = self.db.query.return_value.filter.return_value
         self.form = SimpleNamespace(
@@ -214,10 +216,11 @@ class AuthenticationTests(unittest.TestCase):
         self.assertEqual("temp-token", result["temp_token"])
 
 
-class OAuthAuthenticationTests(unittest.IsolatedAsyncioTestCase):
+class TestOAuthAuthenticationTests(PytestAssertions):
     """F1-UTC02-TC04 OAuth provider failures."""
 
     @patch("app.routes.oauth_routes.oauth.create_client")
+    @pytest.mark.asyncio
     async def test_F1_UTC02_TC04_maps_invalid_oauth_token(
         self,
         create_client,
@@ -239,6 +242,7 @@ class OAuthAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         "app.routes.oauth_routes.oauth.create_client",
         return_value=None,
     )
+    @pytest.mark.asyncio
     async def test_rejects_unsupported_oauth_provider(
         self,
         _create_client,
@@ -251,7 +255,7 @@ class OAuthAuthenticationTests(unittest.IsolatedAsyncioTestCase):
             )
 
 
-class AuthPrimitiveTests(unittest.TestCase):
+class TestAuthPrimitiveTests(PytestAssertions):
     def test_password_hash_round_trip(self) -> None:
         hashed = get_password_hash("StrongPassword123!")
         self.assertTrue(verify_password("StrongPassword123!", hashed))
@@ -266,7 +270,7 @@ class AuthPrimitiveTests(unittest.TestCase):
         self.assertGreater(len(token), 20)
 
 
-class EmailTestModeTests(unittest.TestCase):
+class TestEmailTestModeTests(PytestAssertions):
     @patch("app.services.email_service.smtplib.SMTP")
     @patch("app.services.email_service.REELCAST_TEST_MODE", True)
     def test_verification_email_is_suppressed_in_test_mode(self, smtp) -> None:

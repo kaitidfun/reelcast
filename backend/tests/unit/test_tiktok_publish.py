@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-import unittest
+import pytest
+from tests.pytest_helpers import PytestAssertions
+
 from unittest.mock import patch
 
 from app.exceptions import DistributionPublishException
@@ -49,7 +51,8 @@ class _TikTokClient:
         return _Response()
 
 
-class TikTokPublishTests(unittest.IsolatedAsyncioTestCase):
+class TestTikTokPublishTests(PytestAssertions):
+    @pytest.mark.asyncio
     async def test_direct_post_queries_creator_then_uploads_video_bytes(self) -> None:
         client = _TikTokClient({
             "data": {"privacy_level_options": ["PUBLIC_TO_EVERYONE", "SELF_ONLY"]},
@@ -67,6 +70,7 @@ class TikTokPublishTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, len(client.uploads))
         self.assertEqual("bytes 0-10/11", client.uploads[0]["headers"]["Content-Range"])
 
+    @pytest.mark.asyncio
     async def test_direct_post_accepts_an_empty_201_upload_response(self) -> None:
         """TikTok's upload endpoint commonly responds 201 with no JSON body."""
         client = _TikTokClient({
@@ -79,6 +83,7 @@ class TikTokPublishTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("publish-123", publish_id)
         self.assertIsNone(post_url)
 
+    @pytest.mark.asyncio
     async def test_direct_post_rejects_creator_without_self_only_access(self) -> None:
         client = _TikTokClient({
             "data": {"privacy_level_options": ["PUBLIC_TO_EVERYONE"]},
@@ -90,6 +95,7 @@ class TikTokPublishTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(1, len(client.posts))
 
+    @pytest.mark.asyncio
     async def test_direct_post_surfaces_tiktok_api_error_payload(self) -> None:
         client = _TikTokClient({
             "data": {},

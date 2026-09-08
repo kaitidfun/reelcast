@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-import unittest
+import pytest
+from tests.pytest_helpers import PytestAssertions
+
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -9,7 +11,7 @@ from app.models.models import Distribution, Product, Reel, SocialAccount
 from app.worker import _format_caption, _publishDistribution, checkScheduledDistributions
 
 
-class FormatCaptionTests(unittest.TestCase):
+class TestFormatCaptionTests(PytestAssertions):
     def test_none_returns_empty_string(self) -> None:
         self.assertEqual("", _format_caption(None))
 
@@ -30,8 +32,8 @@ class FormatCaptionTests(unittest.TestCase):
         self.assertEqual("https://example.com/buy", _prepend_affiliate_link("", "https://example.com/buy"))
 
 
-class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
-    def setUp(self) -> None:
+class TestPublishDistributionTaskTests(PytestAssertions):
+    def setup_method(self, _method) -> None:
         self.distribution_id = uuid4()
         self.reel_id = uuid4()
         self.account_id = uuid4()
@@ -80,12 +82,14 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         db.query.side_effect = query_side_effect
         return db
 
+    @pytest.mark.asyncio
     async def test_missing_distribution_returns_without_error(self) -> None:
         db = self._db_returning(distribution=None)
         with patch("app.worker.SessionLocal", return_value=db):
             await _publishDistribution(str(self.distribution_id))  # should not raise
         db.close.assert_called_once()
 
+    @pytest.mark.asyncio
     async def test_reel_without_video_marks_failed(self) -> None:
         incomplete_reel = Reel(reel_id=self.reel_id, user_id=self.user_id, status="Generating", prompt_text="x")
         db = self._db_returning(distribution=self.distribution, reel=incomplete_reel)
@@ -98,6 +102,7 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, len(failed_calls))
         self.assertIn("no saved video", failed_calls[0].kwargs["error_message"])
 
+    @pytest.mark.asyncio
     async def test_missing_account_marks_failed(self) -> None:
         db = self._db_returning(distribution=self.distribution, reel=self.reel)
 
@@ -110,6 +115,7 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, len(failed_calls))
         self.assertIn("Connected account not found", failed_calls[0].kwargs["error_message"])
 
+    @pytest.mark.asyncio
     async def test_successful_publish_marks_published(self) -> None:
         db = self._db_returning(distribution=self.distribution, reel=self.reel)
 
@@ -133,6 +139,7 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
             mock_publish.call_args.kwargs["caption"],
         )
 
+    @pytest.mark.asyncio
     async def test_refreshes_access_token_before_publish_when_refresh_token_saved(self) -> None:
         account_with_refresh = SocialAccount(
             account_id=self.account_id,
@@ -163,6 +170,7 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         # The refreshed token — not the stale one — is what actually gets published with.
         self.assertEqual("fresh-token", mock_publish.call_args.kwargs["access_token"])
 
+    @pytest.mark.asyncio
     async def test_refresh_failure_falls_back_to_existing_access_token(self) -> None:
         account_with_refresh = SocialAccount(
             account_id=self.account_id,
@@ -191,6 +199,7 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         failed_calls = [c for c in mock_update.call_args_list if c.kwargs.get("status") == "Failed"]
         self.assertEqual(0, len(failed_calls))
 
+    @pytest.mark.asyncio
     async def test_publish_exception_marks_failed_and_retries(self) -> None:
         db = self._db_returning(distribution=self.distribution, reel=self.reel)
 
@@ -213,6 +222,7 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         # every other exception's message is surfaced in this codebase.
         self.assertEqual("DistributionPublishException: platform rejected it", failed_calls[0].kwargs["error_message"])
 
+    @pytest.mark.asyncio
     async def test_unexpected_publish_exception_marks_failed_instead_of_staying_uploading(self) -> None:
         db = self._db_returning(distribution=self.distribution, reel=self.reel)
 
@@ -231,10 +241,10 @@ class PublishDistributionTaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("Unexpected publishing error (RuntimeError)", failed_calls[0].kwargs["error_message"])
 
 
-class CheckScheduledDistributionsTests(unittest.TestCase):
+class TestCheckScheduledDistributionsTests(PytestAssertions):
     """Celery Beat's periodic task — claims due distributions and queues them."""
 
-    def setUp(self) -> None:
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
 
     def test_claims_and_queues_due_distributions(self) -> None:
@@ -272,7 +282,3 @@ class CheckScheduledDistributionsTests(unittest.TestCase):
 
         mock_task.delay.assert_not_called()
         self.db.close.assert_called_once()
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import pytest
+from tests.pytest_helpers import PytestAssertions
+
 import json
 import sys
-import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -36,10 +38,10 @@ from app.services.video_generation_service import generate_with_ltx
 from app.worker import _build_caption_prompt
 
 
-class ReelGenerationTests(unittest.TestCase):
+class TestReelGenerationTests(PytestAssertions):
     """F2-UTC01, F2-UTC06 and F2-UTC07 route behavior."""
 
-    def setUp(self) -> None:
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
         self.user = SimpleNamespace(user_id=uuid4())
         self.product_id = uuid4()
@@ -211,10 +213,10 @@ class ReelGenerationTests(unittest.TestCase):
             )
 
 
-class PromptEndpointTests(unittest.IsolatedAsyncioTestCase):
+class TestPromptEndpointTests(PytestAssertions):
     """F2-UTC08, F2-UTC09 and F2-UTC10 prompt assembly behavior."""
 
-    def setUp(self) -> None:
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
         self.user = SimpleNamespace(user_id=uuid4())
         self.product_id = uuid4()
@@ -230,6 +232,7 @@ class PromptEndpointTests(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
         return_value="Assembled guided prompt",
     )
+    @pytest.mark.asyncio
     async def test_F2_UTC08_TC01_builds_prompt_with_all_options(
         self,
         generate_guided_prompt,
@@ -255,6 +258,7 @@ class PromptEndpointTests(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
         return_value="Assembled guided prompt",
     )
+    @pytest.mark.asyncio
     async def test_F2_UTC08_TC02_builds_prompt_with_partial_options(
         self,
         generate_guided_prompt,
@@ -272,6 +276,7 @@ class PromptEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("Assembled guided prompt", result["prompt"])
         generate_guided_prompt.assert_awaited_once()
 
+    @pytest.mark.asyncio
     async def test_F2_UTC08_TC03_rejects_missing_product(self) -> None:
         self.db.query.return_value.options.return_value.filter.return_value.first.return_value = None
 
@@ -290,6 +295,7 @@ class PromptEndpointTests(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
         side_effect=GeminiAPIException(),
     )
+    @pytest.mark.asyncio
     async def test_F2_UTC08_TC04_propagates_gemini_failure(
         self,
         _generate_guided_prompt,
@@ -309,6 +315,7 @@ class PromptEndpointTests(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
         return_value="Enhanced detailed prompt",
     )
+    @pytest.mark.asyncio
     async def test_F2_UTC09_TC01_enhances_prompt(self, _enhance_prompt) -> None:
         result = await enhance_prompt_endpoint(
             EnhancePromptRequest(
@@ -320,6 +327,7 @@ class PromptEndpointTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual("Enhanced detailed prompt", result["prompt"])
 
+    @pytest.mark.asyncio
     async def test_F2_UTC09_TC02_rejects_empty_prompt(self) -> None:
         with self.assertRaises(InvalidPromptException):
             await enhance_prompt_endpoint(
@@ -333,6 +341,7 @@ class PromptEndpointTests(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
         side_effect=GeminiAPIException(),
     )
+    @pytest.mark.asyncio
     async def test_F2_UTC09_TC03_propagates_gemini_failure(
         self,
         _enhance_prompt,
@@ -352,6 +361,7 @@ class PromptEndpointTests(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
         return_value="Flash sale prompt",
     )
+    @pytest.mark.asyncio
     async def test_F2_UTC10_TC01_builds_template_prompt(
         self,
         _generate_prompt,
@@ -366,6 +376,7 @@ class PromptEndpointTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual("Flash sale prompt", result["prompt"])
 
+    @pytest.mark.asyncio
     async def test_F2_UTC10_TC02_rejects_missing_product(self) -> None:
         self.db.query.return_value.options.return_value.filter.return_value.first.return_value = None
 
@@ -384,6 +395,7 @@ class PromptEndpointTests(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
         side_effect=GeminiAPIException(),
     )
+    @pytest.mark.asyncio
     async def test_F2_UTC10_TC03_propagates_gemini_failure(
         self,
         _generate_prompt,
@@ -399,10 +411,11 @@ class PromptEndpointTests(unittest.IsolatedAsyncioTestCase):
             )
 
 
-class CaptionGenerationTests(unittest.IsolatedAsyncioTestCase):
+class TestCaptionGenerationTests(PytestAssertions):
     """F2-UTC03 caption and hashtag generation."""
 
     @patch.object(ai_service, "_run_gemini", new_callable=AsyncMock)
+    @pytest.mark.asyncio
     async def test_F2_UTC03_TC01_returns_caption_and_hashtags(
         self,
         run_gemini,
@@ -429,6 +442,7 @@ class CaptionGenerationTests(unittest.IsolatedAsyncioTestCase):
         new_callable=AsyncMock,
         side_effect=GeminiAPIException(),
     )
+    @pytest.mark.asyncio
     async def test_F2_UTC03_TC02_maps_gemini_unavailability(
         self,
         _run_gemini,
@@ -441,6 +455,7 @@ class CaptionGenerationTests(unittest.IsolatedAsyncioTestCase):
                     "TikTok",
                 )
 
+    @pytest.mark.asyncio
     async def test_F2_UTC03_TC03_rejects_prompt_over_500_characters(self) -> None:
         with self.assertRaises(InvalidPromptLengthException):
             await ai_service.generateCaptionsAndHashtags(
@@ -450,7 +465,7 @@ class CaptionGenerationTests(unittest.IsolatedAsyncioTestCase):
             )
 
 
-class CaptionPromptContextTests(unittest.TestCase):
+class TestCaptionPromptContextTests(PytestAssertions):
     """Caption context stays valid for generated and user-uploaded reels."""
 
     def test_preserves_existing_prompt(self) -> None:
@@ -475,9 +490,10 @@ class CaptionPromptContextTests(unittest.TestCase):
         self.assertEqual(500, len(_build_caption_prompt("x" * 501)))
 
 
-class VideoProviderTests(unittest.IsolatedAsyncioTestCase):
+class TestVideoProviderTests(PytestAssertions):
     """F2-UTC02 video generation and F2-UTC07 regeneration provider errors."""
 
+    @pytest.mark.asyncio
     async def test_F2_UTC02_TC01_generates_video_url(self) -> None:
         fal_client = SimpleNamespace(
             run=MagicMock(return_value={"video": {"url": "https://fal.media/test-video.mp4"}})
@@ -486,6 +502,7 @@ class VideoProviderTests(unittest.IsolatedAsyncioTestCase):
             url = await generate_with_ltx("A cinematic cold brew video")
         self.assertEqual("https://fal.media/test-video.mp4", url)
 
+    @pytest.mark.asyncio
     async def test_F2_UTC02_TC02_maps_provider_failure(self) -> None:
         fal_client = SimpleNamespace(
             run=MagicMock(side_effect=RuntimeError("provider unavailable"))
@@ -494,6 +511,7 @@ class VideoProviderTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(LTXVideoAPIException):
                 await generate_with_ltx("Prompt")
 
+    @pytest.mark.asyncio
     async def test_F2_UTC02_TC03_maps_provider_timeout(self) -> None:
         fal_client = SimpleNamespace(
             run=MagicMock(side_effect=TimeoutError("timed out"))
@@ -502,6 +520,7 @@ class VideoProviderTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(GenerationTimeoutException):
                 await generate_with_ltx("Prompt")
 
+    @pytest.mark.asyncio
     async def test_F2_UTC07_TC03_maps_regeneration_timeout(self) -> None:
         fal_client = SimpleNamespace(
             run=MagicMock(side_effect=TimeoutError("regen timed out"))
@@ -510,6 +529,7 @@ class VideoProviderTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(GenerationTimeoutException):
                 await generate_with_ltx("Revised prompt")
 
+    @pytest.mark.asyncio
     async def test_F2_UTC07_TC04_maps_regeneration_api_failure(self) -> None:
         fal_client = SimpleNamespace(
             run=MagicMock(side_effect=RuntimeError("fal provider unavailable"))

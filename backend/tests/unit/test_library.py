@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-import unittest
+import pytest
+from tests.pytest_helpers import PytestAssertions
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -22,10 +24,10 @@ from app.services.campaign_service import createCampaign
 from app.services.product_service import createProduct
 
 
-class CampaignTests(unittest.TestCase):
+class TestCampaignTests(PytestAssertions):
     """F4-UTC01 campaign creation."""
 
-    def setUp(self) -> None:
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
         self.query = self.db.query.return_value.filter.return_value
         self.query.first.return_value = None
@@ -68,10 +70,10 @@ class CampaignTests(unittest.TestCase):
         self.db.rollback.assert_called_once()
 
 
-class ProductTests(unittest.TestCase):
+class TestProductTests(PytestAssertions):
     """F4-UTC02 product creation and image constraints."""
 
-    def setUp(self) -> None:
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
         self.query = self.db.query.return_value.filter.return_value
         self.query.first.return_value = SimpleNamespace(campaign_id=uuid4())
@@ -176,10 +178,10 @@ class ProductTests(unittest.TestCase):
         self.assertEqual("Draft", response.status)
 
 
-class LibraryBrowseTests(unittest.TestCase):
+class TestLibraryBrowseTests(PytestAssertions):
     """F4-UTC03 campaign and product retrieval."""
 
-    def setUp(self) -> None:
+    def setup_method(self, _method) -> None:
         self.user_id = uuid4()
         self.campaign_id = uuid4()
         self.product_id = uuid4()

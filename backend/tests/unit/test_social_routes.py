@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-import unittest
+import pytest
+from tests.pytest_helpers import PytestAssertions
+
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -29,7 +31,7 @@ from app.services.oauth_platforms import (
 )
 
 
-class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
+class TestOAuthPlatformConfigTests(PytestAssertions):
     """oauth_platforms.py: authorize URL building and token exchange."""
 
     def test_unconfigured_platform_reports_not_configured(self) -> None:
@@ -83,6 +85,7 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("read_insights", url)
         self.assertIn("business_management", url)
 
+    @pytest.mark.asyncio
     async def test_exchange_code_raises_on_missing_access_token(self) -> None:
         with patch("app.services.oauth_platforms.is_configured", return_value=True), \
              patch("app.services.oauth_platforms.httpx.AsyncClient") as mock_client_cls:
@@ -96,6 +99,7 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(OAuthProviderException):
                 await exchange_code_for_token("youtube", "some-code")
 
+    @pytest.mark.asyncio
     async def test_refresh_access_token_returns_new_token(self) -> None:
         with patch("app.services.oauth_platforms.is_configured", return_value=True), \
              patch("app.services.oauth_platforms.httpx.AsyncClient") as mock_client_cls:
@@ -113,6 +117,7 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("refresh_token", post_kwargs["data"]["grant_type"])
         self.assertEqual("some-refresh-token", post_kwargs["data"]["refresh_token"])
 
+    @pytest.mark.asyncio
     async def test_refresh_access_token_raises_on_missing_access_token(self) -> None:
         with patch("app.services.oauth_platforms.is_configured", return_value=True), \
              patch("app.services.oauth_platforms.httpx.AsyncClient") as mock_client_cls:
@@ -126,10 +131,12 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(OAuthProviderException):
                 await refresh_access_token("youtube", "some-refresh-token")
 
+    @pytest.mark.asyncio
     async def test_refresh_access_token_unconfigured_platform_raises(self) -> None:
         with self.assertRaises(OAuthProviderException):
             await refresh_access_token("tiktok", "some-refresh-token")
 
+    @pytest.mark.asyncio
     async def test_fetch_external_account_id_youtube_returns_channel_id(self) -> None:
         mock_response = MagicMock()
         mock_response.json.return_value = {"items": [{"id": "UC12345"}]}
@@ -143,6 +150,7 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual("UC12345", result)
 
+    @pytest.mark.asyncio
     async def test_fetch_external_account_id_instagram_returns_professional_user_id(self) -> None:
         mock_response = MagicMock()
         mock_response.json.return_value = {"user_id": "ig-user-123"}
@@ -160,6 +168,7 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
             params={"fields": "user_id", "access_token": "some-token"},
         )
 
+    @pytest.mark.asyncio
     async def test_fetch_facebook_page_access_token_uses_me_accounts_page_token(self) -> None:
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -182,6 +191,7 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
             params={"fields": "id,name,access_token", "access_token": "user-token"},
         )
 
+    @pytest.mark.asyncio
     async def test_fetch_facebook_page_access_token_falls_back_to_business_assigned_page(self) -> None:
         direct_pages = MagicMock()
         direct_pages.json.return_value = {"data": []}
@@ -211,6 +221,7 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
             [(call.args, call.kwargs) for call in mock_client.get.await_args_list],
         )
 
+    @pytest.mark.asyncio
     async def test_fetch_external_account_id_swallows_http_errors(self) -> None:
         mock_client = AsyncMock()
         mock_client.get.side_effect = httpx.ConnectError("boom")
@@ -222,10 +233,10 @@ class OAuthPlatformConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(result)
 
 
-class SocialAccountEncryptionTests(unittest.TestCase):
+class TestSocialAccountEncryptionTests(PytestAssertions):
     """Tokens must never be stored or returned in plaintext."""
 
-    def setUp(self) -> None:
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
         self.user_id = uuid4()
 
@@ -257,10 +268,10 @@ class SocialAccountEncryptionTests(unittest.TestCase):
         )
 
 
-class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
+class TestSocialRoutesTests(PytestAssertions):
     """Connect/callback/list/disconnect route behavior."""
 
-    def setUp(self) -> None:
+    def setup_method(self, _method) -> None:
         self.db = MagicMock()
         self.user = SimpleNamespace(user_id=uuid4(), email="creator@example.com")
 
@@ -304,6 +315,7 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("/account?error=", response.headers["location"])
         self.assertEqual({}, request.session)
 
+    @pytest.mark.asyncio
     async def test_callback_rejects_state_mismatch(self) -> None:
         request = SimpleNamespace(session={
             "reelcast_connect_state": "expected-state",
@@ -315,6 +327,7 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn("error=", response.headers["location"])
 
+    @pytest.mark.asyncio
     async def test_callback_success_creates_social_account(self) -> None:
         user_id = uuid4()
         request = SimpleNamespace(session={
@@ -338,6 +351,7 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("connected=tiktok", response.headers["location"])
         self.db.add.assert_called_once()
 
+    @pytest.mark.asyncio
     async def test_callback_does_not_connect_without_target_account_id(self) -> None:
         request = SimpleNamespace(session={
             "reelcast_connect_state": "s1",
@@ -382,7 +396,3 @@ class SocialRoutesTests(unittest.IsolatedAsyncioTestCase):
             {"platforms": {"tiktok": False, "facebook": False, "instagram": False, "youtube": True}},
             result,
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

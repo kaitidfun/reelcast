@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import pytest
+from tests.pytest_helpers import PytestAssertions
+
 import tempfile
 import subprocess
-import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -18,7 +20,7 @@ from app.services.upload_service import (
 )
 
 
-class VideoValidationTests(unittest.TestCase):
+class TestVideoValidationTests(PytestAssertions):
     """F2-UTC04 upload format, size, and duration validation."""
 
     def test_F2_UTC04_TC01_accepts_mp4(self) -> None:
@@ -55,9 +57,10 @@ class VideoValidationTests(unittest.TestCase):
         self.assertTrue(any("exceeds 60s" in error for error in errors))
 
 
-class OverlayTests(unittest.IsolatedAsyncioTestCase):
+class TestOverlayTests(PytestAssertions):
     """F2-UTC05 overlay validation and FFmpeg failure mapping."""
 
+    @pytest.mark.asyncio
     async def test_F2_UTC05_TC03_rejects_out_of_bounds_position(self) -> None:
         with self.assertRaises(InvalidCoordinateException):
             await overlay_watermark(
@@ -68,6 +71,7 @@ class OverlayTests(unittest.IsolatedAsyncioTestCase):
             )
 
     @patch("app.services.overlay_service.subprocess.run")
+    @pytest.mark.asyncio
     async def test_F2_UTC05_TC02_maps_ffmpeg_failure(self, run) -> None:
         run.return_value = SimpleNamespace(
             returncode=1,
@@ -83,6 +87,7 @@ class OverlayTests(unittest.IsolatedAsyncioTestCase):
             )
 
     @patch("app.services.overlay_service.subprocess.run")
+    @pytest.mark.asyncio
     async def test_F2_UTC05_TC01_returns_finalized_output_path(self, run) -> None:
         run.return_value = SimpleNamespace(returncode=0, stderr=b"")
         output_path = tempfile.mktemp(suffix=".mp4")
@@ -97,6 +102,7 @@ class OverlayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(output_path, result)
 
     @patch("app.services.overlay_service.subprocess.run")
+    @pytest.mark.asyncio
     async def test_native_crash_reports_exit_code_and_stderr_tail(self, run) -> None:
         run.return_value = SimpleNamespace(
             returncode=0xC0000005,
@@ -109,6 +115,7 @@ class OverlayTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(message.endswith("scaler crashed"))
         self.assertLess(len(message), 4200)
 
+    @pytest.mark.asyncio
     async def test_jpeg_overlay_with_odd_scaled_height_renders_and_decodes(self) -> None:
         """750x726 used to scale to 150x145 and crash Windows FFmpeg 7.1."""
         from PIL import Image

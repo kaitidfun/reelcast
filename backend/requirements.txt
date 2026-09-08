@@ -57,6 +57,8 @@ pyasn1_modules
 pycparser
 pydantic
 pydantic-settings
+pytest>=8.3,<9.0
+pytest-asyncio>=0.24,<1.0
 pydantic_core
 pyotp
 PySocks
