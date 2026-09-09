@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy.orm import Session
 from uuid import UUID
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from sqlalchemy.orm import joinedload
 from app.dependencies import get_db, get_current_user
@@ -181,6 +181,8 @@ class ReelRenameRequest(BaseModel):
 
 
 class ReelResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     reel_id: UUID
     status: str
     prompt_text: str
@@ -206,10 +208,6 @@ class ReelResponse(BaseModel):
     # other endpoints returning ReelResponse leave this at its default.
     has_distribution: bool = False
     created_at: Optional[datetime] = None
-    class Config:
-        from_attributes = True
-
-
 class ReelListResponse(BaseModel):
     reels: list[ReelResponse]
     total: int

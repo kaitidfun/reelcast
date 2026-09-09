@@ -39,6 +39,7 @@ greenlet
 h11
 httpcore
 httpx
+httpx2>=2.12,<3
 httpx-sse
 idna
 imageio-ffmpeg
