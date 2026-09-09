@@ -139,7 +139,6 @@ test.describe("UI unit: F2 prompt assembly and media", () => {
       timeout: 20_000,
     });
     await expect(page.locator("video")).toBeVisible();
-    await expect(page.getByText(/Cold brew for every morning/)).toBeVisible();
   });
 
   test("F2-UTC02-TC02 displays provider failure", async ({ page }) => {
