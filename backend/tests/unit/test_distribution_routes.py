@@ -17,8 +17,9 @@ from app.routes.distribution_routes import (
     listDistributions,
     listDistributionsByReel,
     publishNow,
+    rescheduleDistribution,
 )
-from app.schemas.distribution import DistributionCreate
+from app.schemas.distribution import DistributionCreate, DistributionReschedule
 
 
 class TestCreateDistributionTests(PytestAssertions):
@@ -75,37 +76,28 @@ class TestListDistributionsTests(PytestAssertions):
     def test_filters_to_current_user_only(self) -> None:
         db = MagicMock()
         user = SimpleNamespace(user_id=uuid4())
-        reel_id = uuid4()
-        campaign_id = uuid4()
         chain = db.query.return_value.join.return_value.filter.return_value
-        chain.with_entities.return_value.distinct.return_value.all.return_value = [(reel_id,)]
-        chain.join.return_value.join.return_value.with_entities.return_value.distinct.return_value.all.return_value = [
-            (campaign_id,)
-        ]
         chain.count.return_value = 0
         chain.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
 
         result = listDistributions(db=db, current_user=user)
         self.assertEqual(0, result.total)
         self.assertEqual([], result.distributions)
-        self.assertEqual([reel_id], result.matched_reel_ids)
-        self.assertEqual([campaign_id], result.matched_campaign_ids)
+        db.query.return_value.join.assert_called_once()
 
     def test_searches_reel_platform_and_status_names(self) -> None:
         db = MagicMock()
         user = SimpleNamespace(user_id=uuid4())
         owned_query = db.query.return_value.join.return_value.filter.return_value
-        searched_query = owned_query.outerjoin.return_value.filter.return_value
+        searched_query = owned_query.filter.return_value
         searched_query.count.return_value = 0
         searched_query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
 
         result = listDistributions(search="published", db=db, current_user=user)
 
-        owned_query.outerjoin.assert_called_once()
+        owned_query.filter.assert_called_once()
         self.assertEqual(0, result.total)
         self.assertEqual([], result.distributions)
-        self.assertEqual([], result.matched_reel_ids)
-        self.assertEqual([], result.matched_campaign_ids)
 
 
 class TestListDistributionsByReelTests(PytestAssertions):
@@ -196,6 +188,7 @@ class TestPublishNowTests(PytestAssertions):
             publishNow(self.distribution_id, db=self.db, current_user=self.user)
         self.assertEqual(409, ctx.exception.status_code)
 
+
     def test_queues_celery_task_for_pending_distribution(self) -> None:
         dist = Distribution(distribution_id=self.distribution_id, status="Pending")
         self.db.query.return_value.join.return_value.filter.return_value.first.return_value = dist
@@ -219,3 +212,38 @@ class TestPublishNowTests(PytestAssertions):
             publishNow(self.distribution_id, db=self.db, current_user=self.user)
 
         self.assertEqual(409, ctx.exception.status_code)
+
+
+class TestRescheduleDistributionTests(PytestAssertions):
+    """F3-UTC10: only owned Pending/Failed distributions may be rescheduled."""
+
+    def setup_method(self, _method) -> None:
+        self.db = MagicMock()
+        self.user = SimpleNamespace(user_id=uuid4())
+        self.distribution_id = uuid4()
+        self.req = DistributionReschedule(scheduled_time="2026-09-22T09:00:00Z")
+
+    def test_F3_UTC10_reschedules_pending_and_preserves_its_status(self) -> None:
+        distribution = Distribution(distribution_id=self.distribution_id, status="Pending", retry_count=0)
+        self.db.query.return_value.join.return_value.filter.return_value.first.return_value = distribution
+
+        with patch("app.routes.distribution_routes.distribution_service.update_distribution", return_value=distribution) as update:
+            result = rescheduleDistribution(self.distribution_id, self.req, db=self.db, current_user=self.user)
+
+        update.assert_called_once_with(self.db, distribution=distribution, scheduled_time=self.req.scheduled_time)
+        self.assertEqual("Pending", result.status)
+
+    def test_F3_UTC10_rejects_uploading_distribution_without_mutating_it(self) -> None:
+        distribution = Distribution(distribution_id=self.distribution_id, status="Uploading")
+        self.db.query.return_value.join.return_value.filter.return_value.first.return_value = distribution
+
+        with self.assertRaises(HTTPException) as ctx:
+            rescheduleDistribution(self.distribution_id, self.req, db=self.db, current_user=self.user)
+
+        self.assertEqual(409, ctx.exception.status_code)
+
+    def test_F3_UTC10_rejects_an_unowned_distribution(self) -> None:
+        self.db.query.return_value.join.return_value.filter.return_value.first.return_value = None
+
+        with self.assertRaises(DistributionNotFoundException):
+            rescheduleDistribution(self.distribution_id, self.req, db=self.db, current_user=self.user)

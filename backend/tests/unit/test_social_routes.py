@@ -386,6 +386,18 @@ class TestSocialRoutesTests(PytestAssertions):
             disconnectSocialAccount(uuid4(), db=self.db, current_user=self.user)
         self.assertEqual(404, getattr(ctx.exception, "status_code", None))
 
+    def test_F3_UTC03_disconnects_only_the_authenticated_members_account(self) -> None:
+        account_id = uuid4()
+        with patch(
+            "app.routes.social_routes.social_account_service.delete_social_account",
+            return_value=True,
+        ) as delete_account:
+            disconnectSocialAccount(account_id, db=self.db, current_user=self.user)
+
+        delete_account.assert_called_once_with(
+            self.db, account_id=account_id, user_id=self.user.user_id
+        )
+
     def test_F3_UTC01_readiness_exposes_no_platform_credentials(self) -> None:
         with patch(
             "app.routes.social_routes.is_configured",

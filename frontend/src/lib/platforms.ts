@@ -30,10 +30,14 @@ export const platformColor = (name: string | null | undefined): string =>
  * backend will send the browser back to once the OAuth round-trip
  * finishes, instead of always landing on /account.
  */
+export const buildSocialConnectionUrl = (platform: string, token: string, returnTo?: string): string => {
+  const params = new URLSearchParams({ token });
+  if (returnTo) params.set("return_to", returnTo);
+  return `${OAUTH_API_BASE_URL}/social/${platform}/connect?${params.toString()}`;
+};
+
 export const connectSocialPlatform = (platform: string, returnTo?: string): void => {
   const token = localStorage.getItem("rf_token");
   if (!token) return;
-  const params = new URLSearchParams({ token });
-  if (returnTo) params.set("return_to", returnTo);
-  window.location.href = `${OAUTH_API_BASE_URL}/social/${platform}/connect?${params.toString()}`;
+  window.location.href = buildSocialConnectionUrl(platform, token, returnTo);
 };
