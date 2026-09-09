@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+# UTC: F2-UTC04, F2-UTC05
+# STC: STC-F2-03, STC-F2-04
+
 import pytest
 from tests.pytest_helpers import PytestAssertions
 

@@ -22,6 +22,8 @@ from app.routes.distribution_routes import (
 from app.schemas.distribution import DistributionCreate, DistributionReschedule
 
 
+# UTC: F3-UTC04, F3-UTC05, F3-UTC06, F3-UTC08, F3-UTC10
+# STC: STC-F3-02, STC-F3-03
 class TestCreateDistributionTests(PytestAssertions):
     def setup_method(self, _method) -> None:
         self.db = MagicMock()

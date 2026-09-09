@@ -5,11 +5,10 @@ import {
   previewAndApproveContent,
   regenerateContent,
   uploadOwnReel,
-  fetchTrackingDashboard,
-  fetchTrackingAnalysis,
-  syncTrackingData,
 } from "./api";
 
+// UTC: F2-UTC01, F2-UTC04, F2-UTC06, F2-UTC07
+// STC: STC-F2-01, STC-F2-02, STC-F2-03, STC-F2-05
 describe("Reel API client", () => {
   beforeEach(() => {
     localStorage.setItem("rf_token", "test-token");
@@ -114,55 +113,4 @@ describe("Reel API client", () => {
     ).rejects.toThrow("Failed to generate AI Reel");
   });
 
-  it("F5-UTC05 loads the real tracking dashboard with authentication", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ totals: {}, trend: [] }), { status: 200 }),
-    );
-
-    await fetchTrackingDashboard();
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/tracking/dashboard"),
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer test-token" }) }),
-    );
-  });
-
-  it("F5-UTC06 sends the selected tracking date range", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ totals: {}, trend: [] }), { status: 200 }),
-    );
-
-    await fetchTrackingDashboard({ start: "2026-08-01", end: "2026-08-17" });
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/tracking/dashboard?start=2026-08-01&end=2026-08-17"),
-      expect.anything(),
-    );
-  });
-
-  it("F5-UTC06 sends the selected performance analysis criteria", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ rows: [], trend: [] }), { status: 200 }),
-    );
-
-    await fetchTrackingAnalysis({ level: "reel", metric: "engagement", platform: "instagram" });
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/tracking/analysis?level=reel&metric=engagement&platform=instagram"),
-      expect.anything(),
-    );
-  });
-
-  it("F5-UTC03 can request a tracking synchronization", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ synced_accounts: 1 }), { status: 200 }),
-    );
-
-    await syncTrackingData();
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/tracking/sync"),
-      expect.objectContaining({ method: "POST" }),
-    );
-  });
 });

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { PLATFORM_OPTIONS, buildSocialConnectionUrl, platformLabel } from "./platforms";
 
+// UTC: F3-UTC01
+// STC: STC-F3-01
 describe("F3 frontend platform helpers", () => {
   beforeEach(() => {
     localStorage.clear();

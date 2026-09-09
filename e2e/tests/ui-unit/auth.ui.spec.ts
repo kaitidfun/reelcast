@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
 
+// UTC: F1-UTC01, F1-UTC02, F1-UTC04
+// STC: STC-F1-01, STC-F1-02
+
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 test.describe("UI unit: F1 authentication", () => {

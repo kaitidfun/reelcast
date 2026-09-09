@@ -51,6 +51,8 @@ class _TikTokClient:
         return _Response()
 
 
+# UTC: F3-UTC07
+# STC: STC-F3-04
 class TestTikTokPublishTests(PytestAssertions):
     @pytest.mark.asyncio
     async def test_direct_post_queries_creator_then_uploads_video_bytes(self) -> None:

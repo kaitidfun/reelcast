@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+// UTC: F1-UTC01 through F1-UTC04, F2-UTC01, F2-UTC04, F2-UTC08, F4-UTC02, F4-UTC03
+// STC: STC-F1-01 through STC-F1-03, STC-F2-01, STC-F2-03, STC-F4-01
+
 import {
   MAX_PROFILE_IMAGE_BYTES,
   MAX_VIDEO_BYTES,

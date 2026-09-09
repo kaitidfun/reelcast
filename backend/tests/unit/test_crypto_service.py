@@ -8,6 +8,8 @@ from app.exceptions import TokenDecryptionException
 from app.services.crypto_service import decrypt_token, encrypt_token
 
 
+# UTC: F3-UTC01, F3-UTC02, F3-UTC07
+# STC: STC-F3-01, STC-F3-04
 class TestTokenEncryptionTests(PytestAssertions):
     """Feature 3 prep: SocialAccount token encryption at rest."""
 

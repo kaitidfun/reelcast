@@ -3,6 +3,8 @@ import { expect, test } from "@playwright/test";
 import { connectDB, deleteUserByEmail, disconnectDB } from "../../helpers/db-helper";
 import { registerAndLogin, systemUser } from "../../helpers/system-fixture";
 
+// UTC: F3-UTC05
+// STC: STC-F3-02
 test.describe("STC-F3-02 Reel Distribution Management", () => {
   test.beforeAll(connectDB);
   test.afterAll(disconnectDB);

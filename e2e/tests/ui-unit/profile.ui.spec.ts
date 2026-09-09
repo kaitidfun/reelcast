@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
 
+// UTC: F1-UTC03, F1-UTC04
+// STC: STC-F1-02, STC-F1-03
+
 import { mockAuthenticatedUser } from "../../helpers/ui-mocks";
 
 test.describe("UI unit: F1 profile and 2FA", () => {

@@ -1,7 +1,11 @@
 import pytest
 from tests.pytest_helpers import PytestAssertions
 
-"""OAuth must complete TOTP verification before accessing member endpoints."""
+"""OAuth must complete TOTP verification before accessing member endpoints.
+
+UTC: F1-UTC02, F1-UTC04
+STC: STC-F1-01, STC-F1-02
+"""
 
 from datetime import timedelta
 from types import SimpleNamespace
@@ -19,7 +23,6 @@ from app.dependencies import get_current_user, get_db
 from app.exceptions import OAuthProviderException
 from app.routes.oauth_routes import router as oauth_router
 from app.routes.social_routes import connectSocialAccount
-from app.routes.tracking_routes import connectEcommerceAccount
 from app.routes.twofa_routes import router as twofa_router
 from app.services.auth_service import create_access_token
 
@@ -148,17 +151,12 @@ class TestOAuthTwoFactorTests(PytestAssertions):
 
 
 class TestConnectionTokenTests(PytestAssertions):
+    # UTC: F1-UTC02
+    # STC: STC-F1-01
     @pytest.mark.asyncio
     async def test_social_connection_rejects_2fa_challenge(self):
         token = create_access_token({"sub": "member@example.com", "type": "2fa_challenge"})
         db = MagicMock()
         with self.assertRaises(OAuthProviderException):
             connectSocialAccount("facebook", MagicMock(), token, db=db)
-        db.query.assert_not_called()
-
-    def test_tracking_connection_rejects_2fa_challenge(self):
-        token = create_access_token({"sub": "member@example.com", "type": "2fa_challenge"})
-        db = MagicMock()
-        response = connectEcommerceAccount("shopee", MagicMock(), token, db=db)
-        self.assertIn("error", response.headers["location"])
         db.query.assert_not_called()

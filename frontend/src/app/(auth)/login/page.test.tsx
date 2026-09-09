@@ -1,6 +1,9 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// UTC: F1-UTC02, F1-UTC04
+// STC: STC-F1-01, STC-F1-02
 import Login from "./page";
 import { AuthProvider } from "@/contexts/AuthContext";
 

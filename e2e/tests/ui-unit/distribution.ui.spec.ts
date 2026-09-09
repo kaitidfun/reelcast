@@ -22,6 +22,8 @@ const distribution = {
   created_at: "2026-09-01T09:00:00Z",
 };
 
+// UTC: F3-UTC03, F3-UTC05, F3-UTC06, F3-UTC08
+// STC: STC-F3-01, STC-F3-02, STC-F3-03
 test.describe("F3 UI unit tests", () => {
   test.beforeEach(async ({ page }) => {
     await mockAuthenticatedUser(page);

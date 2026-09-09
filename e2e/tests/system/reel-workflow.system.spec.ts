@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
 
+// UTC: F2-UTC02, F2-UTC04, F2-UTC05, F2-UTC06, F2-UTC07
+// STC: STC-F2-02 through STC-F2-05
+
 import {
   connectDB,
   deleteUserByEmail,

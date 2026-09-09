@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
 
+// UTC: F1-UTC01, F1-UTC02, F1-UTC04
+// STC: STC-F1-01
+
 import {
   configureUser2FA,
   connectDB,

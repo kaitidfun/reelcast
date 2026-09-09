@@ -31,6 +31,8 @@ from app.services.oauth_platforms import (
 )
 
 
+# UTC: F3-UTC01, F3-UTC02, F3-UTC03
+# STC: STC-F3-01
 class TestOAuthPlatformConfigTests(PytestAssertions):
     """oauth_platforms.py: authorize URL building and token exchange."""
 
@@ -56,9 +58,9 @@ class TestOAuthPlatformConfigTests(PytestAssertions):
         self.assertIn("client_key=test-client-key", url)
         self.assertIn("state=xyz", url)
 
-    def test_tiktok_scope_covers_publish_and_tracking(self) -> None:
+    def test_tiktok_scope_covers_social_connect_and_publish(self) -> None:
         scopes = set(oauth_platforms.PLATFORM_CONFIGS["tiktok"]["scope"].split(","))
-        self.assertTrue({"user.info.basic", "video.publish", "video.list"}.issubset(scopes))
+        self.assertTrue({"user.info.basic", "video.publish"}.issubset(scopes))
 
     def test_instagram_uses_instagram_login_scopes(self) -> None:
         config = oauth_platforms.PLATFORM_CONFIGS["instagram"]

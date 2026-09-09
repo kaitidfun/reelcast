@@ -11,6 +11,8 @@ from app.models.models import Distribution, Product, Reel, SocialAccount
 from app.worker import _format_caption, _publishDistribution, checkScheduledDistributions
 
 
+# UTC: F3-UTC07, F3-UTC09
+# STC: STC-F3-04
 class TestFormatCaptionTests(PytestAssertions):
     def test_none_returns_empty_string(self) -> None:
         self.assertEqual("", _format_caption(None))

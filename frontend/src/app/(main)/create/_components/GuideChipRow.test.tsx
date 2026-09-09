@@ -1,6 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+// UTC: F2-UTC08
+// STC: STC-F2-01
+
 import { GuideChipRow } from "./GuideChipRow";
 
 const options = [
