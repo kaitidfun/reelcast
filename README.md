@@ -286,7 +286,12 @@ Playwright contains two projects:
 - UI unit tests with mocked backend routes: `npm run test:ui-unit`
 - System E2E tests against frontend, backend, and PostgreSQL: `npm run test:system`
 - Provider/infrastructure-dependent system tests: `npm run test:system:external`
+  ⚠️ **Costs real money.** `@external` includes a full Reel generation + regeneration
+  (`reel-workflow.system.spec.ts`) — two real fal.ai + Gemini API calls per run. Only run
+  this deliberately, not as part of routine testing.
 - All Playwright tests including external: `npm run test:all`
+  ⚠️ **Also costs real money** for the same reason — it runs everything `test:system:external`
+  does, plus the rest of the suite. Prefer `npm run test:system` for everyday runs.
 
 For the non-external system suite, start the backend with `REELCAST_TEST_MODE=true`. See `docs/testing/TEST_STRATEGY.md` and `docs/testing/TRACEABILITY.md`.
 
