@@ -18,22 +18,29 @@ REELCAST_TEST_MODE = os.getenv("REELCAST_TEST_MODE", "false").lower() in {
 }
 
 # Security
-SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
+# These fallbacks only apply when SECRET_KEY / SESSION_SECRET_KEY aren't set
+# in .env — set them locally (never commit real values) before running
+# anything that matters. The placeholders below are intentionally inert.
+SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE_ME_INSECURE_DEFAULT_SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours — long enough for a full dev/demo session
-SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "supersecret-session-key")
+SESSION_SECRET_KEY = os.getenv(
+    "SESSION_SECRET_KEY", "CHANGE_ME_INSECURE_DEFAULT_SESSION_KEY"
+)
 
 # Encrypts SocialAccount.access_token / refresh_token at rest (Feature 3).
 # Must be a urlsafe-base64-encoded 32-byte key — generate one with:
 #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-# The fallback below is a fixed dev-only key so local setup works with zero
-# config; never rely on it outside a throwaway dev database.
+# The fallback below is a placeholder key kept only so Fernet() doesn't crash
+# with no .env present; it decrypts nothing real. Set TOKEN_ENCRYPTION_KEY in
+# .env before connecting any real social account.
 TOKEN_ENCRYPTION_KEY = os.getenv(
-    "TOKEN_ENCRYPTION_KEY", "JX4xHm2DITr8WXDbOxo6lAJ0fk7O4eU3_SY-pVEiQdk="
+    "TOKEN_ENCRYPTION_KEY", "XiRi0FD2w5mQfEHM9UIzM1l3hnJNKtRnajMxe4EuUGg="
 )
 
-# Database
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:tonnoon2005@localhost:5432/reel_cast")
+# Database — set DATABASE_URL in .env; the fallback below is a placeholder,
+# not a real credential, and will fail to connect until overridden.
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:CHANGE_ME@localhost:5432/reel_cast")
 
 # CORS
 # Keep the local defaults, while allowing a public frontend (staging or an
