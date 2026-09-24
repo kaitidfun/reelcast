@@ -1,3 +1,8 @@
+### Local-only, non-project files
+avast_root.pem
+merged_ca_bundle.pem
+legal/
+
 ### Node
 
 # Dependencies
