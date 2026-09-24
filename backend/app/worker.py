@@ -250,6 +250,16 @@ async def _generateReels(
                 reel_id=reel_id,
                 scene_prompt=scene_prompt,                # Scene prompt for Gemini 3 Pro Image
             )
+            # Gemini's first frame is uploaded to fal.ai only so LTX can fetch it as
+            # image_url — that CDN link expires in ~24h same as the raw video below,
+            # so persist a permanent copy to R2 the same way.
+            if first_frame_url and first_frame_url.startswith("http"):
+                try:
+                    first_frame_url = await _upload_cdn_image_to_r2(first_frame_url, reel_id)
+                except Exception as ff_upload_err:
+                    logger.warning(
+                        f"[Worker] First-frame R2 upload failed, keeping CDN URL: {ff_upload_err}"
+                    )
         elif target == "upload":
             # User-uploaded video — apply overlay + captions, skip AI generation
             final_video_url = reel.uploaded_video_url
@@ -598,6 +608,53 @@ async def _upload_cdn_video_to_r2(cdn_url: str, reel_id: str) -> str:
             data=video_bytes,
             filename=f"reel_{reel_id}_raw.mp4",
             prefix="videos/reels/raw",
+            category=reel_id,
+            return_key_only=True,
+        ),
+    )
+    return key
+
+
+async def _upload_cdn_image_to_r2(cdn_url: str, reel_id: str) -> str:
+    """
+    Download a temporary CDN first-frame image (fal.ai) and upload it to R2.
+    Returns the R2 object key for permanent storage.
+
+    WHY this is needed: Gemini's generated first frame is uploaded to fal.ai
+    purely so LTX Video can fetch it as image_url — that CDN link expires in
+    ~24h, same failure mode _upload_cdn_video_to_r2 already solves for the
+    raw video, just not previously applied to the first-frame image.
+
+    Args:
+        cdn_url:  Publicly accessible image URL (fal.ai CDN)
+        reel_id:  Reel UUID — used for the R2 object key naming
+
+    Returns:
+        R2 object key (e.g. "videos/reels/first_frames/.../reel_xxx_first_frame.png")
+
+    Raises:
+        httpx.HTTPError: If the CDN download fails
+        RuntimeError:   If the R2 upload fails
+    """
+    import httpx
+    from app.services.storage_service import upload_raw_bytes_to_r2
+
+    logger.info(f"[Worker] Downloading first frame from CDN: {cdn_url[:80]}")
+    async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+        resp = await client.get(cdn_url)
+        resp.raise_for_status()
+
+    image_bytes = resp.content
+    logger.info(f"[Worker] Downloaded {len(image_bytes):,} bytes — uploading to R2")
+
+    # upload_raw_bytes_to_r2 is sync (boto3) — run in thread executor
+    loop = asyncio.get_running_loop()
+    key = await loop.run_in_executor(
+        None,
+        lambda: upload_raw_bytes_to_r2(
+            data=image_bytes,
+            filename=f"reel_{reel_id}_first_frame.png",
+            prefix="videos/reels/first_frames",
             category=reel_id,
             return_key_only=True,
         ),
