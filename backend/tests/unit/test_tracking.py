@@ -160,6 +160,59 @@ async def test_partial_account_failure_rolls_back_and_continues(data):
     assert result['social_metrics'] == 2 and sum(row['success'] for row in result['accounts']) == 1
     assert db.query(TrackingObservation).count() == 0 and accounts[0].last_synced_at is None
 
+@pytest.mark.parametrize('b_start,b_end', [('2026-01-07', '2026-01-14'), ('2026-01-02', '2026-01-03'), ('2025-12-31', '2026-01-01')])
+def test_comparison_and_export_reject_overlapping_inclusive_periods(data, b_start, b_end):
+    db, users, _, _ = data
+    app = FastAPI(); app.include_router(router)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: users[0]
+    client = TestClient(app)
+    params = dict(a_start='2026-01-01', a_end='2026-01-07', b_start=b_start, b_end=b_end)
+    for endpoint in ('comparison', 'export'):
+        response = client.get('/api/tracking/' + endpoint, params=params)
+        assert response.status_code == 422
+        assert 'Period B must start after Period A ends' in response.json()['detail']
+    params.update(b_start='2026-01-08', b_end='2026-01-14')
+    assert client.get('/api/tracking/comparison', params=params).status_code == 200
+    params.update(b_start='2025-12-24', b_end='2025-12-31')
+    for endpoint in ('comparison', 'export'):
+        assert client.get('/api/tracking/' + endpoint, params=params).status_code == 422
+
+
+@pytest.mark.parametrize('period', ['a', 'b'])
+def test_comparison_and_export_require_end_strictly_after_start(data, period):
+    db, users, _, _ = data
+    app = FastAPI(); app.include_router(router)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: users[0]
+    client = TestClient(app)
+    params = dict(a_start='2026-01-01', a_end='2026-01-07', b_start='2026-01-08', b_end='2026-01-14')
+    params[period + '_end'] = params[period + '_start']
+    for endpoint in ('comparison', 'export'):
+        assert client.get('/api/tracking/' + endpoint, params=params).status_code == 422
+
+
+def test_filter_options_include_only_owned_published_distribution_relations(data):
+    db, users, accounts, distributions = data
+    reel = distributions[0].reel
+    unpublished = Reel(reel_id=uuid4(), user_id=users[0].user_id,
+                       product_id=reel.product_id, prompt_text='Not distributed')
+    db.add(unpublished)
+    db.add(Distribution(distribution_id=uuid4(), reel_id=unpublished.reel_id,
+                        account_id=accounts[0].account_id, status='Pending'))
+    db.commit()
+    from app.routes.tracking_routes import trackingFilterOptions
+    result = trackingFilterOptions(db=db, current_user=users[0])
+    assert result['reels'] == [{'id': str(reel.reel_id), 'name': reel.name or reel.prompt_text}]
+    assert len(result['distributions']) == 1
+    relation = result['distributions'][0]
+    assert relation['platform'] == 'youtube'
+    assert relation['campaign_id'] == str(reel.product.campaign_id)
+    assert relation['product_id'] == str(reel.product_id)
+    assert relation['reel_id'] == str(reel.reel_id)
+    assert result['products'] == [{'id': str(reel.product_id), 'name': reel.product.product_name}]
+
+
 def test_all_filtered_details_export_and_invalid_destinations(data):
     db, users, accounts, distributions = data
     original = distributions[0].reel

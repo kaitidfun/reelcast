@@ -26,7 +26,7 @@ beforeEach(() => {
   });
   vi.mocked(api.fetchTrackingFilterOptions).mockResolvedValue({
     platforms: ['youtube'], products: [], campaigns: [], reels: [],
-    distributions: [{ id: 'distribution-1', name: 'สินค้า · youtube' }],
+    distributions: [{ id: 'distribution-1', name: 'สินค้า · youtube', platform: 'youtube', campaign_id: null, product_id: null, reel_id: 'reel-1' }],
   });
 });
 
@@ -65,6 +65,82 @@ it('shows click totals by platform across all days, including zero clicks', asyn
   }
 });
 
+it('cascades distributed scope options and resets descendants when a parent changes', async () => {
+  vi.mocked(api.fetchTrackingFilterOptions).mockResolvedValue({
+    platforms: ['youtube', 'facebook'],
+    campaigns: [{ id: 'c1', name: 'Campaign One' }, { id: 'c2', name: 'Campaign Two' }],
+    products: [{ id: 'p1', name: 'Product One' }, { id: 'p2', name: 'Product Two' }],
+    reels: [{ id: 'r1', name: 'Reel One' }, { id: 'r2', name: 'Reel Two' }],
+    distributions: [
+      { id: 'd1', name: '', platform: 'youtube', campaign_id: 'c1', product_id: 'p1', reel_id: 'r1' },
+      { id: 'd2', name: '', platform: 'facebook', campaign_id: 'c2', product_id: 'p2', reel_id: 'r2' },
+    ],
+  });
+  render(<Tracking />);
+  await screen.findByText('Tracking details');
+  async function choose(label: string, option: string) {
+    fireEvent.keyDown(screen.getByRole('combobox', { name: label }), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('option', { name: option }));
+  }
+  await choose('Platform', 'YouTube Shorts');
+  fireEvent.keyDown(screen.getByRole('combobox', { name: 'Campaign' }), { key: 'Enter' });
+  expect(await screen.findByRole('option', { name: 'Campaign One' })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'Campaign Two' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('option', { name: 'Campaign One' }));
+  await choose('Product', 'Product One');
+  await choose('Reel', 'Reel One');
+  await choose('Campaign', 'All campaigns');
+  expect(screen.getByRole('combobox', { name: 'Product' })).toHaveTextContent('All products');
+  expect(screen.getByRole('combobox', { name: 'Reel' })).toHaveTextContent('All reels');
+  await choose('Campaign', 'Campaign One');
+  await choose('Product', 'Product One');
+  await choose('Reel', 'Reel One');
+  await choose('Product', 'All products');
+  expect(screen.getByRole('combobox', { name: 'Reel' })).toHaveTextContent('All reels');
+  await choose('Platform', 'Facebook');
+  expect(screen.getByRole('combobox', { name: 'Campaign' })).toHaveTextContent('All campaigns');
+  fireEvent.keyDown(screen.getByRole('combobox', { name: 'Campaign' }), { key: 'Enter' });
+  expect(await screen.findByRole('option', { name: 'Campaign Two' })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'Campaign One' })).not.toBeInTheDocument();
+});
+
+it('blocks overlapping periods including a shared boundary day and permits adjacent periods', async () => {
+  render(<Tracking />);
+  await screen.findByText('Tracking details');
+  for (const [label, value] of [['Start date', '2026-01-01'], ['End date', '2026-01-07'],
+    ['Period B start date', '2026-01-07'], ['Period B end date', '2026-01-14']]) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+  expect(screen.getByRole('alert')).toHaveTextContent('Period B must start after Period A ends');
+  expect(screen.getByLabelText('Period B start date')).toHaveAttribute('min', '2026-01-08');
+  expect(screen.getByRole('button', { name: 'Compare periods' })).toBeDisabled();
+  expect(api.fetchTrackingComparison).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText('Period B start date'), { target: { value: '2026-01-08' } });
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Compare periods' })).toBeEnabled();
+  fireEvent.change(screen.getByLabelText('Period B start date'), { target: { value: '2025-12-01' } });
+  fireEvent.change(screen.getByLabelText('Period B end date'), { target: { value: '2025-12-07' } });
+  expect(screen.getByRole('alert')).toHaveTextContent('Period B must start after Period A ends');
+  expect(screen.getByRole('button', { name: 'Compare periods' })).toBeDisabled();
+});
+
+it('requires end dates strictly after start dates for both periods', async () => {
+  render(<Tracking />);
+  await screen.findByText('Tracking details');
+  for (const [label, value] of [['Start date', '2026-01-01'], ['End date', '2026-01-01'],
+    ['Period B start date', '2026-01-08'], ['Period B end date', '2026-01-08']]) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+  expect(screen.getByLabelText('End date')).toHaveAttribute('min', '2026-01-02');
+  expect(screen.getByLabelText('Period B end date')).toHaveAttribute('min', '2026-01-09');
+  fireEvent.click(screen.getByRole('button', { name: 'Compare periods' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('Start date must be before end date');
+  fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-01-07' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Compare periods' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('Period B start date must be before end date');
+  expect(api.fetchTrackingComparison).not.toHaveBeenCalled();
+});
+
 it('exports the compared periods even if draft dates change afterward', async () => {
   const dashboard = await api.fetchTrackingDashboard();
   vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, has_data: true });
@@ -90,6 +166,15 @@ it('exports the compared periods even if draft dates change afterward', async ()
   fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-02-01' } });
   fireEvent.click(screen.getAllByRole('button', { name: 'CSV' })[0]);
   await waitFor(() => expect(api.downloadTrackingExport).toHaveBeenCalledWith('csv', { ...appliedFilters, ...periods }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Reset' })).toBeEnabled());
+  const comparisonCalls = vi.mocked(api.fetchTrackingComparison).mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+  await waitFor(() => expect(api.fetchTrackingDashboard).toHaveBeenLastCalledWith({}));
+  for (const label of Object.values(labels)) expect(screen.getByLabelText(label)).toHaveValue('');
+  expect(screen.getByRole('combobox', { name: 'Platform' })).toHaveTextContent('All platforms');
+  expect(screen.queryByText('Change: 50 · 50%')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument();
+  expect(api.fetchTrackingComparison).toHaveBeenCalledTimes(comparisonCalls);
 });
 
 

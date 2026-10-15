@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, SearchCheck, Download, RefreshCw, Eye, Heart, MousePointerClick, Video, SlidersHorizontal, ChevronDown, Settings2, Trophy, TableProperties, ArrowLeftRight, ChevronLeft, ChevronRight, Globe2, Megaphone, Package, type LucideIcon } from "lucide-react";
+import { BarChart3, SearchCheck, Download, RefreshCw, Eye, Heart, MousePointerClick, Video, SlidersHorizontal, ChevronDown, Settings2, Trophy, TableProperties, ArrowLeftRight, ChevronLeft, ChevronRight, Globe2, Megaphone, Package, Info, RotateCcw, type LucideIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -25,6 +25,12 @@ const CHART_PLATFORM_COLORS: Record<string, string> = {
 const chartNumber = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 const chartAxisTick = { fill: "hsl(var(--muted-foreground))", fontSize: 11 };
 const chartDate = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const nextDate = (value?: string) => {
+  if (!value) return undefined;
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+};
 
 function PlatformLegend({ values }: { values?: Record<string, number | null> }) {
   return (
@@ -142,6 +148,27 @@ export default function Tracking() {
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
+  const invalidPeriodOrder = Boolean(filters.start && filters.end && comparisonDates.start && comparisonDates.end
+    && filters.start < filters.end && comparisonDates.start < comparisonDates.end
+    && filters.end >= comparisonDates.start);
+
+  function changeScope(scope: "platform" | "campaign_id" | "product_id" | "reel_id", value: string | undefined) {
+    setFilters(previous => ({
+      ...previous, [scope]: value,
+      ...(scope === "platform" ? { campaign_id: undefined, product_id: undefined, reel_id: undefined } : {}),
+      ...(scope === "campaign_id" ? { product_id: undefined, reel_id: undefined } : {}),
+      ...(scope === "product_id" ? { reel_id: undefined } : {}),
+    }));
+  }
+
+  function scopeOptions(scope: "campaign" | "product" | "reel") {
+    const matching = options.distributions.filter(distribution =>
+      (!filters.platform || distribution.platform === filters.platform)
+      && (scope === "campaign" || !filters.campaign_id || distribution.campaign_id === filters.campaign_id)
+      && (scope !== "reel" || !filters.product_id || distribution.product_id === filters.product_id));
+    const ids = new Set(matching.map(distribution => distribution[`${scope}_id`]));
+    return options[`${scope}s`].filter(option => ids.has(option.id));
+  }
 
   useEffect(() => {
     let active = true;
@@ -166,7 +193,7 @@ export default function Tracking() {
     finally { setBusy(false); }
   }
   function applyFilters() {
-    if (filters.start && filters.end && filters.start > filters.end) {
+    if (filters.start && filters.end && filters.start >= filters.end) {
       setError("Start date must be before end date");
       return;
     }
@@ -174,15 +201,28 @@ export default function Tracking() {
       setError("Select start and end dates for both periods");
       return;
     }
-    if (comparisonDates.start > comparisonDates.end) {
+    if (comparisonDates.start >= comparisonDates.end) {
       setError("Period B start date must be before end date");
       return;
     }
+    if (invalidPeriodOrder) return;
     setAppliedPeriods({
       a_start: filters.start, a_end: filters.end,
       b_start: comparisonDates.start, b_end: comparisonDates.end,
     });
     setApplied({ ...filters });
+  }
+
+  function resetComparison() {
+    setFilters({});
+    setComparisonDates({ start: "", end: "" });
+    setAppliedPeriods(null);
+    setComparison(null);
+    setAnalysis(null);
+    setSelectedItem(null);
+    setError("");
+    setDetailsPage(1);
+    setApplied({});
   }
 
   const platformChartData = PLATFORM_OPTIONS.map(platform => {
@@ -337,27 +377,15 @@ export default function Tracking() {
         <PlatformLegend values={platformClickValues} />
       </section>
       </div>
-      <section className={panelClass}><div className="flex flex-wrap items-center justify-between gap-3"><SectionTitle icon={Trophy} title="Content ranking" description="Rank Reels, products, campaigns or platforms by a selected metric." /><div className="flex flex-wrap gap-2"><ScopeSelect icon={Video} label="Ranking level" showLabel={false} allowAll={false} className="w-40" placeholder="Level" value={level}
-                onChange={value => { setLevel(value as TrackingAnalysis["level"]); setAnalysis(null); setSelectedItem(null); }}
-                options={[
-                  { id: "reel", name: "Reel", icon: Video }, { id: "product", name: "Product", icon: Package },
-                  { id: "campaign", name: "Campaign", icon: Megaphone }, { id: "platform", name: "Platform", icon: Globe2 },
-                ]} />
-              <ScopeSelect icon={BarChart3} label="Ranking metric" showLabel={false} allowAll={false} className="w-44" placeholder="Metric" value={metric}
-                onChange={value => { setMetric(value as TrackingAnalysis["metric"]); setAnalysis(null); setSelectedItem(null); }}
-                options={[
-                  { id: "views", name: "Views", icon: Eye }, { id: "engagement", name: "Engagement", icon: Heart },
-                  { id: "clicks", name: "Affiliate clicks", icon: MousePointerClick },
-                ]} /><Button className={primaryButtonClass} disabled={busy} onClick={() => void run(async () => setAnalysis(await fetchTrackingAnalysis({ ...applied, level, metric })))}><SearchCheck className="h-4 w-4" aria-hidden="true" />Analyze</Button>{analysis && exportButtons({ level: analysis.level, metric: analysis.metric })}</div></div>{analysis && <div className="mt-4 space-y-2">{!analysis.rows.length && <p>No matching content.</p>}{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedItem(item)} className="flex w-full justify-between gap-3 border-b border-border py-2 text-left text-sm hover:bg-muted"><span>#{index + 1} {item.name || "Untitled"}</span><span>{display(item.value)}</span></button>)}</div>}{selectedItem && <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm"><h3 className="mb-2 font-semibold">{selectedItem.name || "Untitled"}</h3><div className="grid gap-2 sm:grid-cols-3">{(["views", "likes", "comments", "shares", "engagement", "clicks"] as const).map(key => <p key={key} className="capitalize">{key}: {display(selectedItem[key])}</p>)}</div>{!!selectedItem.partial_metrics.length && <p className="mt-2 text-xs text-muted-foreground">Some counters are unavailable in this scope.</p>}</div>}</section>
-    <section aria-label="Compare periods" className={`${panelClass} space-y-5`}>
+      <section aria-label="Compare periods" className={`${panelClass} space-y-5`}>
       <SectionTitle icon={SlidersHorizontal} title="Compare periods" description="Choose two periods and a content scope to compare affiliate link clicks." />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <ScopeSelect icon={Globe2} label="Platform" value={filters.platform} onChange={value => setFilters({ ...filters, platform: value })}
+        <ScopeSelect icon={Globe2} label="Platform" value={filters.platform} onChange={value => changeScope("platform", value)}
           placeholder="All platforms" options={options.platforms.map(platform => ({ id: platform, name: platformLabel(platform), platform }))} />
         {(["campaign", "product", "reel"] as const).map(scope => (
           <ScopeSelect key={scope} icon={scope === "campaign" ? Megaphone : scope === "product" ? Package : Video} label={scope.charAt(0).toUpperCase() + scope.slice(1)}
-            value={filters[`${scope}_id`]} onChange={value => setFilters({ ...filters, [`${scope}_id`]: value })}
-            placeholder={`All ${scope}s`} options={options[`${scope}s`]} />
+            value={filters[`${scope}_id`]} onChange={value => changeScope(`${scope}_id`, value)}
+            placeholder={`All ${scope}s`} options={scopeOptions(scope)} />
         ))}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
@@ -371,7 +399,7 @@ export default function Tracking() {
             {(["start", "end"] as const).map(key => (
               <label key={key} className="grid min-w-0 gap-2 text-xs font-medium text-muted-foreground">
                 {key === "start" ? "Start date" : "End date"}
-                <Input type="date" className={`${inputClass} dark:[color-scheme:dark]`} value={filters[key] || ""} onChange={event => setFilters({ ...filters, [key]: event.target.value })} />
+                <Input type="date" className={`${inputClass} dark:[color-scheme:dark]`} value={filters[key] || ""} min={key === "end" ? nextDate(filters.start) : undefined} onChange={event => setFilters({ ...filters, [key]: event.target.value })} />
               </label>
             ))}
           </div>
@@ -386,7 +414,7 @@ export default function Tracking() {
             {(["start", "end"] as const).map(key => (
               <label key={key} className="grid min-w-0 gap-2 text-xs font-medium text-muted-foreground">
                 {key === "start" ? "Period B start date" : "Period B end date"}
-                <Input type="date" className={`${inputClass} dark:[color-scheme:dark]`} value={comparisonDates[key]} onChange={event => setComparisonDates({ ...comparisonDates, [key]: event.target.value })} />
+                <Input type="date" className={`${inputClass} dark:[color-scheme:dark]`} value={comparisonDates[key]} min={key === "end" ? nextDate(comparisonDates.start) : nextDate(filters.end)} onChange={event => setComparisonDates({ ...comparisonDates, [key]: event.target.value })} />
               </label>
             ))}
           </div>
@@ -394,11 +422,19 @@ export default function Tracking() {
       </div>
       <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">The same filters apply to both periods. Period A also filters the dashboard and ranking.</p>
-        <Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading} onClick={applyFilters}><ArrowLeftRight className="h-4 w-4" aria-hidden="true" />Compare periods</Button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {appliedPeriods && <Button variant="outline" className="gap-2" disabled={busy || loading} onClick={resetComparison}><RotateCcw className="h-4 w-4" aria-hidden="true" />Reset</Button>}
+          <Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading || invalidPeriodOrder} onClick={applyFilters}><ArrowLeftRight className="h-4 w-4" aria-hidden="true" />Compare periods</Button>
+        </div>
       </div>
-      <details className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        <summary className="flex cursor-pointer list-none items-center gap-2 font-medium">How these metrics are counted<ChevronDown className="h-3.5 w-3.5" /></summary>
-        <p className="mt-2 max-w-4xl leading-relaxed">Social figures are the latest lifetime observation in the selected dates. Clicks are visits during those dates (Asia/Bangkok). Repeat visits count; recognized bots, previews and HEAD requests do not. These figures do not measure purchases or unique visitors. Period comparison supports affiliate link clicks; social daily activity is unavailable from lifetime observations.</p>
+      {invalidPeriodOrder && <p role="alert" className="text-sm text-destructive">Period B must start after Period A ends.</p>}
+      <details className="group rounded-xl border border-info/25 bg-info/5 p-4 text-sm">
+        <summary className="flex cursor-pointer list-none items-center gap-3 rounded-md font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2 focus-visible:ring-offset-card [&::-webkit-details-marker]:hidden">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-info/10 text-info"><Info className="h-5 w-5" aria-hidden="true" /></span>
+          <span>How these metrics are counted</span>
+          <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-info transition-transform group-open:rotate-180" aria-hidden="true" />
+        </summary>
+        <p className="mt-3 max-w-4xl leading-relaxed text-foreground/80 sm:ml-12">Social figures are the latest lifetime observation in the selected dates. Clicks are visits during those dates (Asia/Bangkok). Repeat visits count; recognized bots, previews and HEAD requests do not. These figures do not measure purchases or unique visitors. Period comparison supports affiliate link clicks; social daily activity is unavailable from lifetime observations.</p>
       </details>
     </section>
 
@@ -419,7 +455,19 @@ export default function Tracking() {
     )}
 
 
-      <section className={panelClass}>
+      <section className={panelClass}><div className="flex flex-wrap items-center justify-between gap-3"><SectionTitle icon={Trophy} title="Content ranking" description="Rank Reels, products, campaigns or platforms by a selected metric." /><div className="flex flex-wrap gap-2"><ScopeSelect icon={Video} label="Ranking level" showLabel={false} allowAll={false} className="w-40" placeholder="Level" value={level}
+                onChange={value => { setLevel(value as TrackingAnalysis["level"]); setAnalysis(null); setSelectedItem(null); }}
+                options={[
+                  { id: "reel", name: "Reel", icon: Video }, { id: "product", name: "Product", icon: Package },
+                  { id: "campaign", name: "Campaign", icon: Megaphone }, { id: "platform", name: "Platform", icon: Globe2 },
+                ]} />
+              <ScopeSelect icon={BarChart3} label="Ranking metric" showLabel={false} allowAll={false} className="w-44" placeholder="Metric" value={metric}
+                onChange={value => { setMetric(value as TrackingAnalysis["metric"]); setAnalysis(null); setSelectedItem(null); }}
+                options={[
+                  { id: "views", name: "Views", icon: Eye }, { id: "engagement", name: "Engagement", icon: Heart },
+                  { id: "clicks", name: "Affiliate clicks", icon: MousePointerClick },
+                ]} /><Button className={primaryButtonClass} disabled={busy} onClick={() => void run(async () => setAnalysis(await fetchTrackingAnalysis({ ...applied, level, metric })))}><SearchCheck className="h-4 w-4" aria-hidden="true" />Analyze</Button>{analysis && exportButtons({ level: analysis.level, metric: analysis.metric })}</div></div>{analysis && <div className="mt-4 space-y-2">{!analysis.rows.length && <p>No matching content.</p>}{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedItem(item)} className="flex w-full justify-between gap-3 border-b border-border py-2 text-left text-sm hover:bg-muted"><span>#{index + 1} {item.name || "Untitled"}</span><span>{display(item.value)}</span></button>)}</div>}{selectedItem && <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm"><h3 className="mb-2 font-semibold">{selectedItem.name || "Untitled"}</h3><div className="grid gap-2 sm:grid-cols-3">{(["views", "likes", "comments", "shares", "engagement", "clicks"] as const).map(key => <p key={key} className="capitalize">{key}: {display(selectedItem[key])}</p>)}</div>{!!selectedItem.partial_metrics.length && <p className="mt-2 text-xs text-muted-foreground">Some counters are unavailable in this scope.</p>}</div>}</section>
+    <section className={panelClass}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SectionTitle icon={TableProperties} title="Tracking details" description="Review social metrics and affiliate link clicks for each Reel." />
           {exportButtons()}

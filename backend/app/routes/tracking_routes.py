@@ -56,8 +56,10 @@ def analyzeTrackingPerformance(level: str, metric: str, filters: dict = Depends(
 
 
 def _comparison(db, user_id, filters, a_start, a_end, b_start, b_end):
-    if not all((a_start, a_end, b_start, b_end)) or a_start > a_end or b_start > b_end:
+    if not all((a_start, a_end, b_start, b_end)) or a_start >= a_end or b_start >= b_end:
         raise HTTPException(422, 'Supply two valid complete date ranges')
+    if a_end >= b_start:
+        raise HTTPException(422, 'Period B must start after Period A ends')
     scope = {key: value for key, value in filters.items() if key not in {'start', 'end'}}
     return service.compare_periods(db, user_id=user_id, a_start=a_start, a_end=a_end,
                                    b_start=b_start, b_end=b_end, **scope)
@@ -123,15 +125,31 @@ def redirectTrackingLink(code: str, request: Request, db: Session = Depends(get_
 
 @router.get('/filter-options')
 def trackingFilterOptions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    def owned(model, id_column, name_column):
-        return [{'id': str(getattr(row, id_column)), 'name': getattr(row, name_column)}
-                for row in db.query(model).filter(model.user_id == current_user.user_id, model.deleted_at.is_(None)).all()]
-    return dict(platforms=sorted(service.SUPPORTED_TRACKING_PLATFORMS),
-                campaigns=owned(Campaign, 'campaign_id', 'name'),
-                products=owned(Product, 'product_id', 'product_name'), reels=owned(Reel, 'reel_id', 'prompt_text'),
-                distributions=[dict(id=str(distribution.distribution_id), name=f'{reel.name or reel.prompt_text} · {account.platform_name}')
-                               for distribution, reel, account in db.query(Distribution, Reel, SocialAccount)
-                               .join(Reel, Distribution.reel_id == Reel.reel_id)
-                               .join(SocialAccount, Distribution.account_id == SocialAccount.account_id)
-                               .filter(Reel.user_id == current_user.user_id, SocialAccount.user_id == current_user.user_id,
-                                       Reel.deleted_at.is_(None)).all()])
+    campaigns, products, reels, distributions = {}, {}, {}, []
+    published = (db.query(Distribution, Reel, SocialAccount)
+                 .join(Reel, Distribution.reel_id == Reel.reel_id)
+                 .join(SocialAccount, Distribution.account_id == SocialAccount.account_id)
+                 .filter(Reel.user_id == current_user.user_id, SocialAccount.user_id == current_user.user_id,
+                         Reel.deleted_at.is_(None), Distribution.status == 'Published',
+                         SocialAccount.platform_name.in_(service.SUPPORTED_TRACKING_PLATFORMS)).all())
+    for distribution, reel, account in published:
+        product = reel.product
+        if product and (product.user_id != current_user.user_id or product.deleted_at is not None):
+            continue
+        campaign = product.campaign if product else None
+        if campaign and (campaign.user_id != current_user.user_id or campaign.deleted_at is not None):
+            continue
+        reel_id = str(reel.reel_id)
+        product_id = str(product.product_id) if product else None
+        campaign_id = str(campaign.campaign_id) if campaign else None
+        reels[reel_id] = dict(id=reel_id, name=reel.name or reel.prompt_text)
+        if product:
+            products[product_id] = dict(id=product_id, name=product.product_name)
+        if campaign:
+            campaigns[campaign_id] = dict(id=campaign_id, name=campaign.name)
+        distributions.append(dict(id=str(distribution.distribution_id),
+                                  name=f'{reel.name or reel.prompt_text} · {account.platform_name}',
+                                  platform=account.platform_name, campaign_id=campaign_id,
+                                  product_id=product_id, reel_id=reel_id))
+    return dict(platforms=sorted(service.SUPPORTED_TRACKING_PLATFORMS), campaigns=list(campaigns.values()),
+                products=list(products.values()), reels=list(reels.values()), distributions=distributions)

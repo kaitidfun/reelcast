@@ -97,7 +97,7 @@ export type TrackingDashboard = {
 export type TrackingFilterOptions = {
   platforms: string[]; campaigns: Array<{ id: string; name: string }>;
   products: Array<{ id: string; name: string }>; reels: Array<{ id: string; name: string }>;
-  distributions: Array<{ id: string; name: string }>;
+  distributions: Array<{ id: string; name: string; platform: string; campaign_id: string | null; product_id: string | null; reel_id: string }>;
 };
 export type TrackingAnalysis = {
   level: "product" | "campaign" | "reel" | "platform";
