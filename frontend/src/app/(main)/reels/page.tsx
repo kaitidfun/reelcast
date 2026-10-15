@@ -3,11 +3,12 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Search, Film } from "lucide-react";
+import { Search, Film, AlertCircle, CheckCircle2, CircleDot, Clock, EyeOff, Loader2, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { SearchClearButton } from "@/components/ui/search-clear-button";
 import {
   Select,
+  SelectOptionLabel,
   SelectContent,
   SelectItem,
   SelectTrigger,
@@ -60,11 +61,11 @@ const AllReels = () => {
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="Completed">Completed</SelectItem>
-            <SelectItem value="Generating">Generating</SelectItem>
-            <SelectItem value="Pending">Pending</SelectItem>
-            <SelectItem value="Failed">Failed</SelectItem>
+            <SelectItem value="all" textValue="All Statuses"><SelectOptionLabel icon={CircleDot}>All Statuses</SelectOptionLabel></SelectItem>
+            <SelectItem value="Completed" textValue="Completed"><SelectOptionLabel icon={CheckCircle2}>Completed</SelectOptionLabel></SelectItem>
+            <SelectItem value="Generating" textValue="Generating"><SelectOptionLabel icon={Loader2}>Generating</SelectOptionLabel></SelectItem>
+            <SelectItem value="Pending" textValue="Pending"><SelectOptionLabel icon={Clock}>Pending</SelectOptionLabel></SelectItem>
+            <SelectItem value="Failed" textValue="Failed"><SelectOptionLabel icon={AlertCircle}>Failed</SelectOptionLabel></SelectItem>
           </SelectContent>
         </Select>
         <Select value={publishFilter} onValueChange={setPublishFilter}>
@@ -72,9 +73,9 @@ const AllReels = () => {
             <SelectValue placeholder="Publish status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Published or not</SelectItem>
-            <SelectItem value="published">Published</SelectItem>
-            <SelectItem value="unpublished">Not published</SelectItem>
+            <SelectItem value="all" textValue="Published or not"><SelectOptionLabel icon={Send}>Published or not</SelectOptionLabel></SelectItem>
+            <SelectItem value="published" textValue="Published"><SelectOptionLabel icon={CheckCircle2}>Published</SelectOptionLabel></SelectItem>
+            <SelectItem value="unpublished" textValue="Not published"><SelectOptionLabel icon={EyeOff}>Not published</SelectOptionLabel></SelectItem>
           </SelectContent>
         </Select>
       </div>

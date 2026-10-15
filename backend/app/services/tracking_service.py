@@ -162,20 +162,23 @@ def dashboard(db: Session, *, user_id, start=None, end=None, **filters):
     accounts = db.query(SocialAccount).filter(SocialAccount.user_id == user_id).all()
     unrelated = db.query(TrackingObservation).filter(
         TrackingObservation.user_id == user_id, TrackingObservation.distribution_id.is_(None)).count()
-    link_ids = _filters(_scope_query(db, TrackingLink, user_id), **filters).with_entities(TrackingLink.link_id)
-    clicks = db.query(TrackingClick.clicked_at).filter(TrackingClick.link_id.in_(link_ids.statement))
+    clicks = (_filters(_scope_query(db, TrackingLink, user_id), **filters)
+              .join(TrackingClick, TrackingClick.link_id == TrackingLink.link_id)
+              .with_entities(TrackingClick.clicked_at, SocialAccount.platform_name))
     lower, upper = _bounds(start, end)
     if lower:
         clicks = clicks.filter(TrackingClick.clicked_at >= lower)
     if upper:
         clicks = clicks.filter(TrackingClick.clicked_at < upper)
-    daily = defaultdict(int)
-    for (timestamp,) in clicks.all():
+    daily = defaultdict(lambda: defaultdict(int))
+    for timestamp, source_platform in clicks.all():
         if timestamp.tzinfo is None:
             timestamp = timestamp.replace(tzinfo=timezone.utc)
-        daily[timestamp.astimezone(REPORT_TZ).date().isoformat()] += 1
+        daily[timestamp.astimezone(REPORT_TZ).date().isoformat()][source_platform] += 1
     return dict(totals=dict(_totals(rows), reels=len({row['reel_id'] for row in rows})),
-                click_trend=[dict(date=day, clicks=count) for day, count in sorted(daily.items())],
+                click_trend=[dict(date=day, clicks=sum(counts.values()),
+                                  **{platform: counts.get(platform, 0) for platform in SUPPORTED_TRACKING_PLATFORMS})
+                             for day, counts in sorted(daily.items())],
                 platforms=_rank(rows, 'platform', 'views'),
                 products=_rank(rows, 'product', 'views')[:5],
                 campaigns=_rank(rows, 'campaign', 'views')[:5], reels=_rank(rows, 'reel', 'views')[:5],

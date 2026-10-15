@@ -981,7 +981,7 @@ const CreateReelContent = () => {
                     <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Duration</p>
                     {durationOptions.map((d) => (
                       <button key={d} onClick={() => setDuration(d)} className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs hover:bg-accent ${duration === d ? "text-primary" : "text-foreground"}`}>
-                        {d} seconds
+                        <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" aria-hidden="true" />{d} seconds</span>
                         {duration === d && <Check className="h-3.5 w-3.5" />}
                       </button>
                     ))}

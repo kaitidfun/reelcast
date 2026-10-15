@@ -167,3 +167,25 @@ def test_observations_across_bangkok_midnight_do_not_overwrite_previous_day(data
     assert db.query(TrackingObservation).count() == 2
     assert service.dashboard(db, user_id=users[0].user_id, start=date(2026,1,1), end=date(2026,1,1))['totals']['views'] == 10
     assert service.dashboard(db, user_id=users[0].user_id, start=date(2026,1,2), end=date(2026,1,2))['totals']['views'] == 20
+
+def test_daily_click_chart_separates_platforms_and_keeps_owner_and_date_filters(data):
+    db, users, accounts, distributions = data
+    facebook = SocialAccount(account_id=uuid4(), user_id=users[0].user_id, platform_name='facebook', access_token='encrypted')
+    db.add(facebook); db.commit()
+    distribution = Distribution(distribution_id=uuid4(), reel_id=distributions[0].reel_id,
+                                account_id=facebook.account_id, status='Published', platform_post_id='video')
+    db.add(distribution); db.commit()
+    links = [service.ensure_tracking_link(db, user_id=users[0].user_id, distribution_id=item.distribution_id)
+             for item in (distributions[0], distribution)]
+    other = service.ensure_tracking_link(db, user_id=users[1].user_id, distribution_id=distributions[1].distribution_id)
+    when = datetime(2026,1,1,17,tzinfo=timezone.utc)
+    db.add_all([TrackingClick(link_id=links[0].link_id, clicked_at=when) for _ in range(2)])
+    db.add(TrackingClick(link_id=links[1].link_id, clicked_at=when))
+    db.add_all([TrackingClick(link_id=other.link_id, clicked_at=when) for _ in range(9)])
+    db.commit()
+    result = service.dashboard(db, user_id=users[0].user_id, start=date(2026,1,2), end=date(2026,1,2))
+    assert result['click_trend'] == [{'date':'2026-01-02','clicks':3,'youtube':2,'facebook':1,'instagram':0,'tiktok':0}]
+    assert result['totals']['clicks'] == 3
+    scoped = service.dashboard(db, user_id=users[0].user_id, platform='facebook')
+    assert scoped['click_trend'][0]['facebook'] == 1 and scoped['click_trend'][0]['youtube'] == 0
+    assert scoped['totals']['clicks'] == 1

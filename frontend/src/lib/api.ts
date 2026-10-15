@@ -89,7 +89,7 @@ export type TrackingItem = TrackingMetric & { id: string; name: string; value: n
 export type TrackingDashboard = {
   totals: TrackingMetric & { reels: number };
   platforms: TrackingItem[]; products: TrackingItem[]; campaigns: TrackingItem[]; reels: TrackingItem[];
-  click_trend: Array<{ date: string; clicks: number }>;
+  click_trend: Array<{ date: string; clicks: number; youtube: number; facebook: number; instagram: number; tiktok: number }>;
   details: Array<TrackingMetric & { distribution_id: string; reel_name: string; platform: string; observed_at: string | null }>;
   has_data: boolean; semantics: string; generated_at: string; unrelated_observations: number;
   accounts: Array<{ id: string; platform: string; last_synced_at: string | null; error: string | null }>;

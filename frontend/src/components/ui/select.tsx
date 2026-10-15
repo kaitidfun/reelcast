@@ -1,8 +1,23 @@
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
-import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+
+function SelectOptionLabel({ icon: Icon, iconNode, children }: {
+  icon?: LucideIcon;
+  iconNode?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span aria-hidden="true" className="flex shrink-0 items-center">
+        {iconNode || (Icon ? <Icon className="h-4 w-4 text-muted-foreground" /> : null)}
+      </span>
+      <span className="truncate">{children}</span>
+    </span>
+  );
+}
 
 const Select = SelectPrimitive.Root;
 
@@ -130,6 +145,7 @@ const SelectSeparator = React.forwardRef<
 SelectSeparator.displayName = SelectPrimitive.Separator.displayName;
 
 export {
+  SelectOptionLabel,
   Select,
   SelectGroup,
   SelectValue,

@@ -12,6 +12,10 @@ import {
   Film,
   CircleDot,
   Send,
+  AlertCircle,
+  CheckCircle2,
+  EyeOff,
+  Loader2,
 } from "lucide-react";
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
@@ -30,6 +34,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import {
   Select,
+  SelectOptionLabel,
   SelectContent,
   SelectItem,
   SelectTrigger,
@@ -197,26 +202,24 @@ const ProductReels = () => {
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
           <SelectTrigger className="h-10 w-full justify-start gap-2 bg-card sm:w-[160px] [&>svg:last-child]:ml-auto">
-            <CircleDot className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="Completed">Completed</SelectItem>
-            <SelectItem value="Generating">Generating</SelectItem>
-            <SelectItem value="Pending">Pending</SelectItem>
-            <SelectItem value="Failed">Failed</SelectItem>
+            <SelectItem value="all" textValue="All Statuses"><SelectOptionLabel icon={CircleDot}>All Statuses</SelectOptionLabel></SelectItem>
+            <SelectItem value="Completed" textValue="Completed"><SelectOptionLabel icon={CheckCircle2}>Completed</SelectOptionLabel></SelectItem>
+            <SelectItem value="Generating" textValue="Generating"><SelectOptionLabel icon={Loader2}>Generating</SelectOptionLabel></SelectItem>
+            <SelectItem value="Pending" textValue="Pending"><SelectOptionLabel icon={Clock}>Pending</SelectOptionLabel></SelectItem>
+            <SelectItem value="Failed" textValue="Failed"><SelectOptionLabel icon={AlertCircle}>Failed</SelectOptionLabel></SelectItem>
           </SelectContent>
         </Select>
         <Select value={publishFilter} onValueChange={setPublishFilter}>
           <SelectTrigger aria-label="Filter by publish status" className="h-10 w-full justify-start gap-2 bg-card sm:w-[200px] [&>svg:last-child]:ml-auto">
-            <Send className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <SelectValue placeholder="Publish status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Published or Not</SelectItem>
-            <SelectItem value="published">Published</SelectItem>
-            <SelectItem value="unpublished">Not published</SelectItem>
+            <SelectItem value="all" textValue="Published or Not"><SelectOptionLabel icon={Send}>Published or Not</SelectOptionLabel></SelectItem>
+            <SelectItem value="published" textValue="Published"><SelectOptionLabel icon={CheckCircle2}>Published</SelectOptionLabel></SelectItem>
+            <SelectItem value="unpublished" textValue="Not published"><SelectOptionLabel icon={EyeOff}>Not published</SelectOptionLabel></SelectItem>
           </SelectContent>
         </Select>
         <ToggleGroup

@@ -14,9 +14,13 @@ import {
   LayoutGrid,
   List,
   Sparkles,
-  ArrowUpDown,
   Clock,
   CircleDot,
+  ArrowDownAZ,
+  ArrowDownWideNarrow,
+  ArrowUpWideNarrow,
+  CheckCircle2,
+  Pencil,
 } from "lucide-react";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
@@ -53,6 +57,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import {
   Select,
+  SelectOptionLabel,
   SelectContent,
   SelectItem,
   SelectTrigger,
@@ -756,14 +761,13 @@ const ContentLibrary = () => {
             </div>
             <Select value={campaignSort} onValueChange={(v) => setCampaignSort(v as SortKey)}>
               <SelectTrigger className="w-full sm:w-[200px] bg-card h-10">
-                <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
                 <SelectValue placeholder="Sort" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="updated">Recently updated</SelectItem>
-                <SelectItem value="newest">Newest first</SelectItem>
-                <SelectItem value="oldest">Oldest first</SelectItem>
-                <SelectItem value="name">Name (A–Z)</SelectItem>
+                <SelectItem value="updated" textValue="Recently updated"><SelectOptionLabel icon={Clock}>Recently updated</SelectOptionLabel></SelectItem>
+                <SelectItem value="newest" textValue="Newest first"><SelectOptionLabel icon={ArrowDownWideNarrow}>Newest first</SelectOptionLabel></SelectItem>
+                <SelectItem value="oldest" textValue="Oldest first"><SelectOptionLabel icon={ArrowUpWideNarrow}>Oldest first</SelectOptionLabel></SelectItem>
+                <SelectItem value="name" textValue="Name (A–Z)"><SelectOptionLabel icon={ArrowDownAZ}>Name (A–Z)</SelectOptionLabel></SelectItem>
               </SelectContent>
             </Select>
             <ToggleGroup
@@ -1038,25 +1042,23 @@ const ContentLibrary = () => {
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
           <SelectTrigger className="h-10 w-full justify-start gap-2 bg-card sm:w-[160px] [&>svg:last-child]:ml-auto">
-            <CircleDot className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="Active">Active</SelectItem>
-            <SelectItem value="Draft">Draft</SelectItem>
+            <SelectItem value="all" textValue="All Statuses"><SelectOptionLabel icon={CircleDot}>All Statuses</SelectOptionLabel></SelectItem>
+            <SelectItem value="Active" textValue="Active"><SelectOptionLabel icon={CheckCircle2}>Active</SelectOptionLabel></SelectItem>
+            <SelectItem value="Draft" textValue="Draft"><SelectOptionLabel icon={Pencil}>Draft</SelectOptionLabel></SelectItem>
           </SelectContent>
         </Select>
         <Select value={productSort} onValueChange={(v) => setProductSort(v as SortKey)}>
           <SelectTrigger className="w-full sm:w-[200px] bg-card h-10">
-            <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
             <SelectValue placeholder="Sort" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="updated">Recently updated</SelectItem>
-            <SelectItem value="newest">Newest first</SelectItem>
-            <SelectItem value="oldest">Oldest first</SelectItem>
-            <SelectItem value="name">Name (A–Z)</SelectItem>
+            <SelectItem value="updated" textValue="Recently updated"><SelectOptionLabel icon={Clock}>Recently updated</SelectOptionLabel></SelectItem>
+            <SelectItem value="newest" textValue="Newest first"><SelectOptionLabel icon={ArrowDownWideNarrow}>Newest first</SelectOptionLabel></SelectItem>
+            <SelectItem value="oldest" textValue="Oldest first"><SelectOptionLabel icon={ArrowUpWideNarrow}>Oldest first</SelectOptionLabel></SelectItem>
+            <SelectItem value="name" textValue="Name (A–Z)"><SelectOptionLabel icon={ArrowDownAZ}>Name (A–Z)</SelectOptionLabel></SelectItem>
           </SelectContent>
         </Select>
         <ToggleGroup
