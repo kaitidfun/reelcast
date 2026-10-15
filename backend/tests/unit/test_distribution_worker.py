@@ -6,6 +6,8 @@ from tests.pytest_helpers import PytestAssertions
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+from app.core import config
+from types import SimpleNamespace
 from app.exceptions import DistributionPublishException
 from app.models.models import Distribution, Product, Reel, SocialAccount
 from app.worker import _format_caption, _publishDistribution, checkScheduledDistributions
@@ -122,6 +124,7 @@ class TestPublishDistributionTaskTests(PytestAssertions):
         db = self._db_returning(distribution=self.distribution, reel=self.reel)
 
         with patch("app.worker.SessionLocal", return_value=db), \
+             patch("app.worker.tracking_service.ensure_tracking_link", return_value=SimpleNamespace(code="track-code")) as mock_link, \
              patch("app.worker.social_account_service.get_social_account", return_value=self.account), \
              patch("app.worker.social_account_service.get_decrypted_access_token", return_value="plain-token"), \
              patch("app.worker.get_presigned_url", return_value="https://cdn.example.com/video.mp4"), \
@@ -129,6 +132,7 @@ class TestPublishDistributionTaskTests(PytestAssertions):
              patch("app.worker.distribution_service.update_distribution") as mock_update:
             await _publishDistribution(str(self.distribution_id))
 
+        mock_link.assert_called_once_with(db, user_id=self.user_id, distribution_id=self.distribution_id)
         statuses = [c.kwargs.get("status") for c in mock_update.call_args_list]
         self.assertIn("Uploading", statuses)
         self.assertIn("Published", statuses)
@@ -137,7 +141,7 @@ class TestPublishDistributionTaskTests(PytestAssertions):
         self.assertEqual("tiktok-post-id", published_call.kwargs["platform_post_id"])
         self.assertIsNone(published_call.kwargs["post_url"])
         self.assertEqual(
-            "https://example.com/affiliate\n\nBuy now\n\n#sale",
+            f"{config.BACKEND_URL.rstrip('/')}/api/tracking/r/track-code\n\nBuy now\n\n#sale",
             mock_publish.call_args.kwargs["caption"],
         )
 

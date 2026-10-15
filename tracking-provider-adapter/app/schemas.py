@@ -28,6 +28,7 @@ class SyncRequest(BaseModel):
     account_id: str = Field(min_length=1, max_length=128)
     external_account_id: str = Field(min_length=1, max_length=256)
     access_token: str = Field(min_length=1, max_length=8192)
+    post_ids: list[str] = Field(default_factory=list, max_length=10000)
     from_date: date
     to_date: date
 
@@ -41,10 +42,13 @@ class SyncRequest(BaseModel):
 class Metric(BaseModel):
     external_ref: str = Field(min_length=1, max_length=512)
     record_date: date
-    views: int = Field(default=0, ge=0)
+    views: int | None = Field(default=None, ge=0)
+    likes: int | None = Field(default=None, ge=0)
+    comments: int | None = Field(default=None, ge=0)
+    shares: int | None = Field(default=None, ge=0)
     clicks: int = Field(default=0, ge=0)
     orders: int = Field(default=0, ge=0)
-    engagement: int = Field(default=0, ge=0)
+    engagement: int | None = Field(default=None, ge=0)
     revenue: float = Field(default=0, ge=0)
 
 

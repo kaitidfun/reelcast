@@ -20,10 +20,10 @@ class YouTubeProvider(ProviderClient):
         published_before = datetime.combine(request.to_date, datetime.max.time(), tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
         search_url = self.settings().youtube_api_base_url.rstrip("/") + "/youtube/v3/search"
         page_token: str | None = None
-        ids: list[str] = []
+        ids: list[str] = list(request.post_ids)
         # Explicit date ordering makes a just-published Short visible on the
         # first sync instead of relying on YouTube's relevance ordering.
-        for _ in range(10):
+        for _ in range(0 if request.post_ids else 10):
             params = {"part": "snippet", "channelId": request.external_account_id, "type": "video",
                       "publishedAfter": published_after, "publishedBefore": published_before,
                       "maxResults": 50, "order": "date"}
@@ -48,8 +48,10 @@ class YouTubeProvider(ProviderClient):
             metrics.extend(
                 Metric(external_ref=f"youtube:{item['id']}",
                        record_date=provider_date(item.get("snippet", {}).get("publishedAt"), request.from_date),
-                       views=number(item.get("statistics", {}).get("viewCount")),
-                       engagement=number(item.get("statistics", {}).get("likeCount")) + number(item.get("statistics", {}).get("commentCount")))
+                       views=number(item["statistics"]["viewCount"]) if "viewCount" in item.get("statistics", {}) else None,
+                       likes=number(item["statistics"]["likeCount"]) if "likeCount" in item.get("statistics", {}) else None,
+                       comments=number(item["statistics"]["commentCount"]) if "commentCount" in item.get("statistics", {}) else None,
+                       engagement=number(item.get("statistics", {}).get("likeCount")) + number(item.get("statistics", {}).get("commentCount")) if all(k in item.get("statistics", {}) for k in ("likeCount", "commentCount")) else None)
                 for item in detail.get("items", []) if item.get("id")
             )
         return metrics

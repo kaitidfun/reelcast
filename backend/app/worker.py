@@ -12,6 +12,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import SessionLocal
+from app.core import config
 from app.exceptions import (
     DistributionPublishException,
     FFmpegProcessingException,
@@ -33,7 +34,7 @@ from app.services.video_generation_service import (
 from app.services.overlay_service import overlayImagesAndLogos, generateVideoThumbnail
 from app.services.reel_service import update_reel
 from app.services.storage_service import get_presigned_url
-from app.services import distribution_publish_service, distribution_service, oauth_platforms, social_account_service, tracking_provider_service
+from app.services import distribution_publish_service, distribution_service, oauth_platforms, social_account_service, tracking_provider_service, tracking_service
 
 logger = logging.getLogger(__name__)
 
@@ -743,9 +744,15 @@ async def _publishDistribution(distribution_id: str) -> None:
         try:
             video_url = get_presigned_url(reel.saved_final_commercial_video_url)
             access_token = social_account_service.get_decrypted_access_token(account)
+            affiliate_link = reel.product.affiliate_link if reel.product else None
+            if affiliate_link:
+                tracking_link = tracking_service.ensure_tracking_link(
+                    db, user_id=reel.user_id, distribution_id=distribution.distribution_id,
+                )
+                affiliate_link = f"{config.BACKEND_URL.rstrip('/')}/api/tracking/r/{tracking_link.code}"
             caption = _prepend_affiliate_link(
                 _format_caption(reel.saved_caption_and_hashtags),
-                reel.product.affiliate_link if reel.product else None,
+                affiliate_link,
             )
 
             # Access tokens expire (~1h for Google/TikTok) long before a

@@ -80,71 +80,37 @@ export async function fetchHealth() {
   }
 }
 
-export type TrackingTotals = {
-  reels: number;
-  views: number;
-  clicks: number;
-  orders: number;
-  engagement: number;
-  click_through_rate: number;
-  revenue: number;
-};
-
 export type TrackingMetric = {
-  views: number;
-  clicks: number;
-  orders: number;
-  engagement: number;
-  revenue: number;
-  click_through_rate?: number;
+  views: number | null; likes: number | null; comments: number | null;
+  shares: number | null; engagement: number | null; clicks: number;
+  partial_metrics: string[];
 };
-
+export type TrackingItem = TrackingMetric & { id: string; name: string; value: number | null };
 export type TrackingDashboard = {
-  totals: TrackingTotals;
-  trend: Array<TrackingMetric & { date: string }>;
-  platforms: Array<TrackingMetric & { platform: string }>;
-  products: Array<TrackingMetric & { id: string; name: string }>;
-  campaigns: Array<TrackingMetric & { id: string; name: string }>;
-  reels: Array<TrackingMetric & { id: string; name: string }>;
-  has_data: boolean;
-  last_synced_at: string | null;
-  generated_at: string;
+  totals: TrackingMetric & { reels: number };
+  platforms: TrackingItem[]; products: TrackingItem[]; campaigns: TrackingItem[]; reels: TrackingItem[];
+  click_trend: Array<{ date: string; clicks: number }>;
+  details: Array<TrackingMetric & { distribution_id: string; reel_name: string; platform: string; observed_at: string | null }>;
+  has_data: boolean; semantics: string; generated_at: string; unrelated_observations: number;
+  accounts: Array<{ id: string; platform: string; last_synced_at: string | null; error: string | null }>;
 };
-
 export type TrackingFilterOptions = {
-  platforms: string[];
-  campaigns: Array<{ id: string; name: string }>;
-  products: Array<{ id: string; name: string }>;
+  platforms: string[]; campaigns: Array<{ id: string; name: string }>;
+  products: Array<{ id: string; name: string }>; reels: Array<{ id: string; name: string }>;
+  distributions: Array<{ id: string; name: string }>;
 };
-
 export type TrackingAnalysis = {
   level: "product" | "campaign" | "reel" | "platform";
-  metric: "views" | "clicks" | "orders" | "engagement" | "revenue" | "ctr";
-  rows: Array<TrackingMetric & { id: string; name: string; value: number }>;
-  trend: Array<{ date: string; value: number }>;
-  generated_at: string;
+  metric: "views" | "clicks" | "engagement";
+  rows: TrackingItem[]; semantics: string;
 };
-
-export type TrackingFilters = {
-  start?: string;
-  end?: string;
-  platform?: string;
-  campaign_id?: string;
-  product_id?: string;
-};
-
-export type EcommerceAccount = {
-  ecommerce_account_id: string;
-  platform_name: string;
-  external_shop_id: string;
-  shop_name?: string | null;
-  last_synced_at?: string | null;
-  sync_error?: string | null;
-};
-
-export type TrackingReadiness = {
-  providers: Record<string, boolean>;
-  oauth: Record<"tiktok_shop" | "shopee" | "lazada", boolean>;
+export type TrackingFilters = { start?: string; end?: string; platform?: string; campaign_id?: string; product_id?: string; reel_id?: string };
+export type TrackingPeriods = { a_start: string; a_end: string; b_start: string; b_end: string };
+export type TrackingComparison = {
+  a: { start: string; end: string; clicks: number; complete: boolean };
+  b: { start: string; end: string; clicks: number; complete: boolean };
+  difference: number | null; percentage_change: number | null; equal_duration: boolean;
+  limitation: string; coverage_start: string | null;
 };
 
 async function trackingRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -182,35 +148,22 @@ export function fetchTrackingAnalysis(
   return trackingRequest<TrackingAnalysis>(`/analysis${trackingQuery(filters)}`);
 }
 
-export function fetchEcommerceAccounts() {
-  return trackingRequest<EcommerceAccount[]>("/ecommerce/accounts");
+export function fetchTrackingComparison(filters: TrackingFilters & TrackingPeriods) {
+  return trackingRequest<TrackingComparison>(`/comparison${trackingQuery(filters)}`);
 }
-
-export function fetchTrackingReadiness() {
-  return trackingRequest<TrackingReadiness>("/readiness");
-}
-
-export function connectEcommerceAccount(data: {
-  platform_name: "tiktok_shop" | "shopee" | "lazada";
-  external_shop_id: string;
-  shop_name?: string;
-  access_token: string;
-  refresh_token?: string;
-}) {
-  return trackingRequest<EcommerceAccount>("/ecommerce/accounts", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-}
-
-export async function disconnectEcommerceAccount(accountId: string) {
-  const response = await fetch(`${API_BASE_URL}/tracking/ecommerce/accounts/${accountId}`, {
-    method: "DELETE",
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) throw new Error("Unable to disconnect shop");
-}
-
 export function syncTrackingData() {
-  return trackingRequest<{ ecommerce_metrics: number; social_metrics: number }>("/sync", { method: "POST" });
+  return trackingRequest<{ social_metrics: number; accounts: Array<{ success: boolean; error: string | null }> }>("/sync", { method: "POST" });
+}
+export function createTrackingLink(distributionId: string) {
+  return trackingRequest<{ url: string }>(`/links/${distributionId}`, { method: "POST" });
+}
+export async function downloadTrackingExport(format: "csv" | "xlsx", filters: TrackingFilters & Partial<TrackingPeriods> & { level?: string; metric?: string }) {
+  const response = await fetch(`${API_BASE_URL}/tracking/export${trackingQuery({ ...filters, format })}`, { headers: getAuthHeaders() });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || "Export failed");
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const anchor = document.createElement("a"); anchor.href = url; anchor.download = `reelcast-tracking.${format}`;
+  anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

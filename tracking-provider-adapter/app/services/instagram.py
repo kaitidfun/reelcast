@@ -17,20 +17,28 @@ class InstagramProvider(ProviderClient):
         # insights expansion is invalid for current Instagram Graph versions
         # and causes the whole account sync to fail.
         fields = "id,timestamp,media_type,like_count,comments_count"
-        data = await self.request("GET", f"{self.settings().meta_graph_api_base_url.rstrip('/')}/{request.external_account_id}/media",
-                                  params={"fields": fields, "since": request.from_date.isoformat(), "until": request.to_date.isoformat(), "limit": 100},
-                                  headers={"Authorization": f"Bearer {request.access_token}"})
         media: list[dict] = []
+        if request.post_ids:
+            for post_id in dict.fromkeys(request.post_ids):
+                item = await self.request('GET', f"{self.settings().meta_graph_api_base_url.rstrip('/')}/{post_id}",
+                                          params={'fields': fields}, headers={'Authorization': f'Bearer {request.access_token}'})
+                media.append(item)
+        else:
+            data = await self.request("GET", f"{self.settings().meta_graph_api_base_url.rstrip('/')}/{request.external_account_id}/media",
+                                      params={"fields": fields, "since": request.from_date.isoformat(), "until": request.to_date.isoformat(), "limit": 100},
+                                      headers={"Authorization": f"Bearer {request.access_token}"})
+            media: list[dict] = []
+            headers = {"Authorization": f"Bearer {request.access_token}"}
+            for _ in range(10):
+                page = data.get("data", [])
+                if not isinstance(page, list):
+                    raise ProviderError(self.platform, "provider returned invalid media")
+                media.extend(item for item in page if isinstance(item, dict))
+                next_url = data.get("paging", {}).get("next")
+                if not isinstance(next_url, str) or not next_url:
+                    break
+                data = await self.request("GET", next_url, headers=headers)
         headers = {"Authorization": f"Bearer {request.access_token}"}
-        for _ in range(10):
-            page = data.get("data", [])
-            if not isinstance(page, list):
-                raise ProviderError(self.platform, "provider returned invalid media")
-            media.extend(item for item in page if isinstance(item, dict))
-            next_url = data.get("paging", {}).get("next")
-            if not isinstance(next_url, str) or not next_url:
-                break
-            data = await self.request("GET", next_url, headers=headers)
         metrics: list[Metric] = []
         for item in media:
             if not item.get("id"):
@@ -40,8 +48,11 @@ class InstagramProvider(ProviderClient):
             is_video = item.get("media_type") in {"REELS", "VIDEO"}
             insight = await self._media_insights(str(item["id"]), headers) if is_video else {}
             metrics.append(Metric(external_ref=f"instagram:{item['id']}", record_date=provider_date(item.get("timestamp"), request.from_date),
-                                  views=insight.get("views", insight.get("plays", insight.get("reach", 0))),
-                                  engagement=number(item.get("like_count")) + number(item.get("comments_count")) + insight.get("shares", 0) + insight.get("saved", 0)))
+                                  views=insight.get("views", insight.get("plays")),
+                                  likes=number(item["like_count"]) if "like_count" in item else None,
+                                  comments=number(item["comments_count"]) if "comments_count" in item else None,
+                                  shares=insight.get("shares"),
+                                  engagement=number(item.get("like_count")) + number(item.get("comments_count")) + insight.get("shares", 0) if "like_count" in item and "comments_count" in item and "shares" in insight else None))
         return metrics
 
     async def _media_insights(self, media_id: str, headers: dict[str, str]) -> dict[str, int]:

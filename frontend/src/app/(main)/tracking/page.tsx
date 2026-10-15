@@ -1,297 +1,131 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
-import { BarChart3, CheckCircle2, Eye, Link2, Loader2, MousePointerClick, Music2, Package, RefreshCw, Settings2, ShoppingBag, ShoppingCart, Unplug } from "lucide-react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-
-import StatCard from "@/components/StatCard";
+import { useEffect, useState } from "react";
+import { BarChart3, Download, RefreshCw, Eye, Heart, MousePointerClick, Video, Link2, SlidersHorizontal, ChevronDown, Settings2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { OAUTH_API_BASE_URL, disconnectEcommerceAccount, EcommerceAccount, fetchEcommerceAccounts, fetchTrackingAnalysis, fetchTrackingDashboard, fetchTrackingFilterOptions, fetchTrackingReadiness, syncTrackingData, TrackingAnalysis, TrackingDashboard, TrackingFilterOptions } from "@/lib/api";
+import Link from "next/link";
+import { PlatformIcon } from "@/components/PlatformIcon";
+import { PLATFORM_OPTIONS } from "@/lib/platforms";
+import { createTrackingLink, downloadTrackingExport, fetchTrackingAnalysis, fetchTrackingComparison, fetchTrackingDashboard, fetchTrackingFilterOptions, syncTrackingData, type TrackingAnalysis, type TrackingComparison, type TrackingDashboard, type TrackingFilterOptions, type TrackingFilters, type TrackingPeriods } from "@/lib/api";
 
-const number = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
-const currency = new Intl.NumberFormat("th-TH", { style: "currency", currency: "THB", maximumFractionDigits: 0 });
-const SHOP_PLATFORMS = [
-  { key: "tiktok_shop", label: "TikTok Shop", icon: Music2, iconClassName: "bg-foreground/10 text-foreground" },
-  { key: "shopee", label: "Shopee", icon: ShoppingBag, iconClassName: "bg-destructive/10 text-destructive" },
-  { key: "lazada", label: "Lazada", icon: Package, iconClassName: "bg-info/10 text-info" },
-] as const;
-const ECOMMERCE_PLATFORM_KEYS = new Set(["tiktok_shop", "shopee", "lazada"]);
-
-function EmptyState({ message }: { message: string }) {
-  return <p className="py-8 text-center text-sm text-muted-foreground">{message}</p>;
-}
-
-function PerformanceList({ title, items }: { title: string; items: TrackingDashboard["products"] }) {
-  return (
-    <section className="min-h-[220px] rounded-2xl border border-border bg-card p-5 shadow-card sm:p-6">
-      <h2 className="font-display text-base font-semibold text-foreground">{title}</h2>
-      {items.length === 0 ? <EmptyState message="No tracked performance yet." /> : (
-        <div className="mt-4 space-y-3">
-          {items.map((item) => (
-            <div key={item.id} className="flex items-center justify-between gap-3 border-b border-border/60 pb-3 last:border-0 last:pb-0">
-              <p className="min-w-0 truncate text-sm font-medium text-foreground" title={item.name}>{item.name || "Untitled Reel"}</p>
-              <div className="shrink-0 text-right text-xs text-muted-foreground"><p>{number.format(item.views)} views</p><p>{item.orders} orders</p></div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
+const display = (value: number | null | undefined) => value == null ? "Unavailable" : value.toLocaleString();
+const inputClass = "h-10 min-w-0 rounded-md border border-border bg-card px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50";
+const primaryButtonClass = "gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300";
+const panelClass = "min-w-0 rounded-2xl border border-border bg-card p-5 sm:p-6";
+const emptyOptions: TrackingFilterOptions = { platforms: [], campaigns: [], products: [], reels: [], distributions: [] };
 
 export default function Tracking() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const [filters, setFilters] = useState<TrackingFilters>({});
+  const [applied, setApplied] = useState<TrackingFilters>({});
+  const [options, setOptions] = useState(emptyOptions);
   const [dashboard, setDashboard] = useState<TrackingDashboard | null>(null);
-  const [accounts, setAccounts] = useState<EcommerceAccount[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [shopOAuthReady, setShopOAuthReady] = useState<Record<string, boolean>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [appliedStartDate, setAppliedStartDate] = useState("");
-  const [appliedEndDate, setAppliedEndDate] = useState("");
-  const [ecommercePlatform, setEcommercePlatform] = useState("");
-  const [socialPlatform, setSocialPlatform] = useState("");
-  const [campaignId, setCampaignId] = useState("");
-  const [productId, setProductId] = useState("");
-  const [appliedEcommercePlatform, setAppliedEcommercePlatform] = useState("");
-  const [appliedSocialPlatform, setAppliedSocialPlatform] = useState("");
-  const [appliedCampaignId, setAppliedCampaignId] = useState("");
-  const [appliedProductId, setAppliedProductId] = useState("");
-  const [filterOptions, setFilterOptions] = useState<TrackingFilterOptions>({ platforms: [], campaigns: [], products: [] });
-  const [analysisLevel, setAnalysisLevel] = useState<TrackingAnalysis["level"]>("product");
-  const [analysisMetric, setAnalysisMetric] = useState<TrackingAnalysis["metric"]>("views");
+  const [level, setLevel] = useState<TrackingAnalysis["level"]>("reel");
+  const [metric, setMetric] = useState<TrackingAnalysis["metric"]>("views");
   const [analysis, setAnalysis] = useState<TrackingAnalysis | null>(null);
-  const [selectedAnalysisItem, setSelectedAnalysisItem] = useState<TrackingAnalysis["rows"][number] | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [shopToDisconnect, setShopToDisconnect] = useState<EcommerceAccount | null>(null);
-  const [disconnectingShop, setDisconnectingShop] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [nextDashboard, nextAccounts, readiness, options] = await Promise.all([
-        fetchTrackingDashboard({ start: appliedStartDate, end: appliedEndDate, platform: appliedEcommercePlatform || appliedSocialPlatform, campaign_id: appliedCampaignId, product_id: appliedProductId }),
-        fetchEcommerceAccounts(), fetchTrackingReadiness(), fetchTrackingFilterOptions(),
-      ]);
-      setDashboard(nextDashboard);
-      setAccounts(nextAccounts);
-      setShopOAuthReady(readiness.oauth);
-      setFilterOptions(options);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load tracking data");
-    } finally {
-      setLoading(false);
-    }
-  }, [appliedCampaignId, appliedEcommercePlatform, appliedEndDate, appliedProductId, appliedSocialPlatform, appliedStartDate]);
-
-  useEffect(() => { void load(); }, [load]);
+  const [selectedItem, setSelectedItem] = useState<TrackingAnalysis["rows"][number] | null>(null);
+  const [periods, setPeriods] = useState<TrackingPeriods>({ a_start: "", a_end: "", b_start: "", b_end: "" });
+  const [comparedPeriods, setComparedPeriods] = useState<TrackingPeriods | null>(null);
+  const [comparison, setComparison] = useState<TrackingComparison | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const [error, setError] = useState("");
+  const [link, setLink] = useState("");
+  const [distributionId, setDistributionId] = useState("");
 
   useEffect(() => {
-    const connected = searchParams.get("connected");
-    const connectError = searchParams.get("error");
-    if (connected) {
-      void load();
-      router.replace("/tracking");
-    } else if (connectError) {
-      setError(connectError);
-      router.replace("/tracking");
-    }
-  }, [load, router, searchParams]);
+    let active = true;
+    setLoading(true); setError(""); setAnalysis(null); setSelectedItem(null); setComparison(null); setComparedPeriods(null);
+    Promise.all([fetchTrackingDashboard(applied), fetchTrackingFilterOptions()]).then(([data, values]) => {
+      if (active) { setDashboard(data); setOptions(values); }
+    }).catch((err: Error) => { if (active) { setDashboard(null); setError(err.message); } })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [applied, revision]);
 
-  const sync = async () => {
-    setSyncing(true);
-    try { await syncTrackingData(); await load(); }
-    catch (err) { setError(err instanceof Error ? err.message : "Synchronization failed"); }
-    finally { setSyncing(false); }
-  };
+  async function run(action: () => Promise<void>) {
+    setBusy(true); setError("");
+    try { await action(); } catch (err) { setError(err instanceof Error ? err.message : "Unable to complete request"); }
+    finally { setBusy(false); }
+  }
+  const exportButtons = (extra: Partial<TrackingPeriods> & { level?: string; metric?: string } = {}) =>
+    <div className="flex gap-2">{(["csv", "xlsx"] as const).map(format => <Button key={format} variant="outline" disabled={busy || loading || !dashboard?.has_data} onClick={() => void run(async () => downloadTrackingExport(format, { ...applied, ...extra }))}><Download className="mr-2 h-4 w-4" />{format.toUpperCase()}</Button>)}</div>;
 
-  const connectShop = (platform: string) => {
-    const token = localStorage.getItem("rf_token");
-    if (!token) return;
-    window.location.href = `${OAUTH_API_BASE_URL}/tracking/ecommerce/${platform}/connect?token=${encodeURIComponent(token)}`;
-  };
+  return <div aria-busy={loading} className="min-w-0 space-y-6">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Data Tracking</h1><p className="mt-1 text-muted-foreground">Social performance and affiliate link visits</p></div><Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading} onClick={() => void run(async () => { const result = await syncTrackingData(); setRevision(value => value + 1); const failures = result.accounts.filter(account => !account.success); if (failures.length) throw new Error(`${failures.length} account(s) failed to synchronize. See account status below.`); })}><RefreshCw className={`mr-2 h-4 w-4 ${busy ? "animate-spin" : ""}`} />Sync Data</Button></div>
+    {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+    <section aria-label="Tracking filters" className="space-y-3"><div className="flex items-center gap-2 text-sm font-medium text-foreground"><SlidersHorizontal className="h-4 w-4 text-muted-foreground" />Filter performance</div><div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {(["start", "end"] as const).map(key => <label key={key} className="grid min-w-0 gap-1.5 text-xs font-medium text-muted-foreground">{key === "start" ? "Start date" : "End date"}<Input type="date" className={inputClass} value={filters[key] || ""} onChange={event => setFilters({ ...filters, [key]: event.target.value })} /></label>)}
+      <label className="grid min-w-0 gap-1.5 text-xs font-medium text-muted-foreground">Platform<select className={inputClass} value={filters.platform || ""} onChange={event => setFilters({ ...filters, platform: event.target.value })}><option value="">All platforms</option>{options.platforms.map(platform => <option key={platform}>{platform}</option>)}</select></label>
+      {(["campaign", "product", "reel"] as const).map(scope => <label key={scope} className="grid min-w-0 gap-1.5 text-xs font-medium capitalize text-muted-foreground">{scope}<select className={inputClass} value={filters[`${scope}_id`] || ""} onChange={event => setFilters({ ...filters, [`${scope}_id`]: event.target.value })}><option value="">All {scope}s</option>{options[`${scope}s`].map(item => <option key={item.id} value={item.id}>{item.name || "Untitled"}</option>)}</select></label>)}
+      <Button variant="outline" className="h-10 bg-card" disabled={busy || loading} onClick={() => { if (filters.start && filters.end && filters.start > filters.end) { setError("Start date must be before end date"); return; } setApplied({ ...filters }); }}>Apply filters</Button>
+    </div><details className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"><summary className="flex cursor-pointer list-none items-center gap-2 font-medium">How these metrics are counted<ChevronDown className="h-3.5 w-3.5" /></summary><p className="mt-2 max-w-4xl leading-relaxed">Social figures are the latest lifetime observation in the selected dates. Clicks are visits during those dates (Asia/Bangkok). Repeat visits count; recognized bots, previews and HEAD requests do not. These figures do not measure purchases or unique visitors.</p></details></section>
 
-  const disconnectShop = async () => {
-    if (!shopToDisconnect) return;
-    setDisconnectingShop(true);
-    try {
-      await disconnectEcommerceAccount(shopToDisconnect.ecommerce_account_id);
-      setShopToDisconnect(null);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to disconnect shop");
-    } finally {
-      setDisconnectingShop(false);
-    }
-  };
-
-  const applyDateRange = () => {
-    if (startDate && endDate && startDate > endDate) {
-      setError("Start date must be before end date");
-      return;
-    }
-    setAppliedStartDate(startDate);
-    setAppliedEndDate(endDate);
-    setAppliedEcommercePlatform(ecommercePlatform);
-    setAppliedSocialPlatform(socialPlatform);
-    setAppliedCampaignId(campaignId);
-    setAppliedProductId(productId);
-    setAnalysis(null);
-    setSelectedAnalysisItem(null);
-  };
-
-  const clearDateRange = () => {
-    setStartDate("");
-    setEndDate("");
-    setAppliedStartDate("");
-    setAppliedEndDate("");
-    setEcommercePlatform("");
-    setSocialPlatform("");
-    setCampaignId("");
-    setProductId("");
-    setAppliedEcommercePlatform("");
-    setAppliedSocialPlatform("");
-    setAppliedCampaignId("");
-    setAppliedProductId("");
-    setAnalysis(null);
-    setSelectedAnalysisItem(null);
-  };
-
-  const analyze = async () => {
-    setAnalyzing(true);
-    setError(null);
-    try {
-      const result = await fetchTrackingAnalysis({
-        level: analysisLevel, metric: analysisMetric, start: appliedStartDate, end: appliedEndDate,
-        platform: appliedEcommercePlatform || appliedSocialPlatform, campaign_id: appliedCampaignId, product_id: appliedProductId,
-      });
-      setAnalysis(result);
-      setSelectedAnalysisItem(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to analyze tracking data");
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-
-  const totals = dashboard?.totals;
-  const chartData = dashboard?.trend ?? [];
-
-  return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div><h1 className="font-display text-3xl font-bold text-foreground sm:text-4xl">Data Tracking</h1><p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">Consolidated performance from your connected shops and published Reels.</p></div>
-        <button type="button" onClick={sync} disabled={syncing || loading} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">
-          {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Sync now
-        </button>
+    {loading && !dashboard ? <p role="status">Loading tracking data…</p> : dashboard && <>
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">{([
+        { label: 'Views', value: dashboard.totals.views, icon: Eye, color: 'bg-primary/10 text-primary', gradient: 'from-orange-500 via-pink-500 to-purple-600' },
+        { label: 'Engagement', value: dashboard.totals.engagement, icon: Heart, color: 'bg-pink-500/10 text-pink-500', gradient: 'from-rose-500 via-pink-500 to-fuchsia-600' },
+        { label: 'Affiliate link clicks', value: dashboard.totals.clicks, icon: MousePointerClick, color: 'bg-info/10 text-info', gradient: 'from-cyan-500 via-blue-500 to-indigo-600' },
+        { label: 'Tracked Reels', value: dashboard.totals.reels, icon: Video, color: 'bg-violet-500/10 text-violet-500', gradient: 'from-violet-500 via-purple-500 to-fuchsia-600' },
+      ]).map(({ label, value, icon: Icon, color, gradient }) => <section key={label} className="group relative overflow-hidden rounded-2xl border border-border bg-card card-shine transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"><div className={`h-1 bg-gradient-to-r ${gradient}`} /><div className="p-5"><div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{label}</p><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${color}`}><Icon className="h-4 w-4" /></span></div><p className="mt-3 font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{display(value)}</p></div></section>)}</div>
+      {!!dashboard.totals.partial_metrics.length && <p className="text-xs text-muted-foreground">Some social metrics are unavailable for part of this scope. Totals include only available values.</p>}
+      {!dashboard.has_data && <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-12 text-center"><BarChart3 className="mx-auto h-10 w-10 text-muted-foreground/50" /><h2 className="mt-4 font-display text-xl font-semibold text-foreground">Start tracking your content</h2><p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">No tracking data matches these filters. Publish a Reel and synchronize its connected social account, or create a tracking link for a distribution.</p></div>}
+      <div className="grid gap-5 lg:grid-cols-2">
+      <section className={panelClass}><h2 className="mb-3 flex items-center gap-2 font-display text-lg font-semibold text-foreground"><BarChart3 className="h-5 w-5" />Performance by platform</h2>{dashboard.platforms.length > 0 && <div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={dashboard.platforms}><XAxis dataKey="name" /><YAxis /><Tooltip /><Bar dataKey="views" name="Lifetime views" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>}</section>
+      <section className={panelClass}><h2 className="font-display text-lg font-semibold text-foreground">Affiliate link clicks by day</h2><p className="mt-1 text-xs text-muted-foreground">Recorded visits · Asia/Bangkok · Does not represent unique visitors</p>{dashboard.click_trend.length ? <div className="mt-4 h-56"><ResponsiveContainer width="100%" height="100%"><BarChart data={dashboard.click_trend}><XAxis dataKey="date" /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="clicks" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div> : <p className="py-6 text-sm text-muted-foreground">No recorded clicks in this period.</p>}</section>
       </div>
-
-      {error && <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>}
-
-      <section>
-        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2"><div><h2 className="font-display text-lg font-semibold text-foreground">Performance overview</h2><p className="text-sm text-muted-foreground">Follow the journey from attention to affiliate revenue.</p></div><p className="text-sm text-muted-foreground">{loading ? "–" : number.format(totals?.reels ?? 0)} Distributed Reels</p></div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-6">
-          <StatCard compact icon={Eye} label="Total Views" value={loading ? "-" : number.format(totals?.views ?? 0)} delay={0.05} />
-          <StatCard compact icon={CheckCircle2} label="Engagement" value={loading ? "-" : number.format(totals?.engagement ?? 0)} delay={0.1} />
-          <StatCard compact icon={MousePointerClick} label="Affiliate Clicks" value={loading ? "-" : number.format(totals?.clicks ?? 0)} delay={0.15} />
-          <StatCard compact icon={BarChart3} label="Click-through Rate" value={loading ? "-" : `${totals?.click_through_rate ?? 0}%`} delay={0.2} />
-          <StatCard compact icon={ShoppingCart} label="Affiliate Orders" value={loading ? "-" : number.format(totals?.orders ?? 0)} delay={0.25} />
-          <StatCard compact icon={ShoppingBag} label="Tracked Revenue" value={loading ? "-" : currency.format(totals?.revenue ?? 0)} delay={0.3} />
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="font-display text-lg font-semibold text-foreground">Performance period</h2><p className="text-xs text-muted-foreground">Filter every dashboard metric by recorded date, platform, campaign, or product.</p></div></div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">From<input aria-label="Start date" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" /></label>
-          <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">To<input aria-label="End date" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground" /></label>
-          <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">E-commerce platform<select aria-label="E-commerce platform" value={ecommercePlatform} onChange={(event) => { setEcommercePlatform(event.target.value); if (event.target.value) setSocialPlatform(""); }} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground"><option value="">All e-commerce</option>{filterOptions.platforms.filter((item) => ECOMMERCE_PLATFORM_KEYS.has(item)).map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}</select></label>
-          <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Social media platform<select aria-label="Social media platform" value={socialPlatform} onChange={(event) => { setSocialPlatform(event.target.value); if (event.target.value) setEcommercePlatform(""); }} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground"><option value="">All social media</option>{filterOptions.platforms.filter((item) => !ECOMMERCE_PLATFORM_KEYS.has(item)).map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}</select></label>
-          <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Campaign<select aria-label="Campaign" value={campaignId} onChange={(event) => setCampaignId(event.target.value)} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground"><option value="">All campaigns</option>{filterOptions.campaigns.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-          <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Product<select aria-label="Product" value={productId} onChange={(event) => setProductId(event.target.value)} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground"><option value="">All products</option>{filterOptions.products.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        </div>
-        <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">{(appliedStartDate || appliedEndDate || appliedEcommercePlatform || appliedSocialPlatform || appliedCampaignId || appliedProductId) && <button type="button" onClick={clearDateRange} disabled={loading} className="min-h-10 rounded-lg border border-border px-4 text-sm font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60">Clear</button>}<button type="button" onClick={applyDateRange} disabled={loading} className="min-h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">Apply filters</button></div>
-      </section>
-
-      {!loading && dashboard && !dashboard.has_data && <section className="rounded-2xl border border-dashed border-border bg-muted/30 p-6"><EmptyState message="No tracking data matches these filters. Data will appear after a successful automatic synchronization." /></section>}
-
-      <section className="grid gap-5 xl:grid-cols-5">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-5 shadow-card sm:p-6 xl:col-span-3">
-          <div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-info/10"><BarChart3 className="h-4 w-4 text-info" /></div><div><h2 className="font-display text-lg font-semibold text-foreground">Performance over time</h2><p className="text-xs text-muted-foreground">Views, clicks, and orders across the selected period.</p></div></div>
-          {chartData.length === 0 ? <EmptyState message="Metrics will appear here after connected platforms synchronize." /> : <div className="mt-5 h-64 sm:h-72"><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}><defs><linearGradient id="trackingViews" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} /><stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} /><XAxis dataKey="date" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} /><YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={(value) => number.format(value)} /><Tooltip formatter={(value: number) => [value.toLocaleString(), undefined]} /><Area type="monotone" dataKey="views" name="Views" stroke="hsl(var(--primary))" strokeWidth={2.5} fill="url(#trackingViews)" /><Area type="monotone" dataKey="clicks" name="Clicks" stroke="hsl(var(--info))" strokeWidth={2} fill="transparent" /><Area type="monotone" dataKey="orders" name="Orders" stroke="hsl(var(--success))" strokeWidth={2} fill="transparent" /></AreaChart></ResponsiveContainer></div>}
-        </motion.div>
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-card sm:p-6 xl:col-span-2"><h2 className="font-display text-lg font-semibold text-foreground">Performance by platform</h2><p className="mt-1 text-xs text-muted-foreground">Compare attention across connected channels.</p>{dashboard?.platforms.length ? <div className="mt-5 h-64 sm:h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={dashboard.platforms}><XAxis dataKey="platform" tick={{ fontSize: 12 }} /><YAxis tickFormatter={(value) => number.format(value)} /><Tooltip /><Bar dataKey="views" name="Views" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div> : <EmptyState message="No platform data yet." />}</div>
-      </section>
-
-      <section>
-        <div className="mb-4"><h2 className="font-display text-lg font-semibold text-foreground">Top performers</h2><p className="text-sm text-muted-foreground">The leading products, campaigns, and Reels in the selected scope.</p></div>
-        <div className="grid gap-4 md:grid-cols-3"><PerformanceList title="Top Products" items={dashboard?.products ?? []} /><PerformanceList title="Top Campaigns" items={dashboard?.campaigns ?? []} /><PerformanceList title="Top Reels" items={dashboard?.reels ?? []} /></div>
-      </section>
-
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-card sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div><h2 className="font-display text-lg font-semibold text-foreground">Analyze performance</h2><p className="text-xs text-muted-foreground">Compare a selected scope using the dashboard filters above.</p></div>
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
-            <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Level<select value={analysisLevel} onChange={(event) => setAnalysisLevel(event.target.value as TrackingAnalysis["level"])} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground sm:min-w-32"><option value="product">Product</option><option value="campaign">Campaign</option><option value="reel">Reel</option><option value="platform">Platform</option></select></label>
-            <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Metric<select value={analysisMetric} onChange={(event) => setAnalysisMetric(event.target.value as TrackingAnalysis["metric"])} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground sm:min-w-36"><option value="views">Views</option><option value="clicks">Affiliate clicks</option><option value="orders">Orders</option><option value="engagement">Engagement</option><option value="revenue">Revenue</option><option value="ctr">Click-through rate</option></select></label>
-            <button type="button" onClick={analyze} disabled={analyzing || loading} className="col-span-2 min-h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-1">{analyzing ? "Analyzing..." : "Analyze Performance"}</button>
+      <section className={panelClass}><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-display text-lg font-semibold text-foreground">Content ranking</h2><div className="flex flex-wrap gap-2"><select aria-label="Ranking level" className={inputClass} value={level} onChange={event => { setLevel(event.target.value as typeof level); setAnalysis(null); setSelectedItem(null); }}>{["reel", "product", "campaign", "platform"].map(value => <option key={value}>{value}</option>)}</select><select aria-label="Ranking metric" className={inputClass} value={metric} onChange={event => { setMetric(event.target.value as typeof metric); setAnalysis(null); setSelectedItem(null); }}>{["views", "engagement", "clicks"].map(value => <option key={value}>{value}</option>)}</select><Button className={primaryButtonClass} disabled={busy} onClick={() => void run(async () => setAnalysis(await fetchTrackingAnalysis({ ...applied, level, metric })))}>Analyze</Button>{analysis && exportButtons({ level: analysis.level, metric: analysis.metric })}</div></div>{analysis && <div className="mt-4 space-y-2">{!analysis.rows.length && <p>No matching content.</p>}{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedItem(item)} className="flex w-full justify-between gap-3 border-b border-border py-2 text-left text-sm hover:bg-muted"><span>#{index + 1} {item.name || "Untitled"}</span><span>{display(item.value)}</span></button>)}</div>}{selectedItem && <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm"><h3 className="mb-2 font-semibold">{selectedItem.name || "Untitled"}</h3><div className="grid gap-2 sm:grid-cols-3">{(["views", "likes", "comments", "shares", "engagement", "clicks"] as const).map(key => <p key={key} className="capitalize">{key}: {display(selectedItem[key])}</p>)}</div>{!!selectedItem.partial_metrics.length && <p className="mt-2 text-xs text-muted-foreground">Some counters are unavailable in this scope.</p>}</div>}</section>
+      <section className={panelClass}><h2 className="font-display text-lg font-semibold text-foreground">Compare periods · Affiliate link clicks</h2><p className="mt-1 text-xs text-muted-foreground">Use the same platform, campaign, product and Reel filters. Social daily activity is unavailable from lifetime observations.</p><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{(Object.keys(periods) as Array<keyof TrackingPeriods>).map(key => <label key={key} className="grid gap-1 text-xs uppercase text-muted-foreground">{key.replace("_", " ")}<Input type="date" className={inputClass} value={periods[key]} onChange={event => setPeriods({ ...periods, [key]: event.target.value })} /></label>)}</div><div className="mt-3 flex flex-wrap gap-3"><Button className={primaryButtonClass} disabled={busy || Object.values(periods).some(value => !value)} onClick={() => void run(async () => { setComparison(null); const result = await fetchTrackingComparison({ ...applied, ...periods }); setComparison(result); setComparedPeriods({ ...periods }); })}>Compare</Button>{comparison && comparedPeriods && exportButtons(comparedPeriods)}</div>{comparison && <div className="mt-4 space-y-2 text-sm"><p>A ({comparison.a.start} – {comparison.a.end}): {display(comparison.a.clicks)}{!comparison.a.complete && " · Partial coverage"}</p><p>B ({comparison.b.start} – {comparison.b.end}): {display(comparison.b.clicks)}{!comparison.b.complete && " · Partial coverage"}</p><p>Change: {display(comparison.difference)} · {comparison.percentage_change == null ? "Percentage unavailable" : `${comparison.percentage_change}%`}</p>{!comparison.equal_duration && <p className="text-muted-foreground">Periods have different durations.</p>}<p className="text-xs text-muted-foreground">{comparison.limitation}</p></div>}</section>
+      <section className={panelClass}><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-display text-lg font-semibold text-foreground">Tracking details</h2>{exportButtons()}</div><div className="mt-4 overflow-hidden rounded-xl border border-border"><Table><TableHeader className="bg-muted/40"><TableRow>{['Reel / platform', 'Views', 'Likes', 'Comments', 'Shares', 'Link clicks', 'Observation', 'Link'].map(title => <TableHead key={title} className="whitespace-nowrap text-xs">{title}</TableHead>)}</TableRow></TableHeader><TableBody>{dashboard.details.map(row => <TableRow key={row.distribution_id}><TableCell className="max-w-60 truncate p-2">{row.reel_name} · {row.platform}</TableCell>{([row.views, row.likes, row.comments, row.shares, row.clicks]).map((value, i) => <TableCell key={i} className="p-2">{display(value)}</TableCell>)}<TableCell className="whitespace-nowrap p-2">{row.observed_at ? new Date(row.observed_at).toLocaleString() : 'Unavailable'}</TableCell><TableCell className="p-2"><Button variant="outline" disabled={busy} onClick={() => void run(async () => setLink((await createTrackingLink(row.distribution_id)).url))}>Get link</Button></TableCell></TableRow>)}</TableBody></Table></div><p className="mt-3 text-xs text-muted-foreground">Use links only in locations the platform allows viewers to open. Instagram and TikTok captions may not provide clickable links. A shared bio link alone cannot identify the originating Reel.</p></section>
+    <section className={panelClass}><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Link2 className="h-5 w-5" /></span><h2 className="font-display text-lg font-semibold text-foreground">Create affiliate tracking link</h2></div><p className="mt-1 text-xs text-muted-foreground">New publications automatically use a ReelCast link. For existing distributions, create a link here and place it in a supported clickable location.</p><div className="mt-3 flex flex-wrap gap-2"><select aria-label="Distribution for tracking link" className={`${inputClass} max-w-full`} value={distributionId} onChange={event => { setDistributionId(event.target.value); setLink(""); }}><option value="">Select distribution</option>{options.distributions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><Button className={primaryButtonClass} disabled={busy || !distributionId} onClick={() => void run(async () => { setLink((await createTrackingLink(distributionId)).url); setRevision(value => value + 1); })}>Create link</Button></div>{link && <label className="mt-3 grid gap-1 text-xs">Tracking link<Input readOnly value={link} onFocus={event => event.target.select()} className={inputClass} /></label>}</section>
+      <div className="space-y-2">
+        <Link
+          href="/account"
+          className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-card transition-colors hover:border-primary/30 sm:px-5"
+        >
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <span className="min-w-0 truncate text-sm text-foreground">
+              <span className="font-semibold">
+                {PLATFORM_OPTIONS.filter((platform) => dashboard.accounts.some((account) => account.platform === platform.name)).length}/{PLATFORM_OPTIONS.length}
+              </span>{" "}Platforms Connected
+            </span>
+            <div className="flex items-center gap-1.5">
+              {PLATFORM_OPTIONS.map((platform) => {
+                const accounts = dashboard.accounts.filter((account) => account.platform === platform.name);
+                const connected = accounts.length > 0;
+                const status = accounts.map((account) => account.error || (
+                  account.last_synced_at
+                    ? `Last success ${new Date(account.last_synced_at).toLocaleString()}`
+                    : "Awaiting first successful sync"
+                )).join("; ");
+                return (
+                  <span
+                    key={platform.id}
+                    title={`${platform.label} — ${connected ? `connected · ${status}` : "not connected"}`}
+                    aria-label={`${platform.label} — ${connected ? `connected · ${status}` : "not connected"}`}
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg ${
+                      connected ? `${platform.activeBg} ${platform.color}` : "bg-muted text-muted-foreground/40"
+                    }`}
+                  >
+                    <PlatformIcon platform={platform.name} className="h-3.5 w-3.5" />
+                  </span>
+                );
+              })}
+            </div>
           </div>
-        </div>
-        {analysis && <div className="mt-5 grid gap-5 lg:grid-cols-2">
-          <div>{analysis.rows.length === 0 ? <EmptyState message="No synchronized tracking data matches this analysis." /> : <div className="space-y-2">{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedAnalysisItem(item)} className="flex w-full items-center justify-between gap-3 rounded-lg border border-border p-3 text-left hover:bg-muted"><span className="min-w-0"><span className="mr-2 text-xs text-muted-foreground">#{index + 1}</span><span className="truncate text-sm font-medium text-foreground">{item.name}</span></span><span className="shrink-0 text-sm font-semibold text-primary">{analysis.metric === "revenue" ? currency.format(item.value) : analysis.metric === "ctr" ? `${item.value}%` : number.format(item.value)}</span></button>)}</div>}</div>
-          <div className="rounded-xl bg-muted/30 p-4">{selectedAnalysisItem ? <div className="space-y-2"><h3 className="font-display text-base font-semibold text-foreground">{selectedAnalysisItem.name}</h3><div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground"><p>Views <span className="float-right text-foreground">{number.format(selectedAnalysisItem.views)}</span></p><p>Clicks <span className="float-right text-foreground">{number.format(selectedAnalysisItem.clicks)}</span></p><p>Orders <span className="float-right text-foreground">{number.format(selectedAnalysisItem.orders)}</span></p><p>Engagement <span className="float-right text-foreground">{number.format(selectedAnalysisItem.engagement)}</span></p><p>CTR <span className="float-right text-foreground">{selectedAnalysisItem.click_through_rate ?? 0}%</span></p><p>Revenue <span className="float-right text-foreground">{currency.format(selectedAnalysisItem.revenue)}</span></p></div></div> : <EmptyState message="Select a ranked item to view its detailed performance." />}</div>
-          {analysis.trend.length > 0 && <div className="h-56 lg:col-span-2"><ResponsiveContainer width="100%" height="100%"><BarChart data={analysis.trend}><XAxis dataKey="date" tick={{ fontSize: 12 }} /><YAxis tickFormatter={(value) => number.format(value)} /><Tooltip /><Bar dataKey="value" name={analysis.metric} fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>}
-        </div>}
-      </section>
-
-      <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5">
-        <div className="flex items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10"><ShoppingBag className="h-4 w-4 text-primary" /></div><div className="min-w-0"><h2 className="font-display text-base font-semibold text-foreground">E-commerce connections</h2><p className="text-xs text-muted-foreground">Connect stores to synchronize affiliate orders and clicks.</p></div></div>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{SHOP_PLATFORMS.map((platform) => {
-          const account = accounts.find((item) => item.platform_name === platform.key);
-          const configured = shopOAuthReady[platform.key] ?? false;
-          const PlatformIcon = platform.icon;
-          const connectionStatus = account?.sync_error || (account ? (account.last_synced_at ? `Last sync ${new Date(account.last_synced_at).toLocaleString()}` : "Connected - awaiting first sync") : (configured ? "Not connected" : "Needs setup"));
-          return <div key={platform.key} className="min-w-0 rounded-xl border border-border bg-muted/30 p-3"><div className="flex min-w-0 items-center gap-3"><div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${platform.iconClassName}`}><PlatformIcon className="h-5 w-5" aria-hidden="true" /></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-foreground" title={account?.shop_name || platform.label}>{account?.shop_name || platform.label}</p><p className={`truncate text-xs ${account?.sync_error ? "text-destructive" : "text-muted-foreground"}`} title={connectionStatus}>{connectionStatus}</p></div>{account && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}{account ? <Button variant="outline" size="icon" onClick={() => setShopToDisconnect(account)} title={`Disconnect ${account.shop_name || platform.label}`} aria-label={`Disconnect ${account.shop_name || platform.label}`} className="h-9 w-9 shrink-0"><Unplug className="h-4 w-4" /></Button> : <Button size="icon" disabled={!configured} title={configured ? `Connect ${platform.label}` : "Configure this shop OAuth adapter in backend/.env.local first"} aria-label={configured ? `Connect ${platform.label}` : `${platform.label} needs setup`} onClick={() => connectShop(platform.key)} className="gradient-primary h-9 w-9 shrink-0 text-primary-foreground">{configured ? <Link2 className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}</Button>}</div></div>;
-        })}</div>
-      </section>
-
-      <AlertDialog
-        open={Boolean(shopToDisconnect)}
-        onOpenChange={(open) => { if (!open && !disconnectingShop) setShopToDisconnect(null); }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Disconnect {shopToDisconnect?.shop_name || shopToDisconnect?.platform_name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will stop synchronization for this store. You can reconnect it later to resume tracking.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={disconnectingShop}>Cancel</AlertDialogCancel>
-            <Button variant="destructive" onClick={() => void disconnectShop()} disabled={disconnectingShop}>
-              {disconnectingShop ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Disconnect
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {!loading && dashboard && <p className="flex items-center justify-end gap-1 text-xs text-muted-foreground"><MousePointerClick className="h-3 w-3" />{dashboard.last_synced_at ? `Last synchronized ${new Date(dashboard.last_synced_at).toLocaleString()}` : "No successful synchronization yet"} · Updated {new Date(dashboard.generated_at).toLocaleString()}</p>}
-    </div>
-  );
+          <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-primary">
+            <Settings2 className="h-3.5 w-3.5" />
+            Manage in Settings
+          </span>
+        </Link>
+        {dashboard.accounts.filter((account) => account.error).map((account) => (
+          <p key={account.id} role="alert" className="px-1 text-xs text-destructive">{account.platform}: {account.error}</p>
+        ))}
+        <p className="px-1 text-xs text-muted-foreground">Report updated {new Date(dashboard.generated_at).toLocaleString()}</p>
+      </div>
+    </>}
+  </div>;
 }

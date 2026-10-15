@@ -1,11 +1,52 @@
 from sqlalchemy import (
     Column, String, Boolean, Integer, Text, Date, Numeric,
-    ForeignKey, Enum, text,
+    ForeignKey, Enum, text, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP, JSONB
 from sqlalchemy.orm import relationship
 import enum
+import uuid
 from app.database import Base
+
+
+class TrackingObservation(Base):
+    """Latest lifetime counters per source post and Bangkok observation day.
+
+    Separate from legacy analytics, whose dates have ambiguous semantics.
+    """
+    __tablename__ = "tracking_observations"
+    __table_args__ = (UniqueConstraint("user_id", "account_id", "external_ref", "observed_date"),)
+    observation_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("social_accounts.account_id", ondelete="CASCADE"), nullable=False)
+    distribution_id = Column(UUID(as_uuid=True), ForeignKey("distributions.distribution_id", ondelete="CASCADE"), nullable=True)
+    platform = Column(String, nullable=False)
+    external_ref = Column(String, nullable=False)
+    observed_date = Column(Date, nullable=False)
+    observed_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    published_date = Column(Date, nullable=True)
+    views = Column(Integer, nullable=True)
+    likes = Column(Integer, nullable=True)
+    comments = Column(Integer, nullable=True)
+    shares = Column(Integer, nullable=True)
+    engagement = Column(Integer, nullable=True)
+
+
+class TrackingLink(Base):
+    __tablename__ = "tracking_links"
+    link_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    distribution_id = Column(UUID(as_uuid=True), ForeignKey("distributions.distribution_id", ondelete="CASCADE"), nullable=False, unique=True)
+    code = Column(String(64), nullable=False, unique=True)
+    destination = Column(Text, nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False)
+
+
+class TrackingClick(Base):
+    __tablename__ = "tracking_clicks"
+    click_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    link_id = Column(UUID(as_uuid=True), ForeignKey("tracking_links.link_id", ondelete="CASCADE"), nullable=False, index=True)
+    clicked_at = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
 
 
 class BannerColor(str, enum.Enum):
