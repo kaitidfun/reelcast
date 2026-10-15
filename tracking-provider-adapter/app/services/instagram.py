@@ -12,7 +12,7 @@ class InstagramProvider(ProviderClient):
         raise ProviderError(self.platform, "OAuth is managed by ReelCast", 422)
 
     async def sync(self, request: SyncRequest) -> list[Metric]:
-        self.require("meta_graph_api_base_url")
+        self.require("instagram_graph_api_base_url")
         # Likes/comments are media fields. Asking for them inside the
         # insights expansion is invalid for current Instagram Graph versions
         # and causes the whole account sync to fail.
@@ -20,11 +20,11 @@ class InstagramProvider(ProviderClient):
         media: list[dict] = []
         if request.post_ids:
             for post_id in dict.fromkeys(request.post_ids):
-                item = await self.request('GET', f"{self.settings().meta_graph_api_base_url.rstrip('/')}/{post_id}",
+                item = await self.request('GET', f"{self.settings().instagram_graph_api_base_url.rstrip('/')}/{post_id}",
                                           params={'fields': fields}, headers={'Authorization': f'Bearer {request.access_token}'})
                 media.append(item)
         else:
-            data = await self.request("GET", f"{self.settings().meta_graph_api_base_url.rstrip('/')}/{request.external_account_id}/media",
+            data = await self.request("GET", f"{self.settings().instagram_graph_api_base_url.rstrip('/')}/{request.external_account_id}/media",
                                       params={"fields": fields, "since": request.from_date.isoformat(), "until": request.to_date.isoformat(), "limit": 100},
                                       headers={"Authorization": f"Bearer {request.access_token}"})
             media: list[dict] = []
@@ -57,7 +57,7 @@ class InstagramProvider(ProviderClient):
 
     async def _media_insights(self, media_id: str, headers: dict[str, str]) -> dict[str, int]:
         """Read Reel insight metrics separately from basic media metadata."""
-        base_url = self.settings().meta_graph_api_base_url.rstrip("/")
+        base_url = self.settings().instagram_graph_api_base_url.rstrip("/")
         try:
             data = await self.request("GET", f"{base_url}/{media_id}/insights",
                                       params={"metric": "views,reach,shares,saved"}, headers=headers)

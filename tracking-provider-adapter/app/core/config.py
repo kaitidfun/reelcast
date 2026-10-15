@@ -49,7 +49,8 @@ class Settings(BaseSettings):
     lazada_token_url: str = ""
     tiktok_api_base_url: str = ""
     youtube_api_base_url: str = ""
-    meta_graph_api_base_url: str = ""
+    facebook_graph_api_base_url: str = ""
+    instagram_graph_api_base_url: str = ""
 
     @property
     def adapter_keys(self) -> dict[str, str]:

@@ -744,7 +744,9 @@ async def _publishDistribution(distribution_id: str) -> None:
         try:
             video_url = get_presigned_url(reel.saved_final_commercial_video_url)
             access_token = social_account_service.get_decrypted_access_token(account)
-            affiliate_link = reel.product.affiliate_link if reel.product else None
+            # A missing or whitespace-only product URL leaves the affiliate
+            # tracking link empty and must not prevent publication.
+            affiliate_link = ((reel.product.affiliate_link or "").strip() if reel.product else "")
             if affiliate_link:
                 tracking_link = tracking_service.ensure_tracking_link(
                     db, user_id=reel.user_id, distribution_id=distribution.distribution_id,

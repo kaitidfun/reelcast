@@ -7,7 +7,7 @@ import * as api from '@/lib/api';
 vi.mock('@/lib/api', () => ({
   fetchTrackingDashboard: vi.fn(), fetchTrackingFilterOptions: vi.fn(),
   fetchTrackingAnalysis: vi.fn(), fetchTrackingComparison: vi.fn(),
-  syncTrackingData: vi.fn(), createTrackingLink: vi.fn(), downloadTrackingExport: vi.fn(),
+  syncTrackingData: vi.fn(), downloadTrackingExport: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -34,16 +34,6 @@ it('shows unavailable social counters and zero clicks without commerce claims', 
   fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-10-01' } });
   fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Start date must be before end date');
-});
-
-it('creates a tracking link even before the first observation or click', async () => {
-  vi.mocked(api.createTrackingLink).mockResolvedValue({ url: 'https://reelcast.test/api/tracking/r/code' });
-  render(<Tracking />);
-  await screen.findByText(/No tracking data matches/);
-  fireEvent.change(screen.getByLabelText('Distribution for tracking link'), { target: { value: 'distribution-1' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
-  await waitFor(() => expect(api.createTrackingLink).toHaveBeenCalledWith('distribution-1'));
-  expect(await screen.findByDisplayValue('https://reelcast.test/api/tracking/r/code')).toBeInTheDocument();
 });
 
 it('exports the compared periods even if draft dates change afterward', async () => {

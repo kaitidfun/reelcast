@@ -146,6 +146,32 @@ class TestPublishDistributionTaskTests(PytestAssertions):
         )
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("has_product, affiliate_link", [
+        (True, None), (True, ""), (True, " \t\n "), (False, None),
+    ])
+    async def test_publish_without_product_link_skips_tracking_link(self, has_product, affiliate_link) -> None:
+        if has_product:
+            self.reel.product.affiliate_link = affiliate_link
+        else:
+            self.reel.product = None
+        db = self._db_returning(distribution=self.distribution, reel=self.reel)
+
+        with patch("app.worker.SessionLocal", return_value=db), \
+             patch("app.worker.tracking_service.ensure_tracking_link") as mock_link, \
+             patch("app.worker.social_account_service.get_social_account", return_value=self.account), \
+             patch("app.worker.social_account_service.get_decrypted_access_token", return_value="plain-token"), \
+             patch("app.worker.get_presigned_url", return_value="https://cdn.example.com/video.mp4"), \
+             patch("app.worker.distribution_publish_service.publish", new=AsyncMock(return_value=("post-id", None))) as mock_publish, \
+             patch("app.worker.distribution_service.update_distribution") as mock_update:
+            await _publishDistribution(str(self.distribution_id))
+
+        mock_link.assert_not_called()
+        self.assertEqual("Buy now\n\n#sale", mock_publish.call_args.kwargs["caption"])
+        statuses = [call.kwargs.get("status") for call in mock_update.call_args_list]
+        self.assertIn("Published", statuses)
+        self.assertNotIn("Failed", statuses)
+
+    @pytest.mark.asyncio
     async def test_refreshes_access_token_before_publish_when_refresh_token_saved(self) -> None:
         account_with_refresh = SocialAccount(
             account_id=self.account_id,

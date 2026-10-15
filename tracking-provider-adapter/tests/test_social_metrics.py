@@ -18,7 +18,8 @@ def configure(provider):
     provider.require = lambda *args: None
     provider.settings = lambda: SimpleNamespace(youtube_api_base_url='https://youtube.test',
                                                 tiktok_api_base_url='https://tiktok.test',
-                                                meta_graph_api_base_url='https://meta.test')
+                                                facebook_graph_api_base_url='https://facebook.test',
+                                                instagram_graph_api_base_url='https://instagram.test')
 
 
 @pytest.mark.asyncio
@@ -54,6 +55,7 @@ async def test_instagram_does_not_substitute_reach_for_views():
                                                'media_type':'VIDEO', 'like_count':0, 'comments_count':0})
     provider._media_insights = AsyncMock(return_value={'reach':100, 'shares':0})
     metrics = await provider.sync(request('instagram', ['old']))
+    assert provider.request.call_args.args[1] == 'https://instagram.test/old'
     assert metrics[0].views is None and metrics[0].engagement == 0
     assert metrics[0].likes == 0 and metrics[0].shares == 0
 
@@ -65,5 +67,6 @@ async def test_facebook_reactions_are_not_likes_and_native_clicks_are_not_affili
         'reactions':{'summary':{'total_count':3}}, 'comments':{'summary':{'total_count':2}}, 'shares':{'count':1},
         'insights':{'data':[{'name':'post_clicks','values':[{'value':999}]}]}})
     metrics = await provider.sync(request('facebook', ['old']))
+    assert provider.request.call_args.args[1] == 'https://facebook.test/old'
     assert metrics[0].views is None and metrics[0].likes is None
     assert metrics[0].engagement == 6 and metrics[0].clicks == 0

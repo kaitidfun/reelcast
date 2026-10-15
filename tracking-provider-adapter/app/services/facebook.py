@@ -12,17 +12,17 @@ class FacebookProvider(ProviderClient):
         raise ProviderError(self.platform, "OAuth is managed by ReelCast", 422)
 
     async def sync(self, request: SyncRequest) -> list[Metric]:
-        self.require("meta_graph_api_base_url")
+        self.require("facebook_graph_api_base_url")
         fields = "id,created_time,reactions.limit(0).summary(true),comments.limit(0).summary(true),shares"
         headers = {"Authorization": f"Bearer {request.access_token}"}
         posts: list[dict] = []
         if request.post_ids:
             for post_id in dict.fromkeys(request.post_ids):
-                item = await self.request('GET', f"{self.settings().meta_graph_api_base_url.rstrip('/')}/{post_id}",
+                item = await self.request('GET', f"{self.settings().facebook_graph_api_base_url.rstrip('/')}/{post_id}",
                                           params={'fields': fields}, headers={'Authorization': f'Bearer {request.access_token}'})
                 posts.append(item)
         else:
-            data = await self.request("GET", f"{self.settings().meta_graph_api_base_url.rstrip('/')}/{request.external_account_id}/posts",
+            data = await self.request("GET", f"{self.settings().facebook_graph_api_base_url.rstrip('/')}/{request.external_account_id}/posts",
                                       params={"fields": fields, "since": request.from_date.isoformat(), "until": request.to_date.isoformat(), "limit": 100}, headers=headers)
             posts: list[dict] = []
             # A Page feed is paginated.  Without following its cursor, a new Reel

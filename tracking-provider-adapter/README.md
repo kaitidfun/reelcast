@@ -39,6 +39,28 @@ adapter through a server-to-server request. Do not configure social OAuth
 client IDs or secrets in this adapter — they belong exclusively in
 `backend/.env.local`.
 
+## Independent Facebook and Instagram environments
+
+Configure Graph API base URLs separately in the adapter's `.env.local`:
+
+```dotenv
+FACEBOOK_GRAPH_API_BASE_URL=https://graph.facebook.com/v23.0
+INSTAGRAM_GRAPH_API_BASE_URL=https://graph.instagram.com/v23.0
+```
+
+ReelCast uses **Instagram API with Instagram Login** (direct Instagram OAuth),
+so Instagram requests use `graph.instagram.com`. Facebook requests continue to
+use `graph.facebook.com`. The adapter keeps the configured API version `v23.0`;
+this is not a claim that it is the latest version. Each provider reads only its
+own URL, so their API versions can be configured independently. `META_GRAPH_API_BASE_URL` is no longer read; replace it with both
+keys when deploying. Restart the adapter after changing environment values.
+
+`ADAPTER_KEY_FACEBOOK` and `ADAPTER_KEY_INSTAGRAM` remain independent secrets
+and must each match the corresponding backend tracking adapter key. Social
+OAuth credentials and tokens continue to be managed by the backend.
+
+Reference: [Meta Instagram API collection — Instagram Login](https://www.postman.com/meta/workspace/instagram/documentation/23987686-9386f468-7714-490f-9bfc-9442db5c8f00).
+
 ## Shop callback setup
 
 Register these callback URLs in the matching provider console:

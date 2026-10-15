@@ -19,7 +19,7 @@
 2. Restart tracking-provider-adapter พร้อม backend เพราะเพิ่ม contract `post_ids` และ nullable social fields ให้ใช้ version นี้คู่กัน
 3. ใช้ค่า social adapter URL/key เดิมใน backend และ provider settings เดิมใน adapter กำหนด BACKEND_URL เป็น public HTTPS URL ที่ผู้ชมเข้าถึงได้เพื่อให้ redirect links เปิดได้จริง
 4. เชื่อมบัญชีผ่าน Feature 3 แล้วเผยแพร่ Reel ที่มี provider post ID จากนั้นกด Sync Data ใน Tracking หรือใช้ worker และ beat เดิม (ทุก 900 วินาที) ไม่ได้ยืนยันว่า worker/beat บนเครื่องกำลังทำงาน
-5. การเผยแพร่ใหม่ที่สินค้ามี affiliate URL จะสร้าง ReelCast link ต่อ distribution และแทน URL ใน caption อัตโนมัติ URL ต้องเป็น HTTP(S) ที่ถูกต้อง หากผิดให้แก้สินค้าก่อน retry ลิงก์เก่าที่เผยแพร่ก่อนอัปเดตนี้ต้องสร้างจากหน้า Tracking แล้ววางในตำแหน่งที่แพลตฟอร์มอนุญาตเอง ไม่แก้โพสต์เก่าอัตโนมัติ Instagram/TikTok caption ไม่รับประกันว่าเปิดลิงก์ได้ และ bio link ที่แชร์ร่วมกันไม่ระบุ Reel ต้นทาง
+5. การเผยแพร่ใหม่ที่สินค้ามี affiliate URL จะสร้าง ReelCast link ต่อ distribution และแทน URL ใน caption อัตโนมัติ URL ต้องเป็น HTTP(S) ที่ถูกต้อง หากผิดให้แก้สินค้าก่อน retry หน้า Tracking ไม่มีฟอร์มสร้างลิงก์หรือปุ่ม Get link ผู้ใช้ใส่ affiliate URL ของสินค้าแล้วระบบสร้าง tracking link ระหว่าง Distribute ไม่แก้โพสต์เก่าอัตโนมัติ Instagram/TikTok caption ไม่รับประกันว่าเปิดลิงก์ได้ และ bio link ที่แชร์ร่วมกันไม่ระบุ Reel ต้นทาง
 6. F5 ใหม่ไม่อ่าน legacy analytics ที่มีวันที่ไม่ชัดเจน ต้องซิงก์ใหม่เพื่อเริ่ม observations ที่ถูกต้อง
 
 ## สิ่งที่ตรวจแล้วและข้อจำกัด

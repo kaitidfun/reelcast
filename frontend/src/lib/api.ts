@@ -154,9 +154,6 @@ export function fetchTrackingComparison(filters: TrackingFilters & TrackingPerio
 export function syncTrackingData() {
   return trackingRequest<{ social_metrics: number; accounts: Array<{ success: boolean; error: string | null }> }>("/sync", { method: "POST" });
 }
-export function createTrackingLink(distributionId: string) {
-  return trackingRequest<{ url: string }>(`/links/${distributionId}`, { method: "POST" });
-}
 export async function downloadTrackingExport(format: "csv" | "xlsx", filters: TrackingFilters & Partial<TrackingPeriods> & { level?: string; metric?: string }) {
   const response = await fetch(`${API_BASE_URL}/tracking/export${trackingQuery({ ...filters, format })}`, { headers: getAuthHeaders() });
   if (!response.ok) {
