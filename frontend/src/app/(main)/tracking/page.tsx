@@ -225,6 +225,13 @@ export default function Tracking() {
     setApplied({});
   }
 
+  function resetRanking() {
+    setLevel("reel");
+    setMetric("views");
+    setAnalysis(null);
+    setSelectedItem(null);
+  }
+
   const platformChartData = PLATFORM_OPTIONS.map(platform => {
     const row = dashboard?.platforms.find(item => item.id === platform.name);
     return { id: platform.name, label: platform.shortLabel, views: row?.views ?? null };
@@ -262,14 +269,6 @@ export default function Tracking() {
   return <div aria-busy={loading} className="min-w-0 space-y-6">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Data Tracking</h1><p className="mt-1 text-muted-foreground">Social performance and affiliate link visits</p></div><Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading} onClick={() => void run(async () => { const result = await syncTrackingData(); setRevision(value => value + 1); const failures = result.accounts.filter(account => !account.success); if (failures.length) throw new Error(`${failures.length} account(s) failed to synchronize. See account status below.`); })}><RefreshCw className={`mr-2 h-4 w-4 ${busy ? "animate-spin" : ""}`} />Sync Data</Button></div>
     {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-    {dashboard && (
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">{([
-        { label: 'Views', value: dashboard.totals.views, icon: Eye, color: 'bg-primary/10 text-primary', gradient: 'from-orange-500 via-pink-500 to-purple-600' },
-        { label: 'Engagement', value: dashboard.totals.engagement, icon: Heart, color: 'bg-pink-500/10 text-pink-500', gradient: 'from-rose-500 via-pink-500 to-fuchsia-600' },
-        { label: 'Affiliate link clicks', value: dashboard.totals.clicks, icon: MousePointerClick, color: 'bg-info/10 text-info', gradient: 'from-cyan-500 via-blue-500 to-indigo-600' },
-        { label: 'Tracked Reels', value: dashboard.totals.reels, icon: Video, color: 'bg-violet-500/10 text-violet-500', gradient: 'from-violet-500 via-purple-500 to-fuchsia-600' },
-      ]).map(({ label, value, icon: Icon, color, gradient }) => <section key={label} className="group relative overflow-hidden rounded-2xl border border-border bg-card card-shine transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"><div className={`h-1 bg-gradient-to-r ${gradient}`} /><div className="p-5"><div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{label}</p><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${color}`}><Icon className="h-4 w-4" /></span></div><p className="mt-3 font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{display(value)}</p></div></section>)}</div>
-    )}
     {dashboard && (
       <div className="space-y-2">
         <Link
@@ -326,6 +325,14 @@ export default function Tracking() {
     )}
 
 
+    {dashboard && (
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">{([
+        { label: 'Views', value: dashboard.totals.views, icon: Eye, color: 'bg-primary/10 text-primary', gradient: 'from-orange-500 via-pink-500 to-purple-600' },
+        { label: 'Engagement', value: dashboard.totals.engagement, icon: Heart, color: 'bg-pink-500/10 text-pink-500', gradient: 'from-rose-500 via-pink-500 to-fuchsia-600' },
+        { label: 'Affiliate link clicks', value: dashboard.totals.clicks, icon: MousePointerClick, color: 'bg-info/10 text-info', gradient: 'from-cyan-500 via-blue-500 to-indigo-600' },
+        { label: 'Tracked Reels', value: dashboard.totals.reels, icon: Video, color: 'bg-violet-500/10 text-violet-500', gradient: 'from-violet-500 via-purple-500 to-fuchsia-600' },
+      ]).map(({ label, value, icon: Icon, color, gradient }) => <section key={label} className="group relative overflow-hidden rounded-2xl border border-border bg-card card-shine transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"><div className={`h-1 bg-gradient-to-r ${gradient}`} /><div className="p-5"><div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{label}</p><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${color}`}><Icon className="h-4 w-4" /></span></div><p className="mt-3 font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{display(value)}</p></div></section>)}</div>
+    )}
     {loading && !dashboard ? <p role="status">Loading tracking data…</p> : dashboard && <>
 
       {!!dashboard.totals.partial_metrics.length && <p className="text-xs text-muted-foreground">Some social metrics are unavailable for part of this scope. Totals include only available values.</p>}
@@ -466,7 +473,7 @@ export default function Tracking() {
                 options={[
                   { id: "views", name: "Views", icon: Eye }, { id: "engagement", name: "Engagement", icon: Heart },
                   { id: "clicks", name: "Affiliate clicks", icon: MousePointerClick },
-                ]} /><Button className={primaryButtonClass} disabled={busy} onClick={() => void run(async () => setAnalysis(await fetchTrackingAnalysis({ ...applied, level, metric })))}><SearchCheck className="h-4 w-4" aria-hidden="true" />Analyze</Button>{analysis && exportButtons({ level: analysis.level, metric: analysis.metric })}</div></div>{analysis && <div className="mt-4 space-y-2">{!analysis.rows.length && <p>No matching content.</p>}{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedItem(item)} className="flex w-full justify-between gap-3 border-b border-border py-2 text-left text-sm hover:bg-muted"><span>#{index + 1} {item.name || "Untitled"}</span><span>{display(item.value)}</span></button>)}</div>}{selectedItem && <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm"><h3 className="mb-2 font-semibold">{selectedItem.name || "Untitled"}</h3><div className="grid gap-2 sm:grid-cols-3">{(["views", "likes", "comments", "shares", "engagement", "clicks"] as const).map(key => <p key={key} className="capitalize">{key}: {display(selectedItem[key])}</p>)}</div>{!!selectedItem.partial_metrics.length && <p className="mt-2 text-xs text-muted-foreground">Some counters are unavailable in this scope.</p>}</div>}</section>
+                ]} />{(analysis || level !== "reel" || metric !== "views") && <Button variant="outline" className="gap-2" disabled={busy || loading} onClick={resetRanking}><RotateCcw className="h-4 w-4" aria-hidden="true" />Reset</Button>}<Button className={primaryButtonClass} disabled={busy} onClick={() => void run(async () => setAnalysis(await fetchTrackingAnalysis({ ...applied, level, metric })))}><SearchCheck className="h-4 w-4" aria-hidden="true" />Analyze</Button>{analysis && exportButtons({ level: analysis.level, metric: analysis.metric })}</div></div>{analysis && <div className="mt-4 space-y-2">{!analysis.rows.length && <p>No matching content.</p>}{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedItem(item)} className="flex w-full justify-between gap-3 border-b border-border py-2 text-left text-sm hover:bg-muted"><span>#{index + 1} {item.name || "Untitled"}</span><span>{display(item.value)}</span></button>)}</div>}{selectedItem && <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm"><h3 className="mb-2 font-semibold">{selectedItem.name || "Untitled"}</h3><div className="grid gap-2 sm:grid-cols-3">{(["views", "likes", "comments", "shares", "engagement", "clicks"] as const).map(key => <p key={key} className="capitalize">{key}: {display(selectedItem[key])}</p>)}</div>{!!selectedItem.partial_metrics.length && <p className="mt-2 text-xs text-muted-foreground">Some counters are unavailable in this scope.</p>}</div>}</section>
     <section className={panelClass}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SectionTitle icon={TableProperties} title="Tracking details" description="Review social metrics and affiliate link clicks for each Reel." />

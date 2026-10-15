@@ -178,6 +178,26 @@ it('exports the compared periods even if draft dates change afterward', async ()
 });
 
 
+it('resets ranking results and choices without clearing comparison draft dates', async () => {
+  vi.mocked(api.fetchTrackingAnalysis).mockResolvedValue({ level: 'product', metric: 'clicks', rows: [], semantics: '' });
+  render(<Tracking />);
+  const ranking = (await screen.findByRole('heading', { name: 'Content ranking' })).closest('section')!;
+  fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-01-01' } });
+  for (const [label, option] of [['Ranking level', 'Product'], ['Ranking metric', 'Affiliate clicks']]) {
+    fireEvent.keyDown(screen.getByRole('combobox', { name: label }), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('option', { name: option }));
+  }
+  fireEvent.click(within(ranking).getByRole('button', { name: 'Analyze' }));
+  await within(ranking).findByText('No matching content.');
+  await waitFor(() => expect(within(ranking).getByRole('button', { name: 'Reset' })).toBeEnabled());
+  fireEvent.click(within(ranking).getByRole('button', { name: 'Reset' }));
+  expect(screen.getByRole('combobox', { name: 'Ranking level' })).toHaveTextContent('Reel');
+  expect(screen.getByRole('combobox', { name: 'Ranking metric' })).toHaveTextContent('Views');
+  expect(within(ranking).queryByText('No matching content.')).not.toBeInTheDocument();
+  expect(within(ranking).queryByRole('button', { name: 'CSV' })).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Start date')).toHaveValue('2026-01-01');
+});
+
 it('offers reauthorization for expired tokens through the existing connection flow', async () => {
   const dashboard = await api.fetchTrackingDashboard();
   vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, accounts: [{
