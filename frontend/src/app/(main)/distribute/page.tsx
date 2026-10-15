@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Send, Clock, Trash2, Search, Settings2, List, Layers, ChevronLeft, ChevronRight, Globe2 } from "lucide-react";
+import { Send, Clock, Trash2, Search, Settings2, List, Layers, ChevronLeft, ChevronRight, Globe2, CircleDot, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchClearButton } from "@/components/ui/search-clear-button";
@@ -42,6 +42,16 @@ const PLATFORM_BADGE: Record<string, string> = {
 };
 
 const STATUS_CHIPS = ["all", "Pending", "Uploading", "Published", "Failed"] as const;
+
+function DistributionStatusIcon({ status }: { status: string }) {
+  const Icon = status === "Pending" ? Clock
+    : status === "Uploading" ? Loader2
+    : status === "Published" ? CheckCircle2
+    : status === "Failed" ? AlertCircle
+    : CircleDot;
+  return <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />;
+}
+
 const DISTRIBUTIONS_PAGE_SIZE = 10;
 const RECENT_REELS_PAGE_SIZE = 6;
 const RECENT_CAMPAIGNS_PAGE_SIZE = 5;
@@ -315,12 +325,13 @@ const Distribution = () => {
                 key={chip}
                 type="button"
                 onClick={() => setFilterStatus(chip)}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
                   filterStatus === chip
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:bg-muted/70"
                 }`}
               >
+                <DistributionStatusIcon status={chip} />
                 {chip === "all" ? "All" : chip}
               </button>
             ))}
@@ -384,7 +395,8 @@ const Distribution = () => {
                     </div>
                   </div>
                   <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end sm:gap-3" onClick={(e) => e.stopPropagation()}>
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_BADGE[d.status] ?? "bg-muted text-muted-foreground ring-1 ring-border"}`}>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${STATUS_BADGE[d.status] ?? "bg-muted text-muted-foreground ring-1 ring-border"}`}>
+                      <DistributionStatusIcon status={d.status} />
                       {d.status}
                     </span>
                     {(d.scheduled_time || d.created_at) && (

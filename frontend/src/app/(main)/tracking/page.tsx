@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, Download, RefreshCw, Eye, Heart, MousePointerClick, Video, SlidersHorizontal, ChevronDown, Settings2, Trophy, TableProperties, ArrowLeftRight, ChevronLeft, ChevronRight, Globe2, Megaphone, Package, type LucideIcon } from "lucide-react";
+import { BarChart3, SearchCheck, Download, RefreshCw, Eye, Heart, MousePointerClick, Video, SlidersHorizontal, ChevronDown, Settings2, Trophy, TableProperties, ArrowLeftRight, ChevronLeft, ChevronRight, Globe2, Megaphone, Package, type LucideIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -348,7 +348,7 @@ export default function Tracking() {
                 options={[
                   { id: "views", name: "Views", icon: Eye }, { id: "engagement", name: "Engagement", icon: Heart },
                   { id: "clicks", name: "Affiliate clicks", icon: MousePointerClick },
-                ]} /><Button className={primaryButtonClass} disabled={busy} onClick={() => void run(async () => setAnalysis(await fetchTrackingAnalysis({ ...applied, level, metric })))}>Analyze</Button>{analysis && exportButtons({ level: analysis.level, metric: analysis.metric })}</div></div>{analysis && <div className="mt-4 space-y-2">{!analysis.rows.length && <p>No matching content.</p>}{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedItem(item)} className="flex w-full justify-between gap-3 border-b border-border py-2 text-left text-sm hover:bg-muted"><span>#{index + 1} {item.name || "Untitled"}</span><span>{display(item.value)}</span></button>)}</div>}{selectedItem && <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm"><h3 className="mb-2 font-semibold">{selectedItem.name || "Untitled"}</h3><div className="grid gap-2 sm:grid-cols-3">{(["views", "likes", "comments", "shares", "engagement", "clicks"] as const).map(key => <p key={key} className="capitalize">{key}: {display(selectedItem[key])}</p>)}</div>{!!selectedItem.partial_metrics.length && <p className="mt-2 text-xs text-muted-foreground">Some counters are unavailable in this scope.</p>}</div>}</section>
+                ]} /><Button className={primaryButtonClass} disabled={busy} onClick={() => void run(async () => setAnalysis(await fetchTrackingAnalysis({ ...applied, level, metric })))}><SearchCheck className="h-4 w-4" aria-hidden="true" />Analyze</Button>{analysis && exportButtons({ level: analysis.level, metric: analysis.metric })}</div></div>{analysis && <div className="mt-4 space-y-2">{!analysis.rows.length && <p>No matching content.</p>}{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedItem(item)} className="flex w-full justify-between gap-3 border-b border-border py-2 text-left text-sm hover:bg-muted"><span>#{index + 1} {item.name || "Untitled"}</span><span>{display(item.value)}</span></button>)}</div>}{selectedItem && <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm"><h3 className="mb-2 font-semibold">{selectedItem.name || "Untitled"}</h3><div className="grid gap-2 sm:grid-cols-3">{(["views", "likes", "comments", "shares", "engagement", "clicks"] as const).map(key => <p key={key} className="capitalize">{key}: {display(selectedItem[key])}</p>)}</div>{!!selectedItem.partial_metrics.length && <p className="mt-2 text-xs text-muted-foreground">Some counters are unavailable in this scope.</p>}</div>}</section>
     <section aria-label="Compare periods" className={`${panelClass} space-y-5`}>
       <SectionTitle icon={SlidersHorizontal} title="Compare periods" description="Choose two periods and a content scope to compare affiliate link clicks." />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -394,7 +394,7 @@ export default function Tracking() {
       </div>
       <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">The same filters apply to both periods. Period A also filters the dashboard and ranking.</p>
-        <Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading} onClick={applyFilters}>Compare periods</Button>
+        <Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading} onClick={applyFilters}><ArrowLeftRight className="h-4 w-4" aria-hidden="true" />Compare periods</Button>
       </div>
       <details className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
         <summary className="flex cursor-pointer list-none items-center gap-2 font-medium">How these metrics are counted<ChevronDown className="h-3.5 w-3.5" /></summary>
