@@ -18,6 +18,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core import config
+from app.exceptions import OAuthProviderException
 from app.models.models import Distribution, Reel, SocialAccount
 from app.services import oauth_platforms, social_account_service, tracking_service
 
@@ -75,8 +76,30 @@ async def _request_adapter(
             response = await client.post(provider.url, json=payload, headers=headers)
         response.raise_for_status()
         body = response.json()
-    except (httpx.HTTPError, ValueError) as exc:
-        raise TrackingProviderError(f"{platform} tracking adapter request failed") from exc
+    except httpx.TimeoutException as exc:
+        raise TrackingProviderError(f"{platform}: tracking adapter timed out; try Sync Data again") from exc
+    except httpx.HTTPStatusError as exc:
+        # Never forward arbitrary upstream bodies: they can contain credentials.
+        status = exc.response.status_code
+        try:
+            detail = exc.response.json().get("detail")
+        except (ValueError, AttributeError):
+            detail = None
+        if detail == "Invalid adapter key":
+            reason = "backend and adapter keys do not match; check configuration and restart both services"
+        elif detail == f"{platform}: provider rejected the access token":
+            reason = "social API rejected the token; reconnect this platform in Settings"
+        elif status == 429:
+            reason = "social API rate limit reached; try again later"
+        elif status == 504:
+            reason = "social API timed out; try again later"
+        else:
+            reason = f"adapter returned HTTP {status}; check the adapter provider error log"
+        raise TrackingProviderError(f"{platform}: {reason}") from exc
+    except httpx.HTTPError as exc:
+        raise TrackingProviderError(f"{platform}: cannot reach tracking adapter; check it is running") from exc
+    except ValueError as exc:
+        raise TrackingProviderError(f"{platform}: tracking adapter returned invalid JSON") from exc
 
     metrics = body.get("metrics") if isinstance(body, dict) else None
     if not isinstance(metrics, list):
@@ -161,7 +184,12 @@ async def sync_social_account(db: Session, account: SocialAccount) -> int:
         return count
     except Exception as exc:
         db.rollback()
-        account.sync_error = 'Social sync failed; check provider permissions, credentials and adapter availability.'
+        if isinstance(exc, TrackingProviderError):
+            account.sync_error = str(exc)
+        elif isinstance(exc, OAuthProviderException):
+            account.sync_error = f'{account.platform_name}: token refresh failed; reconnect this platform in Settings'
+        else:
+            account.sync_error = 'Social sync failed; check provider permissions, credentials and adapter availability.'
         db.commit()
         logger.warning("[Tracking] %s social sync failed (%s)", account.platform_name, type(exc).__name__)
         return 0

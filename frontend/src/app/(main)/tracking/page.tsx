@@ -8,7 +8,7 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recha
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { PLATFORM_OPTIONS } from "@/lib/platforms";
+import { PLATFORM_OPTIONS, connectSocialPlatform, platformLabel } from "@/lib/platforms";
 import { downloadTrackingExport, fetchTrackingAnalysis, fetchTrackingComparison, fetchTrackingDashboard, fetchTrackingFilterOptions, syncTrackingData, type TrackingAnalysis, type TrackingComparison, type TrackingDashboard, type TrackingFilterOptions, type TrackingFilters, type TrackingPeriods } from "@/lib/api";
 
 const display = (value: number | null | undefined) => value == null ? "Unavailable" : value.toLocaleString();
@@ -105,7 +105,14 @@ export default function Tracking() {
           </span>
         </Link>
         {dashboard.accounts.filter((account) => account.error).map((account) => (
-          <p key={account.id} role="alert" className="px-1 text-xs text-destructive">{account.platform}: {account.error}</p>
+          <div key={account.id} role="alert" className="flex flex-wrap items-center gap-2 px-1 text-xs text-destructive">
+            <p>{account.error?.startsWith(`${account.platform}:`) ? account.error : `${account.platform}: ${account.error}`}</p>
+            {account.error?.includes("reconnect this platform") && (
+              <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => connectSocialPlatform(account.platform, "/tracking")}>
+                Reconnect {platformLabel(account.platform)}
+              </Button>
+            )}
+          </div>
         ))}
         <p className="px-1 text-xs text-muted-foreground">Report updated {new Date(dashboard.generated_at).toLocaleString()}</p>
       </div>

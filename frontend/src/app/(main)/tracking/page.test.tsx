@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import Tracking from './page';
 import * as api from '@/lib/api';
+import * as platforms from '@/lib/platforms';
 
 vi.mock('@/lib/api', () => ({
   fetchTrackingDashboard: vi.fn(), fetchTrackingFilterOptions: vi.fn(),
@@ -55,4 +56,19 @@ it('exports the compared periods even if draft dates change afterward', async ()
   fireEvent.change(screen.getByLabelText('a start'), { target: { value: '2026-02-01' } });
   fireEvent.click(screen.getAllByRole('button', { name: 'CSV' })[0]);
   await waitFor(() => expect(api.downloadTrackingExport).toHaveBeenCalledWith('csv', periods));
+});
+
+
+it('offers reauthorization for expired tokens through the existing connection flow', async () => {
+  const dashboard = await api.fetchTrackingDashboard();
+  vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, accounts: [{
+    id: 'youtube-account', platform: 'youtube', last_synced_at: null,
+    error: 'youtube: token refresh failed; reconnect this platform in Settings',
+  }] });
+  const reconnect = vi.spyOn(platforms, 'connectSocialPlatform').mockImplementation(() => {});
+  render(<Tracking />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Reconnect YouTube Shorts' }));
+  expect(reconnect).toHaveBeenCalledWith('youtube', '/tracking');
+  expect(screen.getByRole('alert')).not.toHaveTextContent('youtube: youtube:');
+  reconnect.mockRestore();
 });

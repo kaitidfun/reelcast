@@ -27,7 +27,7 @@ SEMANTICS = ('Social: latest lifetime observation within selected dates; dates a
              'not publication or activity dates. Clicks: recorded visits during selected dates. '
              'Timezone: Asia/Bangkok. Repeated human GET visits count; recognized bots and HEAD do not. '
              'Engagement: YouTube likes + comments; TikTok/Instagram likes + comments + shares; '
-             'Facebook reactions + comments + shares (when all components are available). '
+             'Facebook videos likes + comments; Facebook Page posts reactions + comments + shares. '
              'Unavailable components are not treated as zero. No unique-visitor or purchase attribution.')
 
 

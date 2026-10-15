@@ -18,8 +18,11 @@ class FacebookProvider(ProviderClient):
         posts: list[dict] = []
         if request.post_ids:
             for post_id in dict.fromkeys(request.post_ids):
+                # Distribution stores the uploaded Video ID. A Page post ID
+                # contains an underscore and supports a different set of fields.
+                node_fields = fields if '_' in post_id else 'id,created_time,views,likes.limit(0).summary(true),comments.limit(0).summary(true)'
                 item = await self.request('GET', f"{self.settings().facebook_graph_api_base_url.rstrip('/')}/{post_id}",
-                                          params={'fields': fields}, headers={'Authorization': f'Bearer {request.access_token}'})
+                                          params={'fields': node_fields}, headers={'Authorization': f'Bearer {request.access_token}'})
                 posts.append(item)
         else:
             data = await self.request("GET", f"{self.settings().facebook_graph_api_base_url.rstrip('/')}/{request.external_account_id}/posts",
@@ -43,9 +46,12 @@ class FacebookProvider(ProviderClient):
             reactions = post.get('reactions', {}).get('summary', {}).get('total_count')
             comments = post.get('comments', {}).get('summary', {}).get('total_count')
             shares = post.get('shares', {}).get('count')
+            is_video = bool(request.post_ids and '_' not in str(post['id']))
+            likes = post.get('likes', {}).get('summary', {}).get('total_count') if is_video else None
+            engagement_parts = (likes, comments) if is_video else (reactions, comments, shares)
             metrics.append(Metric(
                 external_ref=f"facebook:{post['id']}",
                 record_date=provider_date(post.get('created_time'), request.from_date),
-                views=None, comments=comments, shares=shares,
-                engagement=sum((reactions, comments, shares)) if all(v is not None for v in (reactions, comments, shares)) else None))
+                views=post.get('views') if is_video else None, likes=likes, comments=comments, shares=shares,
+                engagement=sum(engagement_parts) if all(v is not None for v in engagement_parts) else None))
         return metrics

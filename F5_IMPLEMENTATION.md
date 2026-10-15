@@ -9,7 +9,7 @@
 - คลิกเป็น GET ที่บันทึกผ่าน ReelCast link ทุกครั้ง รวมการเข้าซ้ำ ไม่เก็บ IP/cookie และไม่อ้างว่าเป็น unique visitor ตัด HEAD, prefetch และ user-agent ที่รู้จักว่าเป็น bot/crawler/preview ออก การตรวจบอตเป็น heuristic จึงไม่รับประกันตัดบอตได้ทั้งหมด
 - เก็บ affiliate destination ตรงตามที่สินค้าให้ไว้เมื่อสร้างลิงก์ ไม่เติมหรือแก้พารามิเตอร์ affiliate ลิงก์เดิมคง destination และ source distribution เดิมเมื่อแชร์ซ้ำ
 - ค่าไม่มีข้อมูลเป็น null/Unavailable แยกจากศูนย์ ผลรวมที่มีบางค่าขาดระบุ partial metrics
-- YouTube engagement = likes + comments; TikTok/Instagram = likes + comments + shares; Facebook = reactions + comments + shares โดยต้องมีทุกองค์ประกอบ Facebook reactions ไม่ใช่ likes และ impressions/reach ไม่ใช่ video views
+- YouTube engagement = likes + comments; TikTok/Instagram = likes + comments + shares; Facebook video = likes + comments; Facebook Page post = reactions + comments + shares โดยต้องมีทุกองค์ประกอบ Facebook reactions ไม่ใช่ likes และ impressions/reach ไม่ใช่ video views
 - การจัดอันดับเทียบสินค้า/แคมเปญ/Reel/แพลตฟอร์มในขอบเขตเดียวกัน มีบาง social metric ที่ไม่เทียบกันได้ครบข้ามแพลตฟอร์ม
 - เปรียบเทียบช่วงเวลาได้สำหรับคลิกเท่านั้นในรอบนี้ Social daily activity ยังไม่มี จึงไม่คำนวณจากยอดสะสม ส่วนต่าง/เปอร์เซ็นต์คลิกจะแสดงเมื่อทั้งสองช่วงจบแล้วและมี coverage ครบเท่านั้น baseline ศูนย์แสดงเปอร์เซ็นต์ unavailable และแจ้งเมื่อจำนวนวันไม่เท่ากัน Coverage ใช้เวลาสร้างลิงก์ล่าสุดใน scope เพื่อไม่ถือว่าช่วงก่อนเริ่มเก็บข้อมูลเป็นศูนย์ที่วัดได้
 
@@ -30,7 +30,7 @@
 - Refresh token ของ YouTube/TikTok ก่อน social sync เมื่อมี token; provider rate limits/permission errors รายงานแยกบัญชี เก็บข้อมูลเดิมและให้รอบถัดไปลองใหม่ ไม่มีการ retry แบบเร่งจนชน rate limit
 - CSV เป็น UTF-8 BOM ตารางเดียวพร้อมคอลัมน์ metadata; XLSX เป็น Summary + Details เก็บ text identifiers และป้องกัน formula injection ข้อมูลที่ส่งออกไม่จำกัดจำนวนแถวตามตารางบนจอ Export จาก comparison เก็บทั้งสองช่วงพร้อม values, differences, percentage และ coverage
 - การทดสอบใช้ฐานข้อมูลจำลองและ provider responses จำลอง ไม่ได้ยิง social API จริงหรือยืนยันสิทธิ์ของบัญชีที่เชื่อมอยู่ โดยเฉพาะ Meta metrics ขึ้นกับ Graph version และ permissions ค่า configuration-only readiness ไม่ใช่หลักฐานว่า API พร้อมใช้
-- Facebook video views ยัง unavailable ใน adapter นี้ ไม่แทนด้วย impressions ส่วน Instagram ใช้ views/plays เมื่อ API ส่งให้ ไม่แทนด้วย reach
+- Facebook Video ID ใช้ fields views/likes/comments ของ Video ส่วน Page post ID ใช้ reactions/comments/shares ไม่แทน views ด้วย impressions ส่วน Instagram ใช้ views/plays เมื่อ API ส่งให้ ไม่แทนด้วย reach
 - ตารางคลิกยังไม่มี retention/archival policy; dashboard อ่านข้อมูลที่ตรง filter ทั้งหมด ควรเพิ่ม aggregate/retention เมื่อปริมาณ event สูง
 
 ## API
@@ -44,3 +44,9 @@
 - [YouTube video counters](https://developers.google.com/youtube/v3/docs/videos) และ [videos.list](https://developers.google.com/youtube/v3/docs/videos/list)
 - [TikTok Display API query videos](https://developers.tiktok.com/docs/en/tiktok-api-v2-video-query)
 - [Meta official SDK Post fields/edges](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/post.py)
+
+## TikTok publish ID และ public video ID
+
+F3 เก็บ publish job ID จาก Content Posting API จึงต้องเรียก status/fetch เพื่อหา public video ID ก่อนใช้ Display API video/query และคง external_ref เป็น publish job เดิมเพื่อจับคู่ distribution ไม่เปลี่ยน privacy ของโพสต์ ถ้ายังไม่มี public ID (เช่น SELF_ONLY หรือยังไม่ผ่าน moderation) ให้แสดง counters เป็น Unavailable ไม่ใช่ศูนย์ วันที่เผยแพร่ที่ไม่รู้เป็น null
+
+อ้างอิง: [TikTok Get Post Status](https://developers.tiktok.com/docs/en/content-posting-api-reference-get-video-status).

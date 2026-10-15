@@ -41,7 +41,7 @@ class SyncRequest(BaseModel):
 
 class Metric(BaseModel):
     external_ref: str = Field(min_length=1, max_length=512)
-    record_date: date
+    record_date: date | None = None
     views: int | None = Field(default=None, ge=0)
     likes: int | None = Field(default=None, ge=0)
     comments: int | None = Field(default=None, ge=0)
