@@ -52,6 +52,7 @@ packaging
 passlib
 pillow
 prompt_toolkit
+psycopg[binary]
 psycopg2
 pyasn1
 pyasn1_modules
