@@ -161,6 +161,8 @@ export async function downloadTrackingExport(format: "csv" | "xlsx", filters: Tr
     throw new Error(body?.detail || "Export failed");
   }
   const url = URL.createObjectURL(await response.blob());
-  const anchor = document.createElement("a"); anchor.href = url; anchor.download = `reelcast-tracking.${format}`;
+  const reportName = filters.a_start ? "comparison"
+    : filters.level ? `ranking-${filters.level}-${filters.metric || "views"}` : "details";
+  const anchor = document.createElement("a"); anchor.href = url; anchor.download = `reelcast-tracking-${reportName}.${format}`;
   anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

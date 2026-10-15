@@ -105,14 +105,39 @@ def test_api_export_ownership_thai_formula_safety_and_redirect(data):
     response = client.get('/api/tracking/export?format=csv')
     assert response.status_code == 200 and response.content.startswith(b'\xef\xbb\xbf')
     rows = list(csv.DictReader(io.StringIO(response.content.decode('utf-8-sig'))))
-    assert len(rows) == 1 and rows[0]['product_name'] == '001สินค้า'
-    assert rows[0]['reel_name'].startswith("'=") and rows[0]['comments'] == 'Unavailable'
+    assert len(rows) == 1
+    assert list(rows[0]) == ['Reel / Platform', 'Views', 'Likes', 'Comments', 'Shares', 'Affiliate Link Clicks', 'Observed At (Asia/Bangkok)']
+    assert rows[0]['Reel / Platform'].startswith("'=") and rows[0]['Comments'] == 'Unavailable'
+    ranking = client.get('/api/tracking/export?format=csv&level=product&metric=views')
+    ranking_rows = list(csv.DictReader(io.StringIO(ranking.content.decode('utf-8-sig'))))
+    analysis = client.get('/api/tracking/analysis?level=product&metric=views').json()
+    assert list(ranking_rows[0]) == ['Rank', 'Product', 'Views']
+    assert ranking_rows == [{'Rank': str(index), 'Product': row['name'], 'Views': str(row['value'])}
+                            for index, row in enumerate(analysis['rows'], 1)]
     xlsx = client.get('/api/tracking/export?format=xlsx')
     with ZipFile(io.BytesIO(xlsx.content)) as archive:
         for name in archive.namelist():
             ElementTree.fromstring(archive.read(name))
         assert b'<f>' not in archive.read('xl/worksheets/sheet2.xml')
-        assert '001สินค้า' in archive.read('xl/worksheets/sheet2.xml').decode()
+        detail = ElementTree.fromstring(archive.read('xl/worksheets/sheet2.xml'))
+        ns = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+        assert detail.find('s:sheetViews/s:sheetView/s:pane', ns).get('state') == 'frozen'
+        assert detail.find('s:autoFilter', ns).get('ref') == 'A1:G2'
+        assert all(cell.get('s') == '1' for cell in detail.findall('s:sheetData/s:row', ns)[0])
+        assert 'Reel / Platform' in archive.read('xl/worksheets/sheet2.xml').decode()
+        assert 'Account Sync Status' not in archive.read('xl/worksheets/sheet2.xml').decode()
+        summary_xml = archive.read('xl/worksheets/sheet1.xml').decode()
+        assert 'Sync Status' in summary_xml
+        assert '"last_synced_at"' not in summary_xml
+        workbook = ElementTree.fromstring(archive.read('xl/workbook.xml'))
+        assert workbook.find('s:bookViews/s:workbookView', ns).get('activeTab') == '1'
+        assert detail.find('s:sheetViews/s:sheetView', ns).get('tabSelected') == '1'
+        styles = ElementTree.fromstring(archive.read('xl/styles.xml'))
+        assert styles.find('s:fills/s:fill[3]/s:patternFill/s:fgColor', ns).get('rgb') == 'FF1F4E78'
+        header_style = styles.findall('s:cellXfs/s:xf', ns)[1]
+        assert header_style.find('s:alignment', ns).get('horizontal') == 'center'
+        assert header_style.get('borderId') == '2'
+        assert float(detail.find('s:sheetData/s:row', ns).get('ht')) == 48
     link = service.ensure_tracking_link(db, user_id=users[0].user_id, distribution_id=distributions[0].distribution_id)
     response = client.get('/api/tracking/r/'+link.code, follow_redirects=False)
     assert response.status_code == 302 and response.headers['cache-control'] == 'no-store'
