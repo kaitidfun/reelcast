@@ -50,3 +50,11 @@
 F3 เก็บ publish job ID จาก Content Posting API จึงต้องเรียก status/fetch เพื่อหา public video ID ก่อนใช้ Display API video/query และคง external_ref เป็น publish job เดิมเพื่อจับคู่ distribution ไม่เปลี่ยน privacy ของโพสต์ ถ้ายังไม่มี public ID (เช่น SELF_ONLY หรือยังไม่ผ่าน moderation) ให้แสดง counters เป็น Unavailable ไม่ใช่ศูนย์ วันที่เผยแพร่ที่ไม่รู้เป็น null
 
 อ้างอิง: [TikTok Get Post Status](https://developers.tiktok.com/docs/en/content-posting-api-reference-get-video-status).
+
+## YouTube token refresh
+
+ระบบขอ offline access และ consent ตอนเชื่อม Google และต้องได้ refresh token ก่อนบันทึกการเชื่อมใหม่ เก็บ refresh token เดิมเมื่อ Google ตอบกลับแค่ access token ใหม่ (Google ไม่ได้ออก refresh token ใหม่ทุกครั้ง) เมื่อ refresh สำเร็จจึงบันทึก token ที่เข้ารหัส; เมื่อเกิดปัญหาเครือข่าย/429/5xx ลองอีกครั้งหนึ่ง แต่ invalid_grant ไม่ retry และแสดงให้ reauthorize บัญชีเดิมโดยไม่ลบประวัติ Distribution
+
+หาก Google คืน invalid_grant โทเคนเดิมไม่สามารถกู้ด้วยการ refresh ซ้ำได้ ต้องกด Reconnect YouTube Shorts และอนุญาต Google ใหม่ หาก OAuth consent screen ของโครงการเป็น External + Testing refresh token ที่มี YouTube scopes จะหมดอายุใน 7 วันตามนโยบาย Google ให้ตรวจ Google Auth Platform → Audience → Publishing status และใช้ Production เมื่อพร้อมตามข้อกำหนดของ Google (ยังไม่ได้ตรวจหรือเปลี่ยนสถานะโครงการจริง)
+
+อ้างอิง: [Google refresh-token expiration](https://developers.google.com/identity/protocols/oauth2#expiration) และ [Google web-server OAuth](https://developers.google.com/identity/protocols/oauth2/web-server).

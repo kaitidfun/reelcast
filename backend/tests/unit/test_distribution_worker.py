@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from app.core import config
 from types import SimpleNamespace
-from app.exceptions import DistributionPublishException
+from app.exceptions import DistributionPublishException, OAuthReauthorizationRequiredException
 from app.models.models import Distribution, Product, Reel, SocialAccount
 from app.worker import _format_caption, _publishDistribution, checkScheduledDistributions
 
@@ -201,6 +201,28 @@ class TestPublishDistributionTaskTests(PytestAssertions):
         self.assertEqual("fresh-token", mock_update_tokens.call_args.kwargs["access_token"])
         # The refreshed token — not the stale one — is what actually gets published with.
         self.assertEqual("fresh-token", mock_publish.call_args.kwargs["access_token"])
+
+    @pytest.mark.asyncio
+    async def test_revoked_youtube_grant_stops_publish_and_preserves_account(self) -> None:
+        self.account.platform_name = "youtube"
+        self.account.refresh_token = "encrypted-refresh-token"
+        db = self._db_returning(distribution=self.distribution, reel=self.reel)
+        with patch("app.worker.SessionLocal", return_value=db), \
+             patch("app.worker.tracking_service.ensure_tracking_link", return_value=SimpleNamespace(code="track-code")), \
+             patch("app.worker.social_account_service.get_social_account", return_value=self.account), \
+             patch("app.worker.social_account_service.get_decrypted_access_token", return_value="expired-token"), \
+             patch("app.worker.social_account_service.get_decrypted_refresh_token", return_value="old-refresh"), \
+             patch("app.worker.oauth_platforms.refresh_access_token", new=AsyncMock(side_effect=OAuthReauthorizationRequiredException("youtube invalid_grant; reconnect this platform in Settings"))), \
+             patch("app.worker.get_presigned_url", return_value="https://cdn.example.com/video.mp4"), \
+             patch("app.worker.distribution_publish_service.publish", new=AsyncMock()) as publish, \
+             patch("app.worker.distribution_service.increment_retry"), \
+             patch("app.worker.distribution_service.update_distribution") as update:
+            await _publishDistribution(str(self.distribution_id))
+        publish.assert_not_called()
+        assert "invalid_grant" in self.account.sync_error
+        failed = [call for call in update.call_args_list if call.kwargs.get("status") == "Failed"]
+        assert len(failed) == 1 and "reconnect this platform" in failed[0].kwargs["error_message"]
+        db.delete.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_refresh_failure_falls_back_to_existing_access_token(self) -> None:

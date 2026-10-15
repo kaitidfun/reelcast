@@ -104,6 +104,7 @@ def update_social_account_tokens(
         account.refresh_token = encrypt_token(refresh_token)
     if external_account_id is not None:
         account.external_account_id = external_account_id
+    account.sync_error = None
     db.commit()
     db.refresh(account)
     return account

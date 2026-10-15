@@ -18,6 +18,7 @@ from app.exceptions import (
     FFmpegProcessingException,
     GeminiAPIException,
     InvalidCoordinateException,
+    OAuthReauthorizationRequiredException,
 )
 from app.models.models import Distribution, Reel, Product
 from app.services.ai_service import (
@@ -777,6 +778,10 @@ async def _publishDistribution(distribution_id: str) -> None:
                         refresh_token=refreshed.get("refresh_token") or refresh_token,
                     )
                     logger.info(f"[Distribution] Refreshed {account.platform_name} access token before publish")
+                except OAuthReauthorizationRequiredException as refresh_err:
+                    account.sync_error = refresh_err.message
+                    db.commit()
+                    raise DistributionPublishException(refresh_err.message) from refresh_err
                 except Exception as refresh_err:
                     logger.warning(
                         f"[Distribution] Token refresh failed for {account.platform_name}, "

@@ -18,7 +18,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core import config
-from app.exceptions import OAuthProviderException
+from app.exceptions import OAuthProviderException, OAuthReauthorizationRequiredException
 from app.models.models import Distribution, Reel, SocialAccount
 from app.services import oauth_platforms, social_account_service, tracking_service
 
@@ -164,6 +164,10 @@ async def _sync_metrics(
 async def sync_social_account(db: Session, account: SocialAccount) -> int:
     try:
         refresh_token = social_account_service.get_decrypted_refresh_token(account)
+        if account.platform_name == 'youtube' and not refresh_token:
+            raise OAuthReauthorizationRequiredException(
+                'youtube has no refresh token; reconnect this platform in Settings'
+            )
         if refresh_token and account.platform_name in {'youtube', 'tiktok'}:
             refreshed = await oauth_platforms.refresh_access_token(account.platform_name, refresh_token)
             social_account_service.update_social_account_tokens(
@@ -186,8 +190,10 @@ async def sync_social_account(db: Session, account: SocialAccount) -> int:
         db.rollback()
         if isinstance(exc, TrackingProviderError):
             account.sync_error = str(exc)
+        elif isinstance(exc, OAuthReauthorizationRequiredException):
+            account.sync_error = exc.message
         elif isinstance(exc, OAuthProviderException):
-            account.sync_error = f'{account.platform_name}: token refresh failed; reconnect this platform in Settings'
+            account.sync_error = f'{account.platform_name}: token refresh unavailable; try again later or check OAuth configuration'
         else:
             account.sync_error = 'Social sync failed; check provider permissions, credentials and adapter availability.'
         db.commit()

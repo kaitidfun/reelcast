@@ -15,6 +15,7 @@ other two.
 from __future__ import annotations
 
 import logging
+import asyncio
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -33,7 +34,7 @@ from app.core.config import (
     YOUTUBE_CLIENT_ID,
     YOUTUBE_CLIENT_SECRET,
 )
-from app.exceptions import OAuthProviderException
+from app.exceptions import OAuthProviderException, OAuthReauthorizationRequiredException
 
 PLATFORM_CONFIGS: dict[str, dict] = {
     "tiktok": {
@@ -169,6 +170,11 @@ async def exchange_code_for_token(platform: str, code: str) -> dict[str, Optiona
     if not access_token:
         raise OAuthProviderException(f"{platform} did not return an access token")
     refresh_token = data.get("refresh_token")
+    if platform == "youtube" and not refresh_token:
+        # Never replace an expired grant with another one-hour connection.
+        raise OAuthReauthorizationRequiredException(
+            "youtube did not grant offline access; reconnect this platform in Settings and approve access"
+        )
 
     if platform == "instagram":
         # Instagram's initial token is short-lived (~1hr) and Meta doesn't
@@ -238,6 +244,11 @@ async def refresh_access_token(platform: str, refresh_token: str) -> dict[str, O
         OAuthProviderException: If the platform is unconfigured or the
             token endpoint rejects the refresh_token.
     """
+    if platform == "youtube" and not refresh_token:
+        raise OAuthReauthorizationRequiredException(
+            "youtube has no refresh token; reconnect this platform in Settings"
+        )
+
     if platform == "instagram":
         try:
             async with httpx.AsyncClient(timeout=30) as client:
@@ -267,15 +278,39 @@ async def refresh_access_token(platform: str, refresh_token: str) -> dict[str, O
         "grant_type": "refresh_token",
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                cfg["token_url"], data=body, headers={"Accept": "application/json"}
-            )
-        resp.raise_for_status()
-        data = resp.json()
-    except httpx.HTTPError as exc:
-        raise OAuthProviderException(f"{platform} rejected the token refresh") from exc
+    attempts = 2 if platform == "youtube" else 1
+    for attempt in range(attempts):
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    cfg["token_url"], data=body, headers={"Accept": "application/json"}
+                )
+            resp.raise_for_status()
+            data = resp.json()
+            break
+        except httpx.HTTPStatusError as exc:
+            try:
+                error_code = exc.response.json().get("error")
+            except (ValueError, AttributeError):
+                error_code = None
+            if platform == "youtube" and error_code == "invalid_grant":
+                raise OAuthReauthorizationRequiredException(
+                    "youtube refresh token is no longer valid (invalid_grant); reconnect this platform in Settings"
+                ) from exc
+            retryable = exc.response.status_code == 429 or exc.response.status_code >= 500
+            if retryable and attempt + 1 < attempts:
+                await asyncio.sleep(0.5)
+                continue
+            # Do not include raw descriptions, request URLs, or tokens.
+            reason = "check YouTube OAuth client configuration" if platform == "youtube" and error_code in {"invalid_client", "unauthorized_client"} else "try again later or check OAuth configuration"
+            raise OAuthProviderException(f"{platform} token refresh failed; {reason}") from exc
+        except httpx.HTTPError as exc:
+            if attempt + 1 < attempts:
+                await asyncio.sleep(0.5)
+                continue
+            raise OAuthProviderException(f"{platform} token refresh service is unreachable; try again later") from exc
+        except ValueError as exc:
+            raise OAuthProviderException(f"{platform} token refresh returned invalid JSON") from exc
 
     access_token = data.get("access_token")
     if not access_token:

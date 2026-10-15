@@ -48,6 +48,11 @@ class OAuthProviderException(ReelCastException):
     default_message = "Third-party authentication failed or timed out"
 
 
+class OAuthReauthorizationRequiredException(OAuthProviderException):
+    status_code = 401
+    default_message = "Social authorization is no longer valid; reconnect this platform in Settings"
+
+
 class InvalidVerificationCodeException(ReelCastException):
     default_message = "The 6-digit TOTP verification code is invalid"
 
@@ -197,6 +202,7 @@ __all__ = [
     "MaxImagesExceededException",
     "MediaNotFoundException",
     "OAuthProviderException",
+    "OAuthReauthorizationRequiredException",
     "ProductNotFoundException",
     "RateLimitExceededException",
     "ReelCastException",
