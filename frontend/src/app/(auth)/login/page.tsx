@@ -456,6 +456,7 @@ const Login = () => {
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
           © 2026 ReelCast ·{" "}
+          <Link href="/about" className="hover:text-foreground transition-colors">About ReelCast</Link>{" · "}
           <a href="#" className="hover:text-foreground transition-colors">
             Privacy
           </a>{" "}
