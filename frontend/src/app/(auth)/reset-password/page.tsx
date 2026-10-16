@@ -336,17 +336,17 @@ const ResetPasswordContent = () => {
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
           © 2026 ReelCast ·{" "}
-          <a href="#" className="hover:text-foreground transition-colors">
+          <Link href="/privacy" className="hover:text-foreground transition-colors">
             Privacy
-          </a>{" "}
+          </Link>{" "}
           ·{" "}
-          <a href="#" className="hover:text-foreground transition-colors">
+          <Link href="/terms" className="hover:text-foreground transition-colors">
             Terms
-          </a>{" "}
+          </Link>{" "}
           ·{" "}
-          <a href="#" className="hover:text-foreground transition-colors">
+          <Link href="/support" className="hover:text-foreground transition-colors">
             Support
-          </a>
+          </Link>
         </p>
       </motion.div>
     </div>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BarChart3, Clapperboard, Send, Sparkles } from "lucide-react";
 import { canIndex, siteDescription, siteUrl } from "@/lib/seo";
+import { PublicFooter } from "@/components/PublicPage";
 
 export const metadata: Metadata = {
   title: "AI Product Reels & Social Media Tracking",
@@ -41,7 +42,7 @@ export default function AboutPage() {
           <p className="mt-6 text-sm text-muted-foreground">Social metrics depend on each platform’s permissions and data availability. Affiliate link clicks measure link visits.</p>
         </section>
       </main>
-      <footer className="border-t border-border px-6 py-6 text-center text-sm text-muted-foreground">ReelCast · AI product Reels and social media tracking</footer>
+      <PublicFooter />
     </div>
   );
 }

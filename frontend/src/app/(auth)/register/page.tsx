@@ -274,24 +274,26 @@ const Register = () => {
                 </div>
               </div>
 
-              <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">
+              <div className="flex items-start gap-2 text-xs text-muted-foreground">
                 <Checkbox
+                  id="accept-terms"
+                  aria-labelledby="accept-terms-description"
                   checked={acceptTerms}
                   onCheckedChange={(v) => setAcceptTerms(!!v)}
                   className="mt-0.5"
                 />
-                <span className="leading-snug">
-                  I agree to ReelCast's{" "}
-                  <a href="#" className="text-primary hover:underline font-medium">
+                <span id="accept-terms-description" className="leading-snug">
+                  <label htmlFor="accept-terms" className="cursor-pointer">I agree to ReelCast's</label>{" "}
+                  <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
                     Terms
-                  </a>{" "}
+                  </Link>{" "}
                   and{" "}
-                  <a href="#" className="text-primary hover:underline font-medium">
+                  <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
                     Privacy Policy
-                  </a>
+                  </Link>
                   .
                 </span>
-              </label>
+              </div>
 
               {error && <p className="text-xs text-destructive">{error}</p>}
 
@@ -319,11 +321,11 @@ const Register = () => {
 
         <p className="mt-3 text-center text-[11px] text-muted-foreground">
           © 2026 ReelCast ·{" "}
-          <a href="#" className="hover:text-foreground transition-colors">Privacy</a>{" "}
+          <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>{" "}
           ·{" "}
-          <a href="#" className="hover:text-foreground transition-colors">Terms</a>{" "}
+          <Link href="/terms" className="hover:text-foreground transition-colors">Terms</Link>{" "}
           ·{" "}
-          <a href="#" className="hover:text-foreground transition-colors">Support</a>
+          <Link href="/support" className="hover:text-foreground transition-colors">Support</Link>
         </p>
       </motion.div>
     </div>

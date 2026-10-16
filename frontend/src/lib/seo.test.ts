@@ -22,7 +22,7 @@ it('indexes only public content using the configured production domain', async (
   const [robots, sitemap, seo] = await setup('production', 'https://reelcast.example');
   expect(seo.canIndex).toBe(true);
   expect(robots.default()).toEqual({ rules: { userAgent: '*', allow: '/', disallow: '/api/' }, sitemap: 'https://reelcast.example/sitemap.xml' });
-  expect(sitemap.default()).toEqual([{ url: 'https://reelcast.example/about' }]);
+  expect(sitemap.default()).toEqual(['/about', '/privacy', '/terms', '/support'].map(path => ({ url: `https://reelcast.example${path}` })));
   expect(seo.privateMetadata.robots).toEqual({ index: false, follow: false });
 });
 
