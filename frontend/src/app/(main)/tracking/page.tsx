@@ -45,7 +45,26 @@ function PlatformLegend({ values }: { values?: Record<string, number | null> }) 
   );
 }
 
-function TrackingChartTooltip({ active, payload, label, mode }: TooltipProps<number, string> & { mode: "views" | "clicks" }) {
+function TopPlatform({ values }: { values: Record<string, number | null> }) {
+  const available = PLATFORM_OPTIONS.filter(platform => values[platform.name] != null);
+  const highest = available.length ? Math.max(...available.map(platform => values[platform.name]!)) : null;
+  const leaders = available.filter(platform => values[platform.name] === highest);
+  return (
+    <div className="ml-auto flex max-w-40 flex-col items-end gap-1.5 text-right" aria-label="Top platform">
+      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Top platform</span>
+      <div className="flex flex-wrap justify-end gap-1.5">
+        {leaders.length ? leaders.map(platform => (
+          <span key={platform.name} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs font-medium text-foreground">
+            <PlatformIcon platform={platform.name} className={`h-3.5 w-3.5 shrink-0 ${platform.color}`} />
+            <span>{platform.label} · {display(highest)}</span>
+          </span>
+        )) : <span className="text-xs text-muted-foreground">Unavailable</span>}
+      </div>
+    </div>
+  );
+}
+
+function TrackingChartTooltip({ active, payload, label, mode }: TooltipProps<number, string> & { mode: "views" | "social" | "clicks" }) {
   if (!active || !payload?.length) return null;
   const items = payload.filter(item => typeof item.value === "number");
   return (
@@ -80,6 +99,46 @@ function SectionTitle({ icon: Icon, title, description }: {
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
     </div>
+  );
+}
+
+function SocialPlatformChart({ platforms, metric, label, icon }: {
+  platforms: TrackingDashboard["platforms"];
+  metric: "likes" | "comments" | "shares";
+  label: string;
+  icon: LucideIcon;
+}) {
+  const data = PLATFORM_OPTIONS.map(platform => ({
+    id: platform.name,
+    label: platform.shortLabel,
+    value: platforms.find(row => row.id === platform.name)?.[metric] ?? null,
+  }));
+  const values = Object.fromEntries(data.map(row => [row.id, row.value]));
+  return (
+    <section className={panelClass}>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+        <SectionTitle icon={icon} title={`${label} by platform`} description={`Compare the latest observed lifetime ${metric} across platforms.`} />
+        <TopPlatform values={values} />
+      </div>
+      <p className="mt-5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Lifetime {metric}</p>
+      {data.some(row => row.value !== null) ? (
+        <div className="mt-2 h-64" role="img" aria-label={`Lifetime ${metric} by platform. Exact values are listed below.`}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} layout="vertical" margin={{ top: 12, right: 60, bottom: 0, left: 0 }} accessibilityLayer>
+              <CartesianGrid horizontal={false} stroke="hsl(var(--border))" strokeDasharray="3 3" strokeOpacity={0.6} />
+              <XAxis type="number" tick={chartAxisTick} tickFormatter={value => chartNumber.format(value)} axisLine={false} tickLine={false} allowDecimals={false} />
+              <YAxis type="category" dataKey="label" width={92} tick={chartAxisTick} axisLine={false} tickLine={false} />
+              <Tooltip cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }} content={<TrackingChartTooltip mode="social" />} />
+              <Bar dataKey="value" name={`Lifetime ${metric}`} barSize={20} radius={[0, 5, 5, 0]}>
+                {data.map(row => <Cell key={row.id} fill={CHART_PLATFORM_COLORS[row.id]} stroke={row.id === "tiktok" ? "#94a3b8" : "none"} strokeWidth={1} />)}
+                <LabelList dataKey="value" position="right" offset={8} fill="hsl(var(--foreground))" fontSize={12} fontWeight={600} formatter={(value: number | null) => value == null ? "" : display(value)} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      ) : <div className="mt-3 flex h-64 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">No {metric} metrics available.</div>}
+      <PlatformLegend values={values} />
+    </section>
   );
 }
 
@@ -241,7 +300,7 @@ export default function Tracking() {
     (dashboard?.click_trend ?? []).reduce((total, day) => total + (day[platform.name as "youtube" | "facebook" | "instagram" | "tiktok"] ?? 0), 0),
   ]));
   const platformClickData = PLATFORM_OPTIONS.map(platform => ({
-    id: platform.name, label: platform.label, clicks: platformClickValues[platform.name],
+    id: platform.name, label: platform.shortLabel, clicks: platformClickValues[platform.name],
   }));
 
   const detailCount = dashboard?.details.length || 0;
@@ -334,7 +393,10 @@ export default function Tracking() {
       {!dashboard.has_data && <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-12 text-center"><BarChart3 className="mx-auto h-10 w-10 text-muted-foreground/50" /><h2 className="mt-4 font-display text-xl font-semibold text-foreground">Start tracking your content</h2><p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">No tracking data matches these filters. Distribute a Reel to create its affiliate tracking link automatically, then synchronize its connected social account.</p></div>}
       <div className="grid gap-5 lg:grid-cols-2">
       <section className={panelClass}>
-        <SectionTitle icon={BarChart3} title="Performance by platform" description="Compare the latest observed lifetime views across platforms." />
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+          <SectionTitle icon={BarChart3} title="View by platform" description="Compare the latest observed lifetime views across platforms." />
+          <TopPlatform values={platformViewValues} />
+        </div>
         <p className="mt-5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Lifetime views</p>
         {platformChartData.some(row => row.views !== null) ? (
           <div className="mt-2 h-64" role="img" aria-label="Lifetime views by platform. Exact values are listed below.">
@@ -355,21 +417,22 @@ export default function Tracking() {
         <PlatformLegend values={platformViewValues} />
       </section>
       <section className={panelClass}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <SectionTitle icon={MousePointerClick} title="Affiliate link clicks by platform" description="Recorded visits · Asia/Bangkok · Does not represent unique visitors" />
+          <TopPlatform values={platformClickValues} />
         </div>
         <p className="mt-5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Total clicks by source platform</p>
         {dashboard.click_trend.length ? (
           <div className="mt-2 h-64" role="img" aria-label="Affiliate link clicks by source platform.">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={platformClickData} margin={{ top: 24, right: 12, bottom: 0, left: -16 }} accessibilityLayer>
-                <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 3" strokeOpacity={0.6} />
-                <XAxis dataKey="label" tick={chartAxisTick} interval={0} axisLine={false} tickLine={false} tickMargin={10} />
-                <YAxis tick={chartAxisTick} tickFormatter={value => chartNumber.format(value)} allowDecimals={false} axisLine={false} tickLine={false} />
+              <BarChart data={platformClickData} layout="vertical" margin={{ top: 12, right: 80, bottom: 0, left: 0 }} accessibilityLayer>
+                <CartesianGrid horizontal={false} stroke="hsl(var(--border))" strokeDasharray="3 3" strokeOpacity={0.6} />
+                <XAxis type="number" tick={chartAxisTick} tickFormatter={value => chartNumber.format(value)} axisLine={false} tickLine={false} allowDecimals={false} />
+                <YAxis type="category" dataKey="label" width={92} tick={chartAxisTick} axisLine={false} tickLine={false} />
                 <Tooltip cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }} content={<TrackingChartTooltip mode="clicks" />} />
-                <Bar dataKey="clicks" name="Clicks" maxBarSize={36} radius={[3, 3, 0, 0]}>
+                <Bar dataKey="clicks" name="Clicks" barSize={20} radius={[0, 5, 5, 0]}>
                   {platformClickData.map(platform => <Cell key={platform.id} fill={CHART_PLATFORM_COLORS[platform.id]} stroke={platform.id === "tiktok" ? "#94a3b8" : "none"} />)}
-                  <LabelList dataKey="clicks" position="top" offset={8} fill="hsl(var(--foreground))" fontSize={12} fontWeight={600} formatter={(value: number) => value > 0 ? display(value) : ""} />
+                  <LabelList dataKey="clicks" position="right" offset={8} fill="hsl(var(--foreground))" fontSize={12} fontWeight={600} formatter={(value: number) => display(value)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -377,6 +440,11 @@ export default function Tracking() {
         ) : <div className="mt-3 flex h-64 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">No recorded clicks in this period.</div>}
         <PlatformLegend values={platformClickValues} />
       </section>
+      <div className="grid min-w-0 gap-5 lg:col-span-2 xl:grid-cols-3">
+        <SocialPlatformChart platforms={dashboard.platforms} metric="likes" label="Likes" icon={Heart} />
+        <SocialPlatformChart platforms={dashboard.platforms} metric="comments" label="Comments" icon={MessageCircle} />
+        <SocialPlatformChart platforms={dashboard.platforms} metric="shares" label="Shares" icon={Share2} />
+      </div>
       </div>
       <section aria-label="Compare periods" className={`${panelClass} space-y-5`}>
       <SectionTitle icon={SlidersHorizontal} title="Compare periods" description="Choose two periods and a content scope to compare affiliate link clicks." />

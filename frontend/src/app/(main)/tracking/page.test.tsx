@@ -59,9 +59,37 @@ it('shows click totals by platform across all days, including zero clicks', asyn
   });
   render(<Tracking />);
   const chart = (await screen.findByRole('heading', { name: 'Affiliate link clicks by platform' })).closest('section')!;
+  expect(within(chart).getByLabelText('Top platform')).toHaveTextContent('Facebook · 5');
   for (const [platform, total] of [['YouTube Shorts', '1'], ['Facebook', '5'], ['Instagram', '1'], ['TikTok', '0']]) {
     expect(within(within(chart).getByText(platform).parentElement!).getByText(total)).toBeInTheDocument();
   }
+});
+
+it('shows each social platform metric independently and preserves zero versus unavailable', async () => {
+  const dashboard = await api.fetchTrackingDashboard();
+  const counters = { views: 99, likes: 8, comments: 2, shares: 5, engagement: 15, clicks: 0, partial_metrics: [], observed_at: null };
+  vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({
+    ...dashboard, has_data: true,
+    platforms: [
+      { ...counters, id: 'instagram', name: 'instagram', value: 99 },
+      { ...counters, id: 'facebook', name: 'facebook', value: 99, likes: 0, comments: 0, shares: null },
+    ],
+  });
+  render(<Tracking />);
+  for (const [metric, total] of [['Likes', '8'], ['Comments', '2'], ['Shares', '5']]) {
+    const chart = (await screen.findByRole('heading', { name: `${metric} by platform` })).closest('section')!;
+    const platformValue = (name: string) => within(within(chart).getByText(name).parentElement!);
+    expect(within(chart).getByLabelText('Top platform')).toHaveTextContent(`Instagram · ${total}`);
+    expect(within(chart).getByLabelText('Top platform')).not.toHaveTextContent('Facebook');
+    expect(platformValue('Instagram').getByText(total)).toBeInTheDocument();
+    expect(platformValue('Facebook').getByText(metric === 'Shares' ? 'Unavailable' : '0')).toBeInTheDocument();
+    expect(platformValue('TikTok').getByText('Unavailable')).toBeInTheDocument();
+  }
+  const views = screen.getByRole('heading', { name: 'View by platform' }).closest('section')!;
+  const leaders = within(views).getByLabelText('Top platform');
+  expect(leaders).toHaveTextContent('Instagram · 99');
+  expect(leaders).toHaveTextContent('Facebook · 99');
+  expect(leaders).not.toHaveTextContent('TikTok');
 });
 
 it('cascades distributed scope options and resets descendants when a parent changes', async () => {
