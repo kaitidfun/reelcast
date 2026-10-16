@@ -73,9 +73,41 @@ async def test_youtube_analytics_shares_preserve_video_counters_and_lifetime_win
 async def test_youtube_missing_analytics_does_not_invent_zero_or_lose_views(report):
     provider = YouTubeProvider(); configure(provider)
     provider.request = AsyncMock(side_effect=[
-        {'items': [{'id': 'old', 'statistics': {'viewCount': '10'}}]}, report])
+        {'items': [{'id': 'old', 'statistics': {'viewCount': '10'}}]}, report, {}])
     metrics = await provider.sync(request('youtube', ['old']))
     assert metrics[0].views == 10 and metrics[0].shares is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('count', [0, 3])
+async def test_youtube_empty_grouped_report_uses_explicit_single_video_aggregate(count):
+    provider = YouTubeProvider(); configure(provider)
+    provider.request = AsyncMock(side_effect=[
+        {'items': [{'id': 'old', 'statistics': {'viewCount': '4', 'likeCount': '1'}}]},
+        {'columnHeaders': [{'name': 'video'}, {'name': 'shares'}], 'rows': []},
+        {'columnHeaders': [{'name': 'shares', 'columnType': 'METRIC', 'dataType': 'INTEGER'}], 'rows': [[count]]},
+    ])
+    metrics = await provider.sync(request('youtube', ['old']))
+    assert metrics[0].shares == count and metrics[0].views == 4 and metrics[0].likes == 1
+    params = provider.request.call_args.kwargs['params']
+    assert params['filters'] == 'video==old' and 'dimensions' not in params
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('aggregate', [
+    {'columnHeaders': [{'name': 'shares', 'columnType': 'METRIC', 'dataType': 'INTEGER'}], 'rows': []},
+    {'columnHeaders': [{'name': 'shares', 'columnType': 'METRIC', 'dataType': 'INTEGER'}], 'rows': [[True]]},
+    {'columnHeaders': [{'name': 'shares', 'columnType': 'METRIC', 'dataType': 'INTEGER'}], 'rows': [[-1]]},
+    ProviderError('youtube', 'provider request timed out', 504),
+])
+async def test_youtube_empty_or_failed_aggregate_remains_unavailable(aggregate):
+    provider = YouTubeProvider(); configure(provider)
+    provider.request = AsyncMock(side_effect=[
+        {'items': [{'id': 'old', 'statistics': {'viewCount': '4'}}]},
+        {'columnHeaders': [{'name': 'video'}, {'name': 'shares'}], 'rows': []}, aggregate,
+    ])
+    metrics = await provider.sync(request('youtube', ['old']))
+    assert metrics[0].shares is None and metrics[0].views == 4
 
 
 @pytest.mark.asyncio

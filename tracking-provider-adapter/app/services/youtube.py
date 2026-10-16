@@ -44,7 +44,32 @@ class YouTubeProvider(ProviderClient):
             if (isinstance(video, str) and video in ids and isinstance(count, int)
                     and not isinstance(count, bool) and count >= 0):
                 result[video] = count
-        # Missing rows (including newly published videos) are not measured zeros.
+        # Grouped reports omit videos without processed activity. Ask for each
+        # missing video's aggregate, which can explicitly return a measured 0.
+        for video in ids:
+            if video in result:
+                continue
+            try:
+                aggregate = await self.request(
+                    "GET", self.settings().youtube_analytics_api_base_url.rstrip("/") + "/v2/reports",
+                    params={"ids": f"channel=={request.external_account_id}",
+                            "startDate": "2005-01-01", "endDate": request.to_date.isoformat(),
+                            "metrics": "shares", "filters": "video==" + video}, headers=headers)
+            except ProviderError as exc:
+                logger.warning('YouTube video shares unavailable (status=%s)', exc.status_code)
+                continue
+            aggregate_columns = aggregate.get('columnHeaders')
+            aggregate_rows = aggregate.get('rows')
+            if (aggregate_columns != [{'name': 'shares', 'columnType': 'METRIC', 'dataType': 'INTEGER'}]
+                    or not isinstance(aggregate_rows, list) or len(aggregate_rows) != 1):
+                continue
+            aggregate_row = aggregate_rows[0]
+            if not isinstance(aggregate_row, list) or len(aggregate_row) != 1:
+                continue
+            count = aggregate_row[0]
+            if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
+                result[video] = count
+        # Empty aggregate reports and request failures remain unavailable.
         return result
 
     def authorization_url(self, *, state: str, redirect_uri: str) -> str:
