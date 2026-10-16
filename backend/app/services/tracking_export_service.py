@@ -50,13 +50,18 @@ def report_bytes(rows, *, format, filters, comparison=None, accounts=None):
                 'sync_freshness': json.dumps(accounts or [], ensure_ascii=False),
                 'comparison': json.dumps(comparison, ensure_ascii=False) if comparison else ''}
     if comparison:
-        # Preserve both periods and their context for comparison reports.
-        records = [dict(row, **metadata) for row in rows]
+        # Keep readable content and period labels without internal IDs or raw metadata.
+        columns = ('reel_name', 'product_name', 'campaign_name', 'platform',
+                   'distribute_date', 'views', 'likes', 'comments', 'shares',
+                   'engagement', 'clicks', 'comparison_period',
+                   'period_start', 'period_end', 'observed_at')
+        records = [{key: row.get(key) for key in columns} for row in rows]
     elif filters.get('level'):
         metric = filters.get('metric', 'views')
         metric_title = {'views': 'Views', 'engagement': 'Engagement', 'clicks': 'Link clicks'}[metric]
         records = [{'Rank': index, filters['level'].title(): row['name'] or 'Untitled',
-                    metric_title: row['value']} for index, row in enumerate(rows, 1)]
+                    metric_title: row['value'], 'observed_at': row['observed_at']}
+                   for index, row in enumerate(rows, 1)]
     else:
         records = [{'Reel / platform': f"{row['reel_name']} · {row['platform']}",
                     'Views': row['views'], 'Likes': row['likes'], 'Comments': row['comments'],

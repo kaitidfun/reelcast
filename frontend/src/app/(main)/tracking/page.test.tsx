@@ -235,7 +235,7 @@ it('paginates tracking details by 25, exports the full scope, and resets after r
   const dashboard = await api.fetchTrackingDashboard();
   const details = Array.from({ length: 51 }, (_, index) => ({
     distribution_id: `distribution-${index + 1}`, reel_name: `Tracked reel ${index + 1}`, platform: 'youtube',
-    observed_at: null, views: index, likes: 0, comments: 0, shares: null, engagement: 0, clicks: 0, partial_metrics: [],
+    distribute_date: null, observed_at: null, views: index, likes: 0, comments: 0, shares: null, engagement: 0, clicks: 0, partial_metrics: [],
   }));
   vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, has_data: true, details });
   render(<Tracking />);
@@ -246,10 +246,10 @@ it('paginates tracking details by 25, exports the full scope, and resets after r
   const requestCount = vi.mocked(api.fetchTrackingDashboard).mock.calls.length;
   fireEvent.click(screen.getByRole('button', { name: 'Next tracking details page' }));
   expect(screen.getByText('Showing 26–50 of 51 · 25 rows per page')).toBeInTheDocument();
-  expect(screen.queryByText('Tracked reel 1 · youtube')).not.toBeInTheDocument();
+  expect(screen.queryByText('Tracked reel 1')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Next tracking details page' }));
   expect(table.querySelectorAll('tbody tr')).toHaveLength(1);
-  expect(screen.getByText('Tracked reel 51 · youtube')).toBeInTheDocument();
+  expect(screen.getByText('Tracked reel 51')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Next tracking details page' })).toBeDisabled();
   expect(api.fetchTrackingDashboard).toHaveBeenCalledTimes(requestCount);
   fireEvent.click(screen.getByRole('button', { name: 'CSV' }));

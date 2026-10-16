@@ -98,8 +98,10 @@ def _filters(query, platform=None, campaign_id=None, product_id=None, reel_id=No
 
 
 def _identity(distribution, reel, product, campaign, account):
+    distribute_date = distribution.scheduled_time or distribution.created_at
     return dict(distribution_id=str(distribution.distribution_id), reel_id=str(reel.reel_id),
-                reel_name=reel.prompt_text or 'Untitled Reel',
+                distribute_date=distribute_date.isoformat() if distribute_date else None,
+                reel_name=(reel.name or '').strip() or (reel.saved_prompt_text or '').strip() or '(no prompt)',
                 product_id=str(product.product_id) if product else None,
                 product_name=product.product_name if product else None,
                 campaign_id=str(campaign.campaign_id) if campaign else None,
@@ -152,8 +154,13 @@ def _rank(rows, level, metric):
     result = []
     for key, items in groups.items():
         totals = _totals(items)
+        observations = [datetime.fromisoformat(item['observed_at'])
+                        for item in items if item['observed_at']]
+        latest_observation = max((observed if observed.tzinfo else observed.replace(tzinfo=timezone.utc)
+                                  for observed in observations), default=None)
         result.append(dict(id=key, name=key if level == 'platform' else items[0][level + '_name'],
-                           **totals, value=totals[metric]))
+                           **totals, value=totals[metric],
+                           observed_at=latest_observation.isoformat() if latest_observation else None))
     return sorted(result, key=lambda row: (row['value'] is not None, row['value'] or 0), reverse=True)
 
 

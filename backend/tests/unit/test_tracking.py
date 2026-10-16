@@ -36,7 +36,8 @@ def data():
             product = Product(product_id=uuid4(), campaign_id=campaign.campaign_id, user_id=user.user_id,
                               product_name='001สินค้า', affiliate_link='https://example.com/?aff=001&x=%2F')
             account = SocialAccount(account_id=uuid4(), user_id=user.user_id, platform_name='youtube', access_token='encrypted')
-            reel = Reel(reel_id=uuid4(), user_id=user.user_id, product_id=product.product_id, prompt_text='=BAD()')
+            reel = Reel(reel_id=uuid4(), user_id=user.user_id, product_id=product.product_id,
+                        prompt_text='=BAD()', saved_prompt_text='=BAD()')
             distribution = Distribution(distribution_id=uuid4(), reel_id=reel.reel_id, account_id=account.account_id,
                                         platform_post_id='same', status='Published')
             db.add_all([user, campaign, product, account, reel, distribution])
@@ -111,8 +112,9 @@ def test_api_export_ownership_thai_formula_safety_and_redirect(data):
     ranking = client.get('/api/tracking/export?format=csv&level=product&metric=views')
     ranking_rows = list(csv.DictReader(io.StringIO(ranking.content.decode('utf-8-sig'))))
     analysis = client.get('/api/tracking/analysis?level=product&metric=views').json()
-    assert list(ranking_rows[0]) == ['Rank', 'Product', 'Views']
-    assert ranking_rows == [{'Rank': str(index), 'Product': row['name'], 'Views': str(row['value'])}
+    assert list(ranking_rows[0]) == ['Rank', 'Product', 'Views', 'Observed At (Asia/Bangkok)']
+    assert ranking_rows == [{'Rank': str(index), 'Product': row['name'], 'Views': str(row['value']),
+                            'Observed At (Asia/Bangkok)': row['observed_at'] or 'Unavailable'}
                             for index, row in enumerate(analysis['rows'], 1)]
     xlsx = client.get('/api/tracking/export?format=xlsx')
     with ZipFile(io.BytesIO(xlsx.content)) as archive:

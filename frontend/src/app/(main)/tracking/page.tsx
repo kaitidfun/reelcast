@@ -473,7 +473,11 @@ export default function Tracking() {
                 options={[
                   { id: "views", name: "Views", icon: Eye }, { id: "engagement", name: "Engagement", icon: Heart },
                   { id: "clicks", name: "Affiliate clicks", icon: MousePointerClick },
-                ]} />{(analysis || level !== "reel" || metric !== "views") && <Button variant="outline" className="gap-2" disabled={busy || loading} onClick={resetRanking}><RotateCcw className="h-4 w-4" aria-hidden="true" />Reset</Button>}<Button className={primaryButtonClass} disabled={busy} onClick={() => void run(async () => setAnalysis(await fetchTrackingAnalysis({ ...applied, level, metric })))}><SearchCheck className="h-4 w-4" aria-hidden="true" />Analyze</Button>{analysis && exportButtons({ level: analysis.level, metric: analysis.metric })}</div></div>{analysis && <div className="mt-4 space-y-2">{!analysis.rows.length && <p>No matching content.</p>}{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedItem(item)} className="flex w-full justify-between gap-3 border-b border-border py-2 text-left text-sm hover:bg-muted"><span>#{index + 1} {item.name || "Untitled"}</span><span>{display(item.value)}</span></button>)}</div>}{selectedItem && <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm"><h3 className="mb-2 font-semibold">{selectedItem.name || "Untitled"}</h3><div className="grid gap-2 sm:grid-cols-3">{(["views", "likes", "comments", "shares", "engagement", "clicks"] as const).map(key => <p key={key} className="capitalize">{key}: {display(selectedItem[key])}</p>)}</div>{!!selectedItem.partial_metrics.length && <p className="mt-2 text-xs text-muted-foreground">Some counters are unavailable in this scope.</p>}</div>}</section>
+                ]} />{(analysis || level !== "reel" || metric !== "views") && <Button variant="outline" className="gap-2" disabled={busy || loading} onClick={resetRanking}><RotateCcw className="h-4 w-4" aria-hidden="true" />Reset</Button>}<Button className={primaryButtonClass} disabled={busy} onClick={() => void run(async () => setAnalysis(await fetchTrackingAnalysis({ ...applied, level, metric })))}><SearchCheck className="h-4 w-4" aria-hidden="true" />Analyze</Button>{analysis && exportButtons({ level: analysis.level, metric: analysis.metric })}</div></div>{analysis && <div className="mt-4 space-y-2">{!analysis.rows.length && <p>No matching content.</p>}{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedItem(item)} className="flex w-full flex-wrap items-start justify-between gap-3 border-b border-border py-2 text-left text-sm hover:bg-muted"><span className="min-w-0 flex-1">#{index + 1} {item.name || "Untitled"}</span>
+                  <span className="shrink-0 tabular-nums">{display(item.value)}</span>
+                  <span className="w-full text-xs text-muted-foreground sm:w-56 sm:text-right" title="Latest social observation in this group">
+                    Observed At: {item.observed_at ? new Date(item.observed_at).toLocaleString() : 'Unavailable'}
+                  </span></button>)}</div>}{selectedItem && <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm"><h3 className="mb-2 font-semibold">{selectedItem.name || "Untitled"}</h3><div className="grid gap-2 sm:grid-cols-3">{(["views", "likes", "comments", "shares", "engagement", "clicks"] as const).map(key => <p key={key} className="capitalize">{key}: {display(selectedItem[key])}</p>)}</div>{!!selectedItem.partial_metrics.length && <p className="mt-2 text-xs text-muted-foreground">Some counters are unavailable in this scope.</p>}</div>}</section>
     <section className={panelClass}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SectionTitle icon={TableProperties} title="Tracking details" description="Review social metrics and affiliate link clicks for each Reel." />
@@ -481,10 +485,10 @@ export default function Tracking() {
         </div>
         <div ref={detailsScrollRef} role="region" aria-label="Tracking details table" tabIndex={0}
           className="mt-4 overflow-hidden rounded-xl border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&>div]:max-h-[480px] [&>div]:overscroll-contain">
-          <Table className="min-w-[850px]">
+          <Table className="min-w-[1050px]">
             <TableHeader className="sticky top-0 z-10 bg-muted">
               <TableRow>
-                {['Reel / platform', 'Views', 'Likes', 'Comments', 'Shares', 'Link clicks', 'Observation'].map(title => (
+                {['Reel', 'Platform', 'Distribute Date', 'Views', 'Likes', 'Comments', 'Shares', 'Link clicks', 'Observation'].map(title => (
                   <TableHead key={title} className="whitespace-nowrap text-xs">{title}</TableHead>
                 ))}
               </TableRow>
@@ -492,14 +496,16 @@ export default function Tracking() {
             <TableBody>
               {visibleDetails.length ? visibleDetails.map(row => (
                 <TableRow key={row.distribution_id}>
-                  <TableCell className="max-w-60 truncate p-2" title={`${row.reel_name} · ${row.platform}`}>{row.reel_name} · {row.platform}</TableCell>
+                  <TableCell className="max-w-60 truncate p-2" title={row.reel_name}>{row.reel_name}</TableCell>
+                  <TableCell className="whitespace-nowrap p-2">{platformLabel(row.platform)}</TableCell>
+                  <TableCell className="whitespace-nowrap p-2">{row.distribute_date ? new Date(row.distribute_date).toLocaleString() : 'Unavailable'}</TableCell>
                   {[row.views, row.likes, row.comments, row.shares, row.clicks].map((value, index) => (
                     <TableCell key={index} className="p-2">{display(value)}</TableCell>
                   ))}
                   <TableCell className="whitespace-nowrap p-2">{row.observed_at ? new Date(row.observed_at).toLocaleString() : 'Unavailable'}</TableCell>
                 </TableRow>
               )) : (
-                <TableRow><TableCell colSpan={7} className="h-28 text-center text-muted-foreground">No tracking details match the selected filters.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="h-28 text-center text-muted-foreground">No tracking details match the selected filters.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
