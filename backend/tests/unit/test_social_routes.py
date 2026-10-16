@@ -62,6 +62,15 @@ class TestOAuthPlatformConfigTests(PytestAssertions):
         scopes = set(oauth_platforms.PLATFORM_CONFIGS["tiktok"]["scope"].split(","))
         self.assertTrue({"user.info.basic", "video.publish"}.issubset(scopes))
 
+    @patch("app.services.oauth_platforms.is_configured", return_value=True)
+    def test_youtube_authorize_url_requests_analytics_without_monetary_access(self, _cfg) -> None:
+        from urllib.parse import parse_qs, urlparse
+        params = parse_qs(urlparse(build_authorize_url("youtube", state="test")).query)
+        scopes = set(params['scope'][0].split())
+        self.assertIn('https://www.googleapis.com/auth/yt-analytics.readonly', scopes)
+        self.assertNotIn('https://www.googleapis.com/auth/yt-analytics-monetary.readonly', scopes)
+        self.assertEqual(['consent'], params['prompt'])
+
     def test_instagram_uses_instagram_login_scopes(self) -> None:
         config = oauth_platforms.PLATFORM_CONFIGS["instagram"]
         self.assertEqual("https://www.instagram.com/oauth/authorize", config["authorize_url"])

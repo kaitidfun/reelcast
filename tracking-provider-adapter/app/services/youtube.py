@@ -1,13 +1,51 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 
 from app.schemas import Metric, SyncRequest
 from app.services.base import ProviderClient, ProviderError, number, provider_date
 
+logger = logging.getLogger(__name__)
+
 
 class YouTubeProvider(ProviderClient):
     platform = "youtube"
+
+    async def _shares(self, request: SyncRequest, ids: list[str], headers: dict[str, str]) -> dict[str, int]:
+        if not ids:
+            return {}
+        try:
+            report = await self.request(
+                "GET", self.settings().youtube_analytics_api_base_url.rstrip("/") + "/v2/reports",
+                params={"ids": f"channel=={request.external_account_id}",
+                        # Include older published videos, not just the discovery window.
+                        "startDate": "2005-01-01", "endDate": request.to_date.isoformat(),
+                        "metrics": "shares", "dimensions": "video",
+                        "filters": "video==" + ",".join(ids), "maxResults": len(ids)},
+                headers=headers)
+        except ProviderError as exc:
+            # Old connections may lack Analytics consent. Keep Data API counters.
+            logger.warning('YouTube shares unavailable (status=%s)', exc.status_code)
+            return {}
+        columns = report.get("columnHeaders")
+        rows = report.get("rows")
+        if not isinstance(columns, list) or not isinstance(rows, list):
+            return {}
+        names = [column.get("name") if isinstance(column, dict) else None for column in columns]
+        if names.count("video") != 1 or names.count("shares") != 1:
+            return {}
+        video_index, shares_index = names.index("video"), names.index("shares")
+        result = {}
+        for row in rows:
+            if not isinstance(row, list) or len(row) != len(columns):
+                continue
+            video, count = row[video_index], row[shares_index]
+            if (isinstance(video, str) and video in ids and isinstance(count, int)
+                    and not isinstance(count, bool) and count >= 0):
+                result[video] = count
+        # Missing rows (including newly published videos) are not measured zeros.
+        return result
 
     def authorization_url(self, *, state: str, redirect_uri: str) -> str:
         del state, redirect_uri
@@ -45,12 +83,14 @@ class YouTubeProvider(ProviderClient):
         for start in range(0, len(ids), 50):
             detail = await self.request("GET", self.settings().youtube_api_base_url.rstrip("/") + "/youtube/v3/videos",
                                         params={"part": "snippet,statistics", "id": ",".join(ids[start:start + 50])}, headers=headers)
+            shares = await self._shares(request, [item['id'] for item in detail.get('items', []) if item.get('id')], headers)
             metrics.extend(
                 Metric(external_ref=f"youtube:{item['id']}",
                        record_date=provider_date(item.get("snippet", {}).get("publishedAt"), request.from_date),
                        views=number(item["statistics"]["viewCount"]) if "viewCount" in item.get("statistics", {}) else None,
                        likes=number(item["statistics"]["likeCount"]) if "likeCount" in item.get("statistics", {}) else None,
                        comments=number(item["statistics"]["commentCount"]) if "commentCount" in item.get("statistics", {}) else None,
+                       shares=shares.get(item['id']),
                        engagement=number(item.get("statistics", {}).get("likeCount")) + number(item.get("statistics", {}).get("commentCount")) if all(k in item.get("statistics", {}) for k in ("likeCount", "commentCount")) else None)
                 for item in detail.get("items", []) if item.get("id")
             )

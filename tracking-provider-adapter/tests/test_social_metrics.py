@@ -18,6 +18,7 @@ def request(platform, ids):
 def configure(provider):
     provider.require = lambda *args: None
     provider.settings = lambda: SimpleNamespace(youtube_api_base_url='https://youtube.test',
+                                                youtube_analytics_api_base_url='https://analytics.test',
                                                 tiktok_api_base_url='https://tiktok.test',
                                                 facebook_graph_api_base_url='https://facebook.test',
                                                 instagram_graph_api_base_url='https://instagram.test')
@@ -28,13 +29,53 @@ async def test_youtube_known_older_posts_batch_and_unavailable_counters():
     provider = YouTubeProvider(); configure(provider)
     provider.request = AsyncMock(side_effect=[
         {'items':[{'id':'old', 'snippet':{'publishedAt':'2025-01-01T00:00:00Z'},
-                   'statistics':{'viewCount':'10', 'likeCount':'0'}}]}, {'items':[]}])
+                   'statistics':{'viewCount':'10', 'likeCount':'0'}}]}, {}, {'items':[]}])
     metrics = await provider.sync(request('youtube', [str(i) for i in range(51)]))
-    assert provider.request.await_count == 2
-    assert all('/videos' in call.args[1] for call in provider.request.call_args_list)
+    assert provider.request.await_count == 3
+    assert '/videos' in provider.request.call_args_list[0].args[1]
+    assert '/videos' in provider.request.call_args_list[2].args[1]
     assert metrics[0].record_date == date(2025,1,1) and metrics[0].views == 10
     assert metrics[0].likes == 0 and metrics[0].comments is None and metrics[0].shares is None
     assert metrics[0].engagement is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('count', [0, 7])
+async def test_youtube_analytics_shares_preserve_video_counters_and_lifetime_window(count):
+    provider = YouTubeProvider(); configure(provider)
+    provider.request = AsyncMock(side_effect=[
+        {'items': [{'id': 'old', 'snippet': {'publishedAt': '2025-01-01T00:00:00Z'},
+                    'statistics': {'viewCount': '10', 'likeCount': '2', 'commentCount': '1'}}]},
+        {'columnHeaders': [{'name': 'shares'}, {'name': 'video'}], 'rows': [[count, 'old']]},
+    ])
+    metrics = await provider.sync(request('youtube', ['old', 'old']))
+    assert len(metrics) == 1
+    assert (metrics[0].views, metrics[0].likes, metrics[0].comments, metrics[0].shares) == (10, 2, 1, count)
+    assert metrics[0].engagement == 3
+    analytics = provider.request.call_args_list[1]
+    assert analytics.args[1] == 'https://analytics.test/v2/reports'
+    assert analytics.kwargs['params'] == {'ids': 'channel==channel', 'metrics': 'shares',
+        'dimensions': 'video', 'filters': 'video==old', 'startDate': '2005-01-01',
+        'endDate': '2026-10-15', 'maxResults': 1}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('report', [
+    {}, {'columnHeaders': [{'name': 'video'}, {'name': 'shares'}], 'rows': []},
+    {'columnHeaders': [{'name': 'video'}, {'name': 'shares'}], 'rows': [['other', 8]]},
+    {'columnHeaders': [{'name': 'video'}, {'name': 'shares'}], 'rows': [['old', True]]},
+    {'columnHeaders': [{'name': 'video'}, {'name': 'shares'}], 'rows': [['old', -1]]},
+    {'columnHeaders': [{'name': 'video'}, {'name': 'shares'}], 'rows': [['old', 'bad']]},
+    {'columnHeaders': [{'name': 'video'}, {'name': 'shares'}], 'rows': [['old']]},
+    ProviderError('youtube', 'provider rejected the access token', 401),
+    ProviderError('youtube', 'provider request timed out', 504),
+])
+async def test_youtube_missing_analytics_does_not_invent_zero_or_lose_views(report):
+    provider = YouTubeProvider(); configure(provider)
+    provider.request = AsyncMock(side_effect=[
+        {'items': [{'id': 'old', 'statistics': {'viewCount': '10'}}]}, report])
+    metrics = await provider.sync(request('youtube', ['old']))
+    assert metrics[0].views == 10 and metrics[0].shares is None
 
 
 @pytest.mark.asyncio

@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     lazada_token_url: str = ""
     tiktok_api_base_url: str = ""
     youtube_api_base_url: str = ""
+    youtube_analytics_api_base_url: str = "https://youtubeanalytics.googleapis.com"
     facebook_graph_api_base_url: str = ""
     instagram_graph_api_base_url: str = ""
 
