@@ -58,7 +58,8 @@ def report_bytes(rows, *, format, filters, comparison=None, accounts=None):
         records = [{key: row.get(key) for key in columns} for row in rows]
     elif filters.get('level'):
         metric = filters.get('metric', 'views')
-        metric_title = {'views': 'Views', 'engagement': 'Engagement', 'clicks': 'Link clicks'}[metric]
+        metric_title = {'views': 'Views', 'likes': 'Likes', 'comments': 'Comments',
+                        'shares': 'Shares', 'engagement': 'Engagement', 'clicks': 'Affiliate link clicks'}[metric]
         records = [{'Rank': index, filters['level'].title(): row['name'] or 'Untitled',
                     metric_title: row['value'], 'observed_at': row['observed_at']}
                    for index, row in enumerate(rows, 1)]

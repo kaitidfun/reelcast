@@ -66,6 +66,30 @@ def test_snapshots_are_idempotent_and_members_isolated(data):
     with pytest.raises(LookupError):
         observe(db, users[1], accounts[0], 1000, 1)
 
+@pytest.mark.parametrize('metric,title,expected', [
+    ('views', 'Views', 20), ('likes', 'Likes', 4), ('comments', 'Comments', 0),
+    ('shares', 'Shares', None), ('clicks', 'Affiliate Link Clicks', 0),
+])
+def test_ranking_metrics_and_exports(data, metric, title, expected):
+    db, users, accounts, _ = data
+    service.record_metric(db, user_id=users[0].user_id, social_account_id=accounts[0].account_id,
+                          source_platform='youtube', external_ref='youtube:same',
+                          views=20, likes=4, comments=0, shares=None)
+    db.commit()
+    app = FastAPI(); app.include_router(router)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: users[0]
+    with TestClient(app) as client:
+        response = client.get('/api/tracking/analysis', params={'level': 'reel', 'metric': metric})
+        assert response.status_code == 200
+        rows = response.json()['rows']
+        assert len(rows) == 1 and rows[0]['value'] == expected
+        export = client.get('/api/tracking/export', params={'format': 'csv', 'level': 'reel', 'metric': metric})
+        assert export.status_code == 200
+        exported = list(csv.DictReader(io.StringIO(export.content.decode('utf-8-sig'))))
+        assert exported[0][title] == ('Unavailable' if expected is None else str(expected))
+
+
 def test_redirect_click_rules_period_boundaries_and_missing_coverage(data):
     db, users, _, distributions = data
     link = service.ensure_tracking_link(db, user_id=users[0].user_id, distribution_id=distributions[0].distribution_id)

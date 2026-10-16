@@ -35,7 +35,7 @@ afterEach(() => vi.unstubAllGlobals());
 it('shows unavailable social counters and zero clicks without commerce claims', async () => {
   render(<Tracking />);
   await screen.findByText(/No tracking data matches/);
-  for (const title of ['Views', 'Engagement']) {
+  for (const title of ['Views', 'Likes', 'Comments', 'Shares']) {
     expect(within(screen.getByText(title, { selector: 'p' }).closest('section')!).getByText('Unavailable')).toBeInTheDocument();
   }
   expect(screen.queryByText('Revenue')).not.toBeInTheDocument();
@@ -59,7 +59,6 @@ it('shows click totals by platform across all days, including zero clicks', asyn
   });
   render(<Tracking />);
   const chart = (await screen.findByRole('heading', { name: 'Affiliate link clicks by platform' })).closest('section')!;
-  expect(within(chart).getByLabelText('Click reporting dates')).toHaveTextContent('14 Oct 2026 – 15 Oct 2026');
   for (const [platform, total] of [['YouTube Shorts', '1'], ['Facebook', '5'], ['Instagram', '1'], ['TikTok', '0']]) {
     expect(within(within(chart).getByText(platform).parentElement!).getByText(total)).toBeInTheDocument();
   }
@@ -183,7 +182,7 @@ it('resets ranking results and choices without clearing comparison draft dates',
   render(<Tracking />);
   const ranking = (await screen.findByRole('heading', { name: 'Content ranking' })).closest('section')!;
   fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-01-01' } });
-  for (const [label, option] of [['Ranking level', 'Product'], ['Ranking metric', 'Affiliate clicks']]) {
+  for (const [label, option] of [['Ranking level', 'Product'], ['Ranking metric', 'Affiliate link clicks']]) {
     fireEvent.keyDown(screen.getByRole('combobox', { name: label }), { key: 'Enter' });
     fireEvent.click(await screen.findByRole('option', { name: option }));
   }

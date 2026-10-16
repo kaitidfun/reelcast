@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, SearchCheck, Download, RefreshCw, Eye, Heart, MousePointerClick, Video, SlidersHorizontal, ChevronDown, Settings2, Trophy, TableProperties, ArrowLeftRight, ChevronLeft, ChevronRight, Globe2, Megaphone, Package, Info, RotateCcw, type LucideIcon } from "lucide-react";
+import { BarChart3, SearchCheck, Download, RefreshCw, Eye, Heart, MessageCircle, Share2, MousePointerClick, Video, SlidersHorizontal, ChevronDown, Settings2, Trophy, TableProperties, ArrowLeftRight, ChevronLeft, ChevronRight, Globe2, Megaphone, Package, Info, RotateCcw, type LucideIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -24,7 +24,6 @@ const CHART_PLATFORM_COLORS: Record<string, string> = {
 };
 const chartNumber = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 const chartAxisTick = { fill: "hsl(var(--muted-foreground))", fontSize: 11 };
-const chartDate = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 const nextDate = (value?: string) => {
   if (!value) return undefined;
   const date = new Date(`${value}T00:00:00Z`);
@@ -244,12 +243,6 @@ export default function Tracking() {
   const platformClickData = PLATFORM_OPTIONS.map(platform => ({
     id: platform.name, label: platform.label, clicks: platformClickValues[platform.name],
   }));
-  const clickDates = (dashboard?.click_trend ?? []).map(day => day.date).sort();
-  const clickStart = applied.start || clickDates[0];
-  const clickEnd = applied.end || clickDates[clickDates.length - 1];
-  const clickDateLabel = clickStart && clickEnd
-    ? clickStart === clickEnd ? chartDate(clickStart) : `${chartDate(clickStart)} – ${chartDate(clickEnd)}`
-    : "All dates";
 
   const detailCount = dashboard?.details.length || 0;
   const detailPageCount = Math.max(1, Math.ceil(detailCount / DETAILS_PAGE_SIZE));
@@ -326,9 +319,11 @@ export default function Tracking() {
 
 
     {dashboard && (
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">{([
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">{([
         { label: 'Views', value: dashboard.totals.views, icon: Eye, color: 'bg-primary/10 text-primary', gradient: 'from-orange-500 via-pink-500 to-purple-600' },
-        { label: 'Engagement', value: dashboard.totals.engagement, icon: Heart, color: 'bg-pink-500/10 text-pink-500', gradient: 'from-rose-500 via-pink-500 to-fuchsia-600' },
+        { label: 'Likes', value: dashboard.totals.likes, icon: Heart, color: 'bg-pink-500/10 text-pink-500', gradient: 'from-rose-500 via-pink-500 to-fuchsia-600' },
+        { label: 'Comments', value: dashboard.totals.comments, icon: MessageCircle, color: 'bg-amber-500/10 text-amber-500', gradient: 'from-amber-500 via-orange-500 to-rose-500' },
+        { label: 'Shares', value: dashboard.totals.shares, icon: Share2, color: 'bg-emerald-500/10 text-emerald-500', gradient: 'from-emerald-500 via-teal-500 to-cyan-600' },
         { label: 'Affiliate link clicks', value: dashboard.totals.clicks, icon: MousePointerClick, color: 'bg-info/10 text-info', gradient: 'from-cyan-500 via-blue-500 to-indigo-600' },
         { label: 'Tracked Reels', value: dashboard.totals.reels, icon: Video, color: 'bg-violet-500/10 text-violet-500', gradient: 'from-violet-500 via-purple-500 to-fuchsia-600' },
       ]).map(({ label, value, icon: Icon, color, gradient }) => <section key={label} className="group relative overflow-hidden rounded-2xl border border-border bg-card card-shine transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"><div className={`h-1 bg-gradient-to-r ${gradient}`} /><div className="p-5"><div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{label}</p><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${color}`}><Icon className="h-4 w-4" /></span></div><p className="mt-3 font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{display(value)}</p></div></section>)}</div>
@@ -362,7 +357,6 @@ export default function Tracking() {
       <section className={panelClass}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <SectionTitle icon={MousePointerClick} title="Affiliate link clicks by platform" description="Recorded visits · Asia/Bangkok · Does not represent unique visitors" />
-          <span className="ml-auto rounded-lg border border-border bg-muted/30 px-3 py-1.5 text-xs tabular-nums text-muted-foreground" aria-label="Click reporting dates">{clickDateLabel}</span>
         </div>
         <p className="mt-5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Total clicks by source platform</p>
         {dashboard.click_trend.length ? (
@@ -468,11 +462,12 @@ export default function Tracking() {
                   { id: "reel", name: "Reel", icon: Video }, { id: "product", name: "Product", icon: Package },
                   { id: "campaign", name: "Campaign", icon: Megaphone }, { id: "platform", name: "Platform", icon: Globe2 },
                 ]} />
-              <ScopeSelect icon={BarChart3} label="Ranking metric" showLabel={false} allowAll={false} className="w-44" placeholder="Metric" value={metric}
+              <ScopeSelect icon={BarChart3} label="Ranking metric" showLabel={false} allowAll={false} className="w-56" placeholder="Metric" value={metric}
                 onChange={value => { setMetric(value as TrackingAnalysis["metric"]); setAnalysis(null); setSelectedItem(null); }}
                 options={[
-                  { id: "views", name: "Views", icon: Eye }, { id: "engagement", name: "Engagement", icon: Heart },
-                  { id: "clicks", name: "Affiliate clicks", icon: MousePointerClick },
+                  { id: "views", name: "Views", icon: Eye }, { id: "likes", name: "Likes", icon: Heart },
+                  { id: "comments", name: "Comments", icon: MessageCircle }, { id: "shares", name: "Shares", icon: Share2 },
+                  { id: "clicks", name: "Affiliate link clicks", icon: MousePointerClick },
                 ]} />{(analysis || level !== "reel" || metric !== "views") && <Button variant="outline" className="gap-2" disabled={busy || loading} onClick={resetRanking}><RotateCcw className="h-4 w-4" aria-hidden="true" />Reset</Button>}<Button className={primaryButtonClass} disabled={busy} onClick={() => void run(async () => setAnalysis(await fetchTrackingAnalysis({ ...applied, level, metric })))}><SearchCheck className="h-4 w-4" aria-hidden="true" />Analyze</Button>{analysis && exportButtons({ level: analysis.level, metric: analysis.metric })}</div></div>{analysis && <div className="mt-4 space-y-2">{!analysis.rows.length && <p>No matching content.</p>}{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedItem(item)} className="flex w-full flex-wrap items-start justify-between gap-3 border-b border-border py-2 text-left text-sm hover:bg-muted"><span className="min-w-0 flex-1">#{index + 1} {item.name || "Untitled"}</span>
                   <span className="shrink-0 tabular-nums">{display(item.value)}</span>
                   <span className="w-full text-xs text-muted-foreground sm:w-56 sm:text-right" title="Latest social observation in this group">

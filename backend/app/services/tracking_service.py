@@ -20,7 +20,7 @@ from app.models.models import (Campaign, Distribution, Product, Reel, SocialAcco
 
 SUPPORTED_TRACKING_PLATFORMS = frozenset({'youtube', 'facebook', 'instagram', 'tiktok'})
 ANALYSIS_LEVELS = frozenset({'reel', 'product', 'campaign', 'platform'})
-ANALYSIS_METRICS = frozenset({'views', 'engagement', 'clicks'})
+ANALYSIS_METRICS = frozenset({'views', 'likes', 'comments', 'shares', 'engagement', 'clicks'})
 SOCIAL_METRICS = ('views', 'likes', 'comments', 'shares', 'engagement')
 REPORT_TZ = ZoneInfo('Asia/Bangkok')
 SEMANTICS = ('Social: latest lifetime observation within selected dates; dates are observation dates, '

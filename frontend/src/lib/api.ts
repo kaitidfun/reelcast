@@ -101,7 +101,7 @@ export type TrackingFilterOptions = {
 };
 export type TrackingAnalysis = {
   level: "product" | "campaign" | "reel" | "platform";
-  metric: "views" | "clicks" | "engagement";
+  metric: "views" | "likes" | "comments" | "shares" | "clicks";
   rows: TrackingItem[]; semantics: string;
 };
 export type TrackingFilters = { start?: string; end?: string; platform?: string; campaign_id?: string; product_id?: string; reel_id?: string };
