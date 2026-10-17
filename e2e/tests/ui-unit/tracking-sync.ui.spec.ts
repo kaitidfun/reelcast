@@ -19,7 +19,7 @@ async function setup(page: Page) {
   } }));
 }
 
-test('Sync accepts a background run and displays completion without another POST', async ({ page }) => {
+test('Sync completes in the button without rendering a summary panel', async ({ page }) => {
   await setup(page);
   let posts = 0;
   await page.route('**/api/tracking/sync/latest', route => route.fulfill({ json: null }));
@@ -30,14 +30,13 @@ test('Sync accepts a background run and displays completion without another POST
   await page.goto('/tracking');
   await page.getByRole('button', { name: 'Sync Data', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Syncing…', exact: true })).toBeDisabled();
-  await expect(page.getByRole('region', { name: 'Synchronization status' })).toContainText('0/8 posts processed');
+  await expect(page.getByRole('region', { name: 'Synchronization status' })).toHaveCount(0);
   finish();
-  await expect(page.getByText('Synchronization complete', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sync Data', exact: true })).toBeEnabled();
   expect(posts).toBe(1);
 });
 
-test('Tracking restores a running job and shows partial results honestly', async ({ page }) => {
+test('Tracking restores a running job without rendering its summary details', async ({ page }) => {
   await setup(page);
   let posts = 0;
   await page.route('**/api/tracking/sync', route => { posts++; return route.fulfill({ status: 202, json: running }); });
@@ -47,7 +46,8 @@ test('Tracking restores a running job and shows partial results honestly', async
       warnings: ['Incomplete posts kept their previous values and observation time'] }],
   } }));
   await page.goto('/tracking');
-  await expect(page.getByText('Synchronization finished with some unavailable data', { exact: true })).toBeVisible();
-  await expect(page.getByText('Incomplete posts kept their previous values and observation time', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sync Data', exact: true })).toBeEnabled();
+  await expect(page.getByRole('region', { name: 'Synchronization status' })).toHaveCount(0);
+  await expect(page.getByText('Incomplete posts kept their previous values and observation time', { exact: true })).toHaveCount(0);
   expect(posts).toBe(0);
 });

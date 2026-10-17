@@ -527,16 +527,6 @@ export default function Tracking() {
   return <div aria-busy={loading || busy} className="min-w-0 space-y-6">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Data Tracking</h1><p className="mt-1 text-muted-foreground">Social performance and affiliate link visits</p></div><Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading || sync.busy} onClick={() => void sync.start()}><RefreshCw className={`mr-2 h-4 w-4 ${sync.busy ? "animate-spin" : ""}`} />{sync.busy ? "Syncing…" : "Sync Data"}</Button></div>
     {sync.error && <p role="alert" className="text-sm text-destructive">{sync.error}</p>}
-    {sync.job && <section aria-label="Synchronization status" aria-live="polite" className={`${panelClass} space-y-2`}>
-      <p className="text-sm font-medium">{sync.busy ? "Synchronizing connected accounts…" : sync.job.status === "done" ? "Synchronization complete" : "Synchronization finished with some unavailable data"}</p>
-      {sync.job.accounts.map(account => <div key={account.job_id} className="text-sm">
-        <span className="font-medium">{platformLabel(account.platform)}</span>{" · "}
-        {{ queued: "Queued", running: "Syncing", retry: "Waiting to retry", done: "Complete", partial: "Partially complete", failed: "Failed" }[account.status]}
-        {account.total_posts > 0 && ` · ${Math.min(account.completed_posts, account.total_posts)}/${account.total_posts} posts processed`}
-        {account.error && <p className="text-muted-foreground">{account.error}</p>}
-        {account.warnings.map(warning => <p key={warning} className="text-muted-foreground">{warning}</p>)}
-      </div>)}
-    </section>}
     {pending && <span role="status" className="sr-only">{pending}</span>}
     {loading && dashboard && <LoadingState label="Refreshing tracking data…" />}
     {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
