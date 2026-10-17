@@ -349,10 +349,12 @@ async def _generateReels(
                 video_for_download = get_presigned_url(final_video_url)
                 logger.info(f"[Worker] Resolved R2 key to presigned URL for overlay download")
 
-            if not local_video_path:
-                local_video_path = await download_to_temp(video_for_download, suffix='.mp4')
-            logger.info(f"[Worker] Applying overlay for reel {reel_id}")
             try:
+                # Source preparation belongs to the same fallback boundary as
+                # overlay's downloads: network errors retain the original video.
+                if not local_video_path:
+                    local_video_path = await download_to_temp(video_for_download, suffix='.mp4')
+                logger.info(f"[Worker] Applying overlay for reel {reel_id}")
                 # overlayImagesAndLogos returns an R2 object key on success, raises on failure.
                 # When with_audio=False, FFmpeg uses -an to strip the audio track.
                 overlaid_key = await overlayImagesAndLogos(

@@ -23,6 +23,7 @@ from app.exceptions import (
     VideoSizeExceededException,
 )
 from app.models.models import User, Reel, Product, Distribution
+from app.schemas.reel import ReelMediaResponse
 from app.services.reel_service import (
     create_reel,
     get_reel,
@@ -182,7 +183,7 @@ class ReelRenameRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
 
 
-class ReelResponse(BaseModel):
+class ReelResponse(ReelMediaResponse):
     model_config = ConfigDict(from_attributes=True)
 
     reel_id: UUID

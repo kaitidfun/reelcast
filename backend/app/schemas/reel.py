@@ -24,7 +24,20 @@ class ReelUpdate(BaseModel):
     error_message: Optional[str] = None
 
 
-class ReelResponse(BaseModel):
+class ReelMediaResponse(BaseModel):
+    """Share media serialization without adding fields to each API contract."""
+
+    @field_serializer('uploaded_video_url', 'b_roll_url', 'raw_video_url', 'first_frame_url',
+                      'final_commercial_video_url', check_fields=False)
+    def media_url(self, value):
+        # Persist keys; resolve URLs only when serializing an authorized response.
+        if not value:
+            return value
+        from app.services.storage_service import get_presigned_url
+        return get_presigned_url(value)
+
+
+class ReelResponse(ReelMediaResponse):
     model_config = ConfigDict(from_attributes=True)
 
     reel_id: UUID
@@ -41,15 +54,6 @@ class ReelResponse(BaseModel):
     error_message: Optional[str] = None
     retry_count: int = 0
     created_at: Optional[datetime] = None
-
-    @field_serializer('uploaded_video_url', 'b_roll_url', 'raw_video_url', 'first_frame_url', 'final_commercial_video_url')
-    def media_url(self, value):
-        # Persist object keys in the database, but let the authorized response
-        # hand the browser a short-lived direct read URL (or configured CDN URL).
-        if not value:
-            return value
-        from app.services.storage_service import get_presigned_url
-        return get_presigned_url(value)
 
 
 class ReelListResponse(BaseModel):

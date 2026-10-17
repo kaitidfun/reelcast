@@ -203,6 +203,97 @@ async def test_worker_overlaps_caption_with_video_and_reuses_one_download(monkey
     assert not path.exists()
 
 
+@pytest.mark.parametrize('failure_stage', ['download', 'overlay'])
+async def test_worker_keeps_uploaded_video_when_overlay_network_fails(monkeypatch, tmp_path, failure_stage):
+    from app import worker
+
+    reel = SimpleNamespace(reel_id='reel', product_id='product', prompt_text='',
+                           caption_and_hashtags=None, uploaded_video_url='upload.mp4',
+                           first_frame_url='thumb.png')
+    product = SimpleNamespace(product_name='Product', description='', images=[], brand_logo_url='logo.png')
+    db = MagicMock()
+    db.query.side_effect = lambda model: SimpleNamespace(
+        filter=lambda *_: SimpleNamespace(first=lambda: reel if model is Reel else product),
+        options=lambda *_: SimpleNamespace(filter=lambda *_: SimpleNamespace(first=lambda: product)),
+    )
+    monkeypatch.setattr(worker, 'SessionLocal', lambda: db)
+    monkeypatch.setattr(worker, 'get_presigned_url', lambda value: f'https://media.test/{value}')
+    monkeypatch.setattr(worker, 'generateCaptionsAndHashtags',
+                        AsyncMock(return_value={'caption': 'Ready', 'hashtags': []}))
+    download = AsyncMock(side_effect=httpx.ReadError('temporary media failure'))
+    overlay = AsyncMock(side_effect=httpx.ReadError('temporary media failure'))
+    path = tmp_path / 'source.mp4'
+    if failure_stage == 'overlay':
+        # The worker reuses the source; the overlay's own logo download fails.
+        download.side_effect = None
+        path.write_bytes(b'video')
+        download.return_value = str(path)
+    monkeypatch.setattr(worker, 'download_to_temp', download)
+    monkeypatch.setattr(worker, 'overlayImagesAndLogos', overlay)
+    update = MagicMock()
+    monkeypatch.setattr(worker, 'update_reel', update)
+
+    await worker._generateReels('reel', 'ig', 'bottom-right', target='upload')
+
+    assert update.call_args.kwargs['status'] == 'Completed'
+    assert update.call_args.kwargs['final_commercial_video_url'] == 'upload.mp4'
+    assert update.call_args.kwargs['caption_and_hashtags']['caption'] == 'Ready'
+    assert not any(call.kwargs.get('status') == 'Failed' for call in update.call_args_list)
+    if failure_stage == 'download':
+        overlay.assert_not_awaited()
+    assert not path.exists()
+    db.close.assert_called_once()
+
+
+def test_reel_routes_serialize_live_and_saved_media_without_changing_database(data, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.dependencies import get_current_user, get_db
+    from app.routes.reel_routes import router
+    from app.services import storage_service
+
+    db, users, _, distributions = data
+    reel = distributions[0].reel
+    reel.name = 'My saved Reel'
+    reel.status = 'Completed'
+    reel.is_saved = True
+    reel.prompt_text = 'Live prompt'
+    reel.saved_prompt_text = 'Saved prompt'
+    fields = ('raw_video_url', 'first_frame_url', 'final_commercial_video_url')
+    for field in fields:
+        setattr(reel, field, f'live/{field}')
+        setattr(reel, f'saved_{field}', f'saved/{field}')
+    db.commit()
+    sign = MagicMock(side_effect=lambda value: f'https://media.test/{value}')
+    monkeypatch.setattr(storage_service, 'get_presigned_url', sign)
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: users[0]
+
+    with TestClient(app) as client:
+        status = client.get(f'/api/reels/{reel.reel_id}/status')
+        listing = client.get('/api/reels')
+        assert status.status_code == listing.status_code == 200
+        live, saved = status.json(), listing.json()['reels'][0]
+        for field in fields:
+            assert live[field] == f'https://media.test/live/{field}'
+            assert saved[field] == f'https://media.test/saved/{field}'
+        assert live['prompt_text'] == 'Live prompt'
+        assert saved['prompt_text'] == 'Saved prompt'
+        assert saved['name'] == 'My saved Reel'
+        assert saved['has_distribution'] is True and saved['is_saved'] is True
+        assert saved['product_id'] == str(reel.product_id)
+        sign.reset_mock()
+        assert client.get(f'/api/reels/{distributions[1].reel.reel_id}/status').status_code == 404
+        sign.assert_not_called()
+
+    db.refresh(reel)
+    for field in fields:
+        assert getattr(reel, field) == f'live/{field}'
+        assert getattr(reel, f'saved_{field}') == f'saved/{field}'
+
+
 def test_library_pagination_search_and_deep_links_remain_member_scoped(data):
     from app.models.models import Campaign, Product
     from app.routes.library_routes import router
