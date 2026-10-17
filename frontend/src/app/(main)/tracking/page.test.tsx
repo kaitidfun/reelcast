@@ -32,6 +32,46 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
+it('shows analysis progress only on the Analyze button', async () => {
+  let finish!: () => void;
+  vi.mocked(api.fetchTrackingAnalysis).mockImplementationOnce(() => new Promise(resolve => {
+    finish = () => resolve({ level: 'reel', metric: 'views', rows: [], semantics: '' });
+  }));
+  const { container } = render(<Tracking />);
+  await screen.findByText('Tracking details');
+  fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
+  const analyzing = screen.getByRole('button', { name: 'Analyzing…' });
+  expect(analyzing).toBeDisabled();
+  expect(analyzing.querySelector('.animate-spin')).not.toBeNull();
+  expect(container.querySelectorAll('.animate-spin')).toHaveLength(1);
+  expect(screen.getByRole('button', { name: 'Sync Data' }).querySelector('.animate-spin')).toBeNull();
+  await act(async () => finish());
+  expect(screen.getByRole('button', { name: 'Analyze' })).toBeEnabled();
+});
+
+it('animates only the selected export group and clears progress after failure', async () => {
+  const dashboard = await api.fetchTrackingDashboard();
+  vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, has_data: true });
+  vi.mocked(api.fetchTrackingAnalysis).mockResolvedValue({ level: 'reel', metric: 'views', rows: [], semantics: '' });
+  let rejectExport!: (error: Error) => void;
+  vi.mocked(api.downloadTrackingExport).mockImplementationOnce(() => new Promise((_, reject) => { rejectExport = reject; }));
+  const { container } = render(<Tracking />);
+  await screen.findByText('Tracking details');
+  fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
+  const ranking = screen.getByRole('heading', { name: 'Content ranking' }).closest('section')!;
+  await within(ranking).findByRole('button', { name: 'CSV' });
+  const details = screen.getByText('Tracking details').closest('section')!;
+  fireEvent.click(within(details).getByRole('button', { name: 'CSV' }));
+  expect(within(details).getByRole('button', { name: 'Exporting…' })).toBeDisabled();
+  const otherExport = within(ranking).getByRole('button', { name: 'CSV' });
+  expect(otherExport).toBeDisabled();
+  expect(otherExport.querySelector('.animate-spin')).toBeNull();
+  expect(container.querySelectorAll('.animate-spin')).toHaveLength(1);
+  await act(async () => rejectExport(new Error('Export unavailable')));
+  expect(within(details).getByRole('button', { name: 'CSV' })).toBeEnabled();
+  expect(screen.getByRole('alert')).toHaveTextContent('Export unavailable');
+});
+
 it('limits all comparison dates to Bangkok today and blocks manually entered future dates', async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
   // Bangkok has reached January 15 while UTC is still January 14.

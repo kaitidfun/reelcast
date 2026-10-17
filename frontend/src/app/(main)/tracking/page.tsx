@@ -405,7 +405,7 @@ function PeriodComparison({ options }: { options: TrackingFilterOptions }) {
         </div>
       </div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      {pending && <LoadingState label={pending} />}
+      {pending && <span role="status" className="sr-only">{pending}</span>}
       {loading && <LoadingState label="Comparing periods…" />}
       {invalidPeriodOrder && <p role="alert" className="text-sm text-destructive">Period B must start after Period A ends.</p>}
       {hasFutureDate && <p role="alert" className="text-sm text-destructive">Dates cannot be later than today (Asia/Bangkok).</p>}
@@ -498,12 +498,21 @@ export default function Tracking() {
     if (viewport instanceof HTMLElement) viewport.scrollTop = 0;
   }
 
-  const exportButtons = (extra: Partial<TrackingPeriods> & { level?: string; metric?: string } = {}, hasData = Boolean(dashboard?.has_data)) =>
-    <div className="flex gap-2">{(["csv", "xlsx"] as const).map(format => <Button key={format} variant="outline" disabled={busy || loading || !hasData} onClick={() => void run(async () => downloadTrackingExport(format, { ...extra }), `Exporting ${format.toUpperCase()}…`)}>{pending === `Exporting ${format.toUpperCase()}…` ? <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}{pending === `Exporting ${format.toUpperCase()}…` ? "Exporting…" : format.toUpperCase()}</Button>)}</div>;
+  const exportButtons = (extra: Partial<TrackingPeriods> & { level?: string; metric?: string } = {}, hasData = Boolean(dashboard?.has_data)) => (
+    <div className="flex gap-2">{(["csv", "xlsx"] as const).map(format => {
+      const label = `Exporting ${extra.level ? "ranking" : "details"} ${format.toUpperCase()}…`;
+      const exporting = pending === label;
+      return <Button key={format} variant="outline" disabled={busy || loading || !hasData}
+        onClick={() => void run(async () => downloadTrackingExport(format, { ...extra }), label)}>
+        {exporting ? <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+        {exporting ? "Exporting…" : format.toUpperCase()}
+      </Button>;
+    })}</div>
+  );
 
   return <div aria-busy={loading || busy} className="min-w-0 space-y-6">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Data Tracking</h1><p className="mt-1 text-muted-foreground">Social performance and affiliate link visits</p></div><Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading} onClick={() => void run(async () => { const result = await syncTrackingData(); setRevision(value => value + 1); const failures = result.accounts.filter(account => !account.success); if (failures.length) throw new Error(`${failures.length} account(s) failed to synchronize. See account status below.`); }, "Syncing data…")}><RefreshCw className={`mr-2 h-4 w-4 ${pending === "Syncing data…" ? "animate-spin" : ""}`} />{pending === "Syncing data…" ? "Syncing…" : "Sync Data"}</Button></div>
-    {pending && <LoadingState label={pending} />}
+    {pending && <span role="status" className="sr-only">{pending}</span>}
     {loading && dashboard && <LoadingState label="Refreshing tracking data…" />}
     {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
     {dashboard && (

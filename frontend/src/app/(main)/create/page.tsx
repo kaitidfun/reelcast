@@ -851,7 +851,7 @@ const CreateReelContent = () => {
                     {uploadProgress < 100 ? (
                       <>
                         <div className="flex justify-between text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" />Uploading…</span>
+                          <span>Uploading…</span>
                           <span>{uploadProgress}%</span>
                         </div>
                         <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -861,7 +861,7 @@ const CreateReelContent = () => {
                     ) : (
                       <>
                         <div className="flex justify-between text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" />Processing on server…</span>
+                          <span>Processing on server…</span>
                         </div>
                         <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                           <div className="h-full w-1/3 rounded-full bg-primary" style={{ animation: "shimmer 1.8s ease-in-out infinite" }} />
@@ -873,7 +873,7 @@ const CreateReelContent = () => {
               </div>
               <div className="border-t border-border bg-background/40 px-3 py-2.5 rounded-b-[15px]">
                 <Button onClick={uploadOwnReel} disabled={checkingVideo || !selectedProduct || !uploadFile || uploadStatus === "uploading" || uploadStatus === "done"} className="gradient-primary w-full gap-2 h-9 text-sm text-primary-foreground shadow-glow">
-                  {checkingVideo ? (<><Loader2 className="h-4 w-4 animate-spin" />Checking video…</>) : uploadStatus === "uploading" ? (<><Loader2 className="h-4 w-4 animate-spin" />Uploading…</>)
+                  {checkingVideo ? (<><Loader2 className="h-4 w-4 animate-spin" />Checking video…</>) : uploadStatus === "uploading" ? (<><Upload className="h-4 w-4" />Upload &amp; Process</>)
                     : uploadStatus === "done" ? (<><Check className="h-4 w-4" />Uploaded — select a new file to re-upload</>)
                     : (<><Upload className="h-4 w-4" />Upload &amp; Process</>)}
                 </Button>
@@ -1023,7 +1023,7 @@ const CreateReelContent = () => {
                   disabled={generationStatus === "generating" || !selectedProduct || !promptText.trim() || promptText.length > 500}
                   className="gradient-primary h-9 gap-2 px-4 text-sm text-primary-foreground shadow-glow hover:shadow-glow-lg"
                 >
-                  {generationStatus === "generating" ? (<><Loader2 className="h-4 w-4 animate-spin" />Generating…</>)
+                  {generationStatus === "generating" ? (<><Sparkles className="h-4 w-4" />Generating…</>)
                     : (<><Sparkles className="h-4 w-4" />Generate Video</>)}
                 </Button>
               </div>
