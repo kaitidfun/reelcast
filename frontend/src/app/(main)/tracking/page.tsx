@@ -475,7 +475,7 @@ export default function Tracking() {
             {(["start", "end"] as const).map(key => (
               <label key={key} className="grid min-w-0 gap-2 text-xs font-medium text-muted-foreground">
                 {key === "start" ? "Start date" : "End date"}
-                <Input type="date" max={today} className={`${inputClass} dark:[color-scheme:dark]`} value={filters[key] || ""} min={key === "end" ? nextDate(filters.start) : undefined} onChange={event => setFilters({ ...filters, [key]: event.target.value })} />
+                <Input type="date" max={today} className={`${inputClass} [color-scheme:dark]`} value={filters[key] || ""} min={key === "end" ? nextDate(filters.start) : undefined} onChange={event => setFilters({ ...filters, [key]: event.target.value })} />
               </label>
             ))}
           </div>
@@ -490,7 +490,7 @@ export default function Tracking() {
             {(["start", "end"] as const).map(key => (
               <label key={key} className="grid min-w-0 gap-2 text-xs font-medium text-muted-foreground">
                 {key === "start" ? "Period B start date" : "Period B end date"}
-                <Input type="date" max={today} className={`${inputClass} dark:[color-scheme:dark]`} value={comparisonDates[key]} min={key === "end" ? nextDate(comparisonDates.start) : nextDate(filters.end)} onChange={event => setComparisonDates({ ...comparisonDates, [key]: event.target.value })} />
+                <Input type="date" max={today} className={`${inputClass} [color-scheme:dark]`} value={comparisonDates[key]} min={key === "end" ? nextDate(comparisonDates.start) : nextDate(filters.end)} onChange={event => setComparisonDates({ ...comparisonDates, [key]: event.target.value })} />
               </label>
             ))}
           </div>
