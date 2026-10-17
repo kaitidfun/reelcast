@@ -3,13 +3,21 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { LoadingImage, LoadingVideo } from "./LoadingMedia";
 
-it("uses only the native loader when video controls are enabled, while retaining errors", () => {
+it("shows one custom placeholder and restores native controls only when the video is ready", () => {
   const ref = createRef<HTMLVideoElement>();
   render(<LoadingVideo ref={ref} src="native-controls.mp4" controls />);
+  expect(ref.current).not.toHaveAttribute("controls");
+  expect(ref.current).toHaveAttribute("preload", "auto");
+  expect(screen.getAllByRole("status")).toHaveLength(1);
+  expect(screen.getByRole("status")).toHaveTextContent("Loading video…");
+  fireEvent.canPlay(ref.current!);
   expect(ref.current).toHaveAttribute("controls");
-  expect(screen.queryByText("Loading video…")).not.toBeInTheDocument();
-  fireEvent.waiting(ref.current!);
   expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  fireEvent.waiting(ref.current!);
+  expect(ref.current).not.toHaveAttribute("controls");
+  expect(screen.getAllByRole("status")).toHaveLength(1);
+  fireEvent.playing(ref.current!);
+  expect(ref.current).toHaveAttribute("controls");
   fireEvent.error(ref.current!);
   expect(screen.getByRole("alert")).toHaveTextContent("Unable to load video");
 });

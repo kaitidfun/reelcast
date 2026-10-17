@@ -20,18 +20,18 @@ export function LoadingImage(props: ComponentPropsWithoutRef<"img">) {
 }
 
 const VideoContent = forwardRef<HTMLVideoElement, ComponentPropsWithoutRef<"video">>(function VideoContent(
-  { onLoadedData, onCanPlay, onPlaying, onWaiting, onError, controls, preload = "metadata", ...props }, ref,
+  { onLoadedData, onCanPlay, onPlaying, onWaiting, onError, controls, preload = controls ? "auto" : "metadata", ...props }, ref,
 ) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   return <>
-    <video {...props} controls={controls} preload={preload} ref={ref} aria-busy={status === "loading"}
+    <video {...props} controls={controls && status === "ready"} preload={preload} ref={ref} aria-busy={status === "loading"}
       onLoadedData={event => { setStatus("ready"); onLoadedData?.(event); }}
       onCanPlay={event => { setStatus("ready"); onCanPlay?.(event); }}
       onPlaying={event => { setStatus("ready"); onPlaying?.(event); }}
       onWaiting={event => { setStatus("loading"); onWaiting?.(event); }}
       onError={event => { setStatus("error"); onError?.(event); }} />
-    {/* Native controls already provide their own buffering indicator. */}
-    {(status === "error" || (status === "loading" && !controls)) && <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/40">
+    {/* An opaque placeholder masks the browser spinner; controls return when ready. */}
+    {status !== "ready" && <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-[#10151f]">
       {status === "loading" ? <LoadingState label="Loading video…" className="text-white" />
         : <p role="alert" className="p-4 text-center text-sm text-white">Unable to load video. Please try again.</p>}
     </div>}
