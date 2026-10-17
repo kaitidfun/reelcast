@@ -218,6 +218,23 @@ def test_comparison_and_export_require_end_strictly_after_start(data, period):
         assert client.get('/api/tracking/' + endpoint, params=params).status_code == 422
 
 
+def test_comparison_and_export_reject_future_dates_using_bangkok_today(data):
+    db, users, _, _ = data
+    app = FastAPI(); app.include_router(router)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: users[0]
+    client = TestClient(app)
+    params = dict(a_start='2026-01-01', a_end='2026-01-07', b_start='2026-01-08', b_end='2026-01-15')
+    with patch('app.routes.tracking_routes.datetime') as clock:
+        clock.now.side_effect = lambda tz: datetime(2026, 1, 14, 18, tzinfo=timezone.utc).astimezone(tz)
+        assert client.get('/api/tracking/comparison', params=params).status_code == 200
+        params['b_end'] = '2026-01-16'
+        for endpoint in ('comparison', 'export'):
+            response = client.get('/api/tracking/' + endpoint, params=params)
+            assert response.status_code == 422
+            assert 'Dates cannot be later than today' in response.json()['detail']
+
+
 def test_filter_options_include_only_owned_published_distribution_relations(data):
     db, users, accounts, distributions = data
     reel = distributions[0].reel

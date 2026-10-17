@@ -1,5 +1,5 @@
 """Feature 5: social sync, link visits, dashboard, ranking, comparison, export."""
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -58,6 +58,8 @@ def analyzeTrackingPerformance(level: str, metric: str, filters: dict = Depends(
 def _comparison(db, user_id, filters, a_start, a_end, b_start, b_end):
     if not all((a_start, a_end, b_start, b_end)) or a_start >= a_end or b_start >= b_end:
         raise HTTPException(422, 'Supply two valid complete date ranges')
+    if any(value > datetime.now(service.REPORT_TZ).date() for value in (a_start, a_end, b_start, b_end)):
+        raise HTTPException(422, 'Dates cannot be later than today (Asia/Bangkok)')
     if a_end >= b_start:
         raise HTTPException(422, 'Period B must start after Period A ends')
     scope = {key: value for key, value in filters.items() if key not in {'start', 'end'}}

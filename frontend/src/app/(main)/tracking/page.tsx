@@ -206,6 +206,9 @@ export default function Tracking() {
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const hasFutureDate = [filters.start, filters.end, comparisonDates.start, comparisonDates.end]
+    .some(value => value && value > today);
   const invalidPeriodOrder = Boolean(filters.start && filters.end && comparisonDates.start && comparisonDates.end
     && filters.start < filters.end && comparisonDates.start < comparisonDates.end
     && filters.end >= comparisonDates.start);
@@ -251,6 +254,10 @@ export default function Tracking() {
     finally { setBusy(false); }
   }
   function applyFilters() {
+    if (hasFutureDate) {
+      setError("Dates cannot be later than today (Asia/Bangkok)");
+      return;
+    }
     if (filters.start && filters.end && filters.start >= filters.end) {
       setError("Start date must be before end date");
       return;
@@ -468,7 +475,7 @@ export default function Tracking() {
             {(["start", "end"] as const).map(key => (
               <label key={key} className="grid min-w-0 gap-2 text-xs font-medium text-muted-foreground">
                 {key === "start" ? "Start date" : "End date"}
-                <Input type="date" className={`${inputClass} dark:[color-scheme:dark]`} value={filters[key] || ""} min={key === "end" ? nextDate(filters.start) : undefined} onChange={event => setFilters({ ...filters, [key]: event.target.value })} />
+                <Input type="date" max={today} className={`${inputClass} dark:[color-scheme:dark]`} value={filters[key] || ""} min={key === "end" ? nextDate(filters.start) : undefined} onChange={event => setFilters({ ...filters, [key]: event.target.value })} />
               </label>
             ))}
           </div>
@@ -483,7 +490,7 @@ export default function Tracking() {
             {(["start", "end"] as const).map(key => (
               <label key={key} className="grid min-w-0 gap-2 text-xs font-medium text-muted-foreground">
                 {key === "start" ? "Period B start date" : "Period B end date"}
-                <Input type="date" className={`${inputClass} dark:[color-scheme:dark]`} value={comparisonDates[key]} min={key === "end" ? nextDate(comparisonDates.start) : nextDate(filters.end)} onChange={event => setComparisonDates({ ...comparisonDates, [key]: event.target.value })} />
+                <Input type="date" max={today} className={`${inputClass} dark:[color-scheme:dark]`} value={comparisonDates[key]} min={key === "end" ? nextDate(comparisonDates.start) : nextDate(filters.end)} onChange={event => setComparisonDates({ ...comparisonDates, [key]: event.target.value })} />
               </label>
             ))}
           </div>
@@ -493,10 +500,11 @@ export default function Tracking() {
         <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">The same filters apply to both periods. Period A also filters the dashboard and ranking.</p>
         <div className="flex flex-col gap-2 sm:flex-row">
           {appliedPeriods && <Button variant="outline" className="gap-2" disabled={busy || loading} onClick={resetComparison}><RotateCcw className="h-4 w-4" aria-hidden="true" />Reset</Button>}
-          <Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading || invalidPeriodOrder} onClick={applyFilters}><ArrowLeftRight className="h-4 w-4" aria-hidden="true" />Compare periods</Button>
+          <Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading || invalidPeriodOrder || hasFutureDate} onClick={applyFilters}><ArrowLeftRight className="h-4 w-4" aria-hidden="true" />Compare periods</Button>
         </div>
       </div>
       {invalidPeriodOrder && <p role="alert" className="text-sm text-destructive">Period B must start after Period A ends.</p>}
+      {hasFutureDate && <p role="alert" className="text-sm text-destructive">Dates cannot be later than today (Asia/Bangkok).</p>}
       <details className="group rounded-xl border border-info/25 bg-info/5 p-4 text-sm">
         <summary className="flex cursor-pointer list-none items-center gap-3 rounded-md font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2 focus-visible:ring-offset-card [&::-webkit-details-marker]:hidden">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-info/10 text-info"><Info className="h-5 w-5" aria-hidden="true" /></span>

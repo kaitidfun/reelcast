@@ -32,6 +32,34 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
+it('limits all comparison dates to Bangkok today and blocks manually entered future dates', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  // Bangkok has reached January 15 while UTC is still January 14.
+  vi.setSystemTime(new Date('2026-01-14T18:00:00Z'));
+  try {
+    render(<Tracking />);
+    await screen.findByText('Tracking details');
+    const dates = [['Start date', '2026-01-01'], ['End date', '2026-01-07'],
+      ['Period B start date', '2026-01-08'], ['Period B end date', '2026-01-15']];
+    for (const [label, value] of dates) {
+      expect(screen.getByLabelText(label)).toHaveAttribute('max', '2026-01-15');
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    }
+    expect(screen.getByRole('button', { name: 'Compare periods' })).toBeEnabled();
+    for (const [label, value] of dates) {
+      fireEvent.change(screen.getByLabelText(label), { target: { value: '2026-01-16' } });
+      expect(screen.getByRole('button', { name: 'Compare periods' })).toBeDisabled();
+      expect(screen.getByText('Dates cannot be later than today (Asia/Bangkok).')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Compare periods' }));
+      expect(api.fetchTrackingComparison).not.toHaveBeenCalled();
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    }
+    expect(screen.getByRole('button', { name: 'Compare periods' })).toBeEnabled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it('shows unavailable social counters and zero clicks without commerce claims', async () => {
   render(<Tracking />);
   await screen.findByText(/No tracking data matches/);
