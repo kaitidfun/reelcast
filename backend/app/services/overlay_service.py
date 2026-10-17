@@ -24,6 +24,7 @@ from typing import Optional
 
 import httpx
 import imageio_ffmpeg
+from app.core.task_performance import timed_step
 
 from app.services.storage_service import upload_raw_bytes_to_r2
 from app.exceptions import FFmpegProcessingException, InvalidCoordinateException
@@ -193,6 +194,7 @@ async def overlay_watermark(
 # Main Overlay Operation (with Download + Upload + Error Handling)
 # ─────────────────────────────────────────────────────────────────────────────
 
+@timed_step
 async def overlayImagesAndLogos(
     video_url: str,
     overlay_url: str,

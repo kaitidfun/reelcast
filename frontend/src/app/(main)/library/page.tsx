@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { LoadingImage } from "@/components/LoadingMedia";
 
 import { LoadingState } from "@/components/LoadingState";
@@ -170,7 +171,7 @@ const ContentLibrary = () => {
       if (!token) return;
       const headers = { Authorization: `Bearer ${token}` };
 
-      const libraryRes = await fetch("http://localhost:8000/api/library", {
+      const libraryRes = await fetch(`${BACKEND_BASE_URL}/api/library`, {
         headers,
       });
 
@@ -192,12 +193,12 @@ const ContentLibrary = () => {
                 affiliateLink: p.affiliate_link,
                 imageCount: p.images?.length || 0,
               }),
-              thumbnail: primaryImage ? `http://localhost:8000/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : null),
+              thumbnail: primaryImage ? `${BACKEND_BASE_URL}/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `${BACKEND_BASE_URL}/api/upload/images/${p.brand_logo_url}` : null),
               reelsGenerated: p.reel_count ?? 0,
               createdAt: p.created_at || new Date().toISOString(),
               updatedAt: p.updated_at || new Date().toISOString(),
-              images: p.images?.map((img: any) => ({ url: `http://localhost:8000/api/upload/images/${img.image_url}`, isPrimary: img.is_primary })) || [],
-              logo: p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : undefined
+              images: p.images?.map((img: any) => ({ url: `${BACKEND_BASE_URL}/api/upload/images/${img.image_url}`, isPrimary: img.is_primary })) || [],
+              logo: p.brand_logo_url ? `${BACKEND_BASE_URL}/api/upload/images/${p.brand_logo_url}` : undefined
             };
           });
           return {
@@ -361,7 +362,7 @@ const ContentLibrary = () => {
 
     try {
       if (editingProductId) {
-        const res = await fetch(`http://localhost:8000/api/products/${editingProductId}`, {
+        const res = await fetch(`${BACKEND_BASE_URL}/api/products/${editingProductId}`, {
           method: "PUT",
           headers,
           body: JSON.stringify({
@@ -377,7 +378,7 @@ const ContentLibrary = () => {
         }
         toast({ title: "Product updated" });
       } else {
-        const res = await fetch(`http://localhost:8000/api/products`, {
+        const res = await fetch(`${BACKEND_BASE_URL}/api/products`, {
           method: "POST",
           headers,
           body: JSON.stringify({
@@ -408,7 +409,7 @@ const ContentLibrary = () => {
               const formData = new FormData();
               formData.append("file", img.file);
               const isPrimary = i === 0;
-              const imgRes = await fetch(`http://localhost:8000/api/products/${productId}/images?is_primary=${isPrimary}`, {
+              const imgRes = await fetch(`${BACKEND_BASE_URL}/api/products/${productId}/images?is_primary=${isPrimary}`, {
                 method: "POST",
                 headers: { Authorization: `Bearer ${token}` },
                 body: formData
@@ -420,7 +421,7 @@ const ContentLibrary = () => {
             setUploadLabel("Uploading logo…");
             const formDataLogo = new FormData();
             formDataLogo.append("file", pLogoFile);
-            const logoRes = await fetch(`http://localhost:8000/api/products/${productId}/upload-logo`, {
+            const logoRes = await fetch(`${BACKEND_BASE_URL}/api/products/${productId}/upload-logo`, {
               method: "POST",
               headers: { Authorization: `Bearer ${token}` },
               body: formDataLogo
@@ -430,7 +431,7 @@ const ContentLibrary = () => {
         } catch (uploadError: any) {
           // Rollback product creation if this was a new product
           if (!editingProductId && productId) {
-            await fetch(`http://localhost:8000/api/products/${productId}`, {
+            await fetch(`${BACKEND_BASE_URL}/api/products/${productId}`, {
               method: "DELETE",
               headers: { Authorization: `Bearer ${token}` }
             });
@@ -460,7 +461,7 @@ const ContentLibrary = () => {
   const handleDeleteProduct = async (productId: string, productName: string) => {
     if (!currentCampaign) return;
     const token = localStorage.getItem("rf_token");
-    const response = await fetch(`http://localhost:8000/api/products/${productId}`, {
+    const response = await fetch(`${BACKEND_BASE_URL}/api/products/${productId}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -481,7 +482,7 @@ const ContentLibrary = () => {
   const handleDeleteCampaign = () => runMutation("Deleting campaign…", async () => {
     if (!editingCampaignId) return;
     const token = localStorage.getItem("rf_token");
-    const response = await fetch(`http://localhost:8000/api/campaigns/${editingCampaignId}`, {
+    const response = await fetch(`${BACKEND_BASE_URL}/api/campaigns/${editingCampaignId}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -543,7 +544,7 @@ const ContentLibrary = () => {
 
     try {
       if (editingCampaignId) {
-        const res = await fetch(`http://localhost:8000/api/campaigns/${editingCampaignId}`, {
+        const res = await fetch(`${BACKEND_BASE_URL}/api/campaigns/${editingCampaignId}`, {
           method: "PUT",
           headers,
           body: JSON.stringify({
@@ -559,7 +560,7 @@ const ContentLibrary = () => {
         }
         toast({ title: "Campaign updated" });
       } else {
-        const res = await fetch(`http://localhost:8000/api/campaigns`, {
+        const res = await fetch(`${BACKEND_BASE_URL}/api/campaigns`, {
           method: "POST",
           headers,
           body: JSON.stringify({

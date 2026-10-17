@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { LoadingVideo } from "@/components/LoadingMedia";
 
 import { useEffect, useRef, useState, Suspense } from "react";
@@ -81,7 +82,7 @@ const PublishReelContent = () => {
       const token = localStorage.getItem("rf_token");
       if (!token) { setNotFound(true); return; }
       try {
-        const res = await fetch(`http://localhost:8000/api/reels/${id}/status`, {
+        const res = await fetch(`${BACKEND_BASE_URL}/api/reels/${id}/status`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) { setNotFound(true); return; }
@@ -131,7 +132,7 @@ const PublishReelContent = () => {
     setRegenStartTime(Date.now());
     try {
       const token = localStorage.getItem("rf_token");
-      const res = await fetch(`http://localhost:8000/api/reels/${reelId}/regenerate`, {
+      const res = await fetch(`${BACKEND_BASE_URL}/api/reels/${reelId}/regenerate`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -161,7 +162,7 @@ const PublishReelContent = () => {
     setIsSaving(true);
     try {
       const token = localStorage.getItem("rf_token");
-      const res = await fetch(`http://localhost:8000/api/reels/${reelId}/approve`, {
+      const res = await fetch(`${BACKEND_BASE_URL}/api/reels/${reelId}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ decision: true, caption, ...(name ? { name } : {}) }),

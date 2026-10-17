@@ -10,6 +10,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy import event
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Session
@@ -51,6 +52,72 @@ def observe(db, user, account, views, day):
                           source_platform='youtube', external_ref='youtube:same', views=views, likes=0,
                           observed_at=datetime(2026, 1, day, 10, tzinfo=timezone.utc))
     db.commit()
+
+
+def test_dashboard_query_count_stays_constant_as_links_and_history_grow(data):
+    db, users, accounts, distributions = data
+    user_id = users[0].user_id
+    account_id = accounts[0].account_id
+    product_id = distributions[0].reel.product_id
+    service.ensure_tracking_link(db, user_id=user_id, distribution_id=distributions[0].distribution_id)
+
+    def measure():
+        statements = []
+        def executed(_conn, _cursor, statement, _params, _context, _many):
+            if statement.lstrip().upper().startswith('SELECT'):
+                statements.append(statement)
+        event.listen(db.get_bind(), 'after_cursor_execute', executed)
+        try:
+            result = service.dashboard(db, user_id=user_id)
+        finally:
+            event.remove(db.get_bind(), 'after_cursor_execute', executed)
+        return result, len(statements)
+
+    _, baseline = measure()
+    for index in range(100):
+        reel = Reel(reel_id=uuid4(), user_id=user_id, product_id=product_id, prompt_text='Load test')
+        distribution = Distribution(distribution_id=uuid4(), reel_id=reel.reel_id, account_id=account_id,
+                                    platform_post_id=f'load-{index}', status='Published')
+        db.add_all([reel, distribution]); db.flush()
+        link = service.ensure_tracking_link(db, user_id=user_id, distribution_id=distribution.distribution_id)
+        db.add(TrackingClick(link_id=link.link_id, clicked_at=datetime(2026, 1, 2, 17, tzinfo=timezone.utc)))
+        for day, views in ((1, 10), (2, 20), (3, 30)):
+            db.add(TrackingObservation(observation_id=uuid4(), user_id=user_id, account_id=account_id,
+                                      distribution_id=distribution.distribution_id, platform='youtube',
+                                      external_ref=f'youtube:load-{index}', observed_date=date(2026, 1, day),
+                                      observed_at=datetime(2026, 1, day, 10, tzinfo=timezone.utc), views=views))
+    db.commit()
+    report, expanded = measure()
+    assert expanded == baseline == 5
+    assert len(report['details']) == 101
+    assert report['totals']['views'] == 3000  # latest snapshots, not the sum of all days
+    assert report['totals']['clicks'] == 100
+    assert report['click_trend'][0]['date'] == '2026-01-03'
+    assert report['click_trend'][0]['clicks'] == 100
+
+
+def test_comparison_export_reads_each_period_only_once(data):
+    db, users, accounts, _ = data
+    observe(db, users[0], accounts[0], 10, 1)
+    app = FastAPI(); app.include_router(router)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: users[0]
+    with patch.object(service, 'detail_rows', wraps=service.detail_rows) as details:
+        response = TestClient(app).get('/api/tracking/export', params=dict(
+            a_start='2026-01-01', a_end='2026-01-07', b_start='2026-01-08', b_end='2026-01-14'))
+    assert response.status_code == 200
+    assert details.call_count == 2
+
+
+def test_regeneration_claim_prevents_caption_and_video_from_overwriting_each_other(data):
+    from app.services.reel_service import claim_regeneration
+    db, users, _, distributions = data
+    reel = distributions[0].reel
+    reel.status = 'Completed'; db.commit()
+    assert claim_regeneration(db, reel=reel, user_id=users[0].user_id, target='video', prompt_text='New prompt')
+    assert not claim_regeneration(db, reel=reel, user_id=users[0].user_id, target='caption')
+    db.refresh(reel)
+    assert reel.prompt_text == 'New prompt' and reel.retry_count == 1 and reel.status == 'Generating'
 
 def test_snapshots_are_idempotent_and_members_isolated(data):
     db, users, accounts, _ = data

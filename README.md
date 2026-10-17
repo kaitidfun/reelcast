@@ -127,7 +127,7 @@ The start script will:
 3. Start **Redis** via Docker (`docker compose up -d`)
 4. Create the `tracking-provider-adapter` virtual environment if needed, install its dependencies, then open a new terminal → start it (FastAPI) on port 9000
 5. Open a new terminal → activate venv → start **FastAPI** backend on port 8000
-6. Open a new terminal → activate venv → start **Celery Worker**
+6. Start dedicated **Celery workers** for generation, caption, publish, scheduler and sync (Windows: hidden processes with logs)
 7. Open a new terminal → activate venv → start **Celery Beat** (F3 scheduled Distribution auto-publish + F5 tracking data sync — separate process from the Worker, see STEP 4 below)
 8. Open a new terminal → start **Next.js Frontend** on port 3000
 
@@ -185,14 +185,19 @@ Verify: Open [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ---
 
-### STEP 4 — Celery Worker
+### STEP 4 — Dedicated Celery Workers
 
-Open another new terminal and navigate to `backend`:
+Open a terminal for each worker kind in `backend` (Windows commands below; Linux deployment commands are in `PERFORMANCE.md`):
 
 ```bash
 cd backend
 venv\Scripts\activate
-venv\Scripts\celery -A app.worker.celery_app worker --loglevel=info --pool=solo -Q main-queue
+worker.cmd generation
+# Run the following in four additional terminals:
+worker.cmd caption
+worker.cmd publish
+worker.cmd scheduler
+worker.cmd sync
 ```
 
 Verify: Seeing `celery@... ready.` = Success
@@ -536,11 +541,15 @@ The route URLs stay stable for the frontend, while the internal handler names fo
 
 ---
 
+## Latency and deployment
+
+See [PERFORMANCE.md](PERFORMANCE.md) for the optimization changes, worker startup, measurements and remaining work.
+
 ## Troubleshooting
 
 | Issue                        | Cause / Solution                                            |
 | ---------------------------- | ----------------------------------------------------------- |
-| Celery not receiving tasks   | Must include `-Q main-queue` flag                           |
+| Celery not receiving tasks   | Start every dedicated worker; see `PERFORMANCE.md` for queue names                           |
 | Celery crashes on Windows    | Must use `--pool=solo` (prevents WinError 5)                |
 | Error 429 RESOURCE_EXHAUSTED | GOOGLE_AI_API_KEY requires a Billing project, not Free Tier |
 | Celery executing old tasks   | Must restart Celery whenever task signatures are modified   |

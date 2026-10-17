@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 import httpx
 from datetime import datetime
@@ -26,7 +27,7 @@ from app.services.reel_service import (
     create_reel,
     get_reel,
     get_reels,
-    increment_retry,
+    claim_regeneration,
     rename_reel,
     save_reel,
     soft_delete_reel,
@@ -400,29 +401,19 @@ def regenerateContent(
     ):
         raise InvalidPromptLengthException()
 
-    # If user edited the prompt before re-generating, persist the updated text.
-    # Worker reads reel.prompt_text from DB, so we must save it before queuing.
-    if req.prompt_text and req.target in ["video", "all"]:
-        update_reel(db, reel=reel, prompt_text=req.prompt_text)
-        logger.info(f"Reel {reel_id} prompt updated before regen: {len(req.prompt_text)} chars")
-
-    # Reset status to "Generating" BEFORE queuing so the frontend polling loop
-    # doesn't immediately see the old "Completed" status and display stale content.
-    # Also clear b_roll_url so video regen starts a fresh clip (not from old checkpoint).
-    if req.target in ["video", "all"]:
-        update_reel(db, reel=reel, status="Generating", clear_b_roll=True)
-    else:
-        # Caption-only — video is unchanged, just reset status for polling
-        update_reel(db, reel=reel, status="Generating")
-    logger.info(f"Reel {reel_id} status reset to Generating for regen target='{req.target}'")
-
-    # Send task to Celery — pass with_audio for regen consistency
-    increment_retry(db, reel=reel)
-    generateReels.delay(
-        str(reel.reel_id), req.platform, req.overlay_position, req.target,
-        duration=req.duration,
-        with_audio=req.with_audio,
-    )
+    # Caption and video now have separate workers. A conditional update prevents
+    # concurrent requests from queuing both against the same mutable Reel.
+    if not claim_regeneration(db, reel=reel, user_id=current_user.user_id,
+                              target=req.target, prompt_text=req.prompt_text):
+        raise HTTPException(status_code=409, detail="Reel is already processing or cannot be regenerated")
+    try:
+        generateReels.delay(
+            str(reel.reel_id), req.platform, req.overlay_position, req.target,
+            duration=req.duration, with_audio=req.with_audio,
+        )
+    except Exception:
+        update_reel(db, reel=reel, status='Failed', error_message='Unable to queue generation; please try again')
+        raise HTTPException(status_code=503, detail="Generation queue is unavailable")
 
     return reel
 
@@ -602,7 +593,7 @@ async def generate_prompt_endpoint(
     Returns:
         { prompt: str } — ready to fill into the prompt textarea
     """
-    product_name, product_description, product_images = _load_product_context(
+    product_name, product_description, product_images = await asyncio.to_thread(_load_product_context,
         req.product_id,
         current_user.user_id,
         db,
@@ -644,7 +635,7 @@ async def enhance_prompt_endpoint(
     if not req.prompt_text.strip():
         raise InvalidPromptException()
 
-    product_name, product_description, product_images = _load_product_context(
+    product_name, product_description, product_images = await asyncio.to_thread(_load_product_context,
         req.product_id,
         current_user.user_id,
         db,
@@ -686,7 +677,7 @@ async def generate_guided_prompt_endpoint(
     Returns:
         { prompt: str } — ready to fill into the prompt textarea
     """
-    product_name, product_description, product_images = _load_product_context(
+    product_name, product_description, product_images = await asyncio.to_thread(_load_product_context,
         req.product_id,
         current_user.user_id,
         db,

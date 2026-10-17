@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { LoadingVideo } from "@/components/LoadingMedia";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -262,7 +263,7 @@ const DistributeStatusContent = () => {
     try {
       const [distRes, reelRes] = await Promise.all([
         fetch(`${API_BASE_URL}/distributions?reel_id=${reelId}&limit=50`, { headers: authHeaders() }),
-        fetch(`http://localhost:8000/api/reels/${reelId}/status`, { headers: authHeaders() }),
+        fetch(`${BACKEND_BASE_URL}/api/reels/${reelId}/status`, { headers: authHeaders() }),
       ]);
       if (distRes.ok) setItems((await distRes.json()).distributions ?? []);
       if (reelRes.ok) {

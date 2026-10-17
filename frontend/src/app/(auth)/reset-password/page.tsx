@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -21,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 
-const API_URL = "http://localhost:8000";
+const API_URL = BACKEND_BASE_URL;
 
 const ResetPasswordContent = () => {
   const router = useRouter();

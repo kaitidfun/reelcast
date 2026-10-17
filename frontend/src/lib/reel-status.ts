@@ -1,3 +1,4 @@
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 // Reel.status values from the backend (Pending/Generating/Completed/Failed) —
 // distinct from Distribution's publish status (Published/Scheduled), which
 // doesn't exist yet (Feature 3).
@@ -28,5 +29,5 @@ export const resolveVideoUrl = (url: string | null | undefined) => {
   if (!url) return null;
   return url.startsWith("http")
     ? url
-    : `http://localhost:8000/api/upload/videos/${url}`;
+    : `${BACKEND_BASE_URL}/api/upload/videos/${url}`;
 };

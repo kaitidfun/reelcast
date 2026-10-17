@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import React, { createContext, useContext, useState, useCallback } from "react";
 
 export interface MockUser {
@@ -13,7 +14,7 @@ export interface MockUser {
   hasPassword?: boolean;
 }
 
-const API_URL = "http://localhost:8000";
+const API_URL = BACKEND_BASE_URL;
 
 interface AuthContextType {
   user: MockUser | null;

@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { useEffect, useState } from "react";
 
 export type CampaignCardProduct = { id: string; name: string; thumbnail: string | null };
@@ -25,7 +26,7 @@ export function useCampaigns() {
       try {
         const token = localStorage.getItem("rf_token");
         if (!token) return;
-        const res = await fetch("http://localhost:8000/api/library", {
+        const res = await fetch(`${BACKEND_BASE_URL}/api/library`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) return;
@@ -40,9 +41,9 @@ export function useCampaigns() {
                 id: p.product_id,
                 name: p.product_name?.trim() || "Untitled Product",
                 thumbnail: primaryImage
-                  ? `http://localhost:8000/api/upload/images/${primaryImage}`
+                  ? `${BACKEND_BASE_URL}/api/upload/images/${primaryImage}`
                   : p.brand_logo_url
-                    ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}`
+                    ? `${BACKEND_BASE_URL}/api/upload/images/${p.brand_logo_url}`
                     : null,
                 reelsGenerated: p.reel_count ?? 0,
               };

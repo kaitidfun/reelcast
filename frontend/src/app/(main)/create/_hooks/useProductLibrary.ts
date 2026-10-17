@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { useState, useEffect } from "react";
 import type { LibraryCampaign } from "../_types";
 
@@ -28,7 +29,7 @@ export function useProductLibrary() {
         if (!token) return;
         const headers = { Authorization: `Bearer ${token}` };
 
-        const libraryRes = await fetch("http://localhost:8000/api/library", {
+        const libraryRes = await fetch(`${BACKEND_BASE_URL}/api/library`, {
           headers,
         });
         if (!libraryRes.ok) return;
@@ -52,10 +53,10 @@ export function useProductLibrary() {
                 name: p.product_name,
                 thumbnail: p.product_name.charAt(0).toUpperCase() || "📦",
                 primaryImageUrl: rawImageKey
-                  ? `http://localhost:8000/api/upload/images/${rawImageKey}`
+                  ? `${BACKEND_BASE_URL}/api/upload/images/${rawImageKey}`
                   : null,
                 brandLogoUrl: p.brand_logo_url
-                  ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}`
+                  ? `${BACKEND_BASE_URL}/api/upload/images/${p.brand_logo_url}`
                   : null,
                 highlights: p.description || "",
                 campaignName: c.name,

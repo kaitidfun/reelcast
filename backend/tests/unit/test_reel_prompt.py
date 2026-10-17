@@ -11,6 +11,7 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+from fastapi import HTTPException
 
 from app.exceptions import (
     GeminiAPIException,
@@ -165,14 +166,12 @@ class TestReelGenerationTests(PytestAssertions):
             )
 
     @patch("app.routes.reel_routes.generateReels.delay")
-    @patch("app.routes.reel_routes.increment_retry")
-    @patch("app.routes.reel_routes.update_reel")
+    @patch("app.routes.reel_routes.claim_regeneration", return_value=True)
     @patch("app.routes.reel_routes.get_reel")
     def test_F2_UTC07_TC01_regenerates_with_revised_prompt(
         self,
         get_reel,
-        update_reel,
-        increment_retry,
+        claim_regeneration,
         queue_generation,
     ) -> None:
         reel = SimpleNamespace(
@@ -190,13 +189,10 @@ class TestReelGenerationTests(PytestAssertions):
         )
 
         self.assertIs(reel, result)
-        self.assertTrue(
-            any(
-                call.kwargs.get("prompt_text") == "Revised prompt"
-                for call in update_reel.call_args_list
-            )
+        claim_regeneration.assert_called_once_with(
+            self.db, reel=reel, user_id=self.user.user_id,
+            target='all', prompt_text='Revised prompt',
         )
-        increment_retry.assert_called_once_with(self.db, reel=reel)
         queue_generation.assert_called_once()
 
     @patch("app.routes.reel_routes.get_reel")
@@ -214,6 +210,29 @@ class TestReelGenerationTests(PytestAssertions):
                 self.db,
                 self.user,
             )
+
+    @patch("app.routes.reel_routes.generateReels.delay")
+    @patch("app.routes.reel_routes.claim_regeneration", return_value=False)
+    @patch("app.routes.reel_routes.get_reel")
+    def test_overlapping_regeneration_is_rejected_without_queuing(self, get_reel, claim, queue):
+        reel = SimpleNamespace(reel_id=uuid4(), retry_count=0, prompt_text='Prompt')
+        get_reel.return_value = reel
+        with pytest.raises(HTTPException) as error:
+            regenerateContent(reel.reel_id, ReelRegenerateRequest(target='caption'), self.db, self.user)
+        assert error.value.status_code == 409
+        queue.assert_not_called()
+
+    @patch("app.routes.reel_routes.update_reel")
+    @patch("app.routes.reel_routes.generateReels.delay", side_effect=ConnectionError('broker unavailable'))
+    @patch("app.routes.reel_routes.claim_regeneration", return_value=True)
+    @patch("app.routes.reel_routes.get_reel")
+    def test_unavailable_queue_does_not_leave_regeneration_stuck(self, get_reel, claim, queue, update):
+        reel = SimpleNamespace(reel_id=uuid4(), retry_count=0, prompt_text='Prompt')
+        get_reel.return_value = reel
+        with pytest.raises(HTTPException) as error:
+            regenerateContent(reel.reel_id, ReelRegenerateRequest(target='caption'), self.db, self.user)
+        assert error.value.status_code == 503
+        assert update.call_args.kwargs['status'] == 'Failed'
 
 
 class TestPromptEndpointTests(PytestAssertions):

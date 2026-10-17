@@ -94,9 +94,16 @@ sleep 2
 
 # ── 6. Celery Worker ──────────────────────────────────────
 echo -e "\033[0;33m[7/8] Starting Celery Worker...\033[0m"
-venv/bin/celery -A app.worker.celery_app worker --loglevel=info -Q main-queue > celery.log 2>&1 &
-CELERY_PID=$!
-echo -e "\033[0;32m  Celery Worker started in background (PID: $CELERY_PID).\033[0m"
+for worker_kind in generation publish sync scheduler caption; do
+    worker_queues="$worker_kind-queue"
+    if [ "$worker_kind" = generation ]; then worker_queues="$worker_queues,main-queue"; fi
+    venv/bin/celery -A app.worker.celery_app worker --loglevel=info --concurrency=1 \
+        --hostname="$worker_kind@%h" -Q "$worker_queues" > "celery-$worker_kind.log" 2>&1 &
+    worker_pid=$!
+    echo "$worker_pid" > "$ROOT_DIR/scripts/mac-linux/.celery_${worker_kind}_pid"
+    if [ "$worker_kind" = generation ]; then CELERY_PID=$worker_pid; fi
+done
+echo "Dedicated Celery workers started."
 
 # ── 7. Celery Beat (F3 scheduled distribution) ────────────
 echo -e "\033[0;33m[8/8] Starting Celery Beat...\033[0m"

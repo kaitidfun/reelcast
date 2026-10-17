@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { usePendingAction } from "@/hooks/usePendingAction";
 
 import { useState, useEffect, useRef } from "react";
@@ -22,7 +23,7 @@ import { motion } from "framer-motion";
 import { MAX_DISPLAY_NAME_LENGTH, validateDisplayName, validateProfileImage } from "@/lib/test-plan";
 import { SocialConnections } from "@/components/SocialConnections";
 
-const API_URL = "http://localhost:8000";
+const API_URL = BACKEND_BASE_URL;
 
 const Account = () => {
   const {

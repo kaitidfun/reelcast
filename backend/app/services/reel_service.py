@@ -94,6 +94,28 @@ def get_reels(
     return items, total
 
 
+def claim_regeneration(db: Session, *, reel: Reel, user_id: UUID, target: str, prompt_text=None) -> bool:
+    """Claim once across video/caption workers before changing any input fields."""
+    values = {
+        Reel.status: 'Generating',
+        Reel.retry_count: Reel.retry_count + 1,
+        Reel.error_message: None,
+    }
+    if target in {'video', 'all'}:
+        values[Reel.b_roll_url] = None
+        if prompt_text:
+            values[Reel.prompt_text] = prompt_text
+    claimed = db.query(Reel).filter(
+        Reel.reel_id == reel.reel_id, Reel.user_id == user_id,
+        Reel.deleted_at.is_(None), Reel.status.in_(('Completed', 'Failed')),
+        Reel.retry_count < 5,
+    ).update(values, synchronize_session=False)
+    db.commit()
+    if claimed:
+        db.refresh(reel)
+    return claimed == 1
+
+
 def update_reel(
     db: Session,
     *,

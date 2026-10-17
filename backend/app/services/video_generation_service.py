@@ -52,6 +52,7 @@ from typing import Optional
 
 import ffmpeg
 import httpx
+from app.core.task_performance import timed_step
 
 from app.exceptions import (
     GeminiAPIException,
@@ -315,6 +316,7 @@ async def _upload_image_to_fal(image_bytes: bytes, suffix: str = ".png") -> str:
 # Gemini 3 Pro Image — First Frame Generator
 # ─────────────────────────────────────────────────────────────────────────────
 
+@timed_step
 async def generate_first_frame_with_gemini(
     prompt: str,
     product_images: list[tuple[bytes, str]],
@@ -409,6 +411,7 @@ async def generate_first_frame_with_gemini(
 # LTX Video 2.3 — Animation Engine
 # ─────────────────────────────────────────────────────────────────────────────
 
+@timed_step
 async def generate_with_ltx(
     prompt: str,
     image_url: Optional[str] = None,

@@ -21,6 +21,7 @@ from google import genai
 from google.genai import types
 
 from app.core.config import REELCAST_TEST_MODE
+from app.core.task_performance import timed_step
 from app.exceptions import GeminiAPIException, InvalidPromptLengthException
 
 # generate_video re-exported so existing callers that imported from here still work
@@ -81,6 +82,7 @@ def _build_gemini_contents(
     ] + [types.Part(text=text)]
 
 
+@timed_step
 async def _run_gemini(
     contents,
     *,

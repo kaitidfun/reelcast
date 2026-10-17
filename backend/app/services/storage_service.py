@@ -14,6 +14,7 @@ Usage in FastAPI routes:
 """
 
 import uuid
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -234,16 +235,16 @@ async def upload_file(
     )
 
     try:
-        s3 = _get_s3_client()
         file_body = await file.read()
         file_size = len(file_body)
 
-        s3.put_object(
-            Bucket=target_bucket,
-            Key=object_key,
-            Body=file_body,
-            ContentType=content_type,
-        )
+        def _put():
+            _get_s3_client().put_object(
+                Bucket=target_bucket, Key=object_key,
+                Body=file_body, ContentType=content_type,
+            )
+
+        await asyncio.to_thread(_put)
 
         logger.info(
             "Uploaded %s to R2 bucket '%s' (%d bytes)",
@@ -283,8 +284,9 @@ async def delete_file(object_key: str, *, bucket: Optional[str] = None) -> bool:
     """
     target_bucket = bucket or R2_BUCKET_NAME
     try:
-        s3 = _get_s3_client()
-        s3.delete_object(Bucket=target_bucket, Key=object_key)
+        await asyncio.to_thread(
+            lambda: _get_s3_client().delete_object(Bucket=target_bucket, Key=object_key)
+        )
         logger.info("Deleted '%s' from bucket '%s'", object_key, target_bucket)
         return True
     except (BotoCoreError, ClientError) as exc:

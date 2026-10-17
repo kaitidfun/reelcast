@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { useEffect, MutableRefObject } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useGenerationQueue } from "@/contexts/GenerationQueueContext";
@@ -57,7 +58,7 @@ export function useGenerationPolling({
     const interval = setInterval(async () => {
       try {
         const token = localStorage.getItem("rf_token");
-        const res = await fetch(`http://localhost:8000/api/reels/${reelId}/status`, {
+        const res = await fetch(`${BACKEND_BASE_URL}/api/reels/${reelId}/status`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 

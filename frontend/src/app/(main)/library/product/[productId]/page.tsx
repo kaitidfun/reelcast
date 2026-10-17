@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { LoadingImage } from "@/components/LoadingMedia";
 
 import { LoadingState } from "@/components/LoadingState";
@@ -75,7 +76,7 @@ const ProductReels = () => {
     try {
       const token = localStorage.getItem("rf_token");
       if (!token) return;
-      const res = await fetch(`http://localhost:8000/api/products/${id}`, {
+      const res = await fetch(`${BACKEND_BASE_URL}/api/products/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -87,7 +88,7 @@ const ProductReels = () => {
             keyPoints: p.description || "",
             affiliateLink: p.affiliate_link || "",
             status: "Active",
-            thumbnail: primaryImage ? `http://localhost:8000/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}` : null),
+            thumbnail: primaryImage ? `${BACKEND_BASE_URL}/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `${BACKEND_BASE_URL}/api/upload/images/${p.brand_logo_url}` : null),
             reelsGenerated: p.reel_count ?? 0,
             campaignId: p.campaign_id,
             campaignName: "Campaign" // Could fetch campaign if needed

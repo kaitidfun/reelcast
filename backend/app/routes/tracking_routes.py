@@ -1,10 +1,11 @@
 """Feature 5: social sync, link visits, dashboard, ranking, comparison, export."""
 from datetime import date, datetime
+import asyncio
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import BACKEND_URL
 from app.dependencies import get_current_user, get_db
@@ -33,8 +34,9 @@ def tracking_filters(start: date | None = None, end: date | None = None,
 
 
 @router.post('/sync')
-async def synchronizeTrackingData(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return await tracking_provider_service.sync_member(db, user_id=current_user.user_id)
+def synchronizeTrackingData(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Run the entire session's synchronous DB work outside the API event loop.
+    return asyncio.run(tracking_provider_service.sync_member(db, user_id=current_user.user_id))
 
 
 @router.get('/readiness')
@@ -55,7 +57,7 @@ def analyzeTrackingPerformance(level: str, metric: str, filters: dict = Depends(
     return service.analyze_performance(db, user_id=current_user.user_id, level=level, metric=metric, **filters)
 
 
-def _comparison(db, user_id, filters, a_start, a_end, b_start, b_end):
+def _comparison(db, user_id, filters, a_start, a_end, b_start, b_end, *, include_rows=False):
     if not all((a_start, a_end, b_start, b_end)) or a_start >= a_end or b_start >= b_end:
         raise HTTPException(422, 'Supply two valid complete date ranges')
     if any(value > datetime.now(service.REPORT_TZ).date() for value in (a_start, a_end, b_start, b_end)):
@@ -63,8 +65,15 @@ def _comparison(db, user_id, filters, a_start, a_end, b_start, b_end):
     if a_end >= b_start:
         raise HTTPException(422, 'Period B must start after Period A ends')
     scope = {key: value for key, value in filters.items() if key not in {'start', 'end'}}
-    return service.compare_periods(db, user_id=user_id, a_start=a_start, a_end=a_end,
-                                   b_start=b_start, b_end=b_end, **scope)
+    periods = None
+    if include_rows:
+        periods = (
+            service.detail_rows(db, user_id=user_id, start=a_start, end=a_end, **scope),
+            service.detail_rows(db, user_id=user_id, start=b_start, end=b_end, **scope),
+        )
+    result = service.compare_periods(db, user_id=user_id, a_start=a_start, a_end=a_end,
+                                   b_start=b_start, b_end=b_end, period_rows=periods, **scope)
+    return (result, periods) if include_rows else result
 
 
 @router.get('/comparison')
@@ -82,23 +91,27 @@ def exportTrackingData(format: str = Query('csv', pattern='^(csv|xlsx)$'),
                        filters: dict = Depends(tracking_filters), db: Session = Depends(get_db),
                        current_user: User = Depends(get_current_user)):
     comparison = None
-    dashboard = service.dashboard(db, user_id=current_user.user_id, **filters)
-    rows = dashboard['details']
     if any((a_start, a_end, b_start, b_end)):
-        comparison = _comparison(db, current_user.user_id, filters, a_start, a_end, b_start, b_end)
-        scope = {key: value for key, value in filters.items() if key not in {'start', 'end'}}
+        comparison, period_rows = _comparison(db, current_user.user_id, filters, a_start, a_end,
+                                               b_start, b_end, include_rows=True)
         rows = []
-        for label, start, end in (('A', a_start, a_end), ('B', b_start, b_end)):
+        for (label, start, end), details in zip((('A', a_start, a_end), ('B', b_start, b_end)), period_rows):
             rows.extend(dict(row, comparison_period=label, period_start=start.isoformat(), period_end=end.isoformat())
-                        for row in service.detail_rows(db, user_id=current_user.user_id, start=start, end=end, **scope))
+                        for row in details)
     elif level:
         if level not in service.ANALYSIS_LEVELS or metric not in service.ANALYSIS_METRICS:
             raise HTTPException(422, 'Unsupported analysis level or metric')
         rows = service.analyze_performance(db, user_id=current_user.user_id, level=level, metric=metric, **filters)['rows']
+    else:
+        rows = service.detail_rows(db, user_id=current_user.user_id, **filters)
     if not rows:
         raise HTTPException(404, 'No tracking data matches these filters')
+    accounts = db.query(SocialAccount).filter(SocialAccount.user_id == current_user.user_id).all()
+    account_metadata = [dict(id=str(a.account_id), platform=a.platform_name,
+                             last_synced_at=a.last_synced_at.isoformat() if a.last_synced_at else None,
+                             error=a.sync_error) for a in accounts]
     content = report_bytes(rows, format=format, filters=dict(filters, level=level, metric=metric),
-                           comparison=comparison, accounts=dashboard['accounts'])
+                           comparison=comparison, accounts=account_metadata)
     media = 'text/csv; charset=utf-8' if format == 'csv' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     return Response(content, media_type=media, headers={'Content-Disposition': f'attachment; filename="reelcast-tracking.{format}"'})
 
@@ -129,6 +142,7 @@ def redirectTrackingLink(code: str, request: Request, db: Session = Depends(get_
 def trackingFilterOptions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     campaigns, products, reels, distributions = {}, {}, {}, []
     published = (db.query(Distribution, Reel, SocialAccount)
+                 .options(joinedload(Reel.product).joinedload(Product.campaign))
                  .join(Reel, Distribution.reel_id == Reel.reel_id)
                  .join(SocialAccount, Distribution.account_id == SocialAccount.account_id)
                  .filter(Reel.user_id == current_user.user_id, SocialAccount.user_id == current_user.user_id,

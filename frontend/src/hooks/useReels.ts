@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { useState, useEffect, useCallback } from "react";
 import type { ReelCardData } from "@/components/ReelCard";
 import { resolveVideoUrl } from "@/lib/reel-status";
@@ -22,7 +23,7 @@ export function useReels(params: { limit?: number; skip?: number; productId?: st
       if (productId) qs.set("product_id", productId);
       if (distributedOnly) qs.set("distributed", "true");
 
-      const res = await fetch(`http://localhost:8000/api/reels?${qs.toString()}`, {
+      const res = await fetch(`${BACKEND_BASE_URL}/api/reels?${qs.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return;

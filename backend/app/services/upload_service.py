@@ -163,7 +163,7 @@ async def upload_video_to_r2(
     try:
         # Return the R2 object key (not the full URL) so the frontend can proxy through
         # /api/upload/videos/{key}. This works regardless of whether R2 bucket is public.
-        object_key = upload_raw_bytes_to_r2(
+        object_key = await asyncio.to_thread(upload_raw_bytes_to_r2,
             data=file_data,
             filename=filename,
             prefix="videos/reels/uploads",

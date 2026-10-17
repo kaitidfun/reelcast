@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -54,9 +55,9 @@ export default function DistributedCampaignProductsPage() {
                     imageCount: p.images?.length || 0,
                   }),
                   thumbnail: primaryImage
-                    ? `http://localhost:8000/api/upload/images/${primaryImage}`
+                    ? `${BACKEND_BASE_URL}/api/upload/images/${primaryImage}`
                     : p.brand_logo_url
-                      ? `http://localhost:8000/api/upload/images/${p.brand_logo_url}`
+                      ? `${BACKEND_BASE_URL}/api/upload/images/${p.brand_logo_url}`
                       : null,
                   reelsGenerated: p.reel_count ?? 0,
                   createdAt: p.created_at || new Date().toISOString(),

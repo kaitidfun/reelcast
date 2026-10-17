@@ -32,6 +32,13 @@ if ($pid9000) {
     Write-Host "  No process found on port 9000." -ForegroundColor DarkGray
 }
 
+# Match this checkout's Python executable, so other projects' workers survive.
+$workerPython = Join-Path $ROOT "backend\venv\Scripts\python.exe"
+Get-CimInstance Win32_Process | Where-Object {
+    $_.ExecutablePath -eq $workerPython -and
+    $_.CommandLine -match 'celery.*app\.worker\.celery_app.*worker'
+} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+
 # ── 3. Kill Backend (uvicorn on port 8000) ────────────────
 Write-Host "[3/4] Stopping Backend (port 8000)..." -ForegroundColor Yellow
 $pid8000 = (netstat -ano | Select-String ":8000 " | Select-String "LISTENING" | ForEach-Object { ($_ -split "\s+")[-1] } | Select-Object -First 1)

@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { LoadingImage } from "@/components/LoadingMedia";
 
 import { useState } from "react";
@@ -51,7 +52,7 @@ export function ReelCard({ reel, onClick, onChanged }: { reel: ReelCardData; onC
   const handleRename = async (name: string) => {
     setSaving(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/reels/${reel.id}`, {
+      const res = await fetch(`${BACKEND_BASE_URL}/api/reels/${reel.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ name }),
@@ -69,7 +70,7 @@ export function ReelCard({ reel, onClick, onChanged }: { reel: ReelCardData; onC
   const handleDelete = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/reels/${reel.id}`, {
+      const res = await fetch(`${BACKEND_BASE_URL}/api/reels/${reel.id}`, {
         method: "DELETE",
         headers: authHeaders(),
       });

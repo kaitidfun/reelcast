@@ -23,6 +23,7 @@ from app.exceptions import (
     OAuthProviderException,
 )
 from app.database import engine, Base, SessionLocal
+from app.core.performance import PerformanceMiddleware, configure_performance_logging, install_sql_timing
 import app.models.models  # Import models so Base knows about them
 from app.routes import (
     auth_routes,
@@ -51,6 +52,9 @@ def get_db():
 
 # App setup
 app = FastAPI(title="ReelCast Auth API")
+configure_performance_logging()
+install_sql_timing(engine)
+app.add_middleware(PerformanceMiddleware)
 
 
 # TikTok URL-property verification requests a text file at the root of the
@@ -129,6 +133,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Server-Timing", "X-Request-ID"],
 )
 
 # Include routers

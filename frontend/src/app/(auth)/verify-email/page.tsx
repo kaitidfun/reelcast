@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +24,7 @@ function VerifyEmailContent() {
 
     const verifyEmail = async () => {
       try {
-        const response = await fetch("http://localhost:8000/api/verify-email", {
+        const response = await fetch(`${BACKEND_BASE_URL}/api/verify-email`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

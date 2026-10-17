@@ -108,16 +108,17 @@ Write-Host "  Backend window opened." -ForegroundColor Green
 Start-Sleep -Seconds 2
 
 # ── 6. Celery Worker ──────────────────────────────────────
-Write-Host "[7/8] Starting Celery Worker..." -ForegroundColor Yellow
-Start-Process powershell -ArgumentList @(
-    "-NoExit",
-    "-Command",
-    "cd '$BACKEND'; " +
-    "Write-Host '=== ReelCast: Celery Worker ===' -ForegroundColor Cyan; " +
-    "& '$VENV_ACTIVATE'; " +
-    ".\venv\Scripts\celery -A app.worker.celery_app worker --loglevel=info --pool=solo -Q main-queue"
-) -WindowStyle Normal
-Write-Host "  Celery window opened." -ForegroundColor Green
+Write-Host "[7/8] Starting separate Celery workers..." -ForegroundColor Yellow
+foreach ($workerKind in @("generation", "publish", "sync", "scheduler", "caption")) {
+    $workerQueues = "$workerKind-queue"
+    # Drain jobs submitted by the previous release on the generation worker only.
+    if ($workerKind -eq "generation") { $workerQueues += ",main-queue" }
+    Start-Process -FilePath $VENV_PY -WorkingDirectory $BACKEND -ArgumentList @(
+        "-m", "celery", "-A", "app.worker.celery_app", "worker",
+        "--loglevel=info", "--pool=solo", "--hostname=$workerKind@%h", "-Q", $workerQueues
+    ) -WindowStyle Hidden -RedirectStandardOutput (Join-Path $BACKEND "celery-$workerKind.log") -RedirectStandardError (Join-Path $BACKEND "celery-$workerKind.err.log")
+}
+Write-Host "  Dedicated Celery workers started; see backend/celery-*.log." -ForegroundColor Green
 
 # ── 7. Celery Beat (F3 scheduled distribution) ────────────
 Write-Host "[8/8] Starting Celery Beat..." -ForegroundColor Yellow

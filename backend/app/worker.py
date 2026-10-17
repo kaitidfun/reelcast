@@ -3,6 +3,8 @@ import math
 import asyncio
 import logging
 from celery import Celery
+from app.core import task_performance  # noqa: F401 -- register timing signals
+from app.core.task_performance import timed_step
 
 from app.core.ssl_fix import setup_windows_ssl
 
@@ -45,12 +47,20 @@ celery_app = Celery(
     backend=os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/0"),
 )
 
-celery_app.conf.task_routes = {
-    "app.worker.generateReels": "main-queue",
-    "app.worker.publishDistribution": "main-queue",
-    "app.worker.checkScheduledDistributions": "main-queue",
-    "app.worker.syncTrackingData": "main-queue",
-}
+def route_generation(name, args, kwargs, options, task=None, **_extra):
+    if name == "app.worker.generateReels":
+        args, kwargs = args or (), kwargs or {}
+        target = kwargs.get("target", args[3] if len(args) > 3 else "all")
+        return {"queue": "caption-queue" if target == "caption" else "generation-queue"}
+
+
+celery_app.conf.task_routes = (route_generation, {
+    "app.worker.generateReels": "generation-queue",
+    "app.worker.publishDistribution": "publish-queue",
+    "app.worker.checkScheduledDistributions": "scheduler-queue",
+    "app.worker.syncTrackingData": "sync-queue",
+})
+celery_app.conf.worker_prefetch_multiplier = 1
 
 # Requires a separate `celery -A app.worker.celery_app beat` process running
 # alongside the worker (see scripts/*/start.*) — the worker alone only
@@ -522,6 +532,7 @@ async def _run_ltx_generation(
 # Storage Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+@timed_step
 async def _fetch_product_image_bytes(
     image_urls: list[str],
 ) -> list[tuple[bytes, str]]:
@@ -567,6 +578,7 @@ async def _fetch_product_image_bytes(
     return results
 
 
+@timed_step
 async def _upload_cdn_video_to_r2(cdn_url: str, reel_id: str) -> str:
     """
     Download a temporary CDN video (fal.ai) and upload it to R2.

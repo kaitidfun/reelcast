@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { LoadingImage, LoadingVideo } from "@/components/LoadingMedia";
 
 import { useRef, useState, useEffect, Suspense } from "react";
@@ -212,7 +213,7 @@ const CreateReelContent = () => {
       try {
         const token = localStorage.getItem("rf_token");
         if (!token) return;
-        const res = await fetch(`http://localhost:8000/api/reels/${resumeReelId}/status`, {
+        const res = await fetch(`${BACKEND_BASE_URL}/api/reels/${resumeReelId}/status`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) return;
@@ -381,7 +382,7 @@ const CreateReelContent = () => {
     setEnhancing(true);
     try {
       const token = localStorage.getItem("rf_token");
-      const res = await fetch("http://localhost:8000/api/reels/enhance-prompt", {
+      const res = await fetch(`${BACKEND_BASE_URL}/api/reels/enhance-prompt`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ prompt_text: promptText, product_id: selectedProduct?.id ?? null, duration }),
@@ -405,7 +406,7 @@ const CreateReelContent = () => {
     setLoadingTemplate(templateType);
     try {
       const token = localStorage.getItem("rf_token");
-      const res = await fetch("http://localhost:8000/api/reels/generate-prompt", {
+      const res = await fetch(`${BACKEND_BASE_URL}/api/reels/generate-prompt`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ template_type: templateType, product_id: selectedProduct.id, duration }),
@@ -441,7 +442,7 @@ const CreateReelContent = () => {
     setGuidedLoading(true);
     try {
       const token = localStorage.getItem("rf_token");
-      const res = await fetch("http://localhost:8000/api/reels/generate-guided-prompt", {
+      const res = await fetch(`${BACKEND_BASE_URL}/api/reels/generate-guided-prompt`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(
@@ -480,7 +481,7 @@ const CreateReelContent = () => {
     setIsPlaying(false);
     try {
       const token = localStorage.getItem("rf_token");
-      const res = await fetch("http://localhost:8000/api/reels/generate", {
+      const res = await fetch(`${BACKEND_BASE_URL}/api/reels/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -525,7 +526,7 @@ const CreateReelContent = () => {
     setGenerationStatus("generating");
     try {
       const token = localStorage.getItem("rf_token");
-      const res = await fetch(`http://localhost:8000/api/reels/${reelId}/regenerate`, {
+      const res = await fetch(`${BACKEND_BASE_URL}/api/reels/${reelId}/regenerate`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -630,7 +631,7 @@ const CreateReelContent = () => {
       setUploadStatus("error");
       toast({ title: "Network error", description: "Could not reach the server.", variant: "destructive" });
     };
-    xhr.open("POST", "http://localhost:8000/api/reels/upload-video");
+    xhr.open("POST", `${BACKEND_BASE_URL}/api/reels/upload-video`);
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.send(form);
   };
@@ -641,7 +642,7 @@ const CreateReelContent = () => {
     try {
       const token = localStorage.getItem("rf_token");
       const response = await fetch(
-        `http://localhost:8000/api/reels/${reelId}/approve`,
+        `${BACKEND_BASE_URL}/api/reels/${reelId}/approve`,
         {
           method: "POST",
           headers: {
@@ -687,7 +688,7 @@ const CreateReelContent = () => {
     try {
       const filename = `reel_${reelId}.mp4`;
       const token = localStorage.getItem("rf_token");
-      const res = await fetch(`http://localhost:8000/api/reels/${reelId}/download?with_logo=${showLogo}`, {
+      const res = await fetch(`${BACKEND_BASE_URL}/api/reels/${reelId}/download?with_logo=${showLogo}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} — Could not get download URL`);

@@ -13,6 +13,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.models import (Campaign, Distribution, Product, Reel, SocialAccount,
@@ -115,23 +116,37 @@ def detail_rows(db: Session, *, user_id, start=None, end=None, **filters):
         query = query.filter(TrackingObservation.observed_at >= lower)
     if upper:
         query = query.filter(TrackingObservation.observed_at < upper)
+    # Rank only the owned, date-filtered observations. Fetch one snapshot per
+    # distribution instead of transferring every day's lifetime counters.
+    ranked = query.with_entities(
+        TrackingObservation.observation_id.label('id'),
+        func.row_number().over(
+            partition_by=TrackingObservation.distribution_id,
+            order_by=(TrackingObservation.observed_at.desc(), TrackingObservation.observation_id.desc()),
+        ).label('position'),
+    ).subquery()
+    query = query.join(ranked, ranked.c.id == TrackingObservation.observation_id).filter(ranked.c.position == 1)
     latest = {}
-    for observation, distribution, reel, product, campaign, account in query.order_by(TrackingObservation.observed_at).all():
+    for observation, distribution, reel, product, campaign, account in query.order_by(TrackingObservation.observed_at, TrackingObservation.observation_id).all():
         key = str(distribution.distribution_id)
         latest[key] = dict(_identity(distribution, reel, product, campaign, account),
                            **{metric: getattr(observation, metric) for metric in SOCIAL_METRICS},
                            clicks=0, observed_at=observation.observed_at.isoformat())
     links = _filters(_scope_query(db, TrackingLink, user_id), **filters)
-    for link, distribution, reel, product, campaign, account in links.all():
+    clicks = links.join(TrackingClick, TrackingClick.link_id == TrackingLink.link_id)
+    if lower:
+        clicks = clicks.filter(TrackingClick.clicked_at >= lower)
+    if upper:
+        clicks = clicks.filter(TrackingClick.clicked_at < upper)
+    counts = clicks.with_entities(
+        TrackingLink.link_id.label('link_id'), func.count(TrackingClick.click_id).label('clicks'),
+    ).group_by(TrackingLink.link_id).subquery()
+    links = links.outerjoin(counts, counts.c.link_id == TrackingLink.link_id).add_columns(func.coalesce(counts.c.clicks, 0))
+    for link, distribution, reel, product, campaign, account, count in links.all():
         key = str(distribution.distribution_id)
         row = latest.setdefault(key, dict(_identity(distribution, reel, product, campaign, account),
                                          **dict.fromkeys(SOCIAL_METRICS), clicks=0, observed_at=None))
-        clicks = db.query(TrackingClick).filter(TrackingClick.link_id == link.link_id)
-        if lower:
-            clicks = clicks.filter(TrackingClick.clicked_at >= lower)
-        if upper:
-            clicks = clicks.filter(TrackingClick.clicked_at < upper)
-        row['clicks'] = clicks.count()
+        row['clicks'] = count
     return list(latest.values())
 
 
@@ -171,17 +186,21 @@ def dashboard(db: Session, *, user_id, start=None, end=None, **filters):
         TrackingObservation.user_id == user_id, TrackingObservation.distribution_id.is_(None)).count()
     clicks = (_filters(_scope_query(db, TrackingLink, user_id), **filters)
               .join(TrackingClick, TrackingClick.link_id == TrackingLink.link_id)
-              .with_entities(TrackingClick.clicked_at, SocialAccount.platform_name))
+              )
     lower, upper = _bounds(start, end)
     if lower:
         clicks = clicks.filter(TrackingClick.clicked_at >= lower)
     if upper:
         clicks = clicks.filter(TrackingClick.clicked_at < upper)
+    # SQLite is used by isolated tests; production PostgreSQL stores timestamptz.
+    day = (func.date(func.datetime(TrackingClick.clicked_at, '+7 hours'))
+           if db.get_bind().dialect.name == 'sqlite'
+           else func.date(func.timezone('Asia/Bangkok', TrackingClick.clicked_at)))
     daily = defaultdict(lambda: defaultdict(int))
-    for timestamp, source_platform in clicks.all():
-        if timestamp.tzinfo is None:
-            timestamp = timestamp.replace(tzinfo=timezone.utc)
-        daily[timestamp.astimezone(REPORT_TZ).date().isoformat()][source_platform] += 1
+    for click_day, source_platform, count in clicks.with_entities(
+        day, SocialAccount.platform_name, func.count(TrackingClick.click_id),
+    ).group_by(day, SocialAccount.platform_name).all():
+        daily[str(click_day)][source_platform] = count
     return dict(totals=dict(_totals(rows), reels=len({row['reel_id'] for row in rows})),
                 click_trend=[dict(date=day, clicks=sum(counts.values()),
                                   **{platform: counts.get(platform, 0) for platform in SUPPORTED_TRACKING_PLATFORMS})
@@ -202,14 +221,16 @@ def analyze_performance(db: Session, *, user_id, level, metric, **filters):
     return dict(level=level, metric=metric, rows=_rank(rows, level, metric), semantics=SEMANTICS)
 
 
-def compare_periods(db: Session, *, user_id, a_start, a_end, b_start, b_end, **filters):
-    a = detail_rows(db, user_id=user_id, start=a_start, end=a_end, **filters)
-    b = detail_rows(db, user_id=user_id, start=b_start, end=b_end, **filters)
+def compare_periods(db: Session, *, user_id, a_start, a_end, b_start, b_end,
+                    period_rows=None, **filters):
+    a, b = period_rows if period_rows is not None else (
+        detail_rows(db, user_id=user_id, start=a_start, end=a_end, **filters),
+        detail_rows(db, user_id=user_id, start=b_start, end=b_end, **filters),
+    )
     av, bv = sum(row['clicks'] for row in a), sum(row['clicks'] for row in b)
-    earliest = _filters(_scope_query(db, TrackingLink, user_id), **filters).with_entities(TrackingLink.created_at).all()
     # Zero before collection began is unknown, not a measured zero. With several
     # links, coverage starts when the last link in the scope was created.
-    coverage = max((row[0] for row in earliest), default=None)
+    coverage = _filters(_scope_query(db, TrackingLink, user_id), **filters).with_entities(func.max(TrackingLink.created_at)).scalar()
     if coverage and coverage.tzinfo is None:
         coverage = coverage.replace(tzinfo=timezone.utc)
     complete_a = bool(coverage and coverage <= _bounds(a_start)[0] and a_end < datetime.now(REPORT_TZ).date())

@@ -36,6 +36,15 @@ else
 fi
 
 # ── 3. Stop Celery Worker ─────────────────────────────────
+for worker_kind in generation publish sync scheduler caption; do
+    worker_pid_file="$SCRIPT_DIR/.celery_${worker_kind}_pid"
+    if [ -f "$worker_pid_file" ]; then
+        worker_pid=$(cat "$worker_pid_file")
+        kill "$worker_pid" 2>/dev/null
+        rm "$worker_pid_file"
+    fi
+done
+
 if [ -f "$SCRIPT_DIR/.celery_pid" ]; then
     PID=$(cat "$SCRIPT_DIR/.celery_pid")
     echo "Stopping Celery Worker (PID: $PID)..."

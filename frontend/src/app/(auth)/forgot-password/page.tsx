@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -16,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 
-const API_URL = "http://localhost:8000";
+const API_URL = BACKEND_BASE_URL;
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");

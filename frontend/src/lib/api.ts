@@ -1,3 +1,6 @@
+import { API_BASE_URL } from "@/lib/api-config";
+export { API_BASE_URL, OAUTH_API_BASE_URL, OAUTH_BACKEND_URL } from "@/lib/api-config";
+
 // AI Reel API
 export async function inputPromptAndSelectProduct(data: {
   prompt_text: string;
@@ -48,13 +51,6 @@ export async function uploadOwnReel(file: File, product_id?: string) {
   if (!res.ok) throw new Error('Failed to upload Reel');
   return await res.json();
 }
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-// OAuth starts on the public callback domain so its session cookie is returned
-// by the provider. Keep ordinary browser API requests local during ngrok-based
-// development to avoid ngrok's free-tier browser interstitial.
-export const OAUTH_API_BASE_URL = process.env.NEXT_PUBLIC_OAUTH_API_URL || API_BASE_URL;
-// Member sign-in routes live at /auth rather than below /api.
-export const OAUTH_BACKEND_URL = OAUTH_API_BASE_URL.replace(/\/api\/?$/, "");
 
 function getAuthHeaders(): HeadersInit {
   if (typeof window === "undefined") return {};

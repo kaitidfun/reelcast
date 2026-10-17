@@ -1,5 +1,6 @@
 "use client";
 
+import { BACKEND_BASE_URL } from "@/lib/api-config";
 /**
  * GenerationQueueContext — global background generation tracker
  *
@@ -120,7 +121,7 @@ export function GenerationQueueProvider({ children }: { children: React.ReactNod
         const token = localStorage.getItem("rf_token");
         if (!token) return;
 
-        const res = await fetch(`http://localhost:8000/api/reels/${reelId}/status`, {
+        const res = await fetch(`${BACKEND_BASE_URL}/api/reels/${reelId}/status`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) return;
