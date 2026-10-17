@@ -135,11 +135,11 @@ def detail_rows(db: Session, *, user_id, start=None, end=None, **filters):
     return list(latest.values())
 
 
-def _totals(rows):
+def _totals(rows, *, unavailable_as_zero=False):
     totals = {'clicks': sum(row['clicks'] for row in rows)}
     for metric in SOCIAL_METRICS:
         values = [row[metric] for row in rows if row[metric] is not None]
-        totals[metric] = sum(values) if values else None
+        totals[metric] = sum(values) if values or unavailable_as_zero else None
     totals['partial_metrics'] = [metric for metric in SOCIAL_METRICS
                                  if any(row[metric] is None for row in rows)]
     return totals
@@ -214,16 +214,18 @@ def compare_periods(db: Session, *, user_id, a_start, a_end, b_start, b_end, **f
         coverage = coverage.replace(tzinfo=timezone.utc)
     complete_a = bool(coverage and coverage <= _bounds(a_start)[0] and a_end < datetime.now(REPORT_TZ).date())
     complete_b = bool(coverage and coverage <= _bounds(b_start)[0] and b_end < datetime.now(REPORT_TZ).date())
-    comparable = complete_a and complete_b
-    return dict(a=dict(start=a_start.isoformat(), end=a_end.isoformat(), clicks=av, complete=complete_a),
-                b=dict(start=b_start.isoformat(), end=b_end.isoformat(), clicks=bv, complete=complete_b),
-                difference=bv-av if comparable else None,
-                percentage_change=round((bv-av)/av*100, 2) if comparable and av else None,
+    social_a, social_b = _totals(a, unavailable_as_zero=True), _totals(b, unavailable_as_zero=True)
+    return dict(a=dict(start=a_start.isoformat(), end=a_end.isoformat(), clicks=av, complete=complete_a,
+                       social={key: social_a[key] for key in (*SOCIAL_METRICS, 'partial_metrics')}),
+                b=dict(start=b_start.isoformat(), end=b_end.isoformat(), clicks=bv, complete=complete_b,
+                       social={key: social_b[key] for key in (*SOCIAL_METRICS, 'partial_metrics')}),
+                difference=bv-av,
+                percentage_change=round((bv-av)/av*100, 2) if av else None,
                 equal_duration=(a_end-a_start) == (b_end-b_start),
                 coverage_start=coverage.isoformat() if coverage else None,
                 social_comparison=None,
-                limitation='Social providers currently supply lifetime counters; daily social activity is unavailable. '
-                           'Click differences require completed periods fully covered by link collection.',
+                limitation='Social growth compares lifetime observations, not activity within each period. '
+                           'Click growth uses recorded visits; partial periods or incomplete coverage may affect results.',
                 semantics=SEMANTICS)
 
 

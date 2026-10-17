@@ -214,7 +214,7 @@ it('exports the compared periods even if draft dates change afterward', async ()
     fireEvent.change(screen.getByLabelText(labels[key as keyof typeof labels]), { target: { value } });
   }
   fireEvent.click(screen.getByRole('button', { name: 'Compare periods' }));
-  await screen.findByText('Change: 50 · 50%');
+  expect(await screen.findByLabelText('Click growth rate')).toHaveTextContent('+50%');
   const appliedFilters = { start: periods.a_start, end: periods.a_end, platform: 'youtube' };
   expect(api.fetchTrackingDashboard).toHaveBeenLastCalledWith({});
   expect(api.fetchTrackingDashboard).toHaveBeenCalledTimes(2);
@@ -229,7 +229,7 @@ it('exports the compared periods even if draft dates change afterward', async ()
   expect(api.fetchTrackingDashboard).toHaveBeenCalledTimes(2);
   for (const label of Object.values(labels)) expect(screen.getByLabelText(label)).toHaveValue('');
   expect(screen.getByRole('combobox', { name: 'Platform' })).toHaveTextContent('All platforms');
-  expect(screen.queryByText('Change: 50 · 50%')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Click growth rate')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument();
   expect(api.fetchTrackingComparison).toHaveBeenCalledTimes(comparisonCalls);
 });
@@ -292,7 +292,7 @@ it('isolates comparison loading, errors, exports and reset from dashboard, ranki
     difference: 10, percentage_change: 100, equal_duration: true, limitation: '', coverage_start: '2025-12-01',
   });
   fireEvent.click(screen.getByRole('button', { name: 'Compare periods' }));
-  await screen.findByText('Change: 10 · 100%');
+  expect(await screen.findByLabelText('Click growth rate')).toHaveTextContent('+100%');
   checkOtherSections();
   let rejectExport!: (error: Error) => void;
   vi.mocked(api.downloadTrackingExport).mockImplementationOnce(() => new Promise((_, reject) => { rejectExport = reject; }));
@@ -302,12 +302,69 @@ it('isolates comparison loading, errors, exports and reset from dashboard, ranki
   expect(within(comparisonPanel).getByRole('alert')).toHaveTextContent('Comparison export failed');
   checkOtherSections();
   fireEvent.click(within(comparisonPanel).getByRole('button', { name: 'Reset' }));
-  expect(screen.queryByText('Change: 10 · 100%')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Click growth rate')).not.toBeInTheDocument();
   checkOtherSections();
   fireEvent.click(within(detailSection).getByRole('button', { name: 'CSV' }));
   await waitFor(() => expect(api.downloadTrackingExport).toHaveBeenLastCalledWith('csv', {}));
 });
 
+
+it('shows a comparison overview with honest social observations and partial coverage', async () => {
+  const social = { views: 100, likes: 0, comments: 2, shares: null, engagement: null, partial_metrics: ['shares', 'engagement'] };
+  vi.mocked(api.fetchTrackingComparison).mockResolvedValue({
+    a: { start: '2026-01-01', end: '2026-01-07', clicks: 1, complete: false, social },
+    b: { start: '2026-01-08', end: '2026-01-15', clicks: 0, complete: false, social: { ...social, views: 150 } },
+    difference: null, percentage_change: null, equal_duration: false, limitation: 'Incomplete link coverage', coverage_start: '2026-01-03',
+  });
+  render(<Tracking />);
+  await screen.findByText('Tracking details');
+  for (const [label, value] of [['Start date', '2026-01-01'], ['End date', '2026-01-07'],
+    ['Period B start date', '2026-01-08'], ['Period B end date', '2026-01-15']]) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+  fireEvent.click(screen.getByRole('button', { name: 'Compare periods' }));
+  const results = await screen.findByRole('region', { name: 'Period comparison results' });
+  expect(within(results).getByRole('heading', { name: 'Period comparison · Overview' })).toBeInTheDocument();
+  expect(within(results).getAllByText('Partial coverage')).toHaveLength(2);
+  expect(within(results).getByText(/different durations/)).toBeInTheDocument();
+  expect(within(results).getByLabelText('Click growth rate')).toHaveTextContent('-100%');
+  expect(within(results).getByLabelText('Period B link clicks')).toHaveTextContent('0');
+  const views = within(results).getByLabelText('Views observations');
+  expect(views).toHaveTextContent('100');
+  expect(views).toHaveTextContent('150');
+  expect(within(views).getByText('Growth Rate')).toBeInTheDocument();
+  expect(within(within(results).getByLabelText('Likes observations')).getAllByText('0')).toHaveLength(3);
+  expect(within(within(results).getByLabelText('Shares observations')).getAllByText('0')).toHaveLength(3);
+  expect(within(results).getByLabelText('Views growth')).toHaveTextContent('+50');
+  expect(within(results).getByLabelText('Views growth rate')).toHaveTextContent('+50%');
+  expect(within(results).getByLabelText('Shares growth')).toHaveTextContent('0');
+  expect(within(results).getByLabelText('Shares growth rate')).toHaveTextContent('—');
+  expect(within(results).getByText(/Unavailable counters are counted as 0/)).toBeInTheDocument();
+  expect(within(results).getByText(/not activity earned within that period/)).toBeInTheDocument();
+  expect(within(results).getByText(/One or both periods have partial coverage/)).toBeInTheDocument();
+});
+
+it.each([
+  [10, 5, -5, -50, '-50%', '-5 clicks'],
+  [10, 10, 0, 0, '0%', '0 clicks'],
+  [0, 5, 5, null, '—', '+5 clicks'],
+])('renders valid click changes for A=%s and B=%s', async (a, b, difference, percentage, percentText, differenceText) => {
+  vi.mocked(api.fetchTrackingComparison).mockResolvedValue({
+    a: { start: '2026-01-01', end: '2026-01-07', clicks: a as number, complete: true },
+    b: { start: '2026-01-08', end: '2026-01-14', clicks: b as number, complete: true },
+    difference: difference as number, percentage_change: percentage as number | null, equal_duration: true, limitation: '', coverage_start: '2025-12-01',
+  });
+  render(<Tracking />);
+  await screen.findByText('Tracking details');
+  for (const [label, value] of [['Start date', '2026-01-01'], ['End date', '2026-01-07'],
+    ['Period B start date', '2026-01-08'], ['Period B end date', '2026-01-14']]) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+  fireEvent.click(screen.getByRole('button', { name: 'Compare periods' }));
+  expect(await screen.findByLabelText('Click growth rate')).toHaveTextContent(String(percentText));
+  expect(screen.getByLabelText('Click growth')).toHaveTextContent(String(differenceText));
+  if (a === 0) expect(within(screen.getByRole('region', { name: 'Period comparison results' })).getAllByText(/Growth Rate undefined: Period A is 0/)[0]).toBeInTheDocument();
+});
 
 it('resets ranking results and choices without clearing comparison draft dates', async () => {
   vi.mocked(api.fetchTrackingAnalysis).mockResolvedValue({ level: 'product', metric: 'clicks', rows: [], semantics: '' });

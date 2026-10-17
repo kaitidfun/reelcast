@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { BarChart3, SearchCheck, Download, RefreshCw, Eye, Heart, MessageCircle, Share2, MousePointerClick, Video, SlidersHorizontal, ChevronDown, Settings2, Trophy, TableProperties, ArrowLeftRight, ChevronLeft, ChevronRight, Globe2, Megaphone, Package, Info, RotateCcw, type LucideIcon } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { BarChart3, SearchCheck, Download, RefreshCw, Eye, Heart, MessageCircle, Share2, MousePointerClick, Video, SlidersHorizontal, Settings2, Trophy, TableProperties, ArrowLeftRight, ChevronLeft, ChevronRight, Globe2, Megaphone, Package, Info, RotateCcw, type LucideIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -188,6 +188,79 @@ function ScopeSelect({ label, value, onChange, options, placeholder, icon: Icon,
   );
 }
 
+function MetricGrowth({ a, b, label }: { a: number; b: number; label: string }) {
+  const growth = b - a;
+  const rate = a === 0 ? null : Math.round(growth / a * 10000) / 100;
+  const signed = (value: number) => `${value > 0 ? "+" : ""}${display(value)}`;
+  const color = growth === 0 ? "text-foreground" : growth > 0 ? "text-success" : "text-destructive";
+  return <div className="space-y-2 border-t border-border/60 pt-3">
+    <dl className="space-y-2 text-xs">
+      <div className="flex flex-wrap items-baseline justify-between gap-2"><dt className="text-muted-foreground">Growth</dt><dd aria-label={`${label} growth`} className={`font-semibold tabular-nums ${color}`}>{signed(growth)}{label === "Click" ? " clicks" : ""}</dd></div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2"><dt className="text-muted-foreground">Growth Rate</dt><dd aria-label={`${label} growth rate`} className={`font-semibold tabular-nums ${color}`}>{rate == null ? "—" : `${signed(rate)}%`}</dd></div>
+    </dl>
+    {rate == null && <p className="text-[10px] text-muted-foreground">Growth Rate undefined: Period A is 0.</p>}
+  </div>;
+}
+
+function ComparisonOverview({ comparison, scope, actions }: {
+  comparison: TrackingComparison;
+  scope: string[];
+  actions: ReactNode;
+}) {
+  const dateLabel = (value: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
+  const complete = comparison.a.complete && comparison.b.complete;
+  const maxClicks = Math.max(comparison.a.clicks, comparison.b.clicks, 1);
+  const socialMetrics = [
+    { key: "views", label: "Views", icon: Eye },
+    { key: "likes", label: "Likes", icon: Heart },
+    { key: "comments", label: "Comments", icon: MessageCircle },
+    { key: "shares", label: "Shares", icon: Share2 },
+    { key: "engagement", label: "Engagement", icon: BarChart3 },
+  ] as const;
+  return <section className={`${panelClass} space-y-6`} aria-label="Period comparison results">
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <SectionTitle icon={ArrowLeftRight} title="Period comparison · Overview" description="Two periods, one scope. Review link activity and social observations side by side." />
+      {actions}
+    </div>
+    <div className="flex flex-wrap items-center gap-2" aria-label="Applied comparison scope">
+      {scope.map((label, index) => <span key={`${index}-${label}`} className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-foreground/80">{label}</span>)}
+      <span className="text-xs text-muted-foreground sm:ml-auto">Asia/Bangkok</span>
+    </div>
+    <div className="grid gap-3 md:grid-cols-2">
+      {(["a", "b"] as const).map(period => {
+        const values = comparison[period];
+        const days = Math.round((Date.parse(values.end) - Date.parse(values.start)) / 86400000) + 1;
+        return <div key={period} className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/20 p-4">
+          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${period === "a" ? "bg-muted text-foreground" : "bg-primary/15 text-primary"}`}>{period.toUpperCase()}</span>
+          <div className="min-w-0 flex-1"><p className="text-xs font-medium text-muted-foreground">{period === "a" ? "Baseline period" : "Comparison period"} · {days} days</p><p className="mt-1 text-sm font-semibold">{dateLabel(values.start)} – {dateLabel(values.end)}</p></div>
+          <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${values.complete ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}>{values.complete ? "Full coverage" : "Partial coverage"}</span>
+        </div>;
+      })}
+    </div>
+    {!comparison.equal_duration && <p className="flex items-center gap-2 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning"><Info className="h-4 w-4 shrink-0" aria-hidden="true" />Periods have different durations. Totals reflect different numbers of days.</p>}
+    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="flex items-center gap-2 text-sm font-semibold"><MousePointerClick className="h-4 w-4 text-primary" aria-hidden="true" />Affiliate link clicks</h3><span className="text-[11px] text-muted-foreground">Activity within each period</span></div>
+      <div className="mt-5 grid gap-5 sm:grid-cols-3">
+        {(["a", "b"] as const).map(period => <div key={period}><p className="text-xs text-muted-foreground">Period {period.toUpperCase()}</p><p className="mt-2 text-3xl font-semibold tabular-nums" aria-label={`Period ${period.toUpperCase()} link clicks`}>{display(comparison[period].clicks)}</p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true"><div className={`h-full rounded-full ${period === "a" ? "bg-muted-foreground" : "bg-primary"}`} style={{ width: `${comparison[period].clicks / maxClicks * 100}%` }} /></div></div>)}
+        <div className="sm:border-l sm:border-primary/15 sm:pl-5"><MetricGrowth a={comparison.a.clicks} b={comparison.b.clicks} label="Click" /></div>
+      </div>
+      {!complete && <p className="mt-4 border-t border-primary/15 pt-3 text-xs leading-relaxed text-muted-foreground">Growth uses the recorded clicks shown above. One or both periods have partial coverage or are still in progress.</p>}
+    </div>
+    <div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-sm font-semibold">Social performance</h3><span className="text-[11px] text-muted-foreground">Latest lifetime observation in each period</span></div>
+      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">These are cumulative counters observed during each period, not activity earned within that period. Unavailable counters are counted as 0 in this overview. Growth compares these observed totals.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {socialMetrics.map(({ key, label, icon: Icon }) => <div key={key} className="min-w-0 rounded-xl border border-border bg-muted/20 p-4" aria-label={`${label} observations`}>
+          <h4 className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><Icon className="h-4 w-4" aria-hidden="true" />{label}</h4>
+          <dl className="mt-4 space-y-3">{(["a", "b"] as const).map(period => <div key={period} className="flex items-baseline justify-between gap-2"><dt className="text-xs text-muted-foreground">{period.toUpperCase()}</dt><dd className="text-lg font-semibold tabular-nums">{display(comparison[period].social?.[key] ?? 0)}</dd></div>)}</dl>
+          <div className="mt-4"><MetricGrowth a={comparison.a.social?.[key] ?? 0} b={comparison.b.social?.[key] ?? 0} label={label} /></div>
+        </div>)}
+      </div>
+    </div>
+    <div className="flex items-start gap-2 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground"><Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><p>{comparison.limitation}</p></div>
+  </section>;
+}
+
 function PeriodComparison({ options }: { options: TrackingFilterOptions }) {
   const [filters, setFilters] = useState<TrackingFilters>({});
   const [applied, setApplied] = useState<TrackingFilters>({});
@@ -277,7 +350,7 @@ function PeriodComparison({ options }: { options: TrackingFilterOptions }) {
 
   return <div aria-busy={loading} className="space-y-5">
       <section aria-label="Compare periods" className={`${panelClass} space-y-5`}>
-      <SectionTitle icon={SlidersHorizontal} title="Compare periods" description="Choose two periods and a content scope to compare affiliate link clicks." />
+      <SectionTitle icon={SlidersHorizontal} title="Compare periods" description="Choose two periods and a content scope to review performance side by side." />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <ScopeSelect icon={Globe2} label="Platform" value={filters.platform} onChange={value => changeScope("platform", value)}
           placeholder="All platforms" options={options.platforms.map(platform => ({ id: platform, name: platformLabel(platform), platform }))} />
@@ -330,30 +403,21 @@ function PeriodComparison({ options }: { options: TrackingFilterOptions }) {
       {loading && <p role="status">Comparing periods…</p>}
       {invalidPeriodOrder && <p role="alert" className="text-sm text-destructive">Period B must start after Period A ends.</p>}
       {hasFutureDate && <p role="alert" className="text-sm text-destructive">Dates cannot be later than today (Asia/Bangkok).</p>}
-      <details className="group rounded-xl border border-info/25 bg-info/5 p-4 text-sm">
-        <summary className="flex cursor-pointer list-none items-center gap-3 rounded-md font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2 focus-visible:ring-offset-card [&::-webkit-details-marker]:hidden">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-info/10 text-info"><Info className="h-5 w-5" aria-hidden="true" /></span>
-          <span>How these metrics are counted</span>
-          <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-info transition-transform group-open:rotate-180" aria-hidden="true" />
-        </summary>
-        <p className="mt-3 max-w-4xl leading-relaxed text-foreground/80 sm:ml-12">Social figures are the latest lifetime observation in the selected dates. Clicks are visits during those dates (Asia/Bangkok). Repeat visits count; recognized bots, previews and HEAD requests do not. These figures do not measure purchases or unique visitors. Period comparison supports affiliate link clicks; social daily activity is unavailable from lifetime observations.</p>
-      </details>
+      <aside aria-label="About these metrics" className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+        <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <p>Social metrics are lifetime snapshots. Clicks count repeat visits (Asia/Bangkok), excluding recognized bots and previews. Unavailable = 0; growth compares B with A.</p>
+      </aside>
     </section>
 
     {comparison && appliedPeriods && (
-      <section className={panelClass} aria-label="Period comparison results">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionTitle icon={ArrowLeftRight} title="Period comparison · Affiliate link clicks" description="Review changes in link clicks between the two selected periods." />
-          {exportButtons(appliedPeriods, Boolean(comparison.coverage_start))}
-        </div>
-        <div className="mt-4 space-y-2 text-sm">
-          <p>A ({comparison.a.start} – {comparison.a.end}): {display(comparison.a.clicks)}{!comparison.a.complete && " · Partial coverage"}</p>
-          <p>B ({comparison.b.start} – {comparison.b.end}): {display(comparison.b.clicks)}{!comparison.b.complete && " · Partial coverage"}</p>
-          <p>Change: {display(comparison.difference)} · {comparison.percentage_change == null ? "Percentage unavailable" : `${comparison.percentage_change}%`}</p>
-          {!comparison.equal_duration && <p className="text-muted-foreground">Periods have different durations.</p>}
-          <p className="text-xs text-muted-foreground">{comparison.limitation}</p>
-        </div>
-      </section>
+      <ComparisonOverview comparison={comparison} actions={exportButtons(appliedPeriods, Boolean(comparison.coverage_start))}
+        scope={[
+          applied.platform ? platformLabel(applied.platform) : "All platforms",
+          ...(["campaign", "product", "reel"] as const).flatMap(scope => {
+            const id = applied[`${scope}_id`];
+            return id ? [options[`${scope}s`].find(option => option.id === id)?.name || `Selected ${scope}`] : [];
+          }),
+        ]} />
     )}
 
 
@@ -557,8 +621,6 @@ export default function Tracking() {
         <SocialPlatformChart platforms={dashboard.platforms} metric="shares" label="Shares" icon={Share2} />
       </div>
       </div>
-      <PeriodComparison options={options} />
-
       <section className={panelClass}><div className="flex flex-wrap items-center justify-between gap-3"><SectionTitle icon={Trophy} title="Content ranking" description="Rank Reels, products, campaigns or platforms by a selected metric." /><div className="flex flex-wrap gap-2"><ScopeSelect icon={Video} label="Ranking level" showLabel={false} allowAll={false} className="w-40" placeholder="Level" value={level}
                 onChange={value => { setLevel(value as TrackingAnalysis["level"]); setAnalysis(null); setSelectedItem(null); }}
                 options={[
@@ -576,6 +638,9 @@ export default function Tracking() {
                   <span className="w-full text-xs text-muted-foreground sm:w-56 sm:text-right" title="Latest social observation in this group">
                     Observed At: {item.observed_at ? new Date(item.observed_at).toLocaleString() : 'Unavailable'}
                   </span></button>)}</div>}{selectedItem && <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm"><h3 className="mb-2 font-semibold">{selectedItem.name || "Untitled"}</h3><div className="grid gap-2 sm:grid-cols-3">{(["views", "likes", "comments", "shares", "engagement", "clicks"] as const).map(key => <p key={key} className="capitalize">{key}: {display(selectedItem[key])}</p>)}</div>{!!selectedItem.partial_metrics.length && <p className="mt-2 text-xs text-muted-foreground">Some counters are unavailable in this scope.</p>}</div>}</section>
+
+      <PeriodComparison options={options} />
+
     <section className={panelClass}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SectionTitle icon={TableProperties} title="Tracking details" description="Review social metrics and affiliate link clicks for each Reel." />
@@ -624,7 +689,10 @@ export default function Tracking() {
             </Button>
           </nav>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">Use links only in locations the platform allows viewers to open. Instagram and TikTok captions may not provide clickable links. A shared bio link alone cannot identify the originating Reel.</p>
+        <div className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <p>Use links only in locations the platform allows viewers to open. Instagram and TikTok captions may not provide clickable links. A shared bio link alone cannot identify the originating Reel.</p>
+        </div>
       </section>
 
 

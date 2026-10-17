@@ -107,8 +107,8 @@ export type TrackingAnalysis = {
 export type TrackingFilters = { start?: string; end?: string; platform?: string; campaign_id?: string; product_id?: string; reel_id?: string };
 export type TrackingPeriods = { a_start: string; a_end: string; b_start: string; b_end: string };
 export type TrackingComparison = {
-  a: { start: string; end: string; clicks: number; complete: boolean };
-  b: { start: string; end: string; clicks: number; complete: boolean };
+  a: { start: string; end: string; clicks: number; complete: boolean; social?: Omit<TrackingMetric, "clicks"> };
+  b: { start: string; end: string; clicks: number; complete: boolean; social?: Omit<TrackingMetric, "clicks"> };
   difference: number | null; percentage_change: number | null; equal_duration: boolean;
   limitation: string; coverage_start: string | null;
 };

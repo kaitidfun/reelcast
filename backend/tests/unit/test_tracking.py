@@ -114,7 +114,7 @@ def test_redirect_click_rules_period_boundaries_and_missing_coverage(data):
     result = service.compare_periods(db, user_id=users[0].user_id, **periods)
     assert result['difference'] == 6 and result['percentage_change'] is None
     link.created_at = datetime(2026,1,2,tzinfo=timezone.utc); db.commit()
-    assert service.compare_periods(db, user_id=users[0].user_id, **periods)['difference'] is None
+    assert service.compare_periods(db, user_id=users[0].user_id, **periods)['difference'] == 6
 
 @pytest.mark.parametrize('a_clicks,b_clicks,partial,b_end', [
     (3, 6, False, '2026-01-14'),
@@ -148,8 +148,8 @@ def test_comparison_exports_preserve_api_summary(data, a_clicks, b_clicks, parti
     comparison = comparison_response.json()
     assert comparison['a']['clicks'] == a_clicks and comparison['b']['clicks'] == b_clicks
     assert comparison['a']['complete'] is not partial
-    assert comparison['difference'] == (None if partial else b_clicks - a_clicks)
-    assert comparison['percentage_change'] == (None if partial or not a_clicks else round((b_clicks-a_clicks)/a_clicks*100, 2))
+    assert comparison['difference'] == b_clicks - a_clicks
+    assert comparison['percentage_change'] == (None if not a_clicks else round((b_clicks-a_clicks)/a_clicks*100, 2))
     assert response.content.startswith(b'\xef\xbb\xbf')
     rows = list(csv.DictReader(io.StringIO(response.content.decode('utf-8-sig'))))
     assert len(rows) == 2 and {row['Comparison Period'] for row in rows} == {'A', 'B'}
@@ -202,7 +202,7 @@ def test_comparison_exports_preserve_api_summary(data, a_clicks, b_clicks, parti
         assert summary['Coverage Start (Asia/Bangkok)'] == ('05 Jan 2026, 07:00:00' if partial else '30 Dec 2025, 07:00:00')
         if partial:
             assert summary['Comparison Status'].startswith('Partial coverage:')
-            assert 'not fully covered or completed' in summary['Percentage Change Status']
+            assert summary['Percentage Change Status'] == 'Available'
         elif not a_clicks:
             assert summary['Percentage Change Status'] == 'Unavailable: Period A has zero clicks.'
         else:
@@ -256,6 +256,31 @@ def test_comparison_export_pairs_publications_across_periods(format):
         ('undated', 'A'),
     ]
     assert [(row['distribution_id'], row['comparison_period']) for row in source] == original_order
+
+
+def test_comparison_overview_uses_latest_social_observation_in_each_period(data):
+    db, users, accounts, _ = data
+    observe(db, users[0], accounts[0], 10, 2)
+    observe(db, users[0], accounts[0], 12, 6)
+    observe(db, users[0], accounts[0], 20, 10)
+    observe(db, users[1], accounts[1], 99, 10)
+    result = service.compare_periods(db, user_id=users[0].user_id,
+                                     a_start=date(2026,1,1), a_end=date(2026,1,7),
+                                     b_start=date(2026,1,8), b_end=date(2026,1,14))
+    assert result['a']['social']['views'] == 12
+    assert result['b']['social']['views'] == 20
+    assert result['a']['social']['likes'] == 0
+    assert result['a']['social']['shares'] == 0
+    assert 'shares' in result['a']['social']['partial_metrics']
+    assert result['social_comparison'] is None
+    assert result['difference'] == 0  # Growth uses recorded values even without full coverage.
+    # Other Tracking components retain their own missing-data semantics.
+    assert service.dashboard(db, user_id=users[0].user_id)['totals']['shares'] is None
+    empty = service.compare_periods(db, user_id=users[0].user_id,
+                                   a_start=date(2025,1,1), a_end=date(2025,1,7),
+                                   b_start=date(2025,1,8), b_end=date(2025,1,14))
+    for period in ('a', 'b'):
+        assert all(empty[period]['social'][metric] == 0 for metric in service.SOCIAL_METRICS)
 
 
 def test_api_export_ownership_thai_formula_safety_and_redirect(data):
