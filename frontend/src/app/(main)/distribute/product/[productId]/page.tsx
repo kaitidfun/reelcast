@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { ReelCard } from "@/components/ReelCard";
 import { API_BASE_URL } from "@/lib/api";
 
 export default function DistributedProductReelsPage() {
+  const reduceMotion = useReducedMotion();
   const params = useParams();
   const router = useRouter();
   const productId = Array.isArray(params?.productId) ? params.productId[0] : (params?.productId as string) ?? "";
@@ -41,15 +43,26 @@ export default function DistributedProductReelsPage() {
       {loading ? (
         <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">Loading…</div>
       ) : reels.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.22, ease: "easeOut" }}
+          className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground"
+        >
           No distributed reels for this product yet.
-        </div>
+        </motion.div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <motion.div
+          key={productId}
+          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.22, ease: "easeOut" }}
+          className="grid grid-cols-2 md:grid-cols-4 gap-4"
+        >
           {reels.map((reel) => (
             <ReelCard key={reel.id} reel={reel} onClick={() => router.push(`/distribute/${reel.id}`)} onChanged={reload} />
           ))}
-        </div>
+        </motion.div>
       )}
     </div>
   );
