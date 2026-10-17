@@ -3,12 +3,12 @@
 import { forwardRef, useCallback, useState, type ComponentPropsWithoutRef } from "react";
 import { LoadingState } from "@/components/LoadingState";
 
-function ImageContent({ onLoad, onError, className = "", alt, ...props }: ComponentPropsWithoutRef<"img">) {
+function ImageContent({ onLoad, onError, className = "", alt, loading: strategy = "lazy", decoding = "async", ...props }: ComponentPropsWithoutRef<"img">) {
   const [loading, setLoading] = useState(true);
   const checkCachedImage = useCallback((node: HTMLImageElement | null) => {
     if (node?.complete) setLoading(false);
   }, []);
-  return <img {...props} alt={alt} aria-busy={loading}
+  return <img {...props} alt={alt} loading={strategy} decoding={decoding} aria-busy={loading}
     ref={checkCachedImage}
     className={`${className} ${loading ? "animate-pulse bg-muted motion-reduce:animate-none" : ""}`}
     onLoad={event => { setLoading(false); onLoad?.(event); }}
@@ -20,11 +20,11 @@ export function LoadingImage(props: ComponentPropsWithoutRef<"img">) {
 }
 
 const VideoContent = forwardRef<HTMLVideoElement, ComponentPropsWithoutRef<"video">>(function VideoContent(
-  { onLoadedData, onCanPlay, onPlaying, onWaiting, onError, ...props }, ref,
+  { onLoadedData, onCanPlay, onPlaying, onWaiting, onError, preload = "metadata", ...props }, ref,
 ) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   return <>
-    <video {...props} ref={ref} aria-busy={status === "loading"}
+    <video {...props} preload={preload} ref={ref} aria-busy={status === "loading"}
       onLoadedData={event => { setStatus("ready"); onLoadedData?.(event); }}
       onCanPlay={event => { setStatus("ready"); onCanPlay?.(event); }}
       onPlaying={event => { setStatus("ready"); onPlaying?.(event); }}

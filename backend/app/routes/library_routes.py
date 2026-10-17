@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from typing import Literal, Optional
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import and_, asc, desc, func, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
@@ -27,9 +28,14 @@ def browseLibrary(
     campaignNameFilter: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    skip: int = 0,
+    limit: Optional[int] = None,
+    campaign_id: Optional[UUID] = None,
 ):
     """Retrieve and filter campaigns with their associated products."""
     del viewMode  # Display preference is applied by the frontend.
+    if skip < 0 or (limit is not None and not 1 <= limit <= 100):
+        raise HTTPException(422, 'Invalid page size or offset')
 
     try:
         campaign_query = db.query(Campaign).filter(
@@ -60,6 +66,8 @@ def browseLibrary(
             campaign_query = campaign_query.filter(
                 Campaign.name == campaignNameFilter
             )
+        if campaign_id:
+            campaign_query = campaign_query.filter(Campaign.campaign_id == campaign_id)
 
         if sortOption == "Oldest":
             campaign_query = campaign_query.order_by(asc(Campaign.created_at))
@@ -70,6 +78,10 @@ def browseLibrary(
         else:
             campaign_query = campaign_query.order_by(desc(Campaign.created_at))
 
+        total = campaign_query.order_by(None).count() if limit is not None else None
+        campaign_query = campaign_query.order_by(Campaign.campaign_id)
+        if limit is not None:
+            campaign_query = campaign_query.offset(skip).limit(limit)
         campaigns = campaign_query.all()
         campaign_ids = [campaign.campaign_id for campaign in campaigns]
 
@@ -104,7 +116,7 @@ def browseLibrary(
                 ProductResponse.model_validate(product)
                 for product in products
             ],
-            "total": len(campaigns),
+            "total": total if total is not None else len(campaigns),
         }
     except SQLAlchemyError as exc:
         raise DatabaseRetrieveException() from exc

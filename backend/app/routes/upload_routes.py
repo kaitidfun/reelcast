@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, RedirectResponse
+from urllib.parse import quote
+from app.core.config import R2_PUBLIC_URL
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 import os
@@ -136,6 +138,9 @@ def serve_generic_image(
     """
     if not object_key:
         raise HTTPException(status_code=400, detail="No object key provided")
+    if R2_PUBLIC_URL:
+        return RedirectResponse(f"{R2_PUBLIC_URL.rstrip('/')}/{quote(object_key, safe='/')}",
+                                status_code=307, headers={'Cache-Control': 'public, max-age=86400'})
 
     try:
         file_obj = get_file(object_key)
@@ -181,6 +186,9 @@ def serve_generic_video(
         raise HTTPException(status_code=400, detail="No object key provided")
 
     range_header = request.headers.get("range")
+    if R2_PUBLIC_URL and not download:
+        return RedirectResponse(f"{R2_PUBLIC_URL.rstrip('/')}/{quote(object_key, safe='/')}",
+                                status_code=307, headers={'Cache-Control': 'public, max-age=3600'})
 
     try:
         file_obj = get_file(object_key, range_header=range_header)

@@ -1,7 +1,8 @@
 "use client";
 
 import { BACKEND_BASE_URL } from "@/lib/api-config";
-import { useEffect, MutableRefObject } from "react";
+import type { MutableRefObject } from "react";
+import { useAdaptivePolling } from "@/hooks/useAdaptivePolling";
 import { useToast } from "@/hooks/use-toast";
 import { useGenerationQueue } from "@/contexts/GenerationQueueContext";
 import { resolveVideoUrl } from "@/lib/reel-status";
@@ -51,30 +52,26 @@ export function useGenerationPolling({
   const { toast } = useToast();
   const { markDone, markFailed } = useGenerationQueue();
 
-  useEffect(() => {
-    if ((!generationStatus || generationStatus !== "generating") && !isRegeneratingCaption) return;
-    if (!reelId) return;
-
-    const interval = setInterval(async () => {
+  useAdaptivePolling(async (signal) => {
       try {
         const token = localStorage.getItem("rf_token");
         const res = await fetch(`${BACKEND_BASE_URL}/api/reels/${reelId}/status`, {
-          headers: { Authorization: `Bearer ${token}` },
+          signal, headers: { Authorization: `Bearer ${token}` },
         });
 
         if (res.status === 401) {
-          clearInterval(interval);
           toast({
             title: "Session expired",
             description: "Please log out and log in again.",
             variant: "destructive",
           });
-          return;
+          return true;
         }
 
-        if (!res.ok) return;
+        if (!res.ok) throw new Error("Status request failed");
 
         const data = await res.json();
+        if (signal.aborted) return;
 
         if (data.status === "Completed") {
           const isCaptionRegen = captionOnlyRegenRef.current;
@@ -101,8 +98,7 @@ export function useGenerationPolling({
           } else {
             toast({ title: "Caption updated!", description: "New caption is ready." });
           }
-
-          clearInterval(interval);
+          return true;
         } else if (data.status === "Failed") {
           const elapsed = generationStartTime
             ? Math.floor((Date.now() - generationStartTime) / 1000)
@@ -114,14 +110,10 @@ export function useGenerationPolling({
             description: data.error_message || "Something went wrong.",
             variant: "destructive",
           });
-          clearInterval(interval);
+          return true;
         }
       } catch (e) {
-        console.error(e);
+        throw e;
       }
-    }, 3000);
-
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [generationStatus, isRegeneratingCaption, reelId, generationStartTime]);
+  }, Boolean(reelId && (generationStatus === "generating" || isRegeneratingCaption)), `${reelId}:${generationStartTime}`);
 }

@@ -34,7 +34,7 @@ from app.services.video_generation_service import (
     generate_first_frame_with_gemini,
     LTX_MAX_CLIP_DURATION,
 )
-from app.services.overlay_service import overlayImagesAndLogos, generateVideoThumbnail
+from app.services.overlay_service import overlayImagesAndLogos, generateVideoThumbnail, download_to_temp
 from app.services.reel_service import update_reel
 from app.services.storage_service import get_presigned_url
 from app.services import distribution_publish_service, distribution_service, oauth_platforms, social_account_service, tracking_provider_service, tracking_service
@@ -141,6 +141,8 @@ async def _generateReels(
         5. Persist all outputs to DB and mark reel Complete
     """
     db = SessionLocal()
+    local_video_path = None
+    caption_task = None
     try:
         reel = db.query(Reel).filter(Reel.reel_id == reel_id).first()
         if not reel:
@@ -215,6 +217,16 @@ async def _generateReels(
                 desc_suffix = f" — {desc[:80]}" if desc else ""
                 video_prompt = f"{reel.prompt_text.rstrip('.')}. Product: {product.product_name}{desc_suffix}."
 
+        # Caption has no dependency on generated frames/video; overlap provider waits.
+        if target in {"all", "caption", "upload"}:
+            caption_prompt = _build_caption_prompt(
+                video_prompt if target == "all" else reel.prompt_text,
+                product.product_name if product else None,
+            )
+            caption_task = asyncio.create_task(generateCaptionsAndHashtags(
+                prompt=caption_prompt, productDetails=product_info, targetPlatform=platform,
+            ))
+
         # ── Step 1: Determine video source ──────────────────────────────────
         if target in ["all", "video"]:
             # Pipeline: Gemini 3 Pro Image (first frame) → LTX Video 2.3 (animation)
@@ -283,7 +295,8 @@ async def _generateReels(
             if not first_frame_url and reel.uploaded_video_url:
                 try:
                     upload_video_url = get_presigned_url(reel.uploaded_video_url)
-                    first_frame_url = await generateVideoThumbnail(upload_video_url, reel_id)
+                    local_video_path = await download_to_temp(upload_video_url, suffix='.mp4')
+                    first_frame_url = await generateVideoThumbnail(upload_video_url, reel_id, local_video_path=local_video_path)
                 except Exception as thumb_err:
                     logger.warning(f"[Worker] Thumbnail extraction failed for upload: {thumb_err}")
         else:
@@ -310,7 +323,8 @@ async def _generateReels(
             raw_ref = final_video_url
             if raw_ref.startswith("http"):
                 try:
-                    raw_ref = await _upload_cdn_video_to_r2(final_video_url, reel_id)
+                    local_video_path = await download_to_temp(final_video_url, suffix='.mp4')
+                    raw_ref = await _upload_cdn_video_to_r2(final_video_url, reel_id, local_path=local_video_path)
                     logger.info(f"[Worker] Raw video persisted to R2: {raw_ref}")
                 except Exception as e:
                     logger.warning(f"[Worker] Raw R2 upload failed, keeping CDN URL: {e}")
@@ -335,7 +349,9 @@ async def _generateReels(
                 video_for_download = get_presigned_url(final_video_url)
                 logger.info(f"[Worker] Resolved R2 key to presigned URL for overlay download")
 
-            logger.info(f"[Worker] Applying overlay from: {overlay_url}")
+            if not local_video_path:
+                local_video_path = await download_to_temp(video_for_download, suffix='.mp4')
+            logger.info(f"[Worker] Applying overlay for reel {reel_id}")
             try:
                 # overlayImagesAndLogos returns an R2 object key on success, raises on failure.
                 # When with_audio=False, FFmpeg uses -an to strip the audio track.
@@ -345,6 +361,7 @@ async def _generateReels(
                     position=overlay_position,
                     reel_id=reel_id,
                     with_audio=with_audio,
+                    local_video_path=local_video_path,
                 )
                 final_video_url = overlaid_key  # R2 key — frontend proxies via /api/upload/videos/{key}
             except (FFmpegProcessingException, InvalidCoordinateException):
@@ -354,25 +371,11 @@ async def _generateReels(
                 # Keep final_video_url as the original R2 key or fal.ai CDN URL
                 logger.warning(f"[Worker] Overlay failed, keeping original video: {overlay_err}")
 
-        # ── Step 3: Generate Captions & Hashtags ─────────────────────────────
-        if target in ["all", "caption", "upload"]:
-            # Use the enriched video_prompt (includes product metadata) for richer captions.
-            # Uploaded reels intentionally have no user prompt, so build a meaningful
-            # fallback instead of sending an empty string to the caption service.
-            caption_source = (
-                video_prompt if target in ["all", "video"] else reel.prompt_text
-            )
-            caption_prompt = _build_caption_prompt(
-                caption_source,
-                product.product_name if product else None,
-            )
-            ai_response = await generateCaptionsAndHashtags(
-                prompt=caption_prompt,
-                productDetails=product_info,
-                targetPlatform=platform,
-            )
-        else:
-            ai_response = reel.caption_and_hashtags
+        # Keep the completed video if caption generation fails. A caption-only
+        # retry can reuse it without purchasing another AI video or re-encoding.
+        if target in {'all', 'video', 'upload'} and final_video_url:
+            update_reel(db, reel=reel, final_commercial_video_url=final_video_url)
+        ai_response = await caption_task if caption_task else reel.caption_and_hashtags
 
         # ── Step 4: Persist completed reel ───────────────────────────────────
         # is_saved reset to False here — any (re)generation invalidates the
@@ -394,6 +397,12 @@ async def _generateReels(
         if reel:
             update_reel(db, reel=reel, status="Failed", error_message=str(e))
     finally:
+        if caption_task is not None:
+            if not caption_task.done():
+                caption_task.cancel()
+            await asyncio.gather(caption_task, return_exceptions=True)
+        if local_video_path and os.path.exists(local_video_path):
+            os.remove(local_video_path)
         db.close()
 
 
@@ -579,54 +588,18 @@ async def _fetch_product_image_bytes(
 
 
 @timed_step
-async def _upload_cdn_video_to_r2(cdn_url: str, reel_id: str) -> str:
-    """
-    Download a temporary CDN video (fal.ai) and upload it to R2.
-    Returns the R2 object key for permanent storage.
-
-    WHY this is needed instead of storing the CDN URL directly:
-        - fal.ai CDN URLs expire in ~24h → raw_video_url becomes a broken link
-        - CDN URLs hit the streaming path in the download endpoint, which is
-          intercepted by IDM (Internet Download Manager) returning 204 without
-          CORS headers → frontend fetch fails with "Failed to fetch"
-        - R2 keys always resolve to a presigned URL (JSONResponse) →
-          browser navigates to presigned URL → IDM downloads correctly
-
-    Args:
-        cdn_url:  Publicly accessible video URL (fal.ai CDN or similar)
-        reel_id:  Reel UUID — used for the R2 object key naming
-
-    Returns:
-        R2 object key (e.g. "videos/reels/raw/.../reel_xxx_raw.mp4")
-
-    Raises:
-        httpx.HTTPError: If the CDN download fails
-        RuntimeError:   If the R2 upload fails
-    """
-    import httpx
-    from app.services.storage_service import upload_raw_bytes_to_r2
-
-    logger.info(f"[Worker] Downloading raw video from CDN: {cdn_url[:80]}")
-    async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
-        resp = await client.get(cdn_url)
-        resp.raise_for_status()
-
-    video_bytes = resp.content
-    logger.info(f"[Worker] Downloaded {len(video_bytes):,} bytes — uploading to R2")
-
-    # upload_raw_bytes_to_r2 is sync (boto3) — run in thread executor
-    loop = asyncio.get_running_loop()
-    key = await loop.run_in_executor(
-        None,
-        lambda: upload_raw_bytes_to_r2(
-            data=video_bytes,
-            filename=f"reel_{reel_id}_raw.mp4",
-            prefix="videos/reels/raw",
-            category=reel_id,
-            return_key_only=True,
-        ),
-    )
-    return key
+async def _upload_cdn_video_to_r2(cdn_url: str, reel_id: str, local_path: str | None = None) -> str:
+    from app.services.storage_service import upload_path_to_r2
+    owned_path = None
+    try:
+        if not local_path:
+            owned_path = await download_to_temp(cdn_url, suffix='.mp4')
+            local_path = owned_path
+        return await asyncio.to_thread(upload_path_to_r2, local_path,
+            filename=f"reel_{reel_id}_raw.mp4", prefix="videos/reels/raw", category=reel_id)
+    finally:
+        if owned_path and os.path.exists(owned_path):
+            os.remove(owned_path)
 
 
 async def _upload_cdn_image_to_r2(cdn_url: str, reel_id: str) -> str:

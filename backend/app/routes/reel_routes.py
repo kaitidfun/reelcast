@@ -40,6 +40,7 @@ from app.services.upload_service import (
     validate_video_file,
     probe_video_duration,
     upload_video_to_r2,
+    copy_upload_to_temp, probe_video_path, upload_video_path_to_r2,
 )
 from app.services.storage_service import get_video_download_url
 from app.services.ai_service import generate_prompt_from_template, enhance_prompt, generate_guided_prompt
@@ -441,41 +442,32 @@ async def uploadOwnReel(
     Unlike /generate, skips video generation (uses uploaded video as-is),
     but still applies product logo/image overlay and generates captions.
     """
+    if product_id:
+        try:
+            owned_product_id = UUID(product_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Invalid product") from exc
+        def owned_product():
+            return db.query(Product).filter(Product.product_id == owned_product_id,
+                Product.user_id == current_user.user_id, Product.deleted_at.is_(None)).first()
+        if not await asyncio.to_thread(owned_product):
+            raise ProductNotFoundException()
     filename = file.filename or "video"
 
-    # Step 1-3: Validate file format, size, and duration (consolidated in upload_service)
-    file_data = await file.read()
-
-    extension = os.path.splitext(filename)[1].lower()
-    if extension not in ALLOWED_VIDEO_FORMATS:
-        raise UnsupportedVideoFormatException()
-    if len(file_data) > MAX_VIDEO_SIZE_BYTES:
-        raise VideoSizeExceededException()
-
-    # Quick validation: format + size only (fail-fast before reading large file)
-    errors = validate_video_file(filename, len(file_data))
-    if errors:
-        raise HTTPException(status_code=400, detail=errors[0])
-
-    # Extended validation: duration check via ffprobe (runs after format/size pass)
-    ext = os.path.splitext(filename)[1].lower()
-    duration_sec = await probe_video_duration(file_data, ext)
-    if (
-        duration_sec is not None
-        and duration_sec > MAX_VIDEO_DURATION_SECONDS
-    ):
-        raise DurationExceededException()
-
-    # Step 4: Upload to Cloudflare R2 (delegated to upload_service)
+    # Multipart parsing spools to disk; keep validation/storage bounded in memory.
+    temporary_path, file_size = await copy_upload_to_temp(file)
     try:
-        video_url = await upload_video_to_r2(
-            file_data=file_data,
-            filename=filename,
-            user_id=str(current_user.user_id),
-        )
-    except RuntimeError as e:
-        logger.error(f"Video upload failed for user {current_user.user_id}: {e}")
-        raise HTTPException(status_code=503, detail="Upload to storage service failed")
+        duration_sec = await probe_video_path(temporary_path)
+        if duration_sec > MAX_VIDEO_DURATION_SECONDS:
+            raise DurationExceededException()
+        try:
+            video_url = await upload_video_path_to_r2(
+                temporary_path, filename, str(current_user.user_id),
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail="Upload to storage service failed") from exc
+    finally:
+        os.remove(temporary_path)
 
     # Step 5: Create Reel record with uploaded_video_url (F2-URS04-SRS04)
     parsed_product_id = None

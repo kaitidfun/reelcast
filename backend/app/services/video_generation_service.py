@@ -53,6 +53,7 @@ from typing import Optional
 import ffmpeg
 import httpx
 from app.core.task_performance import timed_step
+from app.services.overlay_service import download_to_temp
 
 from app.exceptions import (
     GeminiAPIException,
@@ -141,14 +142,7 @@ async def _extract_last_frame(video_url: str) -> str:
 
     try:
         # ── 1. Download video ────────────────────────────────────────────────
-        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
-            resp = await client.get(video_url)
-            resp.raise_for_status()
-
-        fd, video_tmp = tempfile.mkstemp(suffix=".mp4")
-        with os.fdopen(fd, "wb") as f:
-            f.write(resp.content)
-        logger.info(f"[Extend] Downloaded clip ({len(resp.content):,} bytes) → {video_tmp}")
+        video_tmp = await download_to_temp(video_url, suffix='.mp4')
 
         # ── 2. Extract last frame with FFmpeg ────────────────────────────────
         # -sseof -0.05 = seek to 50ms before end of file (last frame, no ffprobe needed).
@@ -204,7 +198,7 @@ async def _concat_clips(clip_urls: list[str], reel_id: str) -> str:
     Raises:
         RuntimeError: If any download, FFmpeg concat, or R2 upload fails
     """
-    from app.services.storage_service import upload_raw_bytes_to_r2
+    from app.services.storage_service import upload_path_to_r2
 
     clip_paths: list[str] = []
     list_path: Optional[str] = None
@@ -212,15 +206,14 @@ async def _concat_clips(clip_urls: list[str], reel_id: str) -> str:
 
     try:
         # ── 1. Download all clips in parallel ────────────────────────────────
-        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
-            responses = await asyncio.gather(*[client.get(u) for u in clip_urls])
-
-        for i, resp in enumerate(responses):
-            resp.raise_for_status()
-            fd, path = tempfile.mkstemp(suffix=f"_clip{i}.mp4")
-            with os.fdopen(fd, "wb") as f:
-                f.write(resp.content)
-            clip_paths.append(path)
+        # Keep at most one network buffer per clip and clean successful downloads
+        # even when a different clip fails.
+        downloads = await asyncio.gather(*[download_to_temp(url, suffix='.mp4') for url in clip_urls],
+                                         return_exceptions=True)
+        clip_paths.extend(path for path in downloads if isinstance(path, str))
+        for result in downloads:
+            if isinstance(result, BaseException):
+                raise result
 
         logger.info(f"[Concat] Downloaded {len(clip_paths)} clips")
 
@@ -240,7 +233,7 @@ async def _concat_clips(clip_urls: list[str], reel_id: str) -> str:
             (
                 ffmpeg
                 .input(list_path, format="concat", safe=0)
-                .output(output_path, c="copy")
+                .output(output_path, c="copy", movflags="+faststart")
                 .run(quiet=True, overwrite_output=True, cmd=_iio_ffmpeg.get_ffmpeg_exe())
             )
 
@@ -249,11 +242,7 @@ async def _concat_clips(clip_urls: list[str], reel_id: str) -> str:
         logger.info(f"[Concat] Complete: {output_path}")
 
         # ── 4. Upload concatenated video to R2 ───────────────────────────────
-        with open(output_path, "rb") as f:
-            data = f.read()
-
-        key = upload_raw_bytes_to_r2(
-            data=data,
+        key = await asyncio.to_thread(upload_path_to_r2, output_path,
             filename=f"reel_{reel_id}_extended.mp4",
             prefix="videos/reels/extended",
             category=reel_id,

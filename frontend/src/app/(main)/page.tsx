@@ -38,8 +38,10 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [reelsExpanded, setReelsExpanded] = useState(false);
   const [campaignsExpanded, setCampaignsExpanded] = useState(false);
-  const { reels, loading: reelsLoading, reload: reloadReels } = useReels();
-  const { campaigns, loading: campaignsLoading } = useCampaigns();
+  const { reels, total: reelTotal, loading: reelsLoading, reload: reloadReels } = useReels({
+    limit: reelsExpanded || searchQuery.trim() ? 50 : RECENT_REELS_COLLAPSED_SIZE,
+  });
+  const { campaigns, total: campaignTotal, loading: campaignsLoading } = useCampaigns({ limit: campaignsExpanded || searchQuery.trim() ? undefined : RECENT_CAMPAIGNS_COLLAPSED_SIZE });
   const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
   const isSearching = normalizedQuery.length > 0;
   const newestReels = [...reels].sort(
@@ -149,7 +151,7 @@ export default function Home() {
             ))}
           </div>
         )}
-        {!isSearching && !reelsExpanded && newestReels.length > RECENT_REELS_COLLAPSED_SIZE && (
+        {!isSearching && !reelsExpanded && reelTotal > RECENT_REELS_COLLAPSED_SIZE && (
           <div className="flex justify-center">
             <Button variant="outline" size="sm" onClick={() => setReelsExpanded(true)}>Show all</Button>
           </div>
@@ -179,7 +181,7 @@ export default function Home() {
             ))}
           </div>
         )}
-        {!isSearching && !campaignsExpanded && searchedCampaigns.length > RECENT_CAMPAIGNS_COLLAPSED_SIZE && (
+        {!isSearching && !campaignsExpanded && campaignTotal > RECENT_CAMPAIGNS_COLLAPSED_SIZE && (
           <div className="flex justify-center">
             <Button variant="outline" size="sm" onClick={() => setCampaignsExpanded(true)}>Show all</Button>
           </div>

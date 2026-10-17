@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdaptivePolling } from "@/hooks/useAdaptivePolling";
 import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { LoadingVideo } from "@/components/LoadingMedia";
 
@@ -256,45 +257,36 @@ const DistributeStatusContent = () => {
   const [items, setItems] = useState<DistributionItem[]>([]);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     if (!reelId) return;
     try {
       const [distRes, reelRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/distributions?reel_id=${reelId}&limit=50`, { headers: authHeaders() }),
-        fetch(`${BACKEND_BASE_URL}/api/reels/${reelId}/status`, { headers: authHeaders() }),
+        fetch(`${API_BASE_URL}/distributions?reel_id=${reelId}&limit=50`, { headers: authHeaders(), signal }),
+        fetch(`${BACKEND_BASE_URL}/api/reels/${reelId}/status`, { headers: authHeaders(), signal }),
       ]);
+      if (signal?.aborted) return;
       if (distRes.ok) setItems((await distRes.json()).distributions ?? []);
       if (reelRes.ok) {
         const reel = await reelRes.json();
         setVideoUrl(resolveVideoUrl(reel.raw_video_url) ?? resolveVideoUrl(reel.final_commercial_video_url));
       }
     } catch (e) {
+      if (signal) throw e;
       console.error("Failed to load distribution status:", e);
     } finally {
       setLoading(false);
     }
   }, [reelId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   // Real-time-ish polling while anything is actively publishing or due any moment.
-  useEffect(() => {
-    const anyLive = items.some((d) => {
-      if (d.status === "Uploading") return true;
-      if (d.status === "Pending") {
-        const future = d.scheduled_time && new Date(d.scheduled_time).getTime() > Date.now();
-        return !future || new Date(d.scheduled_time as string).getTime() - Date.now() < 65_000;
-      }
-      return false;
-    });
-    if (pollRef.current) clearInterval(pollRef.current);
-    if (anyLive) {
-      pollRef.current = setInterval(load, 4000);
-    }
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [items, load]);
+  const anyLive = items.some(item => item.status === "Uploading" || item.status === "Pending");
+  const urgent = items.some(item => item.status === "Uploading" || (item.status === "Pending" &&
+    (!item.scheduled_time || new Date(item.scheduled_time).getTime() - Date.now() <= 65_000)));
+  useAdaptivePolling(signal => load(signal), anyLive, reelId, urgent ? 4000 : 30_000);
+
 
   const reelTitle = items[0]?.reel_name || items[0]?.reel_prompt || "Reel";
 

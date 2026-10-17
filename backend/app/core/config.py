@@ -145,3 +145,4 @@ R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "")
 R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL", "")
 R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME", "")
 R2_PUBLIC_URL = os.getenv("R2_PUBLIC_URL", "")  # Optional: custom domain or public bucket URL
+DIRECT_VIDEO_UPLOAD_ENABLED = os.getenv('DIRECT_VIDEO_UPLOAD_ENABLED', 'false').lower() == 'true'

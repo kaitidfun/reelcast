@@ -24,9 +24,10 @@ from typing import Optional
 
 import httpx
 import imageio_ffmpeg
+import aiofiles
 from app.core.task_performance import timed_step
 
-from app.services.storage_service import upload_raw_bytes_to_r2
+from app.services.storage_service import upload_raw_bytes_to_r2, upload_path_to_r2
 from app.exceptions import FFmpegProcessingException, InvalidCoordinateException
 
 logger = logging.getLogger(__name__)
@@ -83,16 +84,23 @@ async def download_to_temp(url: str, suffix: str = "") -> str:
     Raises:
         httpx.HTTPError: If download fails
     """
-    async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-
     fd, path = tempfile.mkstemp(suffix=suffix)
-    with os.fdopen(fd, "wb") as f:
-        f.write(resp.content)
-
-    logger.debug(f"Downloaded {len(resp.content)} bytes to {path}")
-    return path
+    os.close(fd)
+    size = 0
+    try:
+        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+            async with client.stream('GET', url) as response:
+                response.raise_for_status()
+                async with aiofiles.open(path, 'wb') as output:
+                    async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
+                        size += len(chunk)
+                        if size > 500 * 1024 * 1024:
+                            raise ValueError('Downloaded media exceeds 500 MiB')
+                        await output.write(chunk)
+        return path
+    except BaseException:
+        _cleanup_temp_files(path)
+        raise
 
 
 def _cleanup_temp_files(*paths: Optional[str]) -> None:
@@ -170,7 +178,7 @@ async def overlay_watermark(
             cmd += ["-map", "0:a?", "-c:a", "aac", "-strict", "experimental"]
         else:
             cmd += ["-an"]
-        cmd += ["-c:v", "libx264", "-y", output_path]
+        cmd += ["-c:v", "libx264", "-movflags", "+faststart", "-y", output_path]
 
         try:
             result = subprocess.run(cmd, capture_output=True, timeout=120)
@@ -201,6 +209,7 @@ async def overlayImagesAndLogos(
     position: str,
     reel_id: str,
     with_audio: bool = True,
+    local_video_path: str | None = None,
 ) -> str:
     """
     Full overlay pipeline: Download video & overlay, composite, upload to R2.
@@ -236,26 +245,33 @@ async def overlayImagesAndLogos(
         logger.info(f"[Overlay] Starting composition for reel {reel_id}")
 
         # Step 1: Download video and overlay in parallel
-        video_tmp, overlay_tmp = await asyncio.gather(
-            download_to_temp(video_url, suffix=".mp4"),
-            download_to_temp(overlay_url, suffix=overlay_ext),
-        )
+        # Caller-owned input is reused for raw storage/thumbnail/overlay.
+        if local_video_path:
+            overlay_tmp = await download_to_temp(overlay_url, suffix=overlay_ext)
+            input_path = local_video_path
+        else:
+            downloads = await asyncio.gather(
+                download_to_temp(video_url, suffix='.mp4'),
+                download_to_temp(overlay_url, suffix=overlay_ext), return_exceptions=True,
+            )
+            video_tmp = downloads[0] if isinstance(downloads[0], str) else None
+            overlay_tmp = downloads[1] if isinstance(downloads[1], str) else None
+            for result in downloads:
+                if isinstance(result, BaseException):
+                    raise result
+            input_path = video_tmp
 
         # Step 2: Create output temp file
         fd, output_tmp = tempfile.mkstemp(suffix=".mp4")
         os.close(fd)
 
         # Step 3: Run FFmpeg overlay composition (strip audio if with_audio=False)
-        await overlay_watermark(video_tmp, overlay_tmp, position, output_tmp, with_audio=with_audio)
+        await overlay_watermark(input_path, overlay_tmp, position, output_tmp, with_audio=with_audio)
 
         # Step 4: Upload composited video to R2 — store only the object key
         # so the frontend can proxy via /api/upload/videos/{key} regardless of
         # whether the R2 bucket has public access enabled.
-        with open(output_tmp, 'rb') as f:
-            output_bytes = f.read()
-
-        object_key = upload_raw_bytes_to_r2(
-            data=output_bytes,
+        object_key = await asyncio.to_thread(upload_path_to_r2, output_tmp,
             filename=f"reel_{reel_id}.mp4",
             prefix="videos/reels/overlaid",
             category=reel_id,
@@ -296,7 +312,7 @@ def _extract_first_frame(video_path: str, output_path: str) -> str:
         ) from e
 
 
-async def generateVideoThumbnail(video_url: str, reel_id: str) -> str:
+async def generateVideoThumbnail(video_url: str, reel_id: str, local_video_path: str | None = None) -> str:
     """
     Snap the first frame of a member-uploaded video as its thumbnail image.
 
@@ -318,19 +334,18 @@ async def generateVideoThumbnail(video_url: str, reel_id: str) -> str:
     video_tmp = None
     output_tmp = None
     try:
-        video_tmp = await download_to_temp(video_url, suffix=".mp4")
+        input_path = local_video_path
+        if not input_path:
+            video_tmp = await download_to_temp(video_url, suffix=".mp4")
+            input_path = video_tmp
 
         fd, output_tmp = tempfile.mkstemp(suffix=".jpg")
         os.close(fd)
 
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, _extract_first_frame, video_tmp, output_tmp)
+        await loop.run_in_executor(None, _extract_first_frame, input_path, output_tmp)
 
-        with open(output_tmp, "rb") as f:
-            output_bytes = f.read()
-
-        object_key = upload_raw_bytes_to_r2(
-            data=output_bytes,
+        object_key = await asyncio.to_thread(upload_path_to_r2, output_tmp,
             filename=f"reel_{reel_id}_thumb.jpg",
             prefix="videos/reels/thumbnails",
             category=reel_id,

@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import { useState, useMemo } from "react";
 import { useRouter, useSearchParams, useParams, usePathname } from "next/navigation";
 import Link from "next/link";
@@ -102,7 +104,9 @@ const Register = () => {
           {/* VISUAL PANEL (left on desktop) */}
           <div className="relative hidden overflow-hidden border-r border-border bg-gradient-to-br from-card via-card to-muted/40 lg:order-1 lg:flex">
             <div className="absolute inset-0 gradient-glow opacity-80 pointer-events-none" />
-            <img
+            <Image
+              priority
+              sizes="(min-width: 1024px) 50vw, 1px"
               src={authHero.src}
               alt="ReelCast creator community"
               width={896}

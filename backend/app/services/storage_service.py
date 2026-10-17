@@ -15,6 +15,8 @@ Usage in FastAPI routes:
 
 import uuid
 import asyncio
+import os
+from boto3.s3.transfer import TransferConfig
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -235,16 +237,17 @@ async def upload_file(
     )
 
     try:
-        file_body = await file.read()
-        file_size = len(file_body)
-
         def _put():
-            _get_s3_client().put_object(
-                Bucket=target_bucket, Key=object_key,
-                Body=file_body, ContentType=content_type,
+            file.file.seek(0, os.SEEK_END)
+            size = file.file.tell()
+            file.file.seek(0)
+            _get_s3_client().upload_fileobj(
+                _BorrowedFile(file.file), target_bucket, object_key,
+                ExtraArgs={'ContentType': content_type}, Config=_transfer_config(),
             )
+            return size
 
-        await asyncio.to_thread(_put)
+        file_size = await asyncio.to_thread(_put)
 
         logger.info(
             "Uploaded %s to R2 bucket '%s' (%d bytes)",
@@ -426,6 +429,40 @@ def get_presigned_url(object_key_or_url: str, expiry: int = 3600) -> str:
             "Failed to generate presigned URL for '%s': %s", object_key_or_url, exc
         )
         return object_key_or_url
+
+
+class _BorrowedFile:
+    """Managed S3 transfers may close their input; the request owns UploadFile."""
+    def __init__(self, source):
+        self.source = source
+
+    def __getattr__(self, name):
+        return getattr(self.source, name)
+
+    def close(self):
+        pass
+
+
+def _transfer_config():
+    # Bound multipart buffers per upload instead of buffering a 500 MiB video.
+    return TransferConfig(multipart_threshold=8 * 1024 * 1024,
+                          multipart_chunksize=8 * 1024 * 1024, use_threads=False)
+
+
+def upload_path_to_r2(path: str, *, filename: str, prefix='uploads', user_id=None,
+                      category=None, return_key_only=True) -> str:
+    if not R2_BUCKET_NAME:
+        raise RuntimeError('R2_BUCKET_NAME is not configured.')
+    key = build_object_key(filename, prefix=prefix, user_id=user_id, category=category)
+    try:
+        with open(path, 'rb') as source:
+            _get_s3_client().upload_fileobj(
+                source, R2_BUCKET_NAME, key,
+                ExtraArgs={'ContentType': _guess_content_type(filename)}, Config=_transfer_config(),
+            )
+    except (BotoCoreError, ClientError) as exc:
+        raise RuntimeError('Failed to upload file to storage') from exc
+    return key if return_key_only else get_public_url(key)
 
 
 def upload_raw_bytes_to_r2(

@@ -26,6 +26,7 @@ from app.database import engine, Base, SessionLocal
 from app.core.performance import PerformanceMiddleware, configure_performance_logging, install_sql_timing
 import app.models.models  # Import models so Base knows about them
 from app.routes import (
+    direct_upload_routes,
     auth_routes,
     campaign_routes,
     distribution_routes,
@@ -141,6 +142,7 @@ app.include_router(auth_routes.router)
 app.include_router(twofa_routes.router)
 app.include_router(oauth_routes.router)
 app.include_router(upload_routes.router)
+app.include_router(direct_upload_routes.router)
 app.include_router(campaign_routes.router)
 app.include_router(product_routes.router)
 app.include_router(library_routes.router)

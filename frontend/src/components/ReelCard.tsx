@@ -3,6 +3,7 @@
 import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { LoadingImage } from "@/components/LoadingMedia";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Film, Pencil, Play } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ const authHeaders = (): Record<string, string> => {
 /** onChanged: called after a successful rename or delete so the parent list can refetch. */
 export function ReelCard({ reel, onClick, onChanged }: { reel: ReelCardData; onClick?: () => void; onChanged?: () => void }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -59,6 +61,7 @@ export function ReelCard({ reel, onClick, onChanged }: { reel: ReelCardData; onC
       });
       if (!res.ok) throw new Error("Could not rename reel");
       setDialogOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ["member"] });
       onChanged?.();
     } catch {
       toast({ title: "Rename failed", variant: "destructive" });
@@ -77,6 +80,7 @@ export function ReelCard({ reel, onClick, onChanged }: { reel: ReelCardData; onC
       if (!res.ok) throw new Error("Could not delete reel");
       setDialogOpen(false);
       toast({ title: "Reel deleted" });
+      void queryClient.invalidateQueries({ queryKey: ["member"] });
       onChanged?.();
     } catch {
       toast({ title: "Delete failed", variant: "destructive" });

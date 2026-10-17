@@ -1,7 +1,8 @@
 "use client";
 
 import { BACKEND_BASE_URL } from "@/lib/api-config";
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
+import { useLibraryData } from "@/hooks/useLibraryData";
 import type { LibraryCampaign } from "../_types";
 
 const BANNER_PRESETS: { label: string; value: string; gradient: string }[] = [
@@ -19,23 +20,10 @@ export const getBannerGradient = (color: string) => {
 };
 
 export function useProductLibrary() {
-  const [productLibrary, setProductLibrary] = useState<LibraryCampaign[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const browseLibrary = async () => {
-      try {
-        const token = localStorage.getItem("rf_token");
-        if (!token) return;
-        const headers = { Authorization: `Bearer ${token}` };
-
-        const libraryRes = await fetch(`${BACKEND_BASE_URL}/api/library`, {
-          headers,
-        });
-        if (!libraryRes.ok) return;
-
-        const libraryData = await libraryRes.json();
-
+  const query = useLibraryData();
+  const productLibrary = useMemo(() => {
+    const libraryData = query.data;
+    if (!libraryData) return [];
         const mapped: LibraryCampaign[] = libraryData.campaigns.map((c: any) => ({
           id: c.campaign_id,
           name: c.name,
@@ -52,9 +40,9 @@ export function useProductLibrary() {
                 id: p.product_id,
                 name: p.product_name,
                 thumbnail: p.product_name.charAt(0).toUpperCase() || "📦",
-                primaryImageUrl: rawImageKey
+                primaryImageUrl: p.primary_image_url || (rawImageKey
                   ? `${BACKEND_BASE_URL}/api/upload/images/${rawImageKey}`
-                  : null,
+                  : null),
                 brandLogoUrl: p.brand_logo_url
                   ? `${BACKEND_BASE_URL}/api/upload/images/${p.brand_logo_url}`
                   : null,
@@ -64,16 +52,7 @@ export function useProductLibrary() {
             }),
         }));
 
-        setProductLibrary(mapped);
-      } catch (e) {
-        console.error("Failed to load library:", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    browseLibrary();
-  }, []);
-
-  return { productLibrary, loading };
+    return mapped;
+  }, [query.data]);
+  return { productLibrary, loading: query.isLoading };
 }

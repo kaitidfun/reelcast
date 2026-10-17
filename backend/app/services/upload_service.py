@@ -28,6 +28,11 @@ import logging
 from typing import Optional
 
 import ffmpeg
+import subprocess
+import re
+import imageio_ffmpeg
+from fastapi import UploadFile
+from app.exceptions import VideoSizeExceededException, UnsupportedVideoFormatException
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +43,52 @@ logger = logging.getLogger(__name__)
 ALLOWED_VIDEO_FORMATS = {".mp4", ".mov", ".avi"}
 MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024  # 500 MB per SRS
 MAX_VIDEO_DURATION_SECONDS = 60  # Per SRS requirement
+
+
+async def copy_upload_to_temp(file: UploadFile) -> tuple[str, int]:
+    """Read at most one MiB at a time and reject oversize content while copying."""
+    extension = os.path.splitext(file.filename or '')[1].lower()
+    if extension not in ALLOWED_VIDEO_FORMATS:
+        raise UnsupportedVideoFormatException()
+    if file.size is not None and file.size > MAX_VIDEO_SIZE_BYTES:
+        raise VideoSizeExceededException()
+    fd, path = tempfile.mkstemp(suffix=extension)
+    size = 0
+    try:
+        with os.fdopen(fd, 'wb') as output:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_VIDEO_SIZE_BYTES:
+                    raise VideoSizeExceededException()
+                await asyncio.to_thread(output.write, chunk)
+        return path, size
+    except BaseException:
+        os.remove(path)
+        raise
+
+
+async def probe_video_path(path: str) -> float:
+    def _probe():
+        # The bundled FFmpeg works even when ffprobe is not on PATH. Reading
+        # stream headers is enough; no encoding or whole-file RAM buffer is used.
+        try:
+            result = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-hide_banner', '-nostdin',
+                                     '-i', path], capture_output=True, timeout=30)
+        except subprocess.TimeoutExpired as exc:
+            raise UnsupportedVideoFormatException('Video validation timed out; try a different video') from exc
+        output = result.stderr.decode('utf-8', errors='replace')
+        duration = re.search(r'Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)', output)
+        if not duration or not re.search(r'Video:', output):
+            raise UnsupportedVideoFormatException('Unable to read a valid video stream')
+        hours, minutes, seconds = map(float, duration.groups())
+        return hours * 3600 + minutes * 60 + seconds
+    return await asyncio.to_thread(_probe)
+
+
+async def upload_video_path_to_r2(path: str, filename: str, user_id: str) -> str:
+    from app.services.storage_service import upload_path_to_r2
+    return await asyncio.to_thread(upload_path_to_r2, path, filename=filename,
+                                   user_id=user_id, prefix='videos/reels/uploads')
 
 
 # ─────────────────────────────────────────────────────────────────────────────

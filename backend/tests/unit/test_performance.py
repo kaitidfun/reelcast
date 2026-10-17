@@ -48,10 +48,10 @@ def test_request_sql_timing_survives_threadpool_and_does_not_leak_between_reques
 async def test_storage_upload_does_not_hold_event_loop(monkeypatch):
     started, release = Event(), Event()
     storage = MagicMock()
-    def slow_upload(**_kwargs):
+    def slow_upload(*_args, **_kwargs):
         started.set()
         assert release.wait(3), 'event loop could not release the upload'
-    storage.put_object.side_effect = slow_upload
+    storage.upload_fileobj.side_effect = slow_upload
     monkeypatch.setattr(storage_service, '_get_s3_client', lambda: storage)
     monkeypatch.setattr(storage_service, 'R2_BUCKET_NAME', 'test')
     monkeypatch.setattr(storage_service, 'R2_ENDPOINT_URL', 'https://storage.test')

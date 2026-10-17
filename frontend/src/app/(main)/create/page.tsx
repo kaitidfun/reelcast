@@ -1,5 +1,7 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
+import { uploadVideo } from "@/lib/video-upload";
 import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { LoadingImage, LoadingVideo } from "@/components/LoadingMedia";
 
@@ -23,8 +25,9 @@ import type { LibraryProduct, GenerationStatus, GuideOption } from "./_types";
 import { useProductLibrary } from "./_hooks/useProductLibrary";
 import { useGenerationPolling, resolveVideoUrl } from "./_hooks/useGenerationPolling";
 import { GuideChipRow } from "./_components/GuideChipRow";
-import { ProductPickerDialog } from "./_components/ProductPickerDialog";
-import { FullscreenVideoDialog } from "./_components/FullscreenVideoDialog";
+import dynamic from "next/dynamic";
+const ProductPickerDialog = dynamic(() => import("./_components/ProductPickerDialog").then(module => module.ProductPickerDialog), { ssr: false });
+const FullscreenVideoDialog = dynamic(() => import("./_components/FullscreenVideoDialog").then(module => module.FullscreenVideoDialog), { ssr: false });
 import {
   buildGuidedPromptPayload,
   hasGuidedSelection,
@@ -95,6 +98,8 @@ const CAMERA_OPTIONS: GuideOption[] = [
 ];
 
 const CreateReelContent = () => {
+  const queryClient = useQueryClient();
+  const uploadInFlight = useRef(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -587,22 +592,16 @@ const CreateReelContent = () => {
     };
   };
 
-  const uploadOwnReelFile = () => {
+  const uploadOwnReelFile = async () => {
+    if (!uploadFile || !selectedProduct || uploadInFlight.current) return;
+    uploadInFlight.current = true;
     setUploadStatus("uploading");
     setUploadProgress(0);
-    const form = new FormData();
-    form.append("file", uploadFile!);
-    form.append("product_id", selectedProduct!.id);
-    form.append("platform", selectedPlatforms[0] || "ig");
-    form.append("overlay_position", overlayPosition);
-    const token = localStorage.getItem("rf_token");
-    const xhr = new XMLHttpRequest();
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
-    };
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        const data = JSON.parse(xhr.responseText);
+    try {
+      const data = await uploadVideo(uploadFile, {
+        productId: selectedProduct.id, platform: selectedPlatforms[0] || "ig",
+        overlayPosition, onProgress: setUploadProgress,
+      });
         setReelId(data.reel_id);
         hasResumedRef.current = true;
         router.replace(`/create?reelId=${data.reel_id}`);
@@ -618,22 +617,12 @@ const CreateReelContent = () => {
         setIsPlaying(false);
         startGeneration(data.reel_id, selectedProduct?.name ?? "Video Upload");
         toast({ title: "Video uploaded!", description: "Processing overlay and captions…" });
-      } else {
-        setUploadStatus("error");
-        let msg = "Upload failed.";
-        try { msg = JSON.parse(xhr.responseText).detail; } catch {
-          // ignore JSON parsing failures
-        }
-        toast({ title: "Upload failed", description: msg, variant: "destructive" });
-      }
-    };
-    xhr.onerror = () => {
+    } catch (error) {
       setUploadStatus("error");
-      toast({ title: "Network error", description: "Could not reach the server.", variant: "destructive" });
-    };
-    xhr.open("POST", `${BACKEND_BASE_URL}/api/reels/upload-video`);
-    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    xhr.send(form);
+      toast({ title: "Upload failed", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    } finally {
+      uploadInFlight.current = false;
+    }
   };
 
   const performSave = async (name?: string) => {
@@ -656,6 +645,7 @@ const CreateReelContent = () => {
         const error = await response.json().catch(() => null);
         throw new Error(error?.detail || "Could not save Reel");
       }
+      void queryClient.invalidateQueries({ queryKey: ["member"] });
       setIsSaved(true);
       toast({
         title: "Saved!",
@@ -1271,16 +1261,16 @@ const CreateReelContent = () => {
       </div>
 
       {/* Dialogs */}
-      <ProductPickerDialog
+      {pickerOpen && <ProductPickerDialog
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         productLibrary={productLibrary}
         loading={productsLoading}
         onSelect={setSelectedProduct}
         selectedProductId={selectedProduct?.id}
-      />
+      />}
 
-      <FullscreenVideoDialog
+      {fullscreenOpen && <FullscreenVideoDialog
         open={fullscreenOpen}
         onOpenChange={setFullscreenOpen}
         videoUrl={videoUrl}
@@ -1301,7 +1291,7 @@ const CreateReelContent = () => {
         onSeek={setVideoCurrentTime}
         showPlayIcon={showPlayIcon}
         formatTime={formatTime}
-      />
+      />}
 
       {/* Guide Me floating tooltip */}
       {hoveredOption && guidedMode && (

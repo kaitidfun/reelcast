@@ -1,7 +1,8 @@
 "use client";
 
 import { BACKEND_BASE_URL } from "@/lib/api-config";
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
+import { useLibraryData } from "@/hooks/useLibraryData";
 
 export type CampaignCardProduct = { id: string; name: string; thumbnail: string | null };
 export type CampaignCardData = {
@@ -17,21 +18,11 @@ export type CampaignCardData = {
 };
 
 /** Mirrors library/page.tsx's own campaign fetch+mapping so cards built from this match it exactly. */
-export function useCampaigns() {
-  const [campaigns, setCampaigns] = useState<CampaignCardData[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const token = localStorage.getItem("rf_token");
-        if (!token) return;
-        const res = await fetch(`${BACKEND_BASE_URL}/api/library`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-
+export function useCampaigns(params: { limit?: number } = {}) {
+  const query = useLibraryData(params);
+  const campaigns = useMemo(() => {
+    const data = query.data;
+    if (!data) return [];
         const mapped: CampaignCardData[] = data.campaigns.map((c: any) => {
           const products = data.products
             .filter((p: any) => p.campaign_id === c.campaign_id)
@@ -40,11 +31,11 @@ export function useCampaigns() {
               return {
                 id: p.product_id,
                 name: p.product_name?.trim() || "Untitled Product",
-                thumbnail: primaryImage
+                thumbnail: p.primary_image_url || (primaryImage
                   ? `${BACKEND_BASE_URL}/api/upload/images/${primaryImage}`
                   : p.brand_logo_url
                     ? `${BACKEND_BASE_URL}/api/upload/images/${p.brand_logo_url}`
-                    : null,
+                    : null),
                 reelsGenerated: p.reel_count ?? 0,
               };
             });
@@ -54,23 +45,14 @@ export function useCampaigns() {
             description: c.description || "",
             reelsCount: products.reduce((sum: number, p: any) => sum + (p.reelsGenerated || 0), 0),
             bannerColor: c.banner_color || "Twilight",
-            bannerImage: c.banner_image_url || undefined,
+            bannerImage: c.banner_url || (c.banner_image_url ? `${BACKEND_BASE_URL}/api/upload/images/${c.banner_image_url}` : undefined),
             products,
             createdAt: c.created_at || new Date().toISOString(),
             updatedAt: c.updated_at || new Date().toISOString(),
           };
         });
 
-        setCampaigns(mapped);
-      } catch (e) {
-        console.error("Failed to load campaigns:", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, []);
-
-  return { campaigns, loading };
+    return mapped;
+  }, [query.data]);
+  return { campaigns, total: query.data?.total ?? 0, loading: query.isLoading };
 }

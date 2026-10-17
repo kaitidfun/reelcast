@@ -64,6 +64,9 @@ export async function mockAuthenticatedUser(
     }
     await route.continue();
   });
+  await page.route("**/api/reel-uploads/init", route => route.fulfill({
+    status: 409, contentType: "application/json", body: JSON.stringify({ detail: "Direct upload disabled" }),
+  }));
   return user;
 }
 
@@ -71,7 +74,7 @@ export async function mockLibrary(
   page: Page,
   library = UI_LIBRARY,
 ) {
-  await page.route("**/api/library", async (route) => {
+  await page.route("**/api/library*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",

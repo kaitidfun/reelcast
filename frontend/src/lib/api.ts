@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from "@/lib/http";
 import { API_BASE_URL } from "@/lib/api-config";
 export { API_BASE_URL, OAUTH_API_BASE_URL, OAUTH_BACKEND_URL } from "@/lib/api-config";
 
@@ -6,7 +7,7 @@ export async function inputPromptAndSelectProduct(data: {
   prompt_text: string;
   product_id: string;
 }) {
-  const res = await fetch(`${API_BASE_URL}/reels/generate`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/reels/generate`, {
     method: 'POST',
     headers: getJsonHeaders(),
     body: JSON.stringify(data),
@@ -20,7 +21,7 @@ export async function regenerateContent(
   target: "video" | "caption" | "all" = "all",
   prompt_text?: string,
 ) {
-  const res = await fetch(`${API_BASE_URL}/reels/${reel_id}/regenerate`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/reels/${reel_id}/regenerate`, {
     method: 'POST',
     headers: getJsonHeaders(),
     body: JSON.stringify({ target, prompt_text }),
@@ -30,7 +31,7 @@ export async function regenerateContent(
 }
 
 export async function previewAndApproveContent(reel_id: string, decision = true) {
-  const res = await fetch(`${API_BASE_URL}/reels/${reel_id}/approve`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/reels/${reel_id}/approve`, {
     method: "POST",
     headers: getJsonHeaders(),
     body: JSON.stringify({ decision }),
@@ -43,7 +44,7 @@ export async function uploadOwnReel(file: File, product_id?: string) {
   const form = new FormData();
   form.append('file', file);
   if (product_id) form.append('product_id', product_id);
-  const res = await fetch(`${API_BASE_URL}/reels/upload-video`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/reels/upload-video`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: form,
@@ -67,7 +68,7 @@ function getJsonHeaders(): HeadersInit {
 
 export async function fetchHealth() {
   try {
-    const response = await fetch(`${API_BASE_URL}/health`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}/health`);
     if (!response.ok) throw new Error('Network response was not ok');
     return await response.json();
   } catch (error) {
@@ -110,10 +111,10 @@ export type TrackingComparison = {
 };
 
 async function trackingRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}/tracking${path}`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tracking${path}`, {
     ...init,
     headers: { ...getJsonHeaders(), ...init?.headers },
-  });
+  }, path === "/sync" ? 180_000 : 30_000);
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new Error(body?.detail || "Unable to load tracking data");
@@ -151,7 +152,7 @@ export function syncTrackingData() {
   return trackingRequest<{ social_metrics: number; accounts: Array<{ success: boolean; error: string | null }> }>("/sync", { method: "POST" });
 }
 export async function downloadTrackingExport(format: "csv" | "xlsx", filters: TrackingFilters & Partial<TrackingPeriods> & { level?: string; metric?: string }) {
-  const response = await fetch(`${API_BASE_URL}/tracking/export${trackingQuery({ ...filters, format })}`, { headers: getAuthHeaders() });
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tracking/export${trackingQuery({ ...filters, format })}`, { headers: getAuthHeaders() });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new Error(body?.detail || "Export failed");

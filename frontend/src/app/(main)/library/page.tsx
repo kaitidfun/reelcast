@@ -1,5 +1,9 @@
 "use client";
 
+import { useAuth } from "@/contexts/AuthContext";
+import { useQueryClient } from "@tanstack/react-query";
+import { libraryQuery } from "@/hooks/useLibraryData";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { LoadingImage } from "@/components/LoadingMedia";
 
@@ -86,7 +90,7 @@ interface Product {
   keyPoints: string;
   affiliateLink: string;
   status: ProductStatus;
-  thumbnail: string;
+  thumbnail: string | null;
   reelsGenerated: number;
   createdAt: string; // ISO
   updatedAt: string; // ISO
@@ -155,6 +159,15 @@ const ContentLibrary = () => {
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const openCampaignId = searchParams.get("campaign");
+  const [campaignSearch, setCampaignSearch] = useState("");
+  const [campaignSort, setCampaignSort] = useState<SortKey>("updated");
+  const debouncedSearch = useDebouncedValue(campaignSearch, 350);
+  const [campaignPage, setCampaignPage] = useState(0);
+  const [campaignTotal, setCampaignTotal] = useState(0);
+  const requestVersion = useRef(0);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const { pending: libraryPending, run: runLibraryAction } = usePendingAction();
@@ -165,19 +178,21 @@ const ContentLibrary = () => {
     finally { setUploadLabel(""); }
   });
 
-  const browseLibrary = useCallback(async () => {
+  const browseLibrary = useCallback(async (force = true) => {
+    const version = ++requestVersion.current;
     try {
       const token = localStorage.getItem("rf_token");
       if (!token) return;
-      const headers = { Authorization: `Bearer ${token}` };
-
-      const libraryRes = await fetch(`${BACKEND_BASE_URL}/api/library`, {
-        headers,
-      });
-
-      if (libraryRes.ok) {
-        const libraryData = await libraryRes.json();
-
+      if (force) await queryClient.invalidateQueries({ queryKey: ["member", user?.id, "library"], refetchType: "none" });
+      const libraryData = await queryClient.fetchQuery(libraryQuery(user?.id, {
+        skip: openCampaignId ? 0 : campaignPage * 20, limit: openCampaignId ? 1 : 20,
+        campaign_id: openCampaignId || undefined, searchKeyword: openCampaignId ? undefined : debouncedSearch,
+        sortOption: ({updated: "Last Updated", newest: "Newest", oldest: "Oldest", name: "Name"} as Record<string, string>)[campaignSort],
+      }));
+      if (version !== requestVersion.current) return;
+      setCampaignTotal(libraryData.total);
+      if (campaignPage > 0 && !libraryData.campaigns.length) { setCampaignPage(page => page - 1); return; }
+      {
         const mappedCampaigns: Campaign[] = libraryData.campaigns.map((c: any) => {
           const products = libraryData.products.filter((p: any) => p.campaign_id === c.campaign_id).map((p: any) => {
             const primaryImage = p.images?.find((img: any) => img.is_primary)?.image_url || p.images?.[0]?.image_url;
@@ -193,7 +208,7 @@ const ContentLibrary = () => {
                 affiliateLink: p.affiliate_link,
                 imageCount: p.images?.length || 0,
               }),
-              thumbnail: primaryImage ? `${BACKEND_BASE_URL}/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `${BACKEND_BASE_URL}/api/upload/images/${p.brand_logo_url}` : null),
+              thumbnail: p.primary_image_url || (primaryImage ? `${BACKEND_BASE_URL}/api/upload/images/${primaryImage}` : (p.brand_logo_url ? `${BACKEND_BASE_URL}/api/upload/images/${p.brand_logo_url}` : null)),
               reelsGenerated: p.reel_count ?? 0,
               createdAt: p.created_at || new Date().toISOString(),
               updatedAt: p.updated_at || new Date().toISOString(),
@@ -207,7 +222,7 @@ const ContentLibrary = () => {
             description: c.description || "",
             reelsCount: products.reduce((sum: number, p: any) => sum + (p.reelsGenerated || 0), 0),
             bannerColor: c.banner_color || "Twilight",
-            bannerImage: c.banner_image_url || undefined,
+            bannerImage: c.banner_url || (c.banner_image_url ? `${BACKEND_BASE_URL}/api/upload/images/${c.banner_image_url}` : undefined),
             products,
             createdAt: c.created_at || new Date().toISOString(),
             updatedAt: c.updated_at || new Date().toISOString()
@@ -215,22 +230,20 @@ const ContentLibrary = () => {
         });
 
         setCampaigns(mappedCampaigns);
-      } else {
-        const errData = await libraryRes.json().catch(() => ({}));
-        throw new Error(errData.detail || "Failed to retrieve campaigns from database");
       }
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "Failed to retrieve campaigns", variant: "destructive" });
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, []);
+  }, [queryClient, user?.id, openCampaignId, campaignPage, debouncedSearch, campaignSort]);
 
+  useEffect(() => { setCampaignPage(0); }, [debouncedSearch, campaignSort]);
   useEffect(() => {
-    browseLibrary();
+    void browseLibrary(false);
+    return () => { requestVersion.current++; };
   }, [browseLibrary]);
 
-  const openCampaignId = searchParams.get("campaign");
   const setOpenCampaignId = (id: string | null) => {
     if (id) {
       router.push(`?campaign=${id}`)
@@ -251,9 +264,7 @@ const ContentLibrary = () => {
   const cBannerInputRef = useRef<HTMLInputElement>(null);
 
   // Campaigns view
-  const [campaignSearch, setCampaignSearch] = useState("");
   const [campaignView, setCampaignView] = useState<"grid" | "list">("grid");
-  const [campaignSort, setCampaignSort] = useState<SortKey>("updated");
 
   // Products view
   const [search, setSearch] = useState("");
@@ -300,7 +311,7 @@ const ContentLibrary = () => {
 
   const filteredCampaigns = sortLibraryItems(
     campaigns.filter((c) => {
-      const q = campaignSearch.toLowerCase();
+      const q = debouncedSearch.toLowerCase();
       return (
         !q ||
         c.name.toLowerCase().includes(q) ||
@@ -809,6 +820,11 @@ const ContentLibrary = () => {
             </ToggleGroup>
           </div>
 
+          {campaignTotal > 20 && <nav aria-label="Campaign pages" className="flex items-center justify-between gap-3">
+            <Button variant="outline" disabled={campaignPage === 0} onClick={() => setCampaignPage(page => page - 1)}>Previous</Button>
+            <span className="text-sm text-muted-foreground">Page {campaignPage + 1} of {Math.ceil(campaignTotal / 20)}</span>
+            <Button variant="outline" disabled={(campaignPage + 1) * 20 >= campaignTotal} onClick={() => setCampaignPage(page => page + 1)}>Next</Button>
+          </nav>}
           {campaigns.length === 0 && !campaignSearch.trim() ? (
             <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
               <Package className="mx-auto h-10 w-10 text-muted-foreground/50" />

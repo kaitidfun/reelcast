@@ -59,7 +59,7 @@ test.describe("F3 UI unit tests", () => {
     await page.route("**/api/distributions/recent-campaigns**", (route) => route.fulfill({
       contentType: "application/json", body: JSON.stringify({ campaign_ids: [], total: 0 }),
     }));
-    await page.route("**/api/library", (route) => route.fulfill({
+    await page.route("**/api/library*", (route) => route.fulfill({
       contentType: "application/json", body: JSON.stringify({ campaigns: [], products: [], total: 0 }),
     }));
     await page.route("**/api/distributions**", async (route) => {
@@ -106,7 +106,7 @@ test.describe("F3 UI unit tests", () => {
     await page.route("**/api/distributions/recent-campaigns**", (route) => route.fulfill({
       contentType: "application/json", body: JSON.stringify({ campaign_ids: [], total: 0 }),
     }));
-    await page.route("**/api/library", (route) => route.fulfill({
+    await page.route("**/api/library*", (route) => route.fulfill({
       contentType: "application/json", body: JSON.stringify({ campaigns: [], products: [], total: 0 }),
     }));
     await page.route("**/api/distributions**", async (route) => {

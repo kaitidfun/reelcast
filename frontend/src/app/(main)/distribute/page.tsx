@@ -2,6 +2,7 @@
 
 import { LoadingState } from "@/components/LoadingState";
 
+import { useAdaptivePolling } from "@/hooks/useAdaptivePolling";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -166,7 +167,7 @@ const Distribution = () => {
     setPage(0);
   }, [viewMode, filterAccountId, filterStatus, debouncedSearch]);
 
-  const loadAll = useCallback(async (background = false) => {
+  const loadAll = useCallback(async (background = false, signal?: AbortSignal) => {
     if (!background) setLoading(true);
     try {
       const headers = authHeaders();
@@ -180,9 +181,10 @@ const Distribution = () => {
       if (filterStatus !== "all") historyParams.set("status_filter", filterStatus);
       const historyPath = viewMode === "flat" ? "/distributions" : "/distributions/by-reel";
       const [accountsRes, historyRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/social/accounts`, { headers }),
-        fetch(`${API_BASE_URL}${historyPath}?${historyParams.toString()}`, { headers }),
+        fetch(`${API_BASE_URL}/social/accounts`, { headers, signal }),
+        fetch(`${API_BASE_URL}${historyPath}?${historyParams.toString()}`, { headers, signal }),
       ]);
+      if (signal?.aborted) return;
       if (accountsRes.ok) setAccounts((await accountsRes.json()).accounts ?? []);
       if (historyRes.ok) {
         const data = await historyRes.json();
@@ -194,14 +196,17 @@ const Distribution = () => {
         setTotal(data.total ?? 0);
       }
     } catch (e) {
-      console.error("Failed to load distribution data:", e);
+      if (background) throw e;
+      if (!signal?.aborted) console.error("Failed to load distribution data:", e);
     } finally {
       if (!background) setLoading(false);
     }
   }, [viewMode, filterAccountId, filterStatus, debouncedSearch, page]);
 
   useEffect(() => {
-    loadAll();
+    const controller = new AbortController();
+    void loadAll(false, controller.signal);
+    return () => controller.abort();
   }, [loadAll]);
 
   useEffect(() => {
@@ -226,14 +231,12 @@ const Distribution = () => {
 
   // Publishing runs in Celery after the page has loaded. Poll only while a
   // distribution is active so the final status appears without a manual reload.
-  useEffect(() => {
-    const anyUploading = viewMode === "flat"
-      ? flatRows.some((row) => row.status === "Uploading")
-      : groups.some((group) => group.platforms.some((p) => p.status === "Uploading"));
-    if (!anyUploading) return;
-    const timer = window.setInterval(() => { void loadAll(true); }, 5000);
-    return () => window.clearInterval(timer);
-  }, [viewMode, flatRows, groups, loadAll]);
+  const anyUploading = viewMode === "flat"
+    ? flatRows.some(row => row.status === "Uploading")
+    : groups.some(group => group.platforms.some(item => item.status === "Uploading"));
+  useAdaptivePolling(signal => loadAll(true, signal), anyUploading,
+    `${viewMode}:${page}:${filterAccountId}:${filterStatus}:${debouncedSearch}`, 5000);
+
 
   const handleCancel = async (distributionId: string) => {
     const res = await fetch(`${API_BASE_URL}/distributions/${distributionId}`, {

@@ -2,6 +2,7 @@
 
 import { BACKEND_BASE_URL } from "@/lib/api-config";
 import React, { createContext, useContext, useState, useCallback } from "react";
+import { fetchWithTimeout } from "@/lib/http";
 
 export interface MockUser {
   id: string;
@@ -41,19 +42,20 @@ export const useAuth = () => {
   return ctx;
 };
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export const AuthProvider = ({ children, onSessionChange }: { children: React.ReactNode; onSessionChange?: () => void }) => {
   const [user, setUser] = useState<MockUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUser = useCallback(async (token: string) => {
     try {
-      const res = await fetch(`${API_URL}/me`, {
+      const res = await fetchWithTimeout(`${API_URL}/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
       if (res.ok) {
         const data = await res.json();
+        if (localStorage.getItem('rf_token') !== token) return;
         const userId = data.id.toString();
         setUser({
           id: userId,
@@ -61,19 +63,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           displayName: data.display_name || "Creator",
           avatar: "",
           profileImage: data.profile_image
-            ? `${API_URL}/api/upload/profile-image/${userId}?v=${Date.now()}`
+            ? `${API_URL}/api/upload/profile-image/${userId}?v=${encodeURIComponent(data.profile_image)}`
             : null,
           joinedAt: data.created_at || new Date().toISOString(),
           is2faEnabled: data.is_2fa_enabled ?? false,
           hasPassword: data.has_password ?? true,
         });
-      } else {
+      } else if (res.status === 401 && localStorage.getItem('rf_token') === token) {
         localStorage.removeItem("rf_token");
         setUser(null);
       }
     } catch (e) {
       console.error(e);
-      setUser(null);
+      if (localStorage.getItem('rf_token') === token) setUser(null);
     } finally {
       setIsLoading(false);
     }
@@ -118,6 +120,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
         
         // Normal login (no 2FA)
+        onSessionChange?.();
         localStorage.setItem("rf_token", data.access_token);
         const userId = data.user.id.toString();
         setUser({
@@ -126,7 +129,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           displayName: data.user.display_name || "Creator",
           avatar: "",
           profileImage: data.user.profile_image
-            ? `${API_URL}/api/upload/profile-image/${userId}?v=${Date.now()}`
+            ? `${API_URL}/api/upload/profile-image/${userId}?v=${encodeURIComponent(data.user.profile_image)}`
             : null,
           joinedAt: data.user.created_at || new Date().toISOString(),
           is2faEnabled: data.user.is_2fa_enabled ?? false,
@@ -141,7 +144,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error(e);
       return { ok: false };
     }
-  }, []);
+  }, [onSessionChange]);
 
   const manage2FA = useCallback(async (tempToken: string, code: string) => {
     try {
@@ -155,6 +158,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (res.ok) {
         const data = await res.json();
+        onSessionChange?.();
         localStorage.setItem("rf_token", data.access_token);
         const userId = data.user.id.toString();
         setUser({
@@ -163,7 +167,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           displayName: data.user.display_name || "Creator",
           avatar: "",
           profileImage: data.user.profile_image
-            ? `${API_URL}/api/upload/profile-image/${userId}?v=${Date.now()}`
+            ? `${API_URL}/api/upload/profile-image/${userId}?v=${encodeURIComponent(data.user.profile_image)}`
             : null,
           joinedAt: data.user.created_at || new Date().toISOString(),
           is2faEnabled: data.user.is_2fa_enabled ?? false,
@@ -175,7 +179,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error(e);
     }
     return false;
-  }, []);
+  }, [onSessionChange]);
 
   const registerGuest = useCallback(async (email: string, password: string, displayName: string) => {
     try {
@@ -200,9 +204,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const logout = useCallback(() => {
+    onSessionChange?.();
     setUser(null);
     localStorage.removeItem("rf_token");
-  }, []);
+  }, [onSessionChange]);
 
   const updateAccountProfile = useCallback((updates: Partial<MockUser>) => {
     setUser((prev) => {

@@ -15,7 +15,7 @@ test.describe("UI unit: F4 campaign and product library", () => {
 
   test("F4-UTC01-TC01 creates a campaign and F4-UTC03 filters it", async ({ page }) => {
     const library = structuredClone(UI_LIBRARY);
-    await page.route("**/api/library", async (route) => {
+    await page.route("**/api/library*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -54,7 +54,7 @@ test.describe("UI unit: F4 campaign and product library", () => {
   });
 
   test("F4-UTC01-TC02 displays duplicate campaign error", async ({ page }) => {
-    await page.route("**/api/library", async (route) => {
+    await page.route("**/api/library*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -84,7 +84,7 @@ test.describe("UI unit: F4 campaign and product library", () => {
   });
 
   test("F4-UTC03-TC02 shows the empty state", async ({ page }) => {
-    await page.route("**/api/library", async (route) => {
+    await page.route("**/api/library*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -102,7 +102,7 @@ test.describe("UI unit: F4 campaign and product library", () => {
   });
 
   test("F4-UTC03-TC03 shows database retrieval failure", async ({ page }) => {
-    await page.route("**/api/library", async (route) => {
+    await page.route("**/api/library*", async (route) => {
       await route.fulfill({
         status: 500,
         contentType: "application/json",
