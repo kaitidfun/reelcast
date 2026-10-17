@@ -1,6 +1,5 @@
 """Feature 5: social sync, link visits, dashboard, ranking, comparison, export."""
 from datetime import date, datetime
-import asyncio
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -10,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.config import BACKEND_URL
 from app.dependencies import get_current_user, get_db
 from app.models.models import Campaign, Distribution, Product, Reel, SocialAccount, User
-from app.services import tracking_provider_service, tracking_service as service
+from app.services import tracking_provider_service, tracking_service as service, tracking_sync_jobs as sync_jobs
 from app.services.tracking_export_service import report_bytes
 
 router = APIRouter(prefix='/api/tracking', tags=['Data Tracking'])
@@ -33,10 +32,25 @@ def tracking_filters(start: date | None = None, end: date | None = None,
                 product_id=product_id, reel_id=reel_id)
 
 
-@router.post('/sync')
+@router.post('/sync', status_code=202)
 def synchronizeTrackingData(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Run the entire session's synchronous DB work outside the API event loop.
-    return asyncio.run(tracking_provider_service.sync_member(db, user_id=current_user.user_id))
+    run_id = sync_jobs.enqueue_member(db, current_user.user_id)
+    result = sync_jobs.run_status(db, run_id, current_user.user_id)
+    sync_jobs.publish([account['job_id'] for account in result['accounts'] if account['status'] == 'queued'])
+    return result
+
+
+@router.get('/sync/latest')
+def latest_sync(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return sync_jobs.latest_status(db, current_user.user_id)
+
+
+@router.get('/sync/{run_id}')
+def sync_status(run_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = sync_jobs.run_status(db, run_id, current_user.user_id)
+    if result is None:
+        raise HTTPException(404, 'Sync job not found')
+    return result
 
 
 @router.get('/readiness')

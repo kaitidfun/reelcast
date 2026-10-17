@@ -4,6 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -20,7 +21,11 @@ class Settings(BaseSettings):
     )
 
     port: int = 9000
-    request_timeout_seconds: float = 15.0
+    request_timeout_seconds: float = Field(default=15.0, gt=0)
+    sync_timeout_seconds: float = Field(default=24.0, gt=0, le=25)
+    optional_timeout_seconds: float = Field(default=5.0, gt=0)
+    sync_concurrency: int = Field(default=4, ge=1, le=4)
+    read_attempts: int = Field(default=3, ge=1, le=3)
 
     adapter_key_tiktok_shop: str = ""
     adapter_key_shopee: str = ""

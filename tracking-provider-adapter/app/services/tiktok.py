@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.schemas import Metric, SyncRequest
+from app.services.sync_policy import pooled_sync, optional_metrics, scope, warn
 from app.services.base import ProviderClient, ProviderError, number, provider_date
 
 
@@ -11,6 +12,7 @@ class TikTokProvider(ProviderClient):
         del state, redirect_uri
         raise ProviderError(self.platform, "OAuth is managed by ReelCast", 422)
 
+    @pooled_sync
     async def sync(self, request: SyncRequest) -> list[Metric]:
         self.require("tiktok_api_base_url")
         fields = "id,create_time,like_count,comment_count,share_count,view_count"
@@ -42,12 +44,12 @@ class TikTokProvider(ProviderClient):
                 raise ProviderError(self.platform, 'provider returned invalid video ID')
             video_ids.append(video_id)
             source_refs[video_id] = source_id
-        cursor = 0
+        cursor = int(request.page_cursor) if request.page_cursor is not None else 0
         videos: list[dict] = []
         # TikTok accepts at most 20 records per request.  The old max_count
         # of 100 can make the entire sync fail, leaving newly published Reels
         # with no metrics at all.
-        for _ in range(0 if request.post_ids else 10):
+        for _ in range(0 if request.post_ids else (1 if request.single_page else 10)):
             data = await self.request(
                 "POST", endpoint,
                 params={"fields": fields},
@@ -63,8 +65,12 @@ class TikTokProvider(ProviderClient):
                 break
             next_cursor = page.get("cursor")
             if not isinstance(next_cursor, int) or next_cursor == cursor:
+                if request.single_page:
+                    raise ProviderError(self.platform, 'provider returned an invalid pagination cursor', 400)
                 break
             cursor = next_cursor
+            if request.single_page:
+                scope.get().next_cursor = next_cursor
         for offset in range(0, len(video_ids), 20):
             data = await self.request(
                 'POST', self.settings().tiktok_api_base_url.rstrip('/') + '/v2/video/query/',

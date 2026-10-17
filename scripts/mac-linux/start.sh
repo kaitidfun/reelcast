@@ -86,6 +86,7 @@ echo -e "\033[0;32m  Tracking Provider Adapter started in background (PID: $ADAP
 echo -e "\033[0;33m[6/8] Starting Backend (FastAPI)...\033[0m"
 cd "$BACKEND_DIR"
 source venv/bin/activate
+venv/bin/python scripts/migrate_tracking_sync.py
 uvicorn app.main:app --reload --port 8000 > backend.log 2>&1 &
 BACKEND_PID=$!
 echo -e "\033[0;32m  Backend started in background (PID: $BACKEND_PID).\033[0m"
@@ -97,7 +98,9 @@ echo -e "\033[0;33m[7/8] Starting Celery Worker...\033[0m"
 for worker_kind in generation publish sync scheduler caption; do
     worker_queues="$worker_kind-queue"
     if [ "$worker_kind" = generation ]; then worker_queues="$worker_queues,main-queue"; fi
-    venv/bin/celery -A app.worker.celery_app worker --loglevel=info --concurrency=1 \
+    sync_pool_args=(--concurrency=1)
+    if [ "$worker_kind" = sync ]; then sync_pool_args=(--pool=threads --concurrency=4); fi
+    venv/bin/celery -A app.worker.celery_app worker --loglevel=info "${sync_pool_args[@]}" \
         --hostname="$worker_kind@%h" -Q "$worker_queues" > "celery-$worker_kind.log" 2>&1 &
     worker_pid=$!
     echo "$worker_pid" > "$ROOT_DIR/scripts/mac-linux/.celery_${worker_kind}_pid"

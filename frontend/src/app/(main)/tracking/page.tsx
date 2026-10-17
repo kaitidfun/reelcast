@@ -1,9 +1,10 @@
 "use client";
 
 import { LoadingState } from "@/components/LoadingState";
+import { useTrackingSync } from "@/hooks/useTrackingSync";
 import { usePendingAction } from "@/hooks/usePendingAction";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Loader2, BarChart3, SearchCheck, Download, RefreshCw, Eye, Heart, MessageCircle, Share2, MousePointerClick, Video, SlidersHorizontal, Settings2, Trophy, TableProperties, ArrowLeftRight, ChevronLeft, ChevronRight, Globe2, Megaphone, Package, Info, RotateCcw, type LucideIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { PLATFORM_OPTIONS, connectSocialPlatform, platformLabel } from "@/lib/platforms";
-import { downloadTrackingExport, fetchTrackingAnalysis, fetchTrackingComparison, fetchTrackingDashboard, fetchTrackingFilterOptions, syncTrackingData, type TrackingAnalysis, type TrackingComparison, type TrackingDashboard, type TrackingFilterOptions, type TrackingFilters, type TrackingPeriods } from "@/lib/api";
+import { downloadTrackingExport, fetchTrackingAnalysis, fetchTrackingComparison, fetchTrackingDashboard, fetchTrackingFilterOptions, type TrackingAnalysis, type TrackingComparison, type TrackingDashboard, type TrackingFilterOptions, type TrackingFilters, type TrackingPeriods } from "@/lib/api";
 
 const display = (value: number | null | undefined) => value == null ? "Unavailable" : value.toLocaleString();
 const inputClass = "h-10 min-w-0 rounded-md border border-border bg-card px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50";
@@ -454,6 +455,8 @@ export default function Tracking() {
   const { pending, run: runPendingAction } = usePendingAction();
   const busy = pending !== null;
   const [revision, setRevision] = useState(0);
+  const syncCompleted = useCallback(() => setRevision(value => value + 1), []);
+  const sync = useTrackingSync(syncCompleted);
   const [error, setError] = useState("");
   useEffect(() => {
     let active = true;
@@ -522,7 +525,18 @@ export default function Tracking() {
   );
 
   return <div aria-busy={loading || busy} className="min-w-0 space-y-6">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Data Tracking</h1><p className="mt-1 text-muted-foreground">Social performance and affiliate link visits</p></div><Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading} onClick={() => void run(async () => { const result = await syncTrackingData(); setRevision(value => value + 1); const failures = result.accounts.filter(account => !account.success); if (failures.length) throw new Error(`${failures.length} account(s) failed to synchronize. See account status below.`); }, "Syncing data…")}><RefreshCw className={`mr-2 h-4 w-4 ${pending === "Syncing data…" ? "animate-spin" : ""}`} />{pending === "Syncing data…" ? "Syncing…" : "Sync Data"}</Button></div>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Data Tracking</h1><p className="mt-1 text-muted-foreground">Social performance and affiliate link visits</p></div><Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading || sync.busy} onClick={() => void sync.start()}><RefreshCw className={`mr-2 h-4 w-4 ${sync.busy ? "animate-spin" : ""}`} />{sync.busy ? "Syncing…" : "Sync Data"}</Button></div>
+    {sync.error && <p role="alert" className="text-sm text-destructive">{sync.error}</p>}
+    {sync.job && <section aria-label="Synchronization status" aria-live="polite" className={`${panelClass} space-y-2`}>
+      <p className="text-sm font-medium">{sync.busy ? "Synchronizing connected accounts…" : sync.job.status === "done" ? "Synchronization complete" : "Synchronization finished with some unavailable data"}</p>
+      {sync.job.accounts.map(account => <div key={account.job_id} className="text-sm">
+        <span className="font-medium">{platformLabel(account.platform)}</span>{" · "}
+        {{ queued: "Queued", running: "Syncing", retry: "Waiting to retry", done: "Complete", partial: "Partially complete", failed: "Failed" }[account.status]}
+        {account.total_posts > 0 && ` · ${Math.min(account.completed_posts, account.total_posts)}/${account.total_posts} posts processed`}
+        {account.error && <p className="text-muted-foreground">{account.error}</p>}
+        {account.warnings.map(warning => <p key={warning} className="text-muted-foreground">{warning}</p>)}
+      </div>)}
+    </section>}
     {pending && <span role="status" className="sr-only">{pending}</span>}
     {loading && dashboard && <LoadingState label="Refreshing tracking data…" />}
     {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}

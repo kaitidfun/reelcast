@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.schemas import Metric, SyncRequest
+from app.services.sync_policy import pooled_sync, optional_metrics, scope, warn, graph_cursor
 from app.services.base import ProviderClient, ProviderError, number, provider_date
 
 
@@ -11,6 +12,7 @@ class InstagramProvider(ProviderClient):
         del state, redirect_uri
         raise ProviderError(self.platform, "OAuth is managed by ReelCast", 422)
 
+    @pooled_sync
     async def sync(self, request: SyncRequest) -> list[Metric]:
         self.require("instagram_graph_api_base_url")
         # Likes/comments are media fields. Asking for them inside the
@@ -25,7 +27,8 @@ class InstagramProvider(ProviderClient):
                 media.append(item)
         else:
             data = await self.request("GET", f"{self.settings().instagram_graph_api_base_url.rstrip('/')}/{request.external_account_id}/media",
-                                      params={"fields": fields, "since": request.from_date.isoformat(), "until": request.to_date.isoformat(), "limit": 100},
+                                      params={"fields": fields, "since": request.from_date.isoformat(), "until": request.to_date.isoformat(), "limit": 4 if request.single_page else 100,
+                                              **({'after': request.page_cursor} if request.page_cursor is not None else {})},
                                       headers={"Authorization": f"Bearer {request.access_token}"})
             media: list[dict] = []
             headers = {"Authorization": f"Bearer {request.access_token}"}
@@ -34,6 +37,9 @@ class InstagramProvider(ProviderClient):
                 if not isinstance(page, list):
                     raise ProviderError(self.platform, "provider returned invalid media")
                 media.extend(item for item in page if isinstance(item, dict))
+                if request.single_page:
+                    scope.get().next_cursor = graph_cursor(data)
+                    break
                 next_url = data.get("paging", {}).get("next")
                 if not isinstance(next_url, str) or not next_url:
                     break
@@ -55,13 +61,17 @@ class InstagramProvider(ProviderClient):
                                   engagement=number(item.get("like_count")) + number(item.get("comments_count")) + insight.get("shares", 0) if "like_count" in item and "comments_count" in item and "shares" in insight else None))
         return metrics
 
+    @optional_metrics(dict)
     async def _media_insights(self, media_id: str, headers: dict[str, str]) -> dict[str, int]:
         """Read Reel insight metrics separately from basic media metadata."""
         base_url = self.settings().instagram_graph_api_base_url.rstrip("/")
         try:
             data = await self.request("GET", f"{base_url}/{media_id}/insights",
                                       params={"metric": "views,reach,shares,saved"}, headers=headers)
-        except ProviderError:
+        except ProviderError as exc:
+            if exc.status_code != 400:
+                warn()
+                return {}
             # Some older Graph versions expose plays rather than views.  Keep
             # the Reel in Tracking even while Facebook rolls out that change.
             try:

@@ -114,10 +114,10 @@ async function trackingRequest<T>(path: string, init?: RequestInit): Promise<T> 
   const response = await fetchWithTimeout(`${API_BASE_URL}/tracking${path}`, {
     ...init,
     headers: { ...getJsonHeaders(), ...init?.headers },
-  }, path === "/sync" ? 180_000 : 30_000);
+  }, 30_000);
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.detail || "Unable to load tracking data");
+    throw Object.assign(new Error(body?.detail || "Unable to load tracking data"), { status: response.status });
   }
   return response.json() as Promise<T>;
 }
@@ -148,8 +148,21 @@ export function fetchTrackingAnalysis(
 export function fetchTrackingComparison(filters: TrackingFilters & TrackingPeriods) {
   return trackingRequest<TrackingComparison>(`/comparison${trackingQuery(filters)}`);
 }
-export function syncTrackingData() {
-  return trackingRequest<{ social_metrics: number; accounts: Array<{ success: boolean; error: string | null }> }>("/sync", { method: "POST" });
+export type TrackingSyncRun = {
+  job_id: string; status: "running" | "done" | "partial"; active: boolean; social_metrics: number;
+  accounts: Array<{ job_id: string; account_id: string; platform: string;
+    status: "queued" | "running" | "retry" | "done" | "partial" | "failed";
+    metrics: number; completed_posts: number; total_posts: number; success: boolean;
+    error: string | null; warnings: string[]; next_attempt_at: string | null }>;
+};
+export function syncTrackingData(signal?: AbortSignal) {
+  return trackingRequest<TrackingSyncRun>("/sync", { method: "POST", signal });
+}
+export function fetchTrackingSyncStatus(jobId: string, signal?: AbortSignal) {
+  return trackingRequest<TrackingSyncRun>(`/sync/${encodeURIComponent(jobId)}`, { signal });
+}
+export function fetchLatestTrackingSync(signal?: AbortSignal) {
+  return trackingRequest<TrackingSyncRun | null>("/sync/latest", { signal });
 }
 export async function downloadTrackingExport(format: "csv" | "xlsx", filters: TrackingFilters & Partial<TrackingPeriods> & { level?: string; metric?: string }) {
   const response = await fetchWithTimeout(`${API_BASE_URL}/tracking/export${trackingQuery({ ...filters, format })}`, { headers: getAuthHeaders() });

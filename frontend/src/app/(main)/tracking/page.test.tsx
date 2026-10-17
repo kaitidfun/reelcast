@@ -8,10 +8,11 @@ import * as platforms from '@/lib/platforms';
 vi.mock('@/lib/api', () => ({
   fetchTrackingDashboard: vi.fn(), fetchTrackingFilterOptions: vi.fn(),
   fetchTrackingAnalysis: vi.fn(), fetchTrackingComparison: vi.fn(),
-  syncTrackingData: vi.fn(), downloadTrackingExport: vi.fn(),
+  syncTrackingData: vi.fn(), fetchLatestTrackingSync: vi.fn(), fetchTrackingSyncStatus: vi.fn(), downloadTrackingExport: vi.fn(),
 }));
 
 beforeEach(() => {
+  vi.mocked(api.fetchLatestTrackingSync).mockResolvedValue(null);
   vi.stubGlobal('ResizeObserver', class {
     observe() {}
     unobserve() {}
@@ -483,7 +484,7 @@ it('paginates tracking details by 25, exports the full scope, and resets after r
   fireEvent.click(screen.getByRole('button', { name: 'CSV' }));
   await waitFor(() => expect(api.downloadTrackingExport).toHaveBeenCalledWith('csv', {}));
   vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, has_data: true, details: details.slice(0, 26) });
-  vi.mocked(api.syncTrackingData).mockResolvedValue({ social_metrics: 0, accounts: [] });
+  vi.mocked(api.syncTrackingData).mockResolvedValue({ job_id: 'finished', status: 'done', active: false, social_metrics: 0, accounts: [] });
   fireEvent.click(screen.getByRole('button', { name: 'Sync Data' }));
   await screen.findByText('Showing 1–25 of 26 · 25 rows per page');
   expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();

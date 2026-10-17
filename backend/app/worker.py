@@ -2,7 +2,7 @@ import os
 import math
 import asyncio
 import logging
-from celery import Celery
+from app.core.task_queue import celery_app
 from app.core import task_performance  # noqa: F401 -- register timing signals
 from app.core.task_performance import timed_step
 
@@ -41,12 +41,6 @@ from app.services import distribution_publish_service, distribution_service, oau
 
 logger = logging.getLogger(__name__)
 
-celery_app = Celery(
-    "worker",
-    broker=os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0"),
-    backend=os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/0"),
-)
-
 def route_generation(name, args, kwargs, options, task=None, **_extra):
     if name == "app.worker.generateReels":
         args, kwargs = args or (), kwargs or {}
@@ -59,13 +53,19 @@ celery_app.conf.task_routes = (route_generation, {
     "app.worker.publishDistribution": "publish-queue",
     "app.worker.checkScheduledDistributions": "scheduler-queue",
     "app.worker.syncTrackingData": "sync-queue",
+    "app.worker.syncTrackingAccount": "sync-queue",
+    "app.worker.dispatchTrackingSync": "sync-queue",
 })
 celery_app.conf.worker_prefetch_multiplier = 1
+celery_app.conf.broker_connection_timeout = 1
 
 # Requires a separate `celery -A app.worker.celery_app beat` process running
 # alongside the worker (see scripts/*/start.*) — the worker alone only
 # reacts to tasks it's handed, it doesn't watch the clock on its own.
 celery_app.conf.beat_schedule = {
+    'dispatch-tracking-outbox': {
+        'task': 'app.worker.dispatchTrackingSync', 'schedule': 15.0,
+    },
     "check-scheduled-distributions": {
         "task": "app.worker.checkScheduledDistributions",
         "schedule": 60.0,
@@ -856,6 +856,23 @@ def syncTrackingData():
     """F5-UC03/04 periodic synchronization entry point (every 15 minutes)."""
     db = SessionLocal()
     try:
-        return asyncio.run(tracking_provider_service.sync_all_members(db))
+        from app.services import tracking_sync_jobs as jobs
+        from app.models.models import SocialAccount
+        owners = [row[0] for row in db.query(SocialAccount.user_id).distinct().all()]
+        for user_id in owners:
+            jobs.enqueue_member(db, user_id)
+        return {'members': len(owners), 'dispatched': jobs.dispatch_due()}
     finally:
         db.close()
+
+
+@celery_app.task(name='app.worker.syncTrackingAccount')
+def syncTrackingAccount(job_id):
+    from app.services.tracking_sync_jobs import process_job
+    process_job(job_id)
+
+
+@celery_app.task(name='app.worker.dispatchTrackingSync')
+def dispatchTrackingSync():
+    from app.services.tracking_sync_jobs import dispatch_due
+    return dispatch_due()

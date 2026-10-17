@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
+import httpx
+
 from app.schemas import Metric, SyncRequest
+from app.services.sync_policy import pooled_sync, optional_metrics, scope, warn, graph_cursor
 from app.services.base import ProviderClient, ProviderError, provider_date
 
 
@@ -17,11 +21,11 @@ class FacebookProvider(ProviderClient):
         del state, redirect_uri
         raise ProviderError(self.platform, "OAuth is managed by ReelCast", 422)
 
-    async def _reel_shares(self, video_id: str, headers: dict[str, str]) -> int | None:
+    async def _reel_shares(self, video_id: str, headers: dict[str, str], client: httpx.AsyncClient) -> int | None:
         try:
             result = await self.request(
                 'GET', f"{self.settings().facebook_graph_api_base_url.rstrip('/')}/{video_id}/video_insights",
-                params={'metric': 'post_video_social_actions', 'period': 'lifetime'}, headers=headers)
+                params={'metric': 'post_video_social_actions', 'period': 'lifetime'}, headers=headers, client=client)
         except ProviderError as exc:
             logger.warning('Facebook Reel shares unavailable (status=%s)', exc.status_code)
             return None
@@ -47,17 +51,18 @@ class FacebookProvider(ProviderClient):
             return actions.get('share', 0)
         return None
 
-    async def _video_shares(self, video_id: str, page_id: str, headers: dict[str, str]) -> int | None:
-        count = await self._post_shares(video_id, page_id, headers)
-        return count if count is not None else await self._reel_shares(video_id, headers)
+    @optional_metrics(lambda: None)
+    async def _video_shares(self, video_id: str, page_id: str, headers: dict[str, str], client: httpx.AsyncClient) -> int | None:
+        count = await self._post_shares(video_id, page_id, headers, client)
+        return count if count is not None else await self._reel_shares(video_id, headers, client)
 
-    async def _post_shares(self, video_id: str, page_id: str, headers: dict[str, str]) -> int | None:
+    async def _post_shares(self, video_id: str, page_id: str, headers: dict[str, str], client: httpx.AsyncClient) -> int | None:
         # Meta exposes shares on the associated Post, not the Video node.
         # Resolve its real ID rather than constructing a Page/video combination.
         base_url = self.settings().facebook_graph_api_base_url.rstrip('/')
         try:
             video = await self.request('GET', f'{base_url}/{video_id}',
-                                       params={'fields': 'post_id'}, headers=headers)
+                                       params={'fields': 'post_id'}, headers=headers, client=client)
             post_id = video.get('post_id')
             if not isinstance(post_id, str) or not re.fullmatch(r'\d+(?:_\d+)?', post_id):
                 return None
@@ -68,7 +73,7 @@ class FacebookProvider(ProviderClient):
                     return None
                 post_id = f'{page_id}_{post_id}'
             post = await self.request('GET', f'{base_url}/{post_id}',
-                                      params={'fields': 'id,shares'}, headers=headers)
+                                      params={'fields': 'id,shares'}, headers=headers, client=client)
         except ProviderError as exc:
             # This optional lookup must not discard successfully fetched video counters.
             # Log only the safe status, never tokens or provider response bodies.
@@ -78,26 +83,49 @@ class FacebookProvider(ProviderClient):
         count = shares.get('count') if isinstance(shares, dict) else None
         return count if isinstance(count, int) and not isinstance(count, bool) and count >= 0 else None
 
+    @pooled_sync
     async def sync(self, request: SyncRequest) -> list[Metric]:
         self.require("facebook_graph_api_base_url")
+        # Keep the pool local to this sync: provider instances are shared by
+        # concurrent requests and must never retain another account's session.
+        return await self._sync(request, scope.get().client)
+
+    async def _sync(self, request: SyncRequest, client: httpx.AsyncClient) -> list[Metric]:
         fields = "id,created_time,reactions.limit(0).summary(true),comments.limit(0).summary(true),shares"
         headers = {"Authorization": f"Bearer {request.access_token}"}
         posts: list[dict] = []
         if request.post_ids:
-            for post_id in dict.fromkeys(request.post_ids):
+            async def fetch_post(post_id: str) -> dict:
                 # Distribution stores the uploaded Video ID. A Page post ID
                 # contains an underscore and supports a different set of fields.
                 node_fields = fields if '_' in post_id else 'id,created_time,views,likes.limit(0).summary(true),comments.limit(0).summary(true)'
                 item = await self.request('GET', f"{self.settings().facebook_graph_api_base_url.rstrip('/')}/{post_id}",
-                                          params={'fields': node_fields}, headers={'Authorization': f'Bearer {request.access_token}'})
+                                          params={'fields': node_fields}, headers=headers, client=client)
                 if '_' not in post_id:
-                    count = await self._video_shares(post_id, request.external_account_id, headers)
+                    count = await self._video_shares(post_id, request.external_account_id, headers, client)
                     if count is not None:
                         item['shares'] = {'count': count}
-                posts.append(item)
+                return item
+
+            post_ids = list(dict.fromkeys(request.post_ids))
+            for start in range(0, len(post_ids), getattr(self.settings(), 'sync_concurrency', 4)):
+                # Bound provider load, preserve order and finish all tasks in a
+                # batch before closing the session or reporting a failure.
+                results = await asyncio.gather(*(fetch_post(post_id) for post_id in post_ids[start:start + getattr(self.settings(), 'sync_concurrency', 4)]),
+                                               return_exceptions=True)
+                if results and all(isinstance(result, BaseException) for result in results):
+                    raise results[0]
+                for result in results:
+                    if isinstance(result, BaseException):
+                        if isinstance(result, ProviderError) and result.status_code in {400, 404, 502, 503, 504}:
+                            warn('Some posts are unavailable; previous observations were retained')
+                            continue
+                        raise result
+                    posts.append(result)
         else:
             data = await self.request("GET", f"{self.settings().facebook_graph_api_base_url.rstrip('/')}/{request.external_account_id}/posts",
-                                      params={"fields": fields, "since": request.from_date.isoformat(), "until": request.to_date.isoformat(), "limit": 100}, headers=headers)
+                                      params={"fields": fields, "since": request.from_date.isoformat(), "until": request.to_date.isoformat(), "limit": 100,
+                                              **({'after': request.page_cursor} if request.page_cursor is not None else {})}, headers=headers, client=client)
             posts: list[dict] = []
             # A Page feed is paginated.  Without following its cursor, a new Reel
             # can disappear behind older posts and never enter Tracking.
@@ -106,10 +134,13 @@ class FacebookProvider(ProviderClient):
                 if not isinstance(page, list):
                     raise ProviderError(self.platform, "provider returned invalid posts")
                 posts.extend(item for item in page if isinstance(item, dict))
+                if request.single_page:
+                    scope.get().next_cursor = graph_cursor(data)
+                    break
                 next_url = data.get("paging", {}).get("next")
                 if not isinstance(next_url, str) or not next_url:
                     break
-                data = await self.request("GET", next_url, headers=headers)
+                data = await self.request("GET", next_url, headers=headers, client=client)
         metrics: list[Metric] = []
         for post in posts:
             if not post.get("id"):

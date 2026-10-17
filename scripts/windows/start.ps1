@@ -94,6 +94,8 @@ Write-Host "  Tracking Provider Adapter window opened." -ForegroundColor Green
 
 # ── 5. Backend (FastAPI / uvicorn) ────────────────────────
 Write-Host "[6/8] Starting Backend (FastAPI)..." -ForegroundColor Yellow
+& $VENV_PY (Join-Path $BACKEND 'scripts\migrate_tracking_sync.py')
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Start-Process powershell -ArgumentList @(
     "-NoExit",
     "-Command",
@@ -113,10 +115,11 @@ foreach ($workerKind in @("generation", "publish", "sync", "scheduler", "caption
     $workerQueues = "$workerKind-queue"
     # Drain jobs submitted by the previous release on the generation worker only.
     if ($workerKind -eq "generation") { $workerQueues += ",main-queue" }
-    Start-Process -FilePath $VENV_PY -WorkingDirectory $BACKEND -ArgumentList @(
+    $syncPoolArguments = if ($workerKind -eq 'sync') { @('--pool=threads', '--concurrency=4') } else { @('--pool=solo') }
+    Start-Process -FilePath $VENV_PY -WorkingDirectory $BACKEND -ArgumentList (@(
         "-m", "celery", "-A", "app.worker.celery_app", "worker",
-        "--loglevel=info", "--pool=solo", "--hostname=$workerKind@%h", "-Q", $workerQueues
-    ) -WindowStyle Hidden -RedirectStandardOutput (Join-Path $BACKEND "celery-$workerKind.log") -RedirectStandardError (Join-Path $BACKEND "celery-$workerKind.err.log")
+        "--loglevel=info", "--hostname=$workerKind@%h", "-Q", $workerQueues
+    ) + $syncPoolArguments) -WindowStyle Hidden -RedirectStandardOutput (Join-Path $BACKEND "celery-$workerKind.log") -RedirectStandardError (Join-Path $BACKEND "celery-$workerKind.err.log")
 }
 Write-Host "  Dedicated Celery workers started; see backend/celery-*.log." -ForegroundColor Green
 

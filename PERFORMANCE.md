@@ -4,8 +4,9 @@
 
 - Synchronous authentication queries run in FastAPI's thread pool. R2 upload/delete
   and product-context reads no longer hold the API event loop while doing blocking I/O.
-- Manual sync preserves its existing response contract and runs in a thread pool.
-  It still waits for provider completion; it has not yet become a background job.
+- Manual sync now returns HTTP 202 with an owned run ID. The API only snapshots
+  connected accounts and checkpoints; provider work runs on `sync-queue`.
+  Tracking restores the latest run and polls until every account settles.
 - Frontend API and media origins use `src/lib/api-config.ts`. Set
   `NEXT_PUBLIC_API_URL=https://your-backend/api` **before building**. Auth endpoints
   use the corresponding backend root. Optional `NEXT_PUBLIC_OAUTH_API_URL` is retained.
@@ -48,7 +49,7 @@ celery -A app.worker.celery_app worker -n generation@%h -Q generation-queue,main
 celery -A app.worker.celery_app worker -n caption@%h -Q caption-queue -c 1 --loglevel=info
 celery -A app.worker.celery_app worker -n publish@%h -Q publish-queue -c 1 --loglevel=info
 celery -A app.worker.celery_app worker -n scheduler@%h -Q scheduler-queue -c 1 --loglevel=info
-celery -A app.worker.celery_app worker -n sync@%h -Q sync-queue -c 1 --loglevel=info
+celery -A app.worker.celery_app worker -n sync@%h -Q sync-queue --pool=threads -c 4 --loglevel=info
 celery -A app.worker.celery_app beat --loglevel=info
 ```
 
@@ -175,14 +176,94 @@ cover owner isolation, idempotency, bounded reads, cleanup, caption/video overla
 cache isolation and polling cancellation/backoff. These do not establish real R2
 CORS correctness, AI latency, production throughput or deployed p95.
 
+## Shared social synchronization
+
+Applies to YouTube, Facebook, Instagram and TikTok statistics reads. Shop adapters,
+publication and paid generation calls are outside this policy.
+
+- `POST /api/tracking/sync` returns a run with per-account job IDs and states;
+  `GET /sync/{run_id}` and `/sync/latest` check ownership. This deliberately replaces
+  the previous synchronous manual-sync response. Frontend and API must ship together.
+- Manual and scheduled sync create the same account jobs. A database partial unique
+  index permits only one queued/running/retry job per account; repeated clicks reuse
+  it. Platform gate row locks cap running batches across workers (default two per
+  platform). This is a concurrency cap, not a guarantee of provider requests/second
+  or daily quota. Provider quota errors and Retry-After defer later batches.
+- Account jobs persist post-ID snapshots or provider page cursors, batch position,
+  counts and warnings. Each batch commits atomically with its checkpoint. YouTube
+  uses 50 known IDs, TikTok 20, Facebook/Instagram four. Discovery reads one provider
+  page per batch (Instagram limits it to four media items). Other accounts continue
+  when a batch or account fails. Exhausted batches are reported as partial/failed.
+- The database also acts as a durable dispatch outbox. Beat redispatches eligible
+  rows every 15 seconds, including expired worker leases. Redis/broker outages do
+  not erase accepted jobs. A worker claims a 90-second lease with a unique token;
+  every write locks the job and validates that token/lease. Old workers cannot
+  commit data or freshness after a reclaim. A batch's network/token work has a
+  60-second bound; account jobs expire after 30 minutes, including queue/retry time.
+  Repeated worker loss is bounded. Terminal run/job history is retained seven days.
+- All social providers reuse one request-scoped HTTPX pool, closed after each batch.
+  Per-request connection/read/pool timeouts are enclosed in an absolute adapter
+  deadline (default 24 seconds, at most 25). The backend sends a smaller budget if
+  necessary to leave two seconds before its adapter HTTP timeout (default 30).
+  Optional metrics share a five-second budget per optional operation and cannot
+  extend the adapter deadline. Concurrent HTTP requests are capped at four per batch.
+- The adapter retries only GET and allowlisted TikTok read-only POST endpoints,
+  with at most three attempts, jitter and the remaining deadline. It marks exhausted
+  transient errors so the worker does not multiply those provider retries. Workers
+  defer rate limits and adapter transport outages up to three batch attempts; long
+  waits release the worker. Auth, permission and quota failures are distinguished;
+  notably YouTube 403 quota errors do not ask the member to reconnect.
+- Supported token refresh runs once per account job. Rotated tokens are encrypted
+  and committed under the lease before requesting metrics, so a later metrics
+  failure does not discard the new refresh token. No tokens enter task messages,
+  job responses or performance logs.
+- Previously successful observations survive failures. If a returned post loses a
+  previously known metric, the entire old observation and its timestamp are kept
+  and the run reports partial data; new counters are not merged into a falsely fresh
+  row. A future extension can provide independent per-metric observation times.
+  `last_synced_at` advances only for a fully successful account job. Snapshot totals
+  remain idempotent and existing dashboard read-query bounds are unchanged.
+- Tracking polling never overlaps requests, backs off errors, pauses hidden/offline
+  tabs, aborts on cleanup and stops at terminal states. Reopening restores the latest
+  owned run. A polling failure does not claim that the background job failed.
+- Adapter logs include platform, outcome, duration, request-attempt and warning
+  counts. Existing request and queue timings remain in place; raw URLs, query
+  strings, provider messages and credentials are excluded.
+
+Deployment uses three additive tables: `tracking_sync_runs`, `tracking_sync_jobs`
+and `tracking_sync_gates`, with no alterations to existing observation columns.
+The application's existing `Base.metadata.create_all` creates them at API startup.
+Startup scripts also run `backend/scripts/migrate_tracking_sync.py` idempotently
+before the API/workers. For manual deployment, run `python scripts/migrate_tracking_sync.py`
+from `backend` before restarting the services; it also completes intermediate local
+versions of the new job table without modifying existing observation data.
+Restart the API, adapter, sync worker and the single Beat instance together. Startup
+scripts and `worker.cmd sync` use four sync threads; each batch owns its DB sessions
+and event loop. No SQLAlchemy session or HTTP client is shared between worker threads.
+
+Configuration: adapter `SYNC_TIMEOUT_SECONDS=24`, `OPTIONAL_TIMEOUT_SECONDS=5`,
+`SYNC_CONCURRENCY=4`, `READ_ATTEMPTS=3`; backend
+`TRACKING_SYNC_TIMEOUT_SECONDS=30`, `TRACKING_SYNC_PLATFORM_JOBS=2`,
+`TRACKING_SYNC_JOB_MAX_SECONDS=1800`. Tune after representative load measurements;
+these defaults do not establish production throughput or p95.
+
+Verification on 2026-10-17: 245 backend tests, 71 frontend tests plus the additional
+expired-run polling regression, 101 adapter tests
+and two browser cases passed. The opt-in PostgreSQL test additionally passed real
+concurrent duplicate-job/platform-gate claims in a disposable schema. The browser
+cases use mocked APIs. A separate authenticated live API/worker run accepted in
+0.261 seconds, reused the same run on a repeated POST, and completed all four
+connected platforms (19 posts) in 10.34 seconds without warnings. These are local
+observations, not production p95 or sustained-load measurements. Live sync writes
+updated observations/tokens; no paid generation or publication was invoked.
+
 ## Remaining planned work
 
 - PostgreSQL query-plan verification and index selection against representative
   data. No index or schema changes have been applied to a live database.
-- Background manual sync, account-level fan-out and distributed overlap protection.
 - Tracking summary/detail API separation and server-side Tracking detail pagination.
 - Product-level pagination in large campaigns/pickers; further chart bundle splitting.
-- General provider deadlines/retry policies, automatic crash-resume orchestration,
+- Deadlines/retry policies outside social tracking, automatic video crash-resume orchestration,
   and email delivery jobs. Paid AI calls are not retried automatically.
 - Real R2 upload/CORS verification and production workload tests on the deployment.
 

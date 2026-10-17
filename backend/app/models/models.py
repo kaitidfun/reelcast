@@ -1,12 +1,52 @@
 from sqlalchemy import (
     Column, String, Boolean, Integer, Text, Date, Numeric,
-    ForeignKey, Enum, text, UniqueConstraint,
+    ForeignKey, Enum, text, UniqueConstraint, Index,
 )
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP, JSONB
 from sqlalchemy.orm import relationship
 import enum
 import uuid
 from app.database import Base
+
+
+class TrackingSyncRun(Base):
+    __tablename__ = 'tracking_sync_runs'
+    run_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False, index=True)
+    job_ids = Column(JSONB, nullable=False, default=list)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False)
+
+
+class TrackingSyncGate(Base):
+    __tablename__ = 'tracking_sync_gates'
+    platform = Column(String, primary_key=True)
+    not_before = Column(TIMESTAMP(timezone=True), nullable=True)
+
+
+class TrackingSyncJob(Base):
+    __tablename__ = 'tracking_sync_jobs'
+    __table_args__ = (Index('uq_tracking_sync_active_account', 'account_id', unique=True,
+        postgresql_where=text("status IN ('queued','running','retry')"),
+        sqlite_where=text("status IN ('queued','running','retry')")),)
+    job_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False, index=True)
+    account_id = Column(UUID(as_uuid=True), ForeignKey('social_accounts.account_id', ondelete='CASCADE'), nullable=False)
+    platform = Column(String, nullable=False)
+    status = Column(String, nullable=False, default='queued', index=True)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    next_attempt_at = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
+    lease_until = Column(TIMESTAMP(timezone=True), nullable=True)
+    lease_token = Column(UUID(as_uuid=True), nullable=True)
+    post_ids = Column(JSONB, nullable=True)
+    provider_cursor = Column(JSONB, nullable=True)
+    cursor = Column(Integer, nullable=False, default=0)
+    metrics = Column(Integer, nullable=False, default=0)
+    failed_batches = Column(Integer, nullable=False, default=0)
+    retries = Column(Integer, nullable=False, default=0)
+    tokens_refreshed = Column(Boolean, nullable=False, default=False)
+    warnings = Column(JSONB, nullable=False, default=list)
+    error = Column(Text, nullable=True)
 
 
 class TrackingObservation(Base):

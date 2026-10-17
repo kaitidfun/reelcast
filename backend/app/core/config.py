@@ -110,7 +110,9 @@ LAZADA_APP_SECRET = os.getenv("LAZADA_APP_SECRET", "")
 # shop/social platform response into ReelCast's normalized metric contract.
 # They deliberately remain empty until the corresponding app/API credentials
 # and permissions have been approved by the provider.
-TRACKING_SYNC_TIMEOUT_SECONDS = int(os.getenv("TRACKING_SYNC_TIMEOUT_SECONDS", "30"))
+TRACKING_SYNC_TIMEOUT_SECONDS = max(3, int(os.getenv("TRACKING_SYNC_TIMEOUT_SECONDS", "30")))
+TRACKING_SYNC_PLATFORM_JOBS = max(1, int(os.getenv('TRACKING_SYNC_PLATFORM_JOBS', '2')))
+TRACKING_SYNC_JOB_MAX_SECONDS = max(120, int(os.getenv('TRACKING_SYNC_JOB_MAX_SECONDS', '1800')))
 TRACKING_TIKTOK_SHOP_SYNC_URL = os.getenv("TRACKING_TIKTOK_SHOP_SYNC_URL", "")
 TRACKING_SHOPEE_SYNC_URL = os.getenv("TRACKING_SHOPEE_SYNC_URL", "")
 TRACKING_LAZADA_SYNC_URL = os.getenv("TRACKING_LAZADA_SYNC_URL", "")

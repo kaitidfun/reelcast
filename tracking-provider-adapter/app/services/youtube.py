@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import logging
 
 from app.schemas import Metric, SyncRequest
+from app.services.sync_policy import pooled_sync, optional_metrics, scope, warn
 from app.services.base import ProviderClient, ProviderError, number, provider_date
 
 logger = logging.getLogger(__name__)
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 class YouTubeProvider(ProviderClient):
     platform = "youtube"
 
+    @optional_metrics(dict)
     async def _shares(self, request: SyncRequest, ids: list[str], headers: dict[str, str]) -> dict[str, int]:
         if not ids:
             return {}
@@ -76,17 +78,18 @@ class YouTubeProvider(ProviderClient):
         del state, redirect_uri
         raise ProviderError(self.platform, "OAuth is managed by ReelCast", 422)
 
+    @pooled_sync
     async def sync(self, request: SyncRequest) -> list[Metric]:
         self.require("youtube_api_base_url")
         headers = {"Authorization": f"Bearer {request.access_token}"}
         published_after = datetime.combine(request.from_date, datetime.min.time(), tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
         published_before = datetime.combine(request.to_date, datetime.max.time(), tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
         search_url = self.settings().youtube_api_base_url.rstrip("/") + "/youtube/v3/search"
-        page_token: str | None = None
+        page_token: str | None = str(request.page_cursor) if request.page_cursor is not None else None
         ids: list[str] = list(request.post_ids)
         # Explicit date ordering makes a just-published Short visible on the
         # first sync instead of relying on YouTube's relevance ordering.
-        for _ in range(0 if request.post_ids else 10):
+        for _ in range(0 if request.post_ids else (1 if request.single_page else 10)):
             params = {"part": "snippet", "channelId": request.external_account_id, "type": "video",
                       "publishedAfter": published_after, "publishedBefore": published_before,
                       "maxResults": 50, "order": "date"}
@@ -99,6 +102,8 @@ class YouTubeProvider(ProviderClient):
                 if item.get("id", {}).get("videoId")
             )
             page_token = search.get("nextPageToken")
+            if request.single_page:
+                scope.get().next_cursor = page_token if isinstance(page_token, str) and page_token else None
             if not isinstance(page_token, str) or not page_token:
                 break
         ids = list(dict.fromkeys(ids))

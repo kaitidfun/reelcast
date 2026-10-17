@@ -17,7 +17,7 @@ def request(platform, ids):
 
 def configure(provider):
     provider.require = lambda *args: None
-    provider.settings = lambda: SimpleNamespace(youtube_api_base_url='https://youtube.test',
+    provider.settings = lambda: SimpleNamespace(request_timeout_seconds=15, youtube_api_base_url='https://youtube.test',
                                                 youtube_analytics_api_base_url='https://analytics.test',
                                                 tiktok_api_base_url='https://tiktok.test',
                                                 facebook_graph_api_base_url='https://facebook.test',

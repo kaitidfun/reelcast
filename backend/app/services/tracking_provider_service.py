@@ -9,6 +9,7 @@ access or refresh tokens and never exposes them to the frontend.
 from __future__ import annotations
 
 import logging
+import asyncio
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
@@ -40,7 +41,18 @@ _PROVIDERS: dict[str, ProviderConfig] = {
 
 
 class TrackingProviderError(RuntimeError):
-    pass
+    def __init__(self, reason, status_code=502, retry_after=None, retry_exhausted=False):
+        super().__init__(reason)
+        self.status_code = status_code
+        self.retry_after = retry_after
+        self.retry_exhausted = retry_exhausted
+
+
+class AdapterMetrics(list):
+    def __init__(self, metrics, warnings=(), next_cursor=None):
+        super().__init__(metrics)
+        self.warnings = list(warnings)
+        self.next_cursor = next_cursor
 
 
 def readiness() -> dict[str, bool]:
@@ -50,7 +62,7 @@ def readiness() -> dict[str, bool]:
 
 async def _request_adapter(
     *, platform: str, account_id: str, external_account_id: str, access_token: str,
-    post_ids: list[str] | None = None
+    post_ids: list[str] | None = None, single_page: bool = False, page_cursor: str | int | None = None
 ) -> list[dict[str, Any]]:
     provider = _PROVIDERS.get(platform)
     if not provider or not provider.url:
@@ -65,6 +77,9 @@ async def _request_adapter(
     payload = {
         "platform": platform,
         "post_ids": post_ids or [],
+        'single_page': single_page,
+        'page_cursor': page_cursor,
+        'timeout_seconds': min(24, max(0.1, config.TRACKING_SYNC_TIMEOUT_SECONDS - 2)),
         "account_id": account_id,
         "external_account_id": external_account_id,
         "access_token": access_token,
@@ -73,11 +88,12 @@ async def _request_adapter(
     }
     try:
         async with httpx.AsyncClient(timeout=config.TRACKING_SYNC_TIMEOUT_SECONDS) as client:
-            response = await client.post(provider.url, json=payload, headers=headers)
+            response = await asyncio.wait_for(client.post(provider.url, json=payload, headers=headers),
+                                              timeout=config.TRACKING_SYNC_TIMEOUT_SECONDS)
         response.raise_for_status()
         body = response.json()
-    except httpx.TimeoutException as exc:
-        raise TrackingProviderError(f"{platform}: tracking adapter timed out; try Sync Data again") from exc
+    except (httpx.TimeoutException, asyncio.TimeoutError) as exc:
+        raise TrackingProviderError(f"{platform}: tracking adapter timed out", 504) from exc
     except httpx.HTTPStatusError as exc:
         # Never forward arbitrary upstream bodies: they can contain credentials.
         status = exc.response.status_code
@@ -91,11 +107,18 @@ async def _request_adapter(
             reason = "social API rejected the token; reconnect this platform in Settings"
         elif status == 429:
             reason = "social API rate limit reached; try again later"
+        elif status == 403:
+            reason = "social API permission is missing; check the granted permissions"
         elif status == 504:
             reason = "social API timed out; try again later"
         else:
             reason = f"adapter returned HTTP {status}; check the adapter provider error log"
-        raise TrackingProviderError(f"{platform}: {reason}") from exc
+        try:
+            retry_after = min(86400, max(1, float(exc.response.headers.get('Retry-After', '60'))))
+        except ValueError:
+            retry_after = 60
+        raise TrackingProviderError(f"{platform}: {reason}", status, retry_after if status == 429 else None,
+                                    exc.response.headers.get('X-ReelCast-Retry-Exhausted') == '1') from exc
     except httpx.HTTPError as exc:
         raise TrackingProviderError(f"{platform}: cannot reach tracking adapter; check it is running") from exc
     except ValueError as exc:
@@ -104,7 +127,17 @@ async def _request_adapter(
     metrics = body.get("metrics") if isinstance(body, dict) else None
     if not isinstance(metrics, list):
         raise TrackingProviderError("Adapter response must contain a metrics array")
-    return metrics
+    # Adapter owns warning text; only forward our fixed vocabulary.
+    allowed_warnings = {'Some optional metrics are unavailable',
+                        'Some posts are unavailable; previous observations were retained'}
+    raw_warnings = body.get('warnings')
+    warnings = sorted(allowed_warnings.intersection(raw_warnings)) if isinstance(raw_warnings, list) and all(isinstance(value, str) for value in raw_warnings) else []
+    if raw_warnings and not warnings:
+        warnings = ['Some optional metrics are unavailable']
+    cursor = body.get('next_cursor')
+    if cursor is not None and (isinstance(cursor, bool) or not isinstance(cursor, (int, str)) or len(str(cursor)) > 2048):
+        raise TrackingProviderError('Adapter returned an invalid pagination cursor', 400)
+    return AdapterMetrics(metrics, warnings, cursor)
 
 
 async def _sync_metrics(
