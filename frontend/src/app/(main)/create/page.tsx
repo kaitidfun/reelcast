@@ -7,7 +7,7 @@ import { LoadingImage, LoadingVideo } from "@/components/LoadingMedia";
 
 import { useRef, useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   Sparkles, Video, Wand2, Check, Loader2, Film, RefreshCw,
   Play, Pause, Volume2, VolumeX, ShoppingBag, FolderOpen,
@@ -98,6 +98,7 @@ const CAMERA_OPTIONS: GuideOption[] = [
 ];
 
 const CreateReelContent = () => {
+  const reduceMotion = useReducedMotion();
   const queryClient = useQueryClient();
   const uploadInFlight = useRef(false);
   const searchParams = useSearchParams();
@@ -720,7 +721,12 @@ const CreateReelContent = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-5 lg:items-start gap-6">
         {/* ============ LEFT: Composer ============ */}
-        <div className="lg:col-span-3 space-y-5">
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.22, ease: "easeOut" }}
+          className="lg:col-span-3 space-y-5"
+        >
           <input
             ref={uploadInputRef}
             type="file"
@@ -737,6 +743,8 @@ const CreateReelContent = () => {
           {/* Creator mode toggle */}
           <div className="flex rounded-xl border border-border bg-muted/30 p-1 gap-1">
             <button
+              type="button"
+              aria-pressed={creatorMode === "generate"}
               onClick={() => { setCreatorMode("generate"); setWithAudio(true); }}
               className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
                 creatorMode === "generate"
@@ -748,6 +756,8 @@ const CreateReelContent = () => {
               Generate with AI
             </button>
             <button
+              type="button"
+              aria-pressed={creatorMode === "upload"}
               onClick={() => setCreatorMode("upload")}
               className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
                 creatorMode === "upload"
@@ -811,6 +821,15 @@ const CreateReelContent = () => {
             </div>
           </div>
 
+          <AnimatePresence initial={false} mode="wait">
+            <motion.div
+              key={creatorMode}
+              initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: reduceMotion ? 1 : 0, y: reduceMotion ? 0 : -6, pointerEvents: "none", transition: { duration: reduceMotion ? 0 : 0.12 } }}
+              transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
+              className="min-w-0"
+            >
           {/* Upload zone */}
           {creatorMode === "upload" && (
             <div className="rounded-2xl border border-border bg-card shadow-card overflow-hidden">
@@ -1030,6 +1049,9 @@ const CreateReelContent = () => {
             </div>
           )}
 
+            </motion.div>
+          </AnimatePresence>
+
           {/* Preview Overlays (shown after completion) */}
           {completedMode !== null && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-3 shadow-card">
@@ -1089,10 +1111,15 @@ const CreateReelContent = () => {
             saving={isSaving}
           />
 
-        </div>
+        </motion.div>
 
         {/* ============ RIGHT: Video Preview ============ */}
-        <div className="h-[70vh] min-h-[420px] lg:col-span-2 lg:sticky lg:top-4 lg:h-[calc(100vh-4rem)] flex flex-col gap-3">
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.22, delay: reduceMotion ? 0 : 0.04, ease: "easeOut" }}
+          className="h-[70vh] min-h-[420px] lg:col-span-2 lg:sticky lg:top-4 lg:h-[calc(100vh-4rem)] flex flex-col gap-3"
+        >
           <div className="relative flex-1 flex flex-col rounded-3xl border border-border bg-gradient-to-b from-card to-card/60 p-3 shadow-elevated overflow-hidden">
             <div className="flex items-center justify-between px-1 pb-2 shrink-0">
               <div className="flex items-center gap-1.5">
@@ -1257,7 +1284,7 @@ const CreateReelContent = () => {
               </div>
             </motion.div>
           )}
-        </div>
+        </motion.div>
       </div>
 
       {/* Dialogs */}

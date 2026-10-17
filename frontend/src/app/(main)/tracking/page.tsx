@@ -4,6 +4,7 @@ import { LoadingState } from "@/components/LoadingState";
 import { usePendingAction } from "@/hooks/usePendingAction";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { Loader2, BarChart3, SearchCheck, Download, RefreshCw, Eye, Heart, MessageCircle, Share2, MousePointerClick, Video, SlidersHorizontal, Settings2, Trophy, TableProperties, ArrowLeftRight, ChevronLeft, ChevronRight, Globe2, Megaphone, Package, Info, RotateCcw, type LucideIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -430,6 +431,16 @@ function PeriodComparison({ options }: { options: TrackingFilterOptions }) {
   </div>;
 }
 
+function TrackingEntrance({ children, delay = 0, className = "" }: { children: ReactNode; delay?: number; className?: string }) {
+  const reduceMotion = useReducedMotion();
+  return <motion.div
+    initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: reduceMotion ? 0 : 0.22, delay: reduceMotion ? 0 : delay, ease: "easeOut" }}
+    className={`min-w-0 ${className}`}
+  >{children}</motion.div>;
+}
+
 export default function Tracking() {
   const [options, setOptions] = useState(emptyOptions);
   const [dashboard, setDashboard] = useState<TrackingDashboard | null>(null);
@@ -572,20 +583,20 @@ export default function Tracking() {
 
 
     {dashboard && (
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">{([
+      <TrackingEntrance delay={0} className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">{([
         { label: 'Views', value: dashboard.totals.views, icon: Eye, color: 'bg-primary/10 text-primary', gradient: 'from-orange-500 via-pink-500 to-purple-600' },
         { label: 'Likes', value: dashboard.totals.likes, icon: Heart, color: 'bg-pink-500/10 text-pink-500', gradient: 'from-rose-500 via-pink-500 to-fuchsia-600' },
         { label: 'Comments', value: dashboard.totals.comments, icon: MessageCircle, color: 'bg-amber-500/10 text-amber-500', gradient: 'from-amber-500 via-orange-500 to-rose-500' },
         { label: 'Shares', value: dashboard.totals.shares, icon: Share2, color: 'bg-emerald-500/10 text-emerald-500', gradient: 'from-emerald-500 via-teal-500 to-cyan-600' },
         { label: 'Affiliate link clicks', value: dashboard.totals.clicks, icon: MousePointerClick, color: 'bg-info/10 text-info', gradient: 'from-cyan-500 via-blue-500 to-indigo-600' },
         { label: 'Tracked Reels', value: dashboard.totals.reels, icon: Video, color: 'bg-violet-500/10 text-violet-500', gradient: 'from-violet-500 via-purple-500 to-fuchsia-600' },
-      ]).map(({ label, value, icon: Icon, color, gradient }) => <section key={label} className="group relative overflow-hidden rounded-2xl border border-border bg-card card-shine transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"><div className={`h-1 bg-gradient-to-r ${gradient}`} /><div className="p-5"><div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{label}</p><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${color}`}><Icon className="h-4 w-4" /></span></div><p className="mt-3 font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{display(value)}</p></div></section>)}</div>
+      ]).map(({ label, value, icon: Icon, color, gradient }) => <section key={label} className="group relative overflow-hidden rounded-2xl border border-border bg-card card-shine transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"><div className={`h-1 bg-gradient-to-r ${gradient}`} /><div className="p-5"><div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{label}</p><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${color}`}><Icon className="h-4 w-4" /></span></div><p className="mt-3 font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{display(value)}</p></div></section>)}</TrackingEntrance>
     )}
     {loading && !dashboard ? <p role="status">Loading tracking data…</p> : dashboard && <>
 
       {!!dashboard.totals.partial_metrics.length && <p className="text-xs text-muted-foreground">Some social metrics are unavailable for part of this scope. Totals include only available values.</p>}
       {!dashboard.has_data && <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-12 text-center"><BarChart3 className="mx-auto h-10 w-10 text-muted-foreground/50" /><h2 className="mt-4 font-display text-xl font-semibold text-foreground">Start tracking your content</h2><p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">No tracking data matches these filters. Distribute a Reel to create its affiliate tracking link automatically, then synchronize its connected social account.</p></div>}
-      <div className="grid gap-5 lg:grid-cols-2">
+      <TrackingEntrance delay={0.02} className="grid gap-5 lg:grid-cols-2">
       <section className={panelClass}>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <SectionTitle icon={BarChart3} title="View by platform" description="Compare the latest observed lifetime views across platforms." />
@@ -639,7 +650,8 @@ export default function Tracking() {
         <SocialPlatformChart platforms={dashboard.platforms} metric="comments" label="Comments" icon={MessageCircle} />
         <SocialPlatformChart platforms={dashboard.platforms} metric="shares" label="Shares" icon={Share2} />
       </div>
-      </div>
+      </TrackingEntrance>
+      <TrackingEntrance delay={0.04}>
       <section className={panelClass}><div className="flex flex-wrap items-center justify-between gap-3"><SectionTitle icon={Trophy} title="Content ranking" description="Rank Reels, products, campaigns or platforms by a selected metric." /><div className="flex flex-wrap gap-2"><ScopeSelect icon={Video} label="Ranking level" showLabel={false} allowAll={false} className="w-40" placeholder="Level" value={level}
                 onChange={value => { setLevel(value as TrackingAnalysis["level"]); setAnalysis(null); setSelectedItem(null); }}
                 options={[
@@ -658,8 +670,11 @@ export default function Tracking() {
                     Observed At: {item.observed_at ? new Date(item.observed_at).toLocaleString() : 'Unavailable'}
                   </span></button>)}</div>}{selectedItem && <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm"><h3 className="mb-2 font-semibold">{selectedItem.name || "Untitled"}</h3><div className="grid gap-2 sm:grid-cols-3">{(["views", "likes", "comments", "shares", "engagement", "clicks"] as const).map(key => <p key={key} className="capitalize">{key}: {display(selectedItem[key])}</p>)}</div>{!!selectedItem.partial_metrics.length && <p className="mt-2 text-xs text-muted-foreground">Some counters are unavailable in this scope.</p>}</div>}</section>
 
-      <PeriodComparison options={options} />
+      </TrackingEntrance>
 
+      <TrackingEntrance delay={0.06}><PeriodComparison options={options} /></TrackingEntrance>
+
+    <TrackingEntrance delay={0.06}>
     <section className={panelClass}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SectionTitle icon={TableProperties} title="Tracking details" description="Review social metrics and affiliate link clicks for each Reel." />
@@ -713,7 +728,7 @@ export default function Tracking() {
           <p>Use links only in locations the platform allows viewers to open. Instagram and TikTok captions may not provide clickable links. A shared bio link alone cannot identify the originating Reel.</p>
         </div>
       </section>
-
+    </TrackingEntrance>
 
     </>}
   </div>;
