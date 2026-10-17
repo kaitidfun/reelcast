@@ -1,5 +1,9 @@
 "use client";
 
+import { LoadingImage } from "@/components/LoadingMedia";
+
+import { LoadingState } from "@/components/LoadingState";
+
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -168,7 +172,7 @@ const ProductReels = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-4">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted text-4xl ring-1 ring-border">
-            {product.thumbnail ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
+            {product.thumbnail ? <LoadingImage src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
           </div>
           <div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">
@@ -238,7 +242,7 @@ const ProductReels = () => {
       </div>
 
       {/* Reels grid / list */}
-      {filteredReels.length === 0 ? (
+      {reelsLoading ? <LoadingState label="Loading reels…" /> : filteredReels.length === 0 ? (
         <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
           No reels match your filters.
         </div>
@@ -269,7 +273,7 @@ const ProductReels = () => {
             >
               <div className="relative h-16 w-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                 {reel.thumbnail ? (
-                  <img src={reel.thumbnail} alt="" className="h-full w-full object-cover" />
+                  <LoadingImage src={reel.thumbnail} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <Film className="h-5 w-5 text-muted-foreground/30" />
                 )}

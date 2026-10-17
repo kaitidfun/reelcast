@@ -1,5 +1,9 @@
 "use client";
 
+import { LoadingImage } from "@/components/LoadingMedia";
+
+import { LoadingState } from "@/components/LoadingState";
+
 import { useState } from "react";
 import { FolderOpen, Folder, ChevronLeft } from "lucide-react";
 import {
@@ -13,6 +17,7 @@ import type { LibraryCampaign, LibraryProduct } from "../_types";
 import { getBannerGradient } from "../_hooks/useProductLibrary";
 
 type Props = {
+  loading?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   productLibrary: LibraryCampaign[];
@@ -22,6 +27,7 @@ type Props = {
 
 export function ProductPickerDialog({
   open,
+  loading = false,
   onOpenChange,
   productLibrary,
   onSelect,
@@ -56,7 +62,8 @@ export function ProductPickerDialog({
         </DialogHeader>
 
         <div className="overflow-y-auto -mx-6 px-6 pb-1">
-          {view === "campaigns" && (
+          {loading && <LoadingState label="Loading products…" />}
+          {!loading && view === "campaigns" && (
             <div className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Browse Campaigns
@@ -71,7 +78,7 @@ export function ProductPickerDialog({
                   >
                     <div className={`h-24 w-full relative overflow-hidden ${!campaign.bannerUrl ? `bg-gradient-to-br ${getBannerGradient(campaign.bannerColor)}` : "bg-muted"}`}>
                       {campaign.bannerUrl ? (
-                        <img
+                        <LoadingImage
                           src={campaign.bannerUrl}
                           alt={campaign.name}
                           className="absolute inset-0 h-full w-full object-cover"
@@ -102,11 +109,11 @@ export function ProductPickerDialog({
             </div>
           )}
 
-          {view === "products" && activeCampaign && (
+          {!loading && view === "products" && activeCampaign && (
             <div className="space-y-3">
               <div className="relative h-20 w-full rounded-xl overflow-hidden flex-shrink-0">
                 {activeCampaign.bannerUrl ? (
-                  <img src={activeCampaign.bannerUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                  <LoadingImage src={activeCampaign.bannerUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
                 ) : (
                   <div className={`absolute inset-0 bg-gradient-to-br ${getBannerGradient(activeCampaign.bannerColor)}`} />
                 )}
@@ -143,7 +150,7 @@ export function ProductPickerDialog({
                       <div className="h-12 w-12 shrink-0 rounded-md overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center relative">
                         <span className="text-xl font-semibold text-foreground/50 select-none">{product.thumbnail}</span>
                         {product.primaryImageUrl && (
-                          <img
+                          <LoadingImage
                             src={product.primaryImageUrl}
                             alt={product.name}
                             className="absolute inset-0 h-full w-full object-cover"

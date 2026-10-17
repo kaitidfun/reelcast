@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingImage } from "@/components/LoadingMedia";
+
 import { motion } from "framer-motion";
 import { Package, Video, Plus, Clock, Edit, Link2, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -58,7 +60,7 @@ export function ProductCard({ product, onClick, index = 0, onEdit, onCopyLink, o
     >
       <div className="aspect-video bg-muted flex items-center justify-center text-5xl relative group/img">
         {product.thumbnail ? (
-          <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" />
+          <LoadingImage src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" />
         ) : (
           <Package className="h-10 w-10 text-muted-foreground/30" />
         )}

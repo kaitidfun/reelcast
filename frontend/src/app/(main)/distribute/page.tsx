@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingState } from "@/components/LoadingState";
+
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -133,12 +135,13 @@ const Distribution = () => {
   const router = useRouter();
   const [reelsPage, setReelsPage] = useState(0);
   const [campaignsPage, setCampaignsPage] = useState(0);
-  const { reels: recentDistributedReels, total: recentReelsTotal, reload: reloadRecentReels } = useReels({
+  const { reels: recentDistributedReels, total: recentReelsTotal, loading: recentReelsLoading, reload: reloadRecentReels } = useReels({
     limit: RECENT_REELS_PAGE_SIZE,
     skip: reelsPage * RECENT_REELS_PAGE_SIZE,
     distributedOnly: true,
   });
-  const { campaigns } = useCampaigns();
+  const { campaigns, loading: campaignsLoading } = useCampaigns();
+  const [recentCampaignsLoading, setRecentCampaignsLoading] = useState(true);
   const [recentCampaignIds, setRecentCampaignIds] = useState<string[]>([]);
   const [recentCampaignTotal, setRecentCampaignTotal] = useState(0);
 
@@ -203,17 +206,22 @@ const Distribution = () => {
 
   useEffect(() => {
     const headers = authHeaders();
-    if (!headers.Authorization) return;
+    if (!headers.Authorization) { setRecentCampaignsLoading(false); return; }
+    let active = true;
+    setRecentCampaignsLoading(true);
     fetch(`${API_BASE_URL}/distributions/recent-campaigns?skip=${campaignsPage * RECENT_CAMPAIGNS_PAGE_SIZE}&limit=${RECENT_CAMPAIGNS_PAGE_SIZE}`, { headers })
       .then((res) => (res.ok ? res.json() : { campaign_ids: [], total: 0 }))
       .then((data) => {
+        if (!active) return;
         setRecentCampaignIds(data.campaign_ids ?? []);
         setRecentCampaignTotal(data.total ?? 0);
       })
       .catch(() => {
+        if (!active) return;
         setRecentCampaignIds([]);
         setRecentCampaignTotal(0);
-      });
+      }).finally(() => { if (active) setRecentCampaignsLoading(false); });
+    return () => { active = false; };
   }, [campaignsPage]);
 
   // Publishing runs in Celery after the page has loaded. Poll only while a
@@ -471,7 +479,7 @@ const Distribution = () => {
       {/* Recently Distributed Reels */}
       <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="w-full max-w-6xl space-y-4">
         <h2 className="font-display text-lg font-semibold text-foreground">Recently Distributed Reels</h2>
-        {recentDistributedReels.length === 0 ? (
+        {recentReelsLoading ? <LoadingState label="Loading distributed reels…" /> : recentDistributedReels.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
             No reels have been distributed yet.
           </div>
@@ -494,7 +502,7 @@ const Distribution = () => {
       {/* Recently Distributed Campaigns */}
       <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="w-full max-w-6xl space-y-4">
         <h2 className="font-display text-lg font-semibold text-foreground">Recently Distributed Campaigns</h2>
-        {recentCampaigns.length === 0 ? (
+        {recentCampaignsLoading || campaignsLoading ? <LoadingState label="Loading distributed campaigns…" /> : recentCampaigns.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
             No campaigns have been distributed yet.
           </div>

@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingImage } from "@/components/LoadingMedia";
+
 import { useState } from "react";
 import { Film, Pencil, Play } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -97,7 +99,7 @@ export function ReelCard({ reel, onClick, onChanged }: { reel: ReelCardData; onC
       </button>
       <div className="relative aspect-[9/16] bg-muted flex items-center justify-center">
         {reel.thumbnail ? (
-          <img src={reel.thumbnail} alt="" className="h-full w-full object-cover" />
+          <LoadingImage src={reel.thumbnail} alt="" className="h-full w-full object-cover" />
         ) : (
           <Film className="h-10 w-10 text-muted-foreground/30" />
         )}

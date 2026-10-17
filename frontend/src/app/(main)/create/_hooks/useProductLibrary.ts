@@ -19,6 +19,7 @@ export const getBannerGradient = (color: string) => {
 
 export function useProductLibrary() {
   const [productLibrary, setProductLibrary] = useState<LibraryCampaign[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const browseLibrary = async () => {
@@ -65,11 +66,13 @@ export function useProductLibrary() {
         setProductLibrary(mapped);
       } catch (e) {
         console.error("Failed to load library:", e);
+      } finally {
+        setLoading(false);
       }
     };
 
     browseLibrary();
   }, []);
 
-  return productLibrary;
+  return { productLibrary, loading };
 }

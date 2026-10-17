@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingState } from "@/components/LoadingState";
+
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Search, Plus } from "lucide-react";
@@ -37,7 +39,7 @@ export default function Home() {
   const [reelsExpanded, setReelsExpanded] = useState(false);
   const [campaignsExpanded, setCampaignsExpanded] = useState(false);
   const { reels, loading: reelsLoading, reload: reloadReels } = useReels();
-  const { campaigns } = useCampaigns();
+  const { campaigns, loading: campaignsLoading } = useCampaigns();
   const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
   const isSearching = normalizedQuery.length > 0;
   const newestReels = [...reels].sort(
@@ -157,7 +159,7 @@ export default function Home() {
       {/* Campaigns */}
       <motion.section {...fadeUp} transition={{ duration: 0.4, delay: 0.3 }} className="space-y-4">
         <h2 className="font-display text-lg font-semibold text-foreground">Recently Campaigns</h2>
-        {campaigns.length === 0 ? (
+        {campaignsLoading ? <LoadingState label="Loading campaigns…" /> : campaigns.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground">
             No campaigns in your product library yet. <Link href="/library" className="font-medium text-primary hover:text-primary/80">Create one in Library</Link>.
           </div>

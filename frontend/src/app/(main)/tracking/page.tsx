@@ -1,7 +1,10 @@
 "use client";
 
+import { LoadingState } from "@/components/LoadingState";
+import { usePendingAction } from "@/hooks/usePendingAction";
+
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { BarChart3, SearchCheck, Download, RefreshCw, Eye, Heart, MessageCircle, Share2, MousePointerClick, Video, SlidersHorizontal, Settings2, Trophy, TableProperties, ArrowLeftRight, ChevronLeft, ChevronRight, Globe2, Megaphone, Package, Info, RotateCcw, type LucideIcon } from "lucide-react";
+import { Loader2, BarChart3, SearchCheck, Download, RefreshCw, Eye, Heart, MessageCircle, Share2, MousePointerClick, Video, SlidersHorizontal, Settings2, Trophy, TableProperties, ArrowLeftRight, ChevronLeft, ChevronRight, Globe2, Megaphone, Package, Info, RotateCcw, type LucideIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -268,7 +271,8 @@ function PeriodComparison({ options }: { options: TrackingFilterOptions }) {
   const [appliedPeriods, setAppliedPeriods] = useState<TrackingPeriods | null>(null);
   const [comparison, setComparison] = useState<TrackingComparison | null>(null);
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { pending, run: runPendingAction } = usePendingAction();
+  const busy = pending !== null;
   const [error, setError] = useState("");
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const hasFutureDate = [filters.start, filters.end, comparisonDates.start, comparisonDates.end]
@@ -306,10 +310,11 @@ function PeriodComparison({ options }: { options: TrackingFilterOptions }) {
     return () => { active = false; };
   }, [applied, appliedPeriods]);
 
-  async function run(action: () => Promise<void>) {
-    setBusy(true); setError("");
-    try { await action(); } catch (err) { setError(err instanceof Error ? err.message : "Unable to complete request"); }
-    finally { setBusy(false); }
+  function run(action: () => Promise<void>, label = "Preparing export…") {
+    return runPendingAction(label, async () => {
+      setError("");
+      try { await action(); } catch (err) { setError(err instanceof Error ? err.message : "Unable to complete request"); }
+    });
   }
   function applyFilters() {
     if (hasFutureDate) {
@@ -346,9 +351,9 @@ function PeriodComparison({ options }: { options: TrackingFilterOptions }) {
   }
 
   const exportButtons = (periods: TrackingPeriods, hasData: boolean) =>
-    <div className="flex gap-2">{(["csv", "xlsx"] as const).map(format => <Button key={format} variant="outline" disabled={busy || loading || !hasData} onClick={() => void run(async () => downloadTrackingExport(format, { ...applied, ...periods }))}><Download className="mr-2 h-4 w-4" />{format.toUpperCase()}</Button>)}</div>;
+    <div className="flex gap-2">{(["csv", "xlsx"] as const).map(format => <Button key={format} variant="outline" disabled={busy || loading || !hasData} onClick={() => void run(async () => downloadTrackingExport(format, { ...applied, ...periods }), `Exporting ${format.toUpperCase()}…`)}>{pending === `Exporting ${format.toUpperCase()}…` ? <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}{pending === `Exporting ${format.toUpperCase()}…` ? "Exporting…" : format.toUpperCase()}</Button>)}</div>;
 
-  return <div aria-busy={loading} className="space-y-5">
+  return <div aria-busy={loading || busy} className="space-y-5">
       <section aria-label="Compare periods" className={`${panelClass} space-y-5`}>
       <SectionTitle icon={SlidersHorizontal} title="Compare periods" description="Choose two periods and a content scope to review performance side by side." />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -400,7 +405,8 @@ function PeriodComparison({ options }: { options: TrackingFilterOptions }) {
         </div>
       </div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      {loading && <p role="status">Comparing periods…</p>}
+      {pending && <LoadingState label={pending} />}
+      {loading && <LoadingState label="Comparing periods…" />}
       {invalidPeriodOrder && <p role="alert" className="text-sm text-destructive">Period B must start after Period A ends.</p>}
       {hasFutureDate && <p role="alert" className="text-sm text-destructive">Dates cannot be later than today (Asia/Bangkok).</p>}
       <aside aria-label="About these metrics" className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
@@ -434,7 +440,8 @@ export default function Tracking() {
   const [analysis, setAnalysis] = useState<TrackingAnalysis | null>(null);
   const [selectedItem, setSelectedItem] = useState<TrackingAnalysis["rows"][number] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const { pending, run: runPendingAction } = usePendingAction();
+  const busy = pending !== null;
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -453,10 +460,11 @@ export default function Tracking() {
     return () => { active = false; };
   }, [revision]);
 
-  async function run(action: () => Promise<void>) {
-    setBusy(true); setError("");
-    try { await action(); } catch (err) { setError(err instanceof Error ? err.message : "Unable to complete request"); }
-    finally { setBusy(false); }
+  function run(action: () => Promise<void>, label = "Preparing export…") {
+    return runPendingAction(label, async () => {
+      setError("");
+      try { await action(); } catch (err) { setError(err instanceof Error ? err.message : "Unable to complete request"); }
+    });
   }
   function resetRanking() {
     setLevel("reel");
@@ -491,10 +499,12 @@ export default function Tracking() {
   }
 
   const exportButtons = (extra: Partial<TrackingPeriods> & { level?: string; metric?: string } = {}, hasData = Boolean(dashboard?.has_data)) =>
-    <div className="flex gap-2">{(["csv", "xlsx"] as const).map(format => <Button key={format} variant="outline" disabled={busy || loading || !hasData} onClick={() => void run(async () => downloadTrackingExport(format, { ...extra }))}><Download className="mr-2 h-4 w-4" />{format.toUpperCase()}</Button>)}</div>;
+    <div className="flex gap-2">{(["csv", "xlsx"] as const).map(format => <Button key={format} variant="outline" disabled={busy || loading || !hasData} onClick={() => void run(async () => downloadTrackingExport(format, { ...extra }), `Exporting ${format.toUpperCase()}…`)}>{pending === `Exporting ${format.toUpperCase()}…` ? <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}{pending === `Exporting ${format.toUpperCase()}…` ? "Exporting…" : format.toUpperCase()}</Button>)}</div>;
 
-  return <div aria-busy={loading} className="min-w-0 space-y-6">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Data Tracking</h1><p className="mt-1 text-muted-foreground">Social performance and affiliate link visits</p></div><Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading} onClick={() => void run(async () => { const result = await syncTrackingData(); setRevision(value => value + 1); const failures = result.accounts.filter(account => !account.success); if (failures.length) throw new Error(`${failures.length} account(s) failed to synchronize. See account status below.`); })}><RefreshCw className={`mr-2 h-4 w-4 ${busy ? "animate-spin" : ""}`} />Sync Data</Button></div>
+  return <div aria-busy={loading || busy} className="min-w-0 space-y-6">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Data Tracking</h1><p className="mt-1 text-muted-foreground">Social performance and affiliate link visits</p></div><Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading} onClick={() => void run(async () => { const result = await syncTrackingData(); setRevision(value => value + 1); const failures = result.accounts.filter(account => !account.success); if (failures.length) throw new Error(`${failures.length} account(s) failed to synchronize. See account status below.`); }, "Syncing data…")}><RefreshCw className={`mr-2 h-4 w-4 ${pending === "Syncing data…" ? "animate-spin" : ""}`} />{pending === "Syncing data…" ? "Syncing…" : "Sync Data"}</Button></div>
+    {pending && <LoadingState label={pending} />}
+    {loading && dashboard && <LoadingState label="Refreshing tracking data…" />}
     {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
     {dashboard && (
       <div className="space-y-2">
@@ -633,7 +643,7 @@ export default function Tracking() {
                   { id: "views", name: "Views", icon: Eye }, { id: "likes", name: "Likes", icon: Heart },
                   { id: "comments", name: "Comments", icon: MessageCircle }, { id: "shares", name: "Shares", icon: Share2 },
                   { id: "clicks", name: "Affiliate link clicks", icon: MousePointerClick },
-                ]} />{(analysis || level !== "reel" || metric !== "views") && <Button variant="outline" className="gap-2" disabled={busy || loading} onClick={resetRanking}><RotateCcw className="h-4 w-4" aria-hidden="true" />Reset</Button>}<Button className={primaryButtonClass} disabled={busy} onClick={() => void run(async () => setAnalysis(await fetchTrackingAnalysis({ level, metric })))}><SearchCheck className="h-4 w-4" aria-hidden="true" />Analyze</Button>{analysis && exportButtons({ level: analysis.level, metric: analysis.metric })}</div></div>{analysis && <div className="mt-4 space-y-2">{!analysis.rows.length && <p>No matching content.</p>}{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedItem(item)} className="flex w-full flex-wrap items-start justify-between gap-3 border-b border-border py-2 text-left text-sm hover:bg-muted"><span className="min-w-0 flex-1">#{index + 1} {item.name || "Untitled"}</span>
+                ]} />{(analysis || level !== "reel" || metric !== "views") && <Button variant="outline" className="gap-2" disabled={busy || loading} onClick={resetRanking}><RotateCcw className="h-4 w-4" aria-hidden="true" />Reset</Button>}<Button className={primaryButtonClass} disabled={busy} onClick={() => void run(async () => setAnalysis(await fetchTrackingAnalysis({ level, metric })), "Analyzing…")}>{pending === "Analyzing…" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <SearchCheck className="h-4 w-4" aria-hidden="true" />}{pending === "Analyzing…" ? "Analyzing…" : "Analyze"}</Button>{analysis && exportButtons({ level: analysis.level, metric: analysis.metric })}</div></div>{analysis && <div className="mt-4 space-y-2">{!analysis.rows.length && <p>No matching content.</p>}{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedItem(item)} className="flex w-full flex-wrap items-start justify-between gap-3 border-b border-border py-2 text-left text-sm hover:bg-muted"><span className="min-w-0 flex-1">#{index + 1} {item.name || "Untitled"}</span>
                   <span className="shrink-0 tabular-nums">{display(item.value)}</span>
                   <span className="w-full text-xs text-muted-foreground sm:w-56 sm:text-right" title="Latest social observation in this group">
                     Observed At: {item.observed_at ? new Date(item.observed_at).toLocaleString() : 'Unavailable'}

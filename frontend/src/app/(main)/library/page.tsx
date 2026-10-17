@@ -1,5 +1,10 @@
 "use client";
 
+import { LoadingImage } from "@/components/LoadingMedia";
+
+import { LoadingState } from "@/components/LoadingState";
+import { usePendingAction } from "@/hooks/usePendingAction";
+
 import { motion } from "framer-motion";
 import {
   Plus,
@@ -151,6 +156,13 @@ const ContentLibrary = () => {
   const searchParams = useSearchParams();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const { pending: libraryPending, run: runLibraryAction } = usePendingAction();
+  const [uploadLabel, setUploadLabel] = useState("");
+  const runMutation = (label: string, action: () => Promise<void>) => runLibraryAction(label, async () => {
+    try { await action(); }
+    catch (error) { toast({ title: "Error", description: error instanceof Error ? error.message : "Unable to complete request", variant: "destructive" }); }
+    finally { setUploadLabel(""); }
+  });
 
   const browseLibrary = useCallback(async () => {
     try {
@@ -341,7 +353,7 @@ const ContentLibrary = () => {
     setIsProductDialogOpen(true);
   };
 
-  const createProduct = async () => {
+  const createProduct = () => runMutation("Saving product…", async () => {
     if (!currentCampaign) return;
     const token = localStorage.getItem("rf_token");
     const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
@@ -392,6 +404,7 @@ const ContentLibrary = () => {
           for (let i = 0; i < pImages.length; i++) {
             const img = pImages[i];
             if (img.file) {
+              setUploadLabel(`Uploading image ${i + 1} of ${pImages.length}…`);
               const formData = new FormData();
               formData.append("file", img.file);
               const isPrimary = i === 0;
@@ -404,6 +417,7 @@ const ContentLibrary = () => {
             }
           }
           if (pLogoFile) {
+            setUploadLabel("Uploading logo…");
             const formDataLogo = new FormData();
             formDataLogo.append("file", pLogoFile);
             const logoRes = await fetch(`http://localhost:8000/api/products/${productId}/upload-logo`, {
@@ -425,13 +439,14 @@ const ContentLibrary = () => {
         }
       }
 
+      setUploadLabel("Refreshing library…");
       await browseLibrary();
       resetForm();
       setIsProductDialogOpen(false);
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Something went wrong", variant: "destructive" });
     }
-  };
+  });
 
   const handleCopyLink = async (link: string) => {
     try {
@@ -445,35 +460,37 @@ const ContentLibrary = () => {
   const handleDeleteProduct = async (productId: string, productName: string) => {
     if (!currentCampaign) return;
     const token = localStorage.getItem("rf_token");
-    await fetch(`http://localhost:8000/api/products/${productId}`, {
+    const response = await fetch(`http://localhost:8000/api/products/${productId}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` }
     });
+    if (!response.ok) throw new Error("Unable to delete product");
     toast({ title: "Product deleted", description: `${productName} removed.`, variant: "destructive" });
     await browseLibrary();
   };
 
-  const handleDeleteProductFromDialog = () => {
+  const handleDeleteProductFromDialog = () => runMutation("Deleting product…", async () => {
     if (!editingProductId || !currentCampaign) return;
     const product = currentCampaign.products.find((p) => p.id === editingProductId);
     if (!product) return;
-    handleDeleteProduct(editingProductId, product.name);
+    await handleDeleteProduct(editingProductId, product.name);
     resetForm();
     setIsProductDialogOpen(false);
-  };
+  });
 
-  const handleDeleteCampaign = async () => {
+  const handleDeleteCampaign = () => runMutation("Deleting campaign…", async () => {
     if (!editingCampaignId) return;
     const token = localStorage.getItem("rf_token");
-    await fetch(`http://localhost:8000/api/campaigns/${editingCampaignId}`, {
+    const response = await fetch(`http://localhost:8000/api/campaigns/${editingCampaignId}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` }
     });
+    if (!response.ok) throw new Error("Unable to delete campaign");
     toast({ title: "Campaign deleted", variant: "destructive" });
     await browseLibrary();
     resetCampaignForm();
     setIsCampaignDialogOpen(false);
-  };
+  });
 
   const handleCreateReel = (product: Product) => {
     router.push(`/create?productId=${encodeURIComponent(product.id)}&productName=${encodeURIComponent(product.name)}&campaignId=${encodeURIComponent(currentCampaign?.id || "")}`);
@@ -516,7 +533,7 @@ const ContentLibrary = () => {
     reader.readAsDataURL(file);
   };
 
-  const createCampaign = async () => {
+  const createCampaign = () => runMutation("Saving campaign…", async () => {
     if (!cName.trim()) {
       toast({ title: "Campaign name is required", variant: "destructive" });
       return;
@@ -568,13 +585,14 @@ const ContentLibrary = () => {
         variant: "destructive"
       });
     }
-  };
+  });
 
   // ============ Campaign Dialog (shared between views) ============
   const campaignDialog = (
     <Dialog
       open={isCampaignDialogOpen}
       onOpenChange={(open) => {
+        if (libraryPending) return;
         setIsCampaignDialogOpen(open);
         if (!open) resetCampaignForm();
       }}
@@ -585,6 +603,7 @@ const ContentLibrary = () => {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
         >
+          <fieldset disabled={Boolean(libraryPending)} aria-busy={Boolean(libraryPending)} className="min-w-0">
           <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
             <DialogTitle className="font-display text-xl">
               {editingCampaignId ? "Edit Campaign" : "New Campaign"}
@@ -720,10 +739,14 @@ const ContentLibrary = () => {
               </Button>
             </div>
           </DialogFooter>
+          </fieldset>
+          {libraryPending && <LoadingState label={uploadLabel || libraryPending} />}
         </motion.div>
       </DialogContent>
     </Dialog>
   );
+
+  if (loading) return <LoadingState label="Loading library…" />;
 
   if (!currentCampaign) {
     return (
@@ -871,7 +894,7 @@ const ContentLibrary = () => {
                                 key={idx}
                                 className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xl"
                               >
-                                {product.thumbnail ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
+                                {product.thumbnail ? <LoadingImage src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
                               </div>
                             );
                           }
@@ -955,7 +978,7 @@ const ContentLibrary = () => {
                           className="h-9 w-9 shrink-0 rounded-md bg-[#1c1c1c] border border-border/50 flex items-center justify-center overflow-hidden"
                         >
                           {p.thumbnail ? (
-                            <img src={p.thumbnail} alt={p.name} className="h-full w-full object-contain" />
+                            <LoadingImage src={p.thumbnail} alt={p.name} className="h-full w-full object-contain" />
                           ) : (
                             <Package className="h-4 w-4 text-muted-foreground/50" />
                           )}
@@ -1095,7 +1118,7 @@ const ContentLibrary = () => {
                 className="rounded-2xl border border-border bg-card overflow-hidden card-shine hover:border-primary/30 hover:shadow-elevated transition-all duration-300 cursor-pointer"
               >
                 <div className="aspect-video bg-muted flex items-center justify-center text-5xl relative group/img">
-                  {product.thumbnail ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
+                  {product.thumbnail ? <LoadingImage src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
                   <Badge
                     variant="outline"
                     className={
@@ -1187,7 +1210,7 @@ const ContentLibrary = () => {
                 >
                   <TableCell>
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-xl ring-1 ring-border">
-                      {product.thumbnail ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
+                      {product.thumbnail ? <LoadingImage src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
                     </div>
                   </TableCell>
                   <TableCell className="font-medium text-foreground">{product.name}</TableCell>
@@ -1265,6 +1288,7 @@ const ContentLibrary = () => {
       <Dialog
         open={isProductDialogOpen}
         onOpenChange={(open) => {
+          if (libraryPending) return;
           setIsProductDialogOpen(open);
           if (!open) resetForm();
         }}
@@ -1276,6 +1300,7 @@ const ContentLibrary = () => {
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="flex flex-col min-h-0"
           >
+            <fieldset disabled={Boolean(libraryPending)} aria-busy={Boolean(libraryPending)} className="min-h-0 min-w-0 flex flex-col">
             <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
               <DialogTitle className="font-display text-xl">
                 {editingProductId ? "Edit Product" : "Add New Product"}
@@ -1296,7 +1321,7 @@ const ContentLibrary = () => {
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       {pImages.map((img, i) => (
                         <div key={i} className="relative aspect-square rounded-xl overflow-hidden ring-1 ring-border group bg-muted flex items-center justify-center">
-                          <img src={img.url} alt="Preview" className="h-full w-full object-cover" />
+                          <LoadingImage src={img.url} alt="Preview" className="h-full w-full object-cover" />
                           <button onClick={(e) => { e.preventDefault(); removeImage(i); }} className="absolute top-1.5 right-1.5 bg-background/80 text-foreground p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background">
                             <Trash2 className="h-3.5 w-3.5 text-destructive" />
                           </button>
@@ -1324,7 +1349,7 @@ const ContentLibrary = () => {
                   <label className="relative overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-4 text-center hover:border-primary/40 hover:bg-muted/30 cursor-pointer transition-all min-h-[160px] bg-card">
                     {pLogo ? (
                       <>
-                        <img src={pLogo} alt="Logo preview" className="h-full w-full object-contain p-2 absolute inset-0 bg-card" />
+                        <LoadingImage src={pLogo} alt="Logo preview" className="h-full w-full object-contain p-2 absolute inset-0 bg-card" />
                         <div className="absolute inset-0 bg-background/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
                           <p className="text-xs font-medium text-foreground bg-background/80 px-2 py-1 rounded-md">Change Logo</p>
                         </div>
@@ -1407,6 +1432,8 @@ const ContentLibrary = () => {
                 </Button>
               </div>
             </DialogFooter>
+            </fieldset>
+            {libraryPending && <LoadingState label={uploadLabel || libraryPending} />}
           </motion.div>
         </DialogContent>
       </Dialog>

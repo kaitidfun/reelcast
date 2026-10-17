@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingVideo } from "@/components/LoadingMedia";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -316,7 +318,7 @@ const DistributeStatusContent = () => {
           <div className="space-y-2 lg:col-span-2 lg:sticky lg:top-4">
             <div className="rounded-3xl border border-border bg-gradient-to-b from-card to-card/60 p-3 shadow-elevated">
               <div className="relative mx-auto aspect-[9/16] max-w-[300px] overflow-hidden rounded-[28px] border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 ring-1 ring-inset ring-white/5">
-                <video src={videoUrl} className="absolute inset-0 h-full w-full object-cover" controls loop playsInline muted />
+                <LoadingVideo src={videoUrl} className="absolute inset-0 h-full w-full object-cover" controls loop playsInline muted />
               </div>
             </div>
             <div className="flex items-center gap-2">

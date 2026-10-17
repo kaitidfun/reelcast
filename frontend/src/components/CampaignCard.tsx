@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingImage } from "@/components/LoadingMedia";
+
 import { motion } from "framer-motion";
 import { Package, Video, Clock, Plus, ChevronRight } from "lucide-react";
 import { getBannerGradient } from "@/app/(main)/create/_hooks/useProductLibrary";
@@ -70,7 +72,7 @@ export function CampaignCard({ campaign, onClick, index = 0 }: { campaign: Campa
             if (product) {
               return (
                 <div key={idx} className="h-12 rounded-lg bg-muted ring-1 ring-border flex items-center justify-center text-xl">
-                  {product.thumbnail ? <img src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
+                  {product.thumbnail ? <LoadingImage src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
                 </div>
               );
             }

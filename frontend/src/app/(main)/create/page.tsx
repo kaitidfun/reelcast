@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingImage, LoadingVideo } from "@/components/LoadingMedia";
+
 import { useRef, useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -98,7 +100,7 @@ const CreateReelContent = () => {
   const { startGeneration } = useGenerationQueue();
 
   // ── Product library (fetched from backend) ──────────────────────────────────
-  const productLibrary = useProductLibrary();
+  const { productLibrary, loading: productsLoading } = useProductLibrary();
 
   // ── Composer state ───────────────────────────────────────────────────────────
   const [promptText, setPromptText] = useState("");
@@ -152,6 +154,8 @@ const CreateReelContent = () => {
 
   // Upload
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [checkingVideo, setCheckingVideo] = useState(false);
+  const checkingVideoRef = useRef(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -549,6 +553,7 @@ const CreateReelContent = () => {
   };
 
   const uploadOwnReel = () => {
+    if (checkingVideoRef.current) return;
     if (!selectedProduct) {
       toast({ title: "Select a product", description: "Pick a product before uploading." });
       return;
@@ -557,11 +562,15 @@ const CreateReelContent = () => {
       toast({ title: "Select a video file", description: "Choose an MP4, MOV, or AVI file to upload." });
       return;
     }
+    checkingVideoRef.current = true;
+    setCheckingVideo(true);
     const videoEl = document.createElement("video");
     videoEl.preload = "metadata";
     const objectUrl = URL.createObjectURL(uploadFile);
     videoEl.src = objectUrl;
     videoEl.onloadedmetadata = () => {
+      checkingVideoRef.current = false;
+      setCheckingVideo(false);
       URL.revokeObjectURL(objectUrl);
       if (videoEl.duration > 60) {
         toast({ title: "Video too long", description: `Duration ${Math.round(videoEl.duration)}s exceeds the 60s limit.`, variant: "destructive" });
@@ -570,6 +579,8 @@ const CreateReelContent = () => {
       uploadOwnReelFile();
     };
     videoEl.onerror = () => {
+      checkingVideoRef.current = false;
+      setCheckingVideo(false);
       URL.revokeObjectURL(objectUrl);
       uploadOwnReelFile();
     };
@@ -780,7 +791,7 @@ const CreateReelContent = () => {
                   <div className="h-14 w-14 shrink-0 rounded-xl overflow-hidden ring-1 ring-border bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center relative">
                     <span className="text-2xl font-semibold text-foreground/50 select-none">{selectedProduct.thumbnail}</span>
                     {selectedProduct.primaryImageUrl && (
-                      <img src={selectedProduct.primaryImageUrl} alt={selectedProduct.name} className="absolute inset-0 h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      <LoadingImage src={selectedProduct.primaryImageUrl} alt={selectedProduct.name} className="absolute inset-0 h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -870,8 +881,8 @@ const CreateReelContent = () => {
                 )}
               </div>
               <div className="border-t border-border bg-background/40 px-3 py-2.5 rounded-b-[15px]">
-                <Button onClick={uploadOwnReel} disabled={!selectedProduct || !uploadFile || uploadStatus === "uploading" || uploadStatus === "done"} className="gradient-primary w-full gap-2 h-9 text-sm text-primary-foreground shadow-glow">
-                  {uploadStatus === "uploading" ? (<><Loader2 className="h-4 w-4 animate-spin" />Uploading…</>)
+                <Button onClick={uploadOwnReel} disabled={checkingVideo || !selectedProduct || !uploadFile || uploadStatus === "uploading" || uploadStatus === "done"} className="gradient-primary w-full gap-2 h-9 text-sm text-primary-foreground shadow-glow">
+                  {checkingVideo ? (<><Loader2 className="h-4 w-4 animate-spin" />Checking video…</>) : uploadStatus === "uploading" ? (<><Loader2 className="h-4 w-4 animate-spin" />Uploading…</>)
                     : uploadStatus === "done" ? (<><Check className="h-4 w-4" />Uploaded — select a new file to re-upload</>)
                     : (<><Upload className="h-4 w-4" />Upload &amp; Process</>)}
                 </Button>
@@ -1113,7 +1124,7 @@ const CreateReelContent = () => {
                 {generationStatus === "done" ? (
                   <>
                     {videoUrl ? (
-                      <video ref={videoRef} src={rawVideoUrl ?? videoUrl} className="absolute inset-0 w-full h-full object-cover" loop playsInline muted={videoMuted} autoPlay
+                      <LoadingVideo ref={videoRef} src={rawVideoUrl ?? videoUrl} className="absolute inset-0 w-full h-full object-cover" loop playsInline muted={videoMuted} autoPlay
                         onTimeUpdate={() => setVideoCurrentTime(videoRef.current?.currentTime ?? 0)}
                         onLoadedMetadata={() => setVideoDuration(videoRef.current?.duration ?? 0)}
                       />
@@ -1124,7 +1135,7 @@ const CreateReelContent = () => {
                     {showLogo && (
                       <div className="absolute top-2.5 right-2.5 flex items-center gap-1 rounded-md bg-black/40 backdrop-blur-md border border-white/10 px-1.5 py-1 shadow-lg">
                         {selectedProduct?.brandLogoUrl ? (
-                          <img src={selectedProduct.brandLogoUrl} alt="Brand logo" className="h-5 w-auto max-w-[56px] object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                          <LoadingImage src={selectedProduct.brandLogoUrl} alt="Brand logo" className="h-5 w-auto max-w-[56px] object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                         ) : (
                           <>
                             <div className="h-3.5 w-3.5 rounded-sm gradient-primary flex items-center justify-center">
@@ -1140,7 +1151,7 @@ const CreateReelContent = () => {
                       <div className="absolute bottom-12 left-2 right-2 flex items-center gap-2 rounded-lg bg-black/50 backdrop-blur-md border border-white/10 p-1.5 shadow-xl">
                         <div className="h-9 w-9 shrink-0 rounded-md overflow-hidden bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center text-lg">
                           {selectedProduct?.primaryImageUrl ? (
-                            <img src={selectedProduct.primaryImageUrl} alt={selectedProduct.name} className="h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                            <LoadingImage src={selectedProduct.primaryImageUrl} alt={selectedProduct.name} className="h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                           ) : (
                             <span>{selectedProduct?.thumbnail ?? <ShoppingBag className="h-4 w-4 text-white" />}</span>
                           )}
@@ -1263,6 +1274,7 @@ const CreateReelContent = () => {
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         productLibrary={productLibrary}
+        loading={productsLoading}
         onSelect={setSelectedProduct}
         selectedProductId={selectedProduct?.id}
       />

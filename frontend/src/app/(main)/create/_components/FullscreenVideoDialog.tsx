@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingImage, LoadingVideo } from "@/components/LoadingMedia";
+
 import { MutableRefObject } from "react";
 import { Play, Pause, Volume2, VolumeX, Download, Sparkles, ShoppingBag } from "lucide-react";
 import {
@@ -66,7 +68,7 @@ export function FullscreenVideoDialog({
         </DialogHeader>
         <div className="relative aspect-[9/16] w-full overflow-hidden bg-black">
           {videoUrl ? (
-            <video
+            <LoadingVideo
               ref={videoRefFullscreen}
               src={rawVideoUrl ?? videoUrl}
               className="absolute inset-0 w-full h-full object-cover"
@@ -91,7 +93,7 @@ export function FullscreenVideoDialog({
           {showLogo && (
             <div className="absolute top-4 right-4 flex items-center gap-1.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 px-2.5 py-1.5 shadow-lg">
               {selectedProduct?.brandLogoUrl ? (
-                <img
+                <LoadingImage
                   src={selectedProduct.brandLogoUrl}
                   alt="Brand logo"
                   className="h-7 w-auto max-w-[80px] object-contain"
@@ -112,7 +114,7 @@ export function FullscreenVideoDialog({
             <div className="absolute bottom-20 left-4 right-4 flex items-center gap-3 rounded-xl bg-black/55 backdrop-blur-md border border-white/10 p-3 shadow-2xl">
               <div className="h-14 w-14 shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center text-3xl">
                 {selectedProduct?.primaryImageUrl ? (
-                  <img
+                  <LoadingImage
                     src={selectedProduct.primaryImageUrl}
                     alt={selectedProduct.name}
                     className="h-full w-full object-cover"
