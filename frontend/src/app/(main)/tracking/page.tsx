@@ -220,7 +220,6 @@ function ComparisonOverview({ comparison, scope, actions }: {
     { key: "likes", label: "Likes", icon: Heart },
     { key: "comments", label: "Comments", icon: MessageCircle },
     { key: "shares", label: "Shares", icon: Share2 },
-    { key: "engagement", label: "Engagement", icon: BarChart3 },
   ] as const;
   return <section className={`${panelClass} space-y-6`} aria-label="Period comparison results">
     <div className="flex flex-wrap items-start justify-between gap-4">
@@ -254,7 +253,7 @@ function ComparisonOverview({ comparison, scope, actions }: {
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-sm font-semibold">Social performance</h3><span className="text-[11px] text-muted-foreground">Latest lifetime observation in each period</span></div>
       <p className="mt-2 text-xs leading-relaxed text-muted-foreground">These are cumulative counters observed during each period, not activity earned within that period. Unavailable counters are counted as 0 in this overview. Growth compares these observed totals.</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {socialMetrics.map(({ key, label, icon: Icon }) => <div key={key} className="min-w-0 rounded-xl border border-border bg-muted/20 p-4" aria-label={`${label} observations`}>
           <h4 className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><Icon className="h-4 w-4" aria-hidden="true" />{label}</h4>
           <dl className="mt-4 space-y-3">{(["a", "b"] as const).map(period => <div key={period} className="flex items-baseline justify-between gap-2"><dt className="text-xs text-muted-foreground">{period.toUpperCase()}</dt><dd className="text-lg font-semibold tabular-nums">{display(comparison[period].social?.[key] ?? 0)}</dd></div>)}</dl>

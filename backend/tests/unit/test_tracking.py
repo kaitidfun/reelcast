@@ -300,7 +300,7 @@ def test_comparison_export_pairs_publications_across_periods(format):
                 continue  # A publication present in only one period is retained.
             source.append(dict(distribution_id=ident, reel_id=reel_id,
                                reel_name='Same Reel Name', product_name=ident, campaign_name=None,
-                               distribute_date=timestamp, platform=platform, clicks=0,
+                               distribute_date=timestamp, platform=platform, clicks=0, engagement=17,
                                comparison_period=period, period_start=comparison[period.lower()]['start'],
                                period_end=comparison[period.lower()]['end']))
     original_order = [(row['distribution_id'], row['comparison_period']) for row in source]
@@ -315,6 +315,8 @@ def test_comparison_export_pairs_publications_across_periods(format):
                    else cell.findtext('s:v', namespaces=ns) for cell in row]
                   for row in root.findall('s:sheetData/s:row', ns)]
         records = [dict(zip(values[0], row)) for row in values[1:]]
+    assert 'Engagement' not in records[0]
+    assert {'Views', 'Likes', 'Comments', 'Shares', 'Affiliate Link Clicks'} <= records[0].keys()
     assert [(row['Product Name'], row['Comparison Period']) for row in records] == [
         ('early', 'A'), ('early', 'B'),
         ('same-time-other-platform', 'A'), ('same-time-other-platform', 'B'),

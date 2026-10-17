@@ -62,7 +62,7 @@ def report_bytes(rows, *, format, filters, comparison=None, accounts=None):
         # Keep readable content and period labels without internal IDs or raw metadata.
         columns = ('reel_name', 'product_name', 'campaign_name', 'platform',
                    'distribute_date', 'views', 'likes', 'comments', 'shares',
-                   'engagement', 'clicks', 'comparison_period',
+                   'clicks', 'comparison_period',
                    'period_start', 'period_end', 'observed_at')
         records = [{key: row.get(key) for key in columns} for row in rows]
     elif filters.get('level'):
