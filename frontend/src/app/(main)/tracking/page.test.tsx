@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import Tracking from './page';
 import * as api from '@/lib/api';
@@ -216,7 +216,8 @@ it('exports the compared periods even if draft dates change afterward', async ()
   fireEvent.click(screen.getByRole('button', { name: 'Compare periods' }));
   await screen.findByText('Change: 50 · 50%');
   const appliedFilters = { start: periods.a_start, end: periods.a_end, platform: 'youtube' };
-  expect(api.fetchTrackingDashboard).toHaveBeenCalledWith(appliedFilters);
+  expect(api.fetchTrackingDashboard).toHaveBeenLastCalledWith({});
+  expect(api.fetchTrackingDashboard).toHaveBeenCalledTimes(2);
   expect(api.fetchTrackingComparison).toHaveBeenCalledWith({ ...appliedFilters, ...periods });
   fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-02-01' } });
   fireEvent.click(screen.getAllByRole('button', { name: 'CSV' })[0]);
@@ -225,11 +226,86 @@ it('exports the compared periods even if draft dates change afterward', async ()
   const comparisonCalls = vi.mocked(api.fetchTrackingComparison).mock.calls.length;
   fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
   await waitFor(() => expect(api.fetchTrackingDashboard).toHaveBeenLastCalledWith({}));
+  expect(api.fetchTrackingDashboard).toHaveBeenCalledTimes(2);
   for (const label of Object.values(labels)) expect(screen.getByLabelText(label)).toHaveValue('');
   expect(screen.getByRole('combobox', { name: 'Platform' })).toHaveTextContent('All platforms');
   expect(screen.queryByText('Change: 50 · 50%')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument();
   expect(api.fetchTrackingComparison).toHaveBeenCalledTimes(comparisonCalls);
+});
+
+it('isolates comparison loading, errors, exports and reset from dashboard, ranking and pagination', async () => {
+  const dashboard = await api.fetchTrackingDashboard();
+  const details = Array.from({ length: 26 }, (_, index) => ({
+    distribution_id: `distribution-${index}`, reel_name: `Kept reel ${index}`, platform: 'youtube',
+    distribute_date: null, observed_at: null, views: 1, likes: 0, comments: 0, shares: null,
+    engagement: 0, clicks: 0, partial_metrics: [],
+  }));
+  vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, has_data: true, details });
+  vi.mocked(api.fetchTrackingAnalysis).mockResolvedValue({ level: 'product', metric: 'clicks', semantics: '',
+    rows: [{ ...dashboard.totals, id: 'kept', name: 'Kept product', value: 17, observed_at: null }],
+  });
+  let rejectComparison!: (error: Error) => void;
+  vi.mocked(api.fetchTrackingComparison).mockImplementationOnce(() => new Promise((_, reject) => { rejectComparison = reject; }));
+  render(<Tracking />);
+  await screen.findByText('Tracking details');
+  fireEvent.click(screen.getByRole('button', { name: 'Next tracking details page' }));
+  for (const [label, option] of [['Ranking level', 'Product'], ['Ranking metric', 'Affiliate link clicks']]) {
+    fireEvent.keyDown(screen.getByRole('combobox', { name: label }), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('option', { name: option }));
+  }
+  fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
+  fireEvent.click(await screen.findByRole('button', { name: /#1 Kept product/ }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Analyze' })).toBeEnabled());
+  const ranking = screen.getByRole('heading', { name: 'Content ranking' }).closest('section')!;
+  const detailSection = screen.getByText('Tracking details').closest('section')!;
+  const rankingBefore = ranking.innerHTML;
+  const detailsBefore = detailSection.innerHTML;
+  const dashboardCalls = vi.mocked(api.fetchTrackingDashboard).mock.calls.length;
+  const optionsCalls = vi.mocked(api.fetchTrackingFilterOptions).mock.calls.length;
+  const comparisonPanel = screen.getByRole('region', { name: 'Compare periods' });
+  const checkOtherSections = () => {
+    expect(ranking.innerHTML).toBe(rankingBefore);
+    expect(detailSection.innerHTML).toBe(detailsBefore);
+    expect(api.fetchTrackingDashboard).toHaveBeenCalledTimes(dashboardCalls);
+    expect(api.fetchTrackingFilterOptions).toHaveBeenCalledTimes(optionsCalls);
+    expect(screen.getByRole('button', { name: 'Sync Data' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Analyze' })).toBeEnabled();
+    expect(within(detailSection).getByRole('button', { name: 'CSV' })).toBeEnabled();
+  };
+  fireEvent.keyDown(screen.getByRole('combobox', { name: 'Platform' }), { key: 'Enter' });
+  fireEvent.click(await screen.findByRole('option', { name: 'YouTube Shorts' }));
+  for (const [label, value] of [['Start date', '2026-01-01'], ['End date', '2026-01-07'],
+    ['Period B start date', '2026-01-08'], ['Period B end date', '2026-01-14']]) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+  checkOtherSections();
+  fireEvent.click(screen.getByRole('button', { name: 'Compare periods' }));
+  await within(comparisonPanel).findByText('Comparing periods…');
+  checkOtherSections();
+  await act(async () => rejectComparison(new Error('Comparison unavailable')));
+  expect(within(comparisonPanel).getByRole('alert')).toHaveTextContent('Comparison unavailable');
+  checkOtherSections();
+  vi.mocked(api.fetchTrackingComparison).mockResolvedValue({
+    a: { start: '2026-01-01', end: '2026-01-07', clicks: 10, complete: true },
+    b: { start: '2026-01-08', end: '2026-01-14', clicks: 20, complete: true },
+    difference: 10, percentage_change: 100, equal_duration: true, limitation: '', coverage_start: '2025-12-01',
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Compare periods' }));
+  await screen.findByText('Change: 10 · 100%');
+  checkOtherSections();
+  let rejectExport!: (error: Error) => void;
+  vi.mocked(api.downloadTrackingExport).mockImplementationOnce(() => new Promise((_, reject) => { rejectExport = reject; }));
+  fireEvent.click(within(screen.getByRole('region', { name: 'Period comparison results' })).getByRole('button', { name: 'CSV' }));
+  checkOtherSections();
+  await act(async () => rejectExport(new Error('Comparison export failed')));
+  expect(within(comparisonPanel).getByRole('alert')).toHaveTextContent('Comparison export failed');
+  checkOtherSections();
+  fireEvent.click(within(comparisonPanel).getByRole('button', { name: 'Reset' }));
+  expect(screen.queryByText('Change: 10 · 100%')).not.toBeInTheDocument();
+  checkOtherSections();
+  fireEvent.click(within(detailSection).getByRole('button', { name: 'CSV' }));
+  await waitFor(() => expect(api.downloadTrackingExport).toHaveBeenLastCalledWith('csv', {}));
 });
 
 
@@ -268,7 +344,7 @@ it('offers reauthorization for expired tokens through the existing connection fl
 });
 
 
-it('validates both periods in the shared filters before making a comparison request', async () => {
+it('validates both periods in the comparison filters before making a comparison request', async () => {
   render(<Tracking />);
   await screen.findByText(/No tracking data matches/);
   expect(screen.getByLabelText('Period B start date')).toBeInTheDocument();

@@ -3,7 +3,7 @@ import csv
 import io
 import json
 import math
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from zipfile import ZipFile, ZIP_DEFLATED
 from xml.sax.saxutils import escape
 
@@ -24,7 +24,9 @@ def header_title(key):
             'clicks': 'Affiliate Link Clicks', 'semantics': 'Metric Definitions',
             'exported_at': 'Exported At (UTC)', 'sync_freshness': 'Account Sync Status',
             'comparison_period': 'Comparison Period', 'period_start': 'Period Start',
-            'period_end': 'Period End'}.get(key, key.replace('_', ' ').title().replace(' Id', ' ID'))
+            'period_end': 'Period End',
+            'comparison_click_difference': 'Comparison Click Difference (B - A)',
+            'comparison_percentage_change': 'Comparison Percentage Change (%)'}.get(key, key.replace('_', ' ').title().replace(' Id', ' ID'))
 
 
 def report_time(value):
@@ -50,6 +52,13 @@ def report_bytes(rows, *, format, filters, comparison=None, accounts=None):
                 'sync_freshness': json.dumps(accounts or [], ensure_ascii=False),
                 'comparison': json.dumps(comparison, ensure_ascii=False) if comparison else ''}
     if comparison:
+        # Pair A/B for the same publication before moving to another Reel or
+        # platform. IDs keep distinct publications with identical names apart.
+        rows = sorted(rows, key=lambda row: (
+            row.get('distribute_date') is None, row.get('distribute_date') or '',
+            row.get('reel_id') or '', row.get('platform') or '',
+            row.get('distribution_id') or '', row.get('comparison_period') or '',
+        ))
         # Keep readable content and period labels without internal IDs or raw metadata.
         columns = ('reel_name', 'product_name', 'campaign_name', 'platform',
                    'distribute_date', 'views', 'likes', 'comments', 'shares',
@@ -68,6 +77,27 @@ def report_bytes(rows, *, format, filters, comparison=None, accounts=None):
                     'Views': row['views'], 'Likes': row['likes'], 'Comments': row['comments'],
                     'Shares': row['shares'], 'Link clicks': row['clicks'],
                     'Observation': row['observed_at']} for row in rows]
+    if comparison and format == 'csv':
+        # Repeat report-level values on each detail row to keep one rectangular
+        # CSV table. These summary totals are not additional per-row clicks.
+        comparison_summary = {
+            'comparison_metric': 'Affiliate link clicks',
+            'comparison_a_start': comparison['a']['start'],
+            'comparison_a_end': comparison['a']['end'],
+            'comparison_a_total_clicks': comparison['a']['clicks'],
+            'comparison_a_coverage': 'Complete' if comparison['a']['complete'] else 'Partial coverage',
+            'comparison_b_start': comparison['b']['start'],
+            'comparison_b_end': comparison['b']['end'],
+            'comparison_b_total_clicks': comparison['b']['clicks'],
+            'comparison_b_coverage': 'Complete' if comparison['b']['complete'] else 'Partial coverage',
+            'comparison_click_difference': comparison['difference'],
+            'comparison_percentage_change': comparison['percentage_change'],
+            'comparison_equal_duration': 'Yes' if comparison['equal_duration'] else 'No',
+            'comparison_coverage_start': comparison['coverage_start'],
+            'comparison_timezone': 'Asia/Bangkok',
+            'comparison_limitation': comparison['limitation'],
+        }
+        records = [dict(record, **comparison_summary) for record in records]
     headers = list(records[0])
     if format == 'csv':
         stream = io.StringIO(newline='')
@@ -80,12 +110,14 @@ def report_bytes(rows, *, format, filters, comparison=None, accounts=None):
                ['Exported At (Asia/Bangkok)', report_time(metadata['exported_at'])],
                ['Timezone', 'Asia/Bangkok'], ['Exported Rows', len(rows)]]
     for key, value in filters.items():
+        if comparison and key in {'start', 'end', 'metric', 'level'}:
+            continue
         if value is not None and value != '':
             # Use the content name when it is available in the exported scope.
             name_key = key.replace('_id', '_name')
             label = next((row.get(name_key) for row in rows if str(row.get(key)) == str(value) and row.get(name_key)), None)
             summary.append([header_title(key), label or str(value)])
-    if not filters.get('start') and not filters.get('end'):
+    if not comparison and not filters.get('start') and not filters.get('end'):
         summary.append(['Date Range', 'All dates'])
     summary.append(['Metric Definitions', SEMANTICS])
     if accounts:
@@ -95,10 +127,27 @@ def report_bytes(rows, *, format, filters, comparison=None, accounts=None):
     else:
         summary.append(['Account Sync Status', 'No connected accounts'])
     if comparison:
-        summary.extend([['Period A clicks', comparison['a']['clicks']],
+        summary.append(['Metric', 'Affiliate link clicks'])
+        for period in ('a', 'b'):
+            values = comparison[period]
+            label = f'Period {period.upper()}'
+            days = (date.fromisoformat(values['end']) - date.fromisoformat(values['start'])).days + 1
+            summary.extend([[f'{label} Start', values['start']],
+                            [f'{label} End', values['end']],
+                            [f'{label} Days', days],
+                            [f'{label} Coverage', 'Complete' if values['complete'] else 'Partial coverage']])
+        fully_covered = comparison['a']['complete'] and comparison['b']['complete']
+        coverage_start = comparison['coverage_start']
+        summary.extend([['Coverage Start (Asia/Bangkok)', report_time(coverage_start) if coverage_start else None],
+                        ['Equal Duration', 'Yes' if comparison['equal_duration'] else 'No'],
+                        ['Duration Note', 'Periods have equal durations.' if comparison['equal_duration'] else 'Periods have different durations.'],
+                        ['Comparison Status', 'Completed periods with full coverage' if fully_covered else 'Partial coverage: differences require completed periods fully covered by link collection.'],
+                        ['Percentage Change Status', 'Unavailable: periods are not fully covered or completed.' if not fully_covered else 'Unavailable: Period A has zero clicks.' if not comparison['a']['clicks'] else 'Available'],
+                        ['Period A clicks', comparison['a']['clicks']],
                         ['Period B clicks', comparison['b']['clicks']],
                         ['Difference', comparison['difference']],
-                        ['Percentage change', comparison['percentage_change']]])
+                        ['Percentage change (%)', comparison['percentage_change']],
+                        ['Comparison Limitation', comparison['limitation']]])
     detail = [[header_title(key) for key in headers], *[[row[key] for key in headers] for row in records]]
     output = io.BytesIO()
     with ZipFile(output, 'w', ZIP_DEFLATED) as archive:

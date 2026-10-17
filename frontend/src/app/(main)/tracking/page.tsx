@@ -188,23 +188,14 @@ function ScopeSelect({ label, value, onChange, options, placeholder, icon: Icon,
   );
 }
 
-export default function Tracking() {
+function PeriodComparison({ options }: { options: TrackingFilterOptions }) {
   const [filters, setFilters] = useState<TrackingFilters>({});
   const [applied, setApplied] = useState<TrackingFilters>({});
-  const [options, setOptions] = useState(emptyOptions);
-  const [dashboard, setDashboard] = useState<TrackingDashboard | null>(null);
-  const [detailsPage, setDetailsPage] = useState(1);
-  const detailsScrollRef = useRef<HTMLDivElement>(null);
-  const [level, setLevel] = useState<TrackingAnalysis["level"]>("reel");
-  const [metric, setMetric] = useState<TrackingAnalysis["metric"]>("views");
-  const [analysis, setAnalysis] = useState<TrackingAnalysis | null>(null);
-  const [selectedItem, setSelectedItem] = useState<TrackingAnalysis["rows"][number] | null>(null);
   const [comparisonDates, setComparisonDates] = useState({ start: "", end: "" });
   const [appliedPeriods, setAppliedPeriods] = useState<TrackingPeriods | null>(null);
   const [comparison, setComparison] = useState<TrackingComparison | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const hasFutureDate = [filters.start, filters.end, comparisonDates.start, comparisonDates.end]
@@ -232,21 +223,15 @@ export default function Tracking() {
   }
 
   useEffect(() => {
+    if (!appliedPeriods) return;
     let active = true;
-    setLoading(true); setError(""); setAnalysis(null); setSelectedItem(null); setComparison(null);
-    Promise.all([
-      fetchTrackingDashboard(applied),
-      fetchTrackingFilterOptions(),
-      appliedPeriods ? fetchTrackingComparison({ ...applied, ...appliedPeriods }) : Promise.resolve(null),
-    ]).then(([data, values, compared]) => {
-      if (active) { setDashboard(data); setOptions(values); setComparison(compared); setDetailsPage(1);
-        const viewport = detailsScrollRef.current?.firstElementChild;
-        if (viewport instanceof HTMLElement) viewport.scrollTop = 0;
-      }
-    }).catch((err: Error) => { if (active) { setDashboard(null); setError(err.message); } })
+    setLoading(true); setError(""); setComparison(null);
+    fetchTrackingComparison({ ...applied, ...appliedPeriods })
+      .then(result => { if (active) setComparison(result); })
+      .catch((err: Error) => { if (active) setError(err.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [applied, appliedPeriods, revision]);
+  }, [applied, appliedPeriods]);
 
   async function run(action: () => Promise<void>) {
     setBusy(true); setError("");
@@ -283,13 +268,132 @@ export default function Tracking() {
     setComparisonDates({ start: "", end: "" });
     setAppliedPeriods(null);
     setComparison(null);
-    setAnalysis(null);
-    setSelectedItem(null);
     setError("");
-    setDetailsPage(1);
     setApplied({});
   }
 
+  const exportButtons = (periods: TrackingPeriods, hasData: boolean) =>
+    <div className="flex gap-2">{(["csv", "xlsx"] as const).map(format => <Button key={format} variant="outline" disabled={busy || loading || !hasData} onClick={() => void run(async () => downloadTrackingExport(format, { ...applied, ...periods }))}><Download className="mr-2 h-4 w-4" />{format.toUpperCase()}</Button>)}</div>;
+
+  return <div aria-busy={loading} className="space-y-5">
+      <section aria-label="Compare periods" className={`${panelClass} space-y-5`}>
+      <SectionTitle icon={SlidersHorizontal} title="Compare periods" description="Choose two periods and a content scope to compare affiliate link clicks." />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <ScopeSelect icon={Globe2} label="Platform" value={filters.platform} onChange={value => changeScope("platform", value)}
+          placeholder="All platforms" options={options.platforms.map(platform => ({ id: platform, name: platformLabel(platform), platform }))} />
+        {(["campaign", "product", "reel"] as const).map(scope => (
+          <ScopeSelect key={scope} icon={scope === "campaign" ? Megaphone : scope === "product" ? Package : Video} label={scope.charAt(0).toUpperCase() + scope.slice(1)}
+            value={filters[`${scope}_id`]} onChange={value => changeScope(`${scope}_id`, value)}
+            placeholder={`All ${scope}s`} options={scopeOptions(scope)} />
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <fieldset className="min-w-0 space-y-4 rounded-xl border border-border bg-muted/30 p-4">
+          <legend className="sr-only">Period A · Baseline</legend>
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">A</span>
+            <h3 className="text-sm font-semibold text-foreground">Baseline period</h3>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(["start", "end"] as const).map(key => (
+              <label key={key} className="grid min-w-0 gap-2 text-xs font-medium text-muted-foreground">
+                {key === "start" ? "Start date" : "End date"}
+                <Input type="date" max={today} className={`${inputClass} [color-scheme:dark]`} value={filters[key] || ""} min={key === "end" ? nextDate(filters.start) : undefined} onChange={event => setFilters({ ...filters, [key]: event.target.value })} />
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset className="min-w-0 space-y-4 rounded-xl border border-border bg-muted/30 p-4">
+          <legend className="sr-only">Period B · Comparison</legend>
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">B</span>
+            <h3 className="text-sm font-semibold text-foreground">Comparison period</h3>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(["start", "end"] as const).map(key => (
+              <label key={key} className="grid min-w-0 gap-2 text-xs font-medium text-muted-foreground">
+                {key === "start" ? "Period B start date" : "Period B end date"}
+                <Input type="date" max={today} className={`${inputClass} [color-scheme:dark]`} value={comparisonDates[key]} min={key === "end" ? nextDate(comparisonDates.start) : nextDate(filters.end)} onChange={event => setComparisonDates({ ...comparisonDates, [key]: event.target.value })} />
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </div>
+      <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">These filters apply only to this comparison. Dashboard, ranking and tracking details keep their current state.</p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {appliedPeriods && <Button variant="outline" className="gap-2" disabled={busy || loading} onClick={resetComparison}><RotateCcw className="h-4 w-4" aria-hidden="true" />Reset</Button>}
+          <Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading || invalidPeriodOrder || hasFutureDate} onClick={applyFilters}><ArrowLeftRight className="h-4 w-4" aria-hidden="true" />Compare periods</Button>
+        </div>
+      </div>
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {loading && <p role="status">Comparing periods…</p>}
+      {invalidPeriodOrder && <p role="alert" className="text-sm text-destructive">Period B must start after Period A ends.</p>}
+      {hasFutureDate && <p role="alert" className="text-sm text-destructive">Dates cannot be later than today (Asia/Bangkok).</p>}
+      <details className="group rounded-xl border border-info/25 bg-info/5 p-4 text-sm">
+        <summary className="flex cursor-pointer list-none items-center gap-3 rounded-md font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2 focus-visible:ring-offset-card [&::-webkit-details-marker]:hidden">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-info/10 text-info"><Info className="h-5 w-5" aria-hidden="true" /></span>
+          <span>How these metrics are counted</span>
+          <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-info transition-transform group-open:rotate-180" aria-hidden="true" />
+        </summary>
+        <p className="mt-3 max-w-4xl leading-relaxed text-foreground/80 sm:ml-12">Social figures are the latest lifetime observation in the selected dates. Clicks are visits during those dates (Asia/Bangkok). Repeat visits count; recognized bots, previews and HEAD requests do not. These figures do not measure purchases or unique visitors. Period comparison supports affiliate link clicks; social daily activity is unavailable from lifetime observations.</p>
+      </details>
+    </section>
+
+    {comparison && appliedPeriods && (
+      <section className={panelClass} aria-label="Period comparison results">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SectionTitle icon={ArrowLeftRight} title="Period comparison · Affiliate link clicks" description="Review changes in link clicks between the two selected periods." />
+          {exportButtons(appliedPeriods, Boolean(comparison.coverage_start))}
+        </div>
+        <div className="mt-4 space-y-2 text-sm">
+          <p>A ({comparison.a.start} – {comparison.a.end}): {display(comparison.a.clicks)}{!comparison.a.complete && " · Partial coverage"}</p>
+          <p>B ({comparison.b.start} – {comparison.b.end}): {display(comparison.b.clicks)}{!comparison.b.complete && " · Partial coverage"}</p>
+          <p>Change: {display(comparison.difference)} · {comparison.percentage_change == null ? "Percentage unavailable" : `${comparison.percentage_change}%`}</p>
+          {!comparison.equal_duration && <p className="text-muted-foreground">Periods have different durations.</p>}
+          <p className="text-xs text-muted-foreground">{comparison.limitation}</p>
+        </div>
+      </section>
+    )}
+
+
+  </div>;
+}
+
+export default function Tracking() {
+  const [options, setOptions] = useState(emptyOptions);
+  const [dashboard, setDashboard] = useState<TrackingDashboard | null>(null);
+  const [detailsPage, setDetailsPage] = useState(1);
+  const detailsScrollRef = useRef<HTMLDivElement>(null);
+  const [level, setLevel] = useState<TrackingAnalysis["level"]>("reel");
+  const [metric, setMetric] = useState<TrackingAnalysis["metric"]>("views");
+  const [analysis, setAnalysis] = useState<TrackingAnalysis | null>(null);
+  const [selectedItem, setSelectedItem] = useState<TrackingAnalysis["rows"][number] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    setLoading(true); setError(""); setAnalysis(null); setSelectedItem(null);
+    Promise.all([
+      fetchTrackingDashboard({}),
+      fetchTrackingFilterOptions(),
+    ]).then(([data, values]) => {
+      if (active) { setDashboard(data); setOptions(values); setDetailsPage(1);
+        const viewport = detailsScrollRef.current?.firstElementChild;
+        if (viewport instanceof HTMLElement) viewport.scrollTop = 0;
+      }
+    }).catch((err: Error) => { if (active) { setDashboard(null); setError(err.message); } })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [revision]);
+
+  async function run(action: () => Promise<void>) {
+    setBusy(true); setError("");
+    try { await action(); } catch (err) { setError(err instanceof Error ? err.message : "Unable to complete request"); }
+    finally { setBusy(false); }
+  }
   function resetRanking() {
     setLevel("reel");
     setMetric("views");
@@ -323,7 +427,7 @@ export default function Tracking() {
   }
 
   const exportButtons = (extra: Partial<TrackingPeriods> & { level?: string; metric?: string } = {}, hasData = Boolean(dashboard?.has_data)) =>
-    <div className="flex gap-2">{(["csv", "xlsx"] as const).map(format => <Button key={format} variant="outline" disabled={busy || loading || !hasData} onClick={() => void run(async () => downloadTrackingExport(format, { ...applied, ...extra }))}><Download className="mr-2 h-4 w-4" />{format.toUpperCase()}</Button>)}</div>;
+    <div className="flex gap-2">{(["csv", "xlsx"] as const).map(format => <Button key={format} variant="outline" disabled={busy || loading || !hasData} onClick={() => void run(async () => downloadTrackingExport(format, { ...extra }))}><Download className="mr-2 h-4 w-4" />{format.toUpperCase()}</Button>)}</div>;
 
   return <div aria-busy={loading} className="min-w-0 space-y-6">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Data Tracking</h1><p className="mt-1 text-muted-foreground">Social performance and affiliate link visits</p></div><Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading} onClick={() => void run(async () => { const result = await syncTrackingData(); setRevision(value => value + 1); const failures = result.accounts.filter(account => !account.success); if (failures.length) throw new Error(`${failures.length} account(s) failed to synchronize. See account status below.`); })}><RefreshCw className={`mr-2 h-4 w-4 ${busy ? "animate-spin" : ""}`} />Sync Data</Button></div>
@@ -453,84 +557,7 @@ export default function Tracking() {
         <SocialPlatformChart platforms={dashboard.platforms} metric="shares" label="Shares" icon={Share2} />
       </div>
       </div>
-      <section aria-label="Compare periods" className={`${panelClass} space-y-5`}>
-      <SectionTitle icon={SlidersHorizontal} title="Compare periods" description="Choose two periods and a content scope to compare affiliate link clicks." />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <ScopeSelect icon={Globe2} label="Platform" value={filters.platform} onChange={value => changeScope("platform", value)}
-          placeholder="All platforms" options={options.platforms.map(platform => ({ id: platform, name: platformLabel(platform), platform }))} />
-        {(["campaign", "product", "reel"] as const).map(scope => (
-          <ScopeSelect key={scope} icon={scope === "campaign" ? Megaphone : scope === "product" ? Package : Video} label={scope.charAt(0).toUpperCase() + scope.slice(1)}
-            value={filters[`${scope}_id`]} onChange={value => changeScope(`${scope}_id`, value)}
-            placeholder={`All ${scope}s`} options={scopeOptions(scope)} />
-        ))}
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <fieldset className="min-w-0 space-y-4 rounded-xl border border-border bg-muted/30 p-4">
-          <legend className="sr-only">Period A · Baseline</legend>
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">A</span>
-            <h3 className="text-sm font-semibold text-foreground">Baseline period</h3>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {(["start", "end"] as const).map(key => (
-              <label key={key} className="grid min-w-0 gap-2 text-xs font-medium text-muted-foreground">
-                {key === "start" ? "Start date" : "End date"}
-                <Input type="date" max={today} className={`${inputClass} [color-scheme:dark]`} value={filters[key] || ""} min={key === "end" ? nextDate(filters.start) : undefined} onChange={event => setFilters({ ...filters, [key]: event.target.value })} />
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <fieldset className="min-w-0 space-y-4 rounded-xl border border-border bg-muted/30 p-4">
-          <legend className="sr-only">Period B · Comparison</legend>
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">B</span>
-            <h3 className="text-sm font-semibold text-foreground">Comparison period</h3>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {(["start", "end"] as const).map(key => (
-              <label key={key} className="grid min-w-0 gap-2 text-xs font-medium text-muted-foreground">
-                {key === "start" ? "Period B start date" : "Period B end date"}
-                <Input type="date" max={today} className={`${inputClass} [color-scheme:dark]`} value={comparisonDates[key]} min={key === "end" ? nextDate(comparisonDates.start) : nextDate(filters.end)} onChange={event => setComparisonDates({ ...comparisonDates, [key]: event.target.value })} />
-              </label>
-            ))}
-          </div>
-        </fieldset>
-      </div>
-      <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">The same filters apply to both periods. Period A also filters the dashboard and ranking.</p>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          {appliedPeriods && <Button variant="outline" className="gap-2" disabled={busy || loading} onClick={resetComparison}><RotateCcw className="h-4 w-4" aria-hidden="true" />Reset</Button>}
-          <Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading || invalidPeriodOrder || hasFutureDate} onClick={applyFilters}><ArrowLeftRight className="h-4 w-4" aria-hidden="true" />Compare periods</Button>
-        </div>
-      </div>
-      {invalidPeriodOrder && <p role="alert" className="text-sm text-destructive">Period B must start after Period A ends.</p>}
-      {hasFutureDate && <p role="alert" className="text-sm text-destructive">Dates cannot be later than today (Asia/Bangkok).</p>}
-      <details className="group rounded-xl border border-info/25 bg-info/5 p-4 text-sm">
-        <summary className="flex cursor-pointer list-none items-center gap-3 rounded-md font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-offset-2 focus-visible:ring-offset-card [&::-webkit-details-marker]:hidden">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-info/10 text-info"><Info className="h-5 w-5" aria-hidden="true" /></span>
-          <span>How these metrics are counted</span>
-          <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-info transition-transform group-open:rotate-180" aria-hidden="true" />
-        </summary>
-        <p className="mt-3 max-w-4xl leading-relaxed text-foreground/80 sm:ml-12">Social figures are the latest lifetime observation in the selected dates. Clicks are visits during those dates (Asia/Bangkok). Repeat visits count; recognized bots, previews and HEAD requests do not. These figures do not measure purchases or unique visitors. Period comparison supports affiliate link clicks; social daily activity is unavailable from lifetime observations.</p>
-      </details>
-    </section>
-
-    {comparison && appliedPeriods && (
-      <section className={panelClass} aria-label="Period comparison results">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionTitle icon={ArrowLeftRight} title="Period comparison · Affiliate link clicks" description="Review changes in link clicks between the two selected periods." />
-          {exportButtons(appliedPeriods, Boolean(comparison.coverage_start))}
-        </div>
-        <div className="mt-4 space-y-2 text-sm">
-          <p>A ({comparison.a.start} – {comparison.a.end}): {display(comparison.a.clicks)}{!comparison.a.complete && " · Partial coverage"}</p>
-          <p>B ({comparison.b.start} – {comparison.b.end}): {display(comparison.b.clicks)}{!comparison.b.complete && " · Partial coverage"}</p>
-          <p>Change: {display(comparison.difference)} · {comparison.percentage_change == null ? "Percentage unavailable" : `${comparison.percentage_change}%`}</p>
-          {!comparison.equal_duration && <p className="text-muted-foreground">Periods have different durations.</p>}
-          <p className="text-xs text-muted-foreground">{comparison.limitation}</p>
-        </div>
-      </section>
-    )}
-
+      <PeriodComparison options={options} />
 
       <section className={panelClass}><div className="flex flex-wrap items-center justify-between gap-3"><SectionTitle icon={Trophy} title="Content ranking" description="Rank Reels, products, campaigns or platforms by a selected metric." /><div className="flex flex-wrap gap-2"><ScopeSelect icon={Video} label="Ranking level" showLabel={false} allowAll={false} className="w-40" placeholder="Level" value={level}
                 onChange={value => { setLevel(value as TrackingAnalysis["level"]); setAnalysis(null); setSelectedItem(null); }}
@@ -544,7 +571,7 @@ export default function Tracking() {
                   { id: "views", name: "Views", icon: Eye }, { id: "likes", name: "Likes", icon: Heart },
                   { id: "comments", name: "Comments", icon: MessageCircle }, { id: "shares", name: "Shares", icon: Share2 },
                   { id: "clicks", name: "Affiliate link clicks", icon: MousePointerClick },
-                ]} />{(analysis || level !== "reel" || metric !== "views") && <Button variant="outline" className="gap-2" disabled={busy || loading} onClick={resetRanking}><RotateCcw className="h-4 w-4" aria-hidden="true" />Reset</Button>}<Button className={primaryButtonClass} disabled={busy} onClick={() => void run(async () => setAnalysis(await fetchTrackingAnalysis({ ...applied, level, metric })))}><SearchCheck className="h-4 w-4" aria-hidden="true" />Analyze</Button>{analysis && exportButtons({ level: analysis.level, metric: analysis.metric })}</div></div>{analysis && <div className="mt-4 space-y-2">{!analysis.rows.length && <p>No matching content.</p>}{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedItem(item)} className="flex w-full flex-wrap items-start justify-between gap-3 border-b border-border py-2 text-left text-sm hover:bg-muted"><span className="min-w-0 flex-1">#{index + 1} {item.name || "Untitled"}</span>
+                ]} />{(analysis || level !== "reel" || metric !== "views") && <Button variant="outline" className="gap-2" disabled={busy || loading} onClick={resetRanking}><RotateCcw className="h-4 w-4" aria-hidden="true" />Reset</Button>}<Button className={primaryButtonClass} disabled={busy} onClick={() => void run(async () => setAnalysis(await fetchTrackingAnalysis({ level, metric })))}><SearchCheck className="h-4 w-4" aria-hidden="true" />Analyze</Button>{analysis && exportButtons({ level: analysis.level, metric: analysis.metric })}</div></div>{analysis && <div className="mt-4 space-y-2">{!analysis.rows.length && <p>No matching content.</p>}{analysis.rows.map((item, index) => <button key={item.id} type="button" onClick={() => setSelectedItem(item)} className="flex w-full flex-wrap items-start justify-between gap-3 border-b border-border py-2 text-left text-sm hover:bg-muted"><span className="min-w-0 flex-1">#{index + 1} {item.name || "Untitled"}</span>
                   <span className="shrink-0 tabular-nums">{display(item.value)}</span>
                   <span className="w-full text-xs text-muted-foreground sm:w-56 sm:text-right" title="Latest social observation in this group">
                     Observed At: {item.observed_at ? new Date(item.observed_at).toLocaleString() : 'Unavailable'}

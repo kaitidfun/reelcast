@@ -116,6 +116,148 @@ def test_redirect_click_rules_period_boundaries_and_missing_coverage(data):
     link.created_at = datetime(2026,1,2,tzinfo=timezone.utc); db.commit()
     assert service.compare_periods(db, user_id=users[0].user_id, **periods)['difference'] is None
 
+@pytest.mark.parametrize('a_clicks,b_clicks,partial,b_end', [
+    (3, 6, False, '2026-01-14'),
+    (0, 6, False, '2026-01-14'),
+    (6, 3, False, '2026-01-14'),
+    (3, 6, True, '2026-01-14'),
+    (3, 6, False, '2026-01-15'),
+])
+@pytest.mark.parametrize('include_dashboard_dates', [False, True])
+def test_comparison_exports_preserve_api_summary(data, a_clicks, b_clicks, partial, b_end, include_dashboard_dates):
+    db, users, _, distributions = data
+    link = service.ensure_tracking_link(db, user_id=users[0].user_id, distribution_id=distributions[0].distribution_id)
+    link.created_at = datetime(2026, 1, 5, tzinfo=timezone.utc) if partial else datetime(2025, 12, 30, tzinfo=timezone.utc)
+    for day, count in ((6, a_clicks), (9, b_clicks)):
+        db.add_all([TrackingClick(link_id=link.link_id, clicked_at=datetime(2026, 1, day, 10, tzinfo=timezone.utc))
+                    for _ in range(count)])
+    db.commit()
+    app = FastAPI(); app.include_router(router)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: users[0]
+    client = TestClient(app)
+    params = dict(a_start='2026-01-01', a_end='2026-01-07', b_start='2026-01-08', b_end=b_end)
+    if include_dashboard_dates:
+        params.update(start=params['a_start'], end=params['a_end'])
+    with patch('app.services.tracking_service.datetime', wraps=datetime) as clock:
+        clock.now.return_value = datetime(2026, 2, 1, tzinfo=timezone.utc)
+        comparison_response = client.get('/api/tracking/comparison', params=params)
+        response = client.get('/api/tracking/export', params=dict(params, format='csv'))
+        xlsx_response = client.get('/api/tracking/export', params=dict(params, format='xlsx', metric='views'))
+    assert comparison_response.status_code == response.status_code == xlsx_response.status_code == 200
+    comparison = comparison_response.json()
+    assert comparison['a']['clicks'] == a_clicks and comparison['b']['clicks'] == b_clicks
+    assert comparison['a']['complete'] is not partial
+    assert comparison['difference'] == (None if partial else b_clicks - a_clicks)
+    assert comparison['percentage_change'] == (None if partial or not a_clicks else round((b_clicks-a_clicks)/a_clicks*100, 2))
+    assert response.content.startswith(b'\xef\xbb\xbf')
+    rows = list(csv.DictReader(io.StringIO(response.content.decode('utf-8-sig'))))
+    assert len(rows) == 2 and {row['Comparison Period'] for row in rows} == {'A', 'B'}
+    for row in rows:
+        assert None not in row  # Every row has the same number of columns.
+        for period in ('a', 'b'):
+            label = period.upper()
+            expected = comparison[period]
+            assert row[f'Comparison {label} Start'] == expected['start']
+            assert row[f'Comparison {label} End'] == expected['end']
+            assert row[f'Comparison {label} Total Clicks'] == str(expected['clicks'])
+            assert row[f'Comparison {label} Coverage'] == ('Complete' if expected['complete'] else 'Partial coverage')
+        for column, key in [('Comparison Click Difference (B - A)', 'difference'),
+                            ('Comparison Percentage Change (%)', 'percentage_change')]:
+            assert row[column] == ('Unavailable' if comparison[key] is None else str(comparison[key]))
+        assert row['Comparison Equal Duration'] == ('Yes' if comparison['equal_duration'] else 'No')
+        assert row['Comparison Coverage Start'] == comparison['coverage_start']
+        assert row['Comparison Timezone'] == 'Asia/Bangkok'
+        assert row['Comparison Metric'] == 'Affiliate link clicks'
+        assert row['Comparison Limitation'] == comparison['limitation']
+        assert row['Reel Name'].startswith("'=")
+        assert 'สินค้า' in row['Product Name']
+        assert row['Period Start'] == comparison[row['Comparison Period'].lower()]['start']
+    assert sum(int(row['Affiliate Link Clicks']) for row in rows) == a_clicks + b_clicks
+    ns = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+    with ZipFile(io.BytesIO(xlsx_response.content)) as archive:
+        summary_root = ElementTree.fromstring(archive.read('xl/worksheets/sheet1.xml'))
+        summary = {}
+        for row in summary_root.findall('s:sheetData/s:row', ns):
+            cells = [cell.findtext('s:is/s:t', namespaces=ns) if cell.get('t') == 'inlineStr'
+                     else cell.findtext('s:v', namespaces=ns) for cell in row]
+            summary[cells[0]] = cells[1]
+        assert summary['Metric'] == 'Affiliate link clicks'
+        assert 'Date Range' not in summary and 'Start' not in summary and 'End' not in summary
+        assert summary['Timezone'] == 'Asia/Bangkok'
+        for period in ('a', 'b'):
+            expected = comparison[period]
+            label = f'Period {period.upper()}'
+            assert summary[f'{label} Start'] == expected['start']
+            assert summary[f'{label} End'] == expected['end']
+            assert summary[f'{label} Days'] == str((date.fromisoformat(expected['end']) - date.fromisoformat(expected['start'])).days + 1)
+            assert summary[f'{label} Coverage'] == ('Complete' if expected['complete'] else 'Partial coverage')
+        assert summary['Period A clicks'] == str(a_clicks)
+        assert summary['Period B clicks'] == str(b_clicks)
+        for column, key in [('Difference', 'difference'), ('Percentage change (%)', 'percentage_change')]:
+            assert summary[column] == ('Unavailable' if comparison[key] is None else str(comparison[key]))
+        assert summary['Equal Duration'] == ('Yes' if comparison['equal_duration'] else 'No')
+        assert summary['Duration Note'] == ('Periods have equal durations.' if comparison['equal_duration'] else 'Periods have different durations.')
+        assert summary['Comparison Limitation'] == comparison['limitation']
+        assert summary['Coverage Start (Asia/Bangkok)'] == ('05 Jan 2026, 07:00:00' if partial else '30 Dec 2025, 07:00:00')
+        if partial:
+            assert summary['Comparison Status'].startswith('Partial coverage:')
+            assert 'not fully covered or completed' in summary['Percentage Change Status']
+        elif not a_clicks:
+            assert summary['Percentage Change Status'] == 'Unavailable: Period A has zero clicks.'
+        else:
+            assert summary['Comparison Status'] == 'Completed periods with full coverage'
+            assert summary['Percentage Change Status'] == 'Available'
+
+
+@pytest.mark.parametrize('format', ['csv', 'xlsx'])
+def test_comparison_export_pairs_publications_across_periods(format):
+    from app.services.tracking_export_service import report_bytes
+    comparison = dict(
+        a=dict(start='2026-01-01', end='2026-01-07', clicks=0, complete=True),
+        b=dict(start='2026-01-08', end='2026-01-14', clicks=0, complete=True),
+        difference=0, percentage_change=None, equal_duration=True,
+        coverage_start='2025-12-01T00:00:00+00:00', limitation='Test coverage',
+    )
+    publications = [
+        ('late', 'reel-1', '2025-12-03T00:00:00', 'youtube'),
+        ('early', 'reel-1', '2025-12-01T00:00:00', 'youtube'),
+        ('same-time-other-reel', 'reel-2', '2025-12-03T00:00:00', 'youtube'),
+        ('same-time-other-platform', 'reel-1', '2025-12-03T00:00:00', 'tiktok'),
+        ('undated', 'reel-3', None, 'youtube'),
+    ]
+    source = []
+    for period in ('B', 'A'):
+        for ident, reel_id, timestamp, platform in publications:
+            if ident == 'undated' and period == 'B':
+                continue  # A publication present in only one period is retained.
+            source.append(dict(distribution_id=ident, reel_id=reel_id,
+                               reel_name='Same Reel Name', product_name=ident, campaign_name=None,
+                               distribute_date=timestamp, platform=platform, clicks=0,
+                               comparison_period=period, period_start=comparison[period.lower()]['start'],
+                               period_end=comparison[period.lower()]['end']))
+    original_order = [(row['distribution_id'], row['comparison_period']) for row in source]
+    content = report_bytes(source, format=format, filters={}, comparison=comparison)
+    if format == 'csv':
+        records = list(csv.DictReader(io.StringIO(content.decode('utf-8-sig'))))
+    else:
+        with ZipFile(io.BytesIO(content)) as archive:
+            root = ElementTree.fromstring(archive.read('xl/worksheets/sheet2.xml'))
+        ns = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+        values = [[cell.findtext('s:is/s:t', namespaces=ns) if cell.get('t') == 'inlineStr'
+                   else cell.findtext('s:v', namespaces=ns) for cell in row]
+                  for row in root.findall('s:sheetData/s:row', ns)]
+        records = [dict(zip(values[0], row)) for row in values[1:]]
+    assert [(row['Product Name'], row['Comparison Period']) for row in records] == [
+        ('early', 'A'), ('early', 'B'),
+        ('same-time-other-platform', 'A'), ('same-time-other-platform', 'B'),
+        ('late', 'A'), ('late', 'B'),
+        ('same-time-other-reel', 'A'), ('same-time-other-reel', 'B'),
+        ('undated', 'A'),
+    ]
+    assert [(row['distribution_id'], row['comparison_period']) for row in source] == original_order
+
+
 def test_api_export_ownership_thai_formula_safety_and_redirect(data):
     db, users, accounts, distributions = data
     observe(db, users[0], accounts[0], 10, 1)
