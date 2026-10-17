@@ -160,8 +160,8 @@ and [R2 CORS](https://developers.cloudflare.com/r2/buckets/cors/) for the contra
   next, pause hidden/offline tabs, abort on cleanup and back off errors. Distant
   scheduled distributions use a slower poll. Completed jobs stop polling.
 - Shared images default to lazy loading and async decoding; videos preload metadata.
-  Auth hero images use Next Image. Both fonts are self-hosted by next/font rather
-  than fetched again via a CSS import. Product/fullscreen dialogs load on demand.
+  Auth hero images use Next Image. Font loading retains the original Inter and
+  Space Grotesk setup by request. Product/fullscreen dialogs load on demand.
 - Profile image cache versions use the image key instead of a fresh timestamp on
   each authentication response.
 

@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import { Inter, Space_Grotesk } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { canIndex, siteDescription, siteName, siteUrl } from "@/lib/seo";
 
-const inter = Inter({ subsets: ["latin"], variable: '--font-inter', display: 'swap' });
-const displayFont = Space_Grotesk({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   metadataBase: siteUrl,
@@ -25,7 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${displayFont.variable}`}>
+      <body className={inter.className}>
         <Providers>{children}</Providers>
       </body>
     </html>
