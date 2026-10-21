@@ -51,13 +51,3 @@ from app.schemas.distribution import (
     DistributionResponse,
     DistributionListResponse,
 )
-
-from app.schemas.analytics import (
-    AnalyticsCreate,
-    AnalyticsUpdate,
-    AnalyticsResponse,
-    AnalyticsListResponse,
-    EcommerceAccountConnect,
-    EcommerceAccountResponse,
-    TrackingMetricCreate,
-)

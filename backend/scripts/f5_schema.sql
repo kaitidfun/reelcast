@@ -1,4 +1,5 @@
--- Additive F5 schema. Legacy analytics/ecommerce data is intentionally retained.
+-- F5 social observations and affiliate link visits.
+-- Legacy table retirement is handled separately by retire_legacy_tracking.sql.
 
 
 CREATE TABLE IF NOT EXISTS tracking_observations (

@@ -22,45 +22,12 @@ ALTER TABLE reels ADD COLUMN IF NOT EXISTS first_frame_url VARCHAR;
 -- callback resolves and stores it here right after the token exchange.
 ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS external_account_id VARCHAR;
 
--- 2026-08-17: Feature 5 - E-commerce shop connections.
--- New databases receive this through SQLAlchemy create_all; run this block
--- once for existing local/dev databases.
-CREATE TABLE IF NOT EXISTS ecommerce_accounts (
-    ecommerce_account_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    platform_name VARCHAR NOT NULL,
-    external_shop_id VARCHAR NOT NULL,
-    shop_name VARCHAR,
-    access_token VARCHAR NOT NULL,
-    refresh_token VARCHAR,
-    last_synced_at TIMESTAMPTZ,
-    sync_error TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (user_id, platform_name, external_shop_id)
-);
-
-ALTER TABLE analytics ADD COLUMN IF NOT EXISTS revenue NUMERIC(14, 2) DEFAULT 0;
-ALTER TABLE analytics ADD COLUMN IF NOT EXISTS external_ref VARCHAR;
-ALTER TABLE analytics ADD COLUMN IF NOT EXISTS engagement INTEGER NOT NULL DEFAULT 0;
-CREATE UNIQUE INDEX IF NOT EXISTS analytics_source_external_ref_unique
-    ON analytics (source_platform, external_ref)
-    WHERE external_ref IS NOT NULL;
-    
 -- 2026-08-20: reels.is_saved
 -- A Completed reel used to appear in the Library automatically. Now it only
 -- shows up once the member explicitly clicks "Save" on the Create page —
 -- previewAndApproveContent() sets this column true. Existing Completed rows
 -- default to false and won't reappear in Library until re-saved.
 ALTER TABLE reels ADD COLUMN IF NOT EXISTS is_saved BOOLEAN NOT NULL DEFAULT false;
-
--- 2026-08-29: Include account-level social metrics in dashboard ownership.
--- Social API responses are posts/media on a connected account and are not
--- always associated with a Reel or product in ReelCast.
-ALTER TABLE analytics
-    ADD COLUMN IF NOT EXISTS social_account_id UUID
-    REFERENCES social_accounts(account_id) ON DELETE CASCADE;
-CREATE INDEX IF NOT EXISTS analytics_social_account_id_index
-    ON analytics (social_account_id);
 
 -- 2026-08-29: reels.saved_* snapshot columns
 -- True versioning for Save: Library/Distribute/publishing now read these
