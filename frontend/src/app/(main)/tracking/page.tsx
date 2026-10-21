@@ -1,12 +1,13 @@
 "use client";
 
 import { LoadingState } from "@/components/LoadingState";
+import { PageEmptyState } from "@/components/PageEmptyState";
 import { useTrackingSync } from "@/hooks/useTrackingSync";
 import { usePendingAction } from "@/hooks/usePendingAction";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { Loader2, BarChart3, SearchCheck, Download, RefreshCw, Eye, Heart, MessageCircle, Share2, MousePointerClick, Video, SlidersHorizontal, Settings2, Trophy, TableProperties, ArrowLeftRight, ChevronLeft, ChevronRight, Globe2, Megaphone, Package, Info, RotateCcw, type LucideIcon } from "lucide-react";
+import { Loader2, BarChart3, SearchCheck, Download, RefreshCw, Eye, Heart, MessageCircle, Share2, MousePointerClick, Video, SlidersHorizontal, Settings2, Trophy, TableProperties, ArrowLeftRight, ArrowRight, ChevronLeft, ChevronRight, Globe2, Megaphone, Package, Info, RotateCcw, type LucideIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -441,6 +442,40 @@ function TrackingEntrance({ children, delay = 0, className = "" }: { children: R
   >{children}</motion.div>;
 }
 
+function TrackingEmptyState({ connected, syncing, disabled, onSync }: {
+  connected: boolean;
+  syncing: boolean;
+  disabled: boolean;
+  onSync: () => void;
+}) {
+  return <PageEmptyState
+      motionStyle="tracking"
+      icon={BarChart3} secondaryIcon={MousePointerClick}
+      kicker="A little setup. A clearer picture."
+      title={connected ? "Ready to see how your content performs?" : "Your tracking starts here"}
+      description={connected
+        ? "Your account is connected. Sync to bring in available social metrics, or distribute a Reel to start following its performance."
+        : "Connect a social account, publish your first Reel, and bring your performance into one simple view."}
+      actions={<>
+        {connected
+          ? <Button className={primaryButtonClass} disabled={disabled || syncing} onClick={onSync}><RefreshCw aria-hidden="true" className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />{syncing ? "Syncing…" : "Sync Data"}</Button>
+          : <Button asChild className={primaryButtonClass}><Link href="/account">Connect an account<ArrowRight aria-hidden="true" className="h-4 w-4" /></Link></Button>}
+        <Button asChild variant="outline" className="gap-2 bg-transparent"><Link href="/distribute"><Video aria-hidden="true" className="h-4 w-4" />Distribute a Reel</Link></Button>
+      </>}
+      stepsLabel="Getting started with tracking"
+      steps={[
+        { title: "Connect an account", description: "Use the social accounts you publish with.", complete: connected },
+        { title: "Publish your content", description: "Distribute a Reel with your affiliate link." },
+        { title: "Bring your results together", description: "Sync metrics and follow recorded link clicks." },
+      ]}
+      features={[
+        { icon: Eye, title: "Social performance", description: "Views, likes, comments and shares supported by your platforms." },
+        { icon: MousePointerClick, title: "Affiliate link clicks", description: "Recorded visits through your ReelCast tracking links." },
+        { icon: Trophy, title: "Content insights", description: "Rank content, compare periods and export your results." },
+      ]}
+    />;
+}
+
 export default function Tracking() {
   const [options, setOptions] = useState(emptyOptions);
   const [dashboard, setDashboard] = useState<TrackingDashboard | null>(null);
@@ -504,6 +539,12 @@ export default function Tracking() {
   const currentDetailsPage = Math.min(detailsPage, detailPageCount);
   const detailOffset = (currentDetailsPage - 1) * DETAILS_PAGE_SIZE;
   const visibleDetails = dashboard?.details.slice(detailOffset, detailOffset + DETAILS_PAGE_SIZE) || [];
+  // Account-wide social observations can exist before the first ReelCast distribution.
+  // A measured zero is still data; only null counters mean nothing is available yet.
+  const hasTrackingData = Boolean(dashboard && (dashboard.has_data || detailCount > 0
+    || dashboard.totals.reels > 0 || dashboard.totals.clicks > 0
+    || (["views", "likes", "comments", "shares", "engagement"] as const).some(metric => dashboard.totals[metric] != null)
+    || dashboard.platforms.some(platform => (["views", "likes", "comments", "shares", "engagement"] as const).some(metric => platform[metric] != null))));
 
   function changeDetailsPage(page: number) {
     setDetailsPage(Math.max(1, Math.min(page, detailPageCount)));
@@ -524,7 +565,7 @@ export default function Tracking() {
   );
 
   return <div aria-busy={loading || busy} className="min-w-0 space-y-6">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Data Tracking</h1><p className="mt-1 text-muted-foreground">Social performance and affiliate link visits</p></div><Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading || sync.busy} onClick={() => void sync.start()}><RefreshCw className={`mr-2 h-4 w-4 ${sync.busy ? "animate-spin" : ""}`} />{sync.busy ? "Syncing…" : "Sync Data"}</Button></div>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">Data Tracking</h1><p className="mt-1 text-muted-foreground">Social performance and affiliate link visits</p></div>{hasTrackingData && <Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading || sync.busy} onClick={() => void sync.start()}><RefreshCw className={`mr-2 h-4 w-4 ${sync.busy ? "animate-spin" : ""}`} />{sync.busy ? "Syncing…" : "Sync Data"}</Button>}</div>
     {sync.error && <p role="alert" className="text-sm text-destructive">{sync.error}</p>}
     {pending && <span role="status" className="sr-only">{pending}</span>}
     {loading && dashboard && <LoadingState label="Refreshing tracking data…" />}
@@ -580,12 +621,12 @@ export default function Tracking() {
             )}
           </div>
         ))}
-        <p className="px-1 text-xs text-muted-foreground">Report updated {new Date(dashboard.generated_at).toLocaleString()}</p>
+        {hasTrackingData && <p className="px-1 text-xs text-muted-foreground">Report updated {new Date(dashboard.generated_at).toLocaleString()}</p>}
       </div>
     )}
 
 
-    {dashboard && (
+    {dashboard && hasTrackingData && (
       <TrackingEntrance delay={0} className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">{([
         { label: 'Views', value: dashboard.totals.views, icon: Eye, color: 'bg-primary/10 text-primary', gradient: 'from-orange-500 via-pink-500 to-purple-600' },
         { label: 'Likes', value: dashboard.totals.likes, icon: Heart, color: 'bg-pink-500/10 text-pink-500', gradient: 'from-rose-500 via-pink-500 to-fuchsia-600' },
@@ -595,10 +636,11 @@ export default function Tracking() {
         { label: 'Tracked Reels', value: dashboard.totals.reels, icon: Video, color: 'bg-violet-500/10 text-violet-500', gradient: 'from-violet-500 via-purple-500 to-fuchsia-600' },
       ]).map(({ label, value, icon: Icon, color, gradient }) => <section key={label} className="group relative overflow-hidden rounded-2xl border border-border bg-card card-shine transition-all duration-300 hover:border-primary/30 hover:shadow-elevated"><div className={`h-1 bg-gradient-to-r ${gradient}`} /><div className="p-5"><div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{label}</p><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${color}`}><Icon className="h-4 w-4" /></span></div><p className="mt-3 font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{display(value)}</p></div></section>)}</TrackingEntrance>
     )}
-    {loading && !dashboard ? <p role="status">Loading tracking data…</p> : dashboard && <>
+    {loading && !dashboard ? <p role="status">Loading tracking data…</p> : dashboard && (!hasTrackingData
+      ? <TrackingEmptyState connected={dashboard.accounts.length > 0} syncing={sync.busy} disabled={busy || loading} onSync={() => void sync.start()} />
+      : <>
 
       {!!dashboard.totals.partial_metrics.length && <p className="text-xs text-muted-foreground">Some social metrics are unavailable for part of this scope. Totals include only available values.</p>}
-      {!dashboard.has_data && <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-12 text-center"><BarChart3 className="mx-auto h-10 w-10 text-muted-foreground/50" /><h2 className="mt-4 font-display text-xl font-semibold text-foreground">Start tracking your content</h2><p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">No tracking data matches these filters. Distribute a Reel to create its affiliate tracking link automatically, then synchronize its connected social account.</p></div>}
       <TrackingEntrance delay={0.02} className="grid gap-5 lg:grid-cols-2">
       <section className={panelClass}>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
@@ -733,6 +775,6 @@ export default function Tracking() {
       </section>
     </TrackingEntrance>
 
-    </>}
+    </>)}
   </div>;
 }

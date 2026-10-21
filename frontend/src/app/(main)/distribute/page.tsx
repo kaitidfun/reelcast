@@ -1,13 +1,14 @@
 "use client";
 
 import { LoadingState } from "@/components/LoadingState";
+import { PageEmptyState } from "@/components/PageEmptyState";
 
 import { useAdaptivePolling } from "@/hooks/useAdaptivePolling";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Send, Clock, Trash2, Search, Settings2, List, Layers, ChevronLeft, ChevronRight, Globe2, CircleDot, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+import { Send, Video, BarChart3, ArrowRight, Clock, Trash2, Search, Settings2, List, Layers, ChevronLeft, ChevronRight, Globe2, CircleDot, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchClearButton } from "@/components/ui/search-clear-button";
@@ -269,9 +270,11 @@ const Distribution = () => {
 
   const isEmpty = viewMode === "flat" ? flatRows.length === 0 : groups.length === 0;
   const filtersActive = Boolean(search) || filterStatus !== "all" || filterAccountId !== "all";
+  const showEmptyState = !loading && !recentReelsLoading && !recentCampaignsLoading
+    && isEmpty && !filtersActive && recentReelsTotal === 0 && recentCampaignTotal === 0;
 
   return (
-    <div className="min-w-0 space-y-6 sm:space-y-8">
+    <div className="min-w-0 space-y-6">
       <div className="max-w-3xl">
         <h1 className="font-display text-2xl font-bold text-foreground sm:text-3xl">Distribution</h1>
         <p className="mt-1 text-sm text-muted-foreground sm:text-base">Publish Reels to YouTube Shorts, TikTok, Facebook, and Instagram</p>
@@ -282,7 +285,7 @@ const Distribution = () => {
         href="/account"
         className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-card transition-colors hover:border-primary/30 sm:px-5"
       >
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <span className="min-w-0 truncate text-sm text-foreground">
             <span className="font-semibold">{accounts.length}/{CONNECTABLE_PLATFORM_COUNT}</span> Platforms Connected
           </span>
@@ -310,6 +313,33 @@ const Distribution = () => {
       </Link>
 
       {/* Distributions */}
+      {isEmpty && !filtersActive && (loading || recentReelsLoading || recentCampaignsLoading)
+        ? <LoadingState label="Loading distributions…" />
+        : showEmptyState ? <PageEmptyState
+        icon={Send} secondaryIcon={Globe2}
+        kicker="One Reel. More places to reach people."
+        title="Your next audience is waiting"
+        description={accounts.length > 0
+          ? "Your social account is connected. Create and save a Reel, then choose where to publish it or schedule it for later."
+          : "Connect a social account and create your first Reel. Publish when you’re ready, or schedule it for the right moment."}
+        actions={<>
+          {accounts.length > 0
+            ? <Button asChild className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg"><Link href="/create"><Video aria-hidden="true" className="h-4 w-4" />Create a Reel</Link></Button>
+            : <Button asChild className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg"><Link href="/account">Connect an account<ArrowRight aria-hidden="true" className="h-4 w-4" /></Link></Button>}
+          <Button asChild variant="outline" className="gap-2 bg-transparent"><Link href={accounts.length > 0 ? "/" : "/create"}><Video aria-hidden="true" className="h-4 w-4" />{accounts.length > 0 ? "Browse saved Reels" : "Create a Reel"}</Link></Button>
+        </>}
+        stepsLabel="Getting started with distribution"
+        steps={[
+          { title: "Connect an account", description: "Choose the social platforms you publish with.", complete: accounts.length > 0 },
+          { title: "Get your Reel ready", description: "Create a video, review it and save your final version." },
+          { title: "Choose your moment", description: "Publish now or schedule a time that suits you." },
+        ]}
+        features={[
+          { icon: Globe2, title: "Your social platforms", description: "Publish to connected YouTube, TikTok, Facebook and Instagram accounts." },
+          { icon: Clock, title: "Flexible scheduling", description: "Set a publishing time and follow each platform’s status." },
+          { icon: BarChart3, title: "Follow your results", description: "Head to Tracking for available metrics and affiliate link clicks." },
+        ]}
+      /> : <>
       <motion.div className="min-w-0" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <div className="mb-4 flex items-center gap-2">
           <Clock className="h-4 w-4 text-info" />
@@ -529,6 +559,7 @@ const Distribution = () => {
           onPageChange={setCampaignsPage}
         />
       </motion.section>
+      </>}
     </div>
   );
 };

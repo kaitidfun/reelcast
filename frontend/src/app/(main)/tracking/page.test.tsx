@@ -23,7 +23,7 @@ beforeEach(() => {
     totals: { views: null, likes: null, comments: null, shares: null, engagement: null,
       clicks: 0, reels: 0, partial_metrics: [] },
     details: [], click_trend: [], platforms: [], products: [], campaigns: [], reels: [],
-    has_data: false, semantics: '', generated_at: '2026-10-15T00:00:00Z', unrelated_observations: 0, accounts: [],
+    has_data: true, semantics: '', generated_at: '2026-10-15T00:00:00Z', unrelated_observations: 0, accounts: [],
   });
   vi.mocked(api.fetchTrackingFilterOptions).mockResolvedValue({
     platforms: ['youtube'], products: [], campaigns: [], reels: [],
@@ -103,17 +103,61 @@ it('limits all comparison dates to Bangkok today and blocks manually entered fut
 
 it('shows unavailable social counters and zero clicks without commerce claims', async () => {
   render(<Tracking />);
-  await screen.findByText(/No tracking data matches/);
+  await screen.findByText('Tracking details');
   for (const title of ['Views', 'Likes', 'Comments', 'Shares']) {
     expect(within(screen.getByText(title, { selector: 'p' }).closest('section')!).getByText('Unavailable')).toBeInTheDocument();
   }
   expect(screen.queryByText('Revenue')).not.toBeInTheDocument();
   expect(screen.queryByText('Orders')).not.toBeInTheDocument();
-  expect(screen.getAllByRole('button', { name: 'CSV' })[0]).toBeDisabled();
   fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-10-15' } });
   fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-10-01' } });
   fireEvent.click(screen.getByRole('button', { name: 'Compare periods' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Start date must be before end date');
+});
+
+it('guides a new member without rendering empty charts or unusable reporting controls', async () => {
+  const dashboard = await api.fetchTrackingDashboard();
+  vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, has_data: false });
+  render(<Tracking />);
+  await screen.findByRole('heading', { name: 'Your tracking starts here' });
+  expect(screen.getByRole('link', { name: 'Connect an account' })).toHaveAttribute('href', '/account');
+  expect(screen.getByRole('link', { name: 'Distribute a Reel' })).toHaveAttribute('href', '/distribute');
+  for (const title of ['View by platform', 'Content ranking', 'Compare periods', 'Tracking details']) {
+    expect(screen.queryByRole('heading', { name: title })).not.toBeInTheDocument();
+  }
+  expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
+  expect(screen.queryByText(/Report updated/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Sync Data' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'CSV' })).not.toBeInTheDocument();
+});
+
+it('lets a connected member sync from the empty state and reveals the dashboard when data arrives', async () => {
+  const dashboard = await api.fetchTrackingDashboard();
+  vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, has_data: false, accounts: [
+    { id: 'account-1', platform: 'youtube', last_synced_at: null, error: null },
+  ] });
+  vi.mocked(api.syncTrackingData).mockResolvedValue({
+    job_id: 'run-1', status: 'completed', phase: 'completed', progress: 100,
+    metrics: 1, accounts: [], warnings: [], failed_batches: 0,
+  } as unknown as Awaited<ReturnType<typeof api.syncTrackingData>>);
+  render(<Tracking />);
+  await screen.findByRole('heading', { name: 'Ready to see how your content performs?' });
+  vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, has_data: true });
+  fireEvent.click(screen.getByRole('button', { name: 'Sync Data' }));
+  await screen.findByRole('heading', { name: 'Tracking details' });
+  expect(api.syncTrackingData).toHaveBeenCalled();
+  expect(screen.queryByRole('heading', { name: 'Ready to see how your content performs?' })).not.toBeInTheDocument();
+});
+
+it('keeps measured zero social metrics visible before a tracked distribution exists', async () => {
+  const dashboard = await api.fetchTrackingDashboard();
+  vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, has_data: false,
+    totals: { ...dashboard.totals, views: 0 },
+  });
+  render(<Tracking />);
+  await screen.findByRole('heading', { name: 'View by platform' });
+  expect(screen.queryByRole('heading', { name: 'Your tracking starts here' })).not.toBeInTheDocument();
+  expect(within(screen.getByText('Views', { selector: 'p' }).closest('section')!).getByText('0')).toBeInTheDocument();
 });
 
 it('shows click totals by platform across all days, including zero clicks', async () => {
@@ -444,7 +488,7 @@ it('offers reauthorization for expired tokens through the existing connection fl
 
 it('validates both periods in the comparison filters before making a comparison request', async () => {
   render(<Tracking />);
-  await screen.findByText(/No tracking data matches/);
+  await screen.findByText('Tracking details');
   expect(screen.getByLabelText('Period B start date')).toBeInTheDocument();
   expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Compare periods' })).toBeInTheDocument();

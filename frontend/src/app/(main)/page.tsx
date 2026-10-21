@@ -1,10 +1,11 @@
 "use client";
 
 import { LoadingState } from "@/components/LoadingState";
+import { PageEmptyState } from "@/components/PageEmptyState";
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, Video, Sparkles, Package, Send, BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
@@ -68,9 +69,13 @@ export default function Home() {
       ? searchedCampaigns
       : searchedCampaigns.slice(0, RECENT_CAMPAIGNS_COLLAPSED_SIZE);
   const searchResultCount = visibleReels.length + visibleCampaigns.length;
+  const loadingEmptyStudio = !isSearching && (reelsLoading || campaignsLoading)
+    && reels.length === 0 && campaigns.length === 0;
+  const isStudioEmpty = !reelsLoading && !campaignsLoading && !isSearching
+    && reelTotal === 0 && campaignTotal === 0 && reels.length === 0 && campaigns.length === 0;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
+    <div className={isStudioEmpty || loadingEmptyStudio ? "min-w-0 space-y-6" : "mx-auto max-w-6xl space-y-8"}>
       {/* Header */}
       <motion.div
         {...fadeUp}
@@ -81,11 +86,11 @@ export default function Home() {
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
             Welcome back, {firstName}!
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Here's what's happening in your studio today.</p>
+          <p className="text-sm text-muted-foreground mt-1">{isStudioEmpty ? "Your space to create, organize and share." : "Here's what's happening in your studio today."}</p>
         </div>
 
         {/* Search applies to both sections below. */}
-        <div className="relative w-full min-w-0 lg:w-[520px] lg:shrink-0">
+        {!isStudioEmpty && !loadingEmptyStudio && <div className="relative w-full min-w-0 lg:w-[520px] lg:shrink-0">
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search reels, products, campaigns…"
@@ -95,9 +100,32 @@ export default function Home() {
             className="h-9 pl-8 pr-9 text-xs"
           />
           {isSearching && <SearchClearButton onClear={() => setSearchQuery("")} />}
-        </div>
+        </div>}
       </motion.div>
 
+      {loadingEmptyStudio ? <LoadingState label="Loading your studio…" /> : isStudioEmpty ? (
+        <PageEmptyState
+          icon={Video} secondaryIcon={Sparkles}
+          kicker="One idea. Your next Reel."
+          title="Your creative studio starts here"
+          description="Turn an idea or a product into a Reel. Keep your content together, share it with your audience, and follow what happens next."
+          actions={<>
+            <Button asChild className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg"><Link href="/create"><Plus aria-hidden="true" className="h-4 w-4" />Create your first Reel</Link></Button>
+            <Button asChild variant="outline" className="gap-2 bg-transparent"><Link href="/library"><Package aria-hidden="true" className="h-4 w-4" />Start a campaign</Link></Button>
+          </>}
+          stepsLabel="Getting started with your studio"
+          steps={[
+            { title: "Bring an idea", description: "Start with a prompt, a product or your own video." },
+            { title: "Make it yours", description: "Review your video and caption, then save your Reel." },
+            { title: "Share and learn", description: "Publish to connected accounts and follow your results." },
+          ]}
+          features={[
+            { icon: Sparkles, title: "AI-powered creation", description: "Create videos and captions from your ideas." },
+            { icon: Send, title: "Social publishing", description: "Publish now or schedule your next Reel." },
+            { icon: BarChart3, title: "Performance tracking", description: "Review available social metrics and affiliate link clicks." },
+          ]}
+        />
+      ) : <>
       {/* Quick Actions */}
       <motion.div
         {...fadeUp}
@@ -188,8 +216,9 @@ export default function Home() {
         )}
       </motion.section>
 
+      </>}
       {/* Footer */}
-      <footer className="pt-12 pb-4 text-center">
+      <footer className={`${isStudioEmpty ? "pt-4" : "pt-12"} pb-4 text-center`}>
         <p className="text-xs text-muted-foreground/60">Copyright © ReelCast</p>
       </footer>
     </div>

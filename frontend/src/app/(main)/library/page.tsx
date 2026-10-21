@@ -8,6 +8,7 @@ import { BACKEND_BASE_URL } from "@/lib/api-config";
 import { LoadingImage } from "@/components/LoadingMedia";
 
 import { LoadingState } from "@/components/LoadingState";
+import { PageEmptyState } from "@/components/PageEmptyState";
 import { usePendingAction } from "@/hooks/usePendingAction";
 
 import { motion } from "framer-motion";
@@ -761,6 +762,7 @@ const ContentLibrary = () => {
   if (loading) return <LoadingState label="Loading library…" />;
 
   if (!currentCampaign) {
+    const isLibraryEmpty = campaigns.length === 0 && !campaignSearch.trim();
     return (
       <>
         <div className="space-y-6">
@@ -773,17 +775,17 @@ const ContentLibrary = () => {
                 Organize products by marketing campaign
               </p>
             </div>
-            <Button
+            {!isLibraryEmpty && <Button
               onClick={openNewCampaignDialog}
               className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto"
             >
               <Plus className="h-4 w-4" />
               New Campaign
-            </Button>
+            </Button>}
           </div>
 
           {/* Toolbar */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          {!isLibraryEmpty && <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -818,31 +820,35 @@ const ContentLibrary = () => {
                 <List className="!h-5 !w-5" />
               </ToggleGroupItem>
             </ToggleGroup>
-          </div>
+          </div>}
 
           {campaignTotal > 20 && <nav aria-label="Campaign pages" className="flex items-center justify-between gap-3">
             <Button variant="outline" disabled={campaignPage === 0} onClick={() => setCampaignPage(page => page - 1)}>Previous</Button>
             <span className="text-sm text-muted-foreground">Page {campaignPage + 1} of {Math.ceil(campaignTotal / 20)}</span>
             <Button variant="outline" disabled={(campaignPage + 1) * 20 >= campaignTotal} onClick={() => setCampaignPage(page => page + 1)}>Next</Button>
           </nav>}
-          {campaigns.length === 0 && !campaignSearch.trim() ? (
-            <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
-              <Package className="mx-auto h-10 w-10 text-muted-foreground/50" />
-              <h2 className="mt-4 font-display text-xl font-semibold text-foreground">
-                Create your first campaign
-              </h2>
-              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                You do not have any campaigns yet. Create your first campaign
-                to organize products and start producing Reels.
-              </p>
-              <Button
-                onClick={openNewCampaignDialog}
-                className="mt-5 gradient-primary gap-2 text-primary-foreground"
-              >
-                <Plus className="h-4 w-4" />
-                Create First Campaign
-              </Button>
-            </div>
+          {isLibraryEmpty ? (
+            <PageEmptyState
+              icon={Package} secondaryIcon={Sparkles}
+              kicker="A little organization. More room to create."
+              title="Your next campaign starts here"
+              description="Give your products a home. Create a campaign, add the details that make them stand out, and turn them into Reels."
+              actions={<>
+                <Button onClick={openNewCampaignDialog} className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg"><Plus aria-hidden="true" className="h-4 w-4" />Create First Campaign</Button>
+                <Button asChild variant="outline" className="gap-2 bg-transparent"><Link href="/create"><Video aria-hidden="true" className="h-4 w-4" />Create a Reel</Link></Button>
+              </>}
+              stepsLabel="Getting started with your library"
+              steps={[
+                { title: "Create a campaign", description: "Group products around your next marketing idea." },
+                { title: "Add your products", description: "Keep images, product details and affiliate links together." },
+                { title: "Make it a Reel", description: "Bring your products into your next video." },
+              ]}
+              features={[
+                { icon: LayoutGrid, title: "Campaign organization", description: "Keep related products in one easy-to-find collection." },
+                { icon: Package, title: "Product assets", description: "Reuse your images, brand logos and product details." },
+                { icon: Link2, title: "Affiliate links", description: "Keep each product’s destination ready for publishing." },
+              ]}
+            />
           ) : filteredCampaigns.length === 0 ? (
             <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
               No campaigns match your search.
@@ -1059,17 +1065,17 @@ const ContentLibrary = () => {
           </h1>
           <p className="mt-1 text-muted-foreground">{currentCampaign.description}</p>
         </div>
-        <Button
+        {currentCampaign.products.length > 0 && <Button
           onClick={openAddDialog}
           className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto"
         >
           <Plus className="h-4 w-4" />
           Add Product
-        </Button>
+        </Button>}
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+      {(currentCampaign.products.length > 0 || search.trim() || statusFilter !== "all") && <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -1114,10 +1120,24 @@ const ContentLibrary = () => {
             <List className="!h-5 !w-5" />
           </ToggleGroupItem>
         </ToggleGroup>
-      </div>
+      </div>}
 
       {/* Content */}
-      {filteredProducts.length === 0 ? (
+      {currentCampaign.products.length === 0 && !search.trim() && statusFilter === "all" ? (
+        <PageEmptyState
+          icon={Package} secondaryIcon={Plus}
+          kicker="Your campaign is ready. Add the first product."
+          title="Bring your campaign to life"
+          description="Add a product with its images and key details, then use it to create your next Reel."
+          actions={<Button onClick={openAddDialog} className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg"><Plus aria-hidden="true" className="h-4 w-4" />Add Product</Button>}
+          stepsLabel="Adding your first product"
+          steps={[
+            { title: "Add the essentials", description: "Give your product a name and a description." },
+            { title: "Make it visual", description: "Upload product images and your brand logo." },
+            { title: "Start creating", description: "Use your saved product to make a Reel." },
+          ]}
+        />
+      ) : filteredProducts.length === 0 ? (
         <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
           No products match your filters.
         </div>
