@@ -84,7 +84,7 @@ export function ProductCard({ product, onClick, index = 0, onEdit, onCopyLink, o
             variant="secondary"
             size="icon"
             onClick={(e) => { e.stopPropagation(); onEdit(e); }}
-            className="absolute bottom-3 right-3 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background opacity-0 group-hover/img:opacity-100 transition-opacity"
+            className="absolute bottom-3 right-3 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background card-action transition-opacity"
             title="Edit product"
           >
             <Edit className="h-4 w-4" />

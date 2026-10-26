@@ -610,14 +610,15 @@ const ContentLibrary = () => {
         if (!open) resetCampaignForm();
       }}
     >
-      <DialogContent className="max-w-xl p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-xl max-h-[calc(100dvh-2rem)] flex flex-col p-0 gap-0 overflow-hidden">
         <motion.div
+          className="min-h-0 flex flex-col"
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
         >
-          <fieldset disabled={Boolean(libraryPending)} aria-busy={Boolean(libraryPending)} className="min-w-0">
-          <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
+          <fieldset disabled={Boolean(libraryPending)} aria-busy={Boolean(libraryPending)} className="contents">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-border">
             <DialogTitle className="font-display text-xl">
               {editingCampaignId ? "Edit Campaign" : "New Campaign"}
             </DialogTitle>
@@ -628,7 +629,7 @@ const ContentLibrary = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="px-6 py-5 space-y-5">
+          <div className="min-h-0 overflow-y-auto px-6 py-5 space-y-5">
             {/* Banner preview */}
             <div
               className={`relative h-28 rounded-xl overflow-hidden ${cBannerImage ? "" : `bg-gradient-to-br ${getBannerGradient(cBanner)}`
@@ -721,7 +722,7 @@ const ContentLibrary = () => {
             </div>
           </div>
 
-          <DialogFooter className="px-6 py-4 border-t border-border flex-row gap-3 sm:justify-between">
+          <DialogFooter className="shrink-0 px-6 py-4 border-t border-border flex-row flex-wrap gap-3 sm:justify-between">
             <div>
               {editingCampaignId && (
                 <Button
@@ -878,7 +879,7 @@ const ContentLibrary = () => {
                         variant="secondary"
                         size="icon"
                         onClick={(e) => openEditCampaignDialog(e, campaign)}
-                        className="absolute top-2 right-2 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-2 right-2 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background card-action transition-opacity"
                         title="Edit campaign"
                       >
                         <Edit className="h-4 w-4" />
@@ -1017,7 +1018,7 @@ const ContentLibrary = () => {
                       variant="ghost"
                       size="icon"
                       onClick={(e) => openEditCampaignDialog(e, campaign)}
-                      className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="h-8 w-8 card-action transition-opacity"
                       title="Edit campaign"
                     >
                       <Edit className="h-4 w-4" />
@@ -1175,7 +1176,7 @@ const ContentLibrary = () => {
                     variant="secondary"
                     size="icon"
                     onClick={(e) => { e.stopPropagation(); openEditDialog(product); }}
-                    className="absolute bottom-3 right-3 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background opacity-0 group-hover/img:opacity-100 transition-opacity"
+                    className="absolute bottom-3 right-3 h-8 w-8 bg-background/70 backdrop-blur hover:bg-background card-action transition-opacity"
                     title="Edit product"
                   >
                     <Edit className="h-4 w-4" />
@@ -1359,7 +1360,7 @@ const ContentLibrary = () => {
                       {pImages.map((img, i) => (
                         <div key={i} className="relative aspect-square rounded-xl overflow-hidden ring-1 ring-border group bg-muted flex items-center justify-center">
                           <LoadingImage src={img.url} alt="Preview" className="h-full w-full object-cover" />
-                          <button onClick={(e) => { e.preventDefault(); removeImage(i); }} className="absolute top-1.5 right-1.5 bg-background/80 text-foreground p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background">
+                          <button type="button" aria-label={`Remove image ${i + 1}`} onClick={(e) => { e.preventDefault(); removeImage(i); }} className="absolute top-1.5 right-1.5 bg-background/80 text-foreground p-1.5 rounded-full card-action transition-opacity hover:bg-background">
                             <Trash2 className="h-3.5 w-3.5 text-destructive" />
                           </button>
                           {i === 0 && <Badge className="absolute bottom-1.5 left-1.5 text-[10px] px-1.5 py-0 shadow">Primary</Badge>}

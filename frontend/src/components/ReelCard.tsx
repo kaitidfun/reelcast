@@ -97,7 +97,7 @@ export function ReelCard({ reel, onClick, onChanged }: { reel: ReelCardData; onC
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setDialogOpen(true); }}
-        className="absolute top-2 left-2 z-10 flex h-7 w-7 items-center justify-center rounded-md bg-black/50 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+        className="absolute top-2 left-2 z-10 flex h-7 w-7 items-center justify-center rounded-md bg-black/50 backdrop-blur-md card-action transition-opacity hover:bg-black/70"
         aria-label="Edit reel"
       >
         <Pencil className="h-3.5 w-3.5 text-white" />

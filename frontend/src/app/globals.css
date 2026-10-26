@@ -87,6 +87,23 @@
 }
 
 @layer utilities {
+  /* Touch users cannot hover; keyboard users must see the focused action. */
+  .card-action {
+    opacity: 1;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .card-action {
+      opacity: 0;
+    }
+
+    .group:hover .card-action,
+    .group\/img:hover .card-action,
+    .card-action:focus-visible {
+      opacity: 1;
+    }
+  }
+
   .gradient-primary {
     background: var(--gradient-primary);
   }

@@ -79,6 +79,7 @@ const RailContent = () => {
           <TooltipTrigger asChild>
             <NavLink
               href="/account"
+              aria-label="Account"
               className={`rounded-full transition-all duration-200 ${
                 pathname === "/account" ? "ring-2 ring-primary ring-offset-2 ring-offset-sidebar" : "hover:opacity-80"
               }`}
@@ -205,13 +206,13 @@ export const MobileHeader = () => {
     <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-border bg-sidebar/95 backdrop-blur-md px-4 md:hidden">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
-          <button className="rounded-lg p-2 text-foreground hover:bg-muted transition-colors">
+          <button aria-label="Open navigation menu" className="rounded-lg p-2 text-foreground hover:bg-muted transition-colors">
             <Menu className="h-5 w-5" />
           </button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-64 bg-sidebar p-0 border-border [&>button]:hidden">
+        <SheetContent side="left" className="w-64 bg-sidebar p-0 border-border">
           <SheetTitle className="sr-only">Navigation menu</SheetTitle>
-          <div className="flex h-full flex-col">
+          <div className="flex h-full flex-col overflow-y-auto">
             <DrawerContent onNavigate={() => setOpen(false)} />
           </div>
         </SheetContent>

@@ -94,7 +94,7 @@ test.describe("UI unit: F4 campaign and product library", () => {
 
     await page.goto("/library");
     await expect(
-      page.getByRole("heading", { name: "Create your first campaign" }),
+      page.getByRole("heading", { name: "Your next campaign starts here" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Create First Campaign/i }),
