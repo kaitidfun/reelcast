@@ -325,7 +325,7 @@ const Login = () => {
                       </Link>
                     </div>
 
-                    {error && <p className="text-sm text-destructive">{error}</p>}
+                    {error && <p className="text-sm text-destructive [overflow-wrap:anywhere]">{error}</p>}
 
                     <Button
                       type="submit"
@@ -432,7 +432,7 @@ const Login = () => {
                     </InputOTP>
                   </div>
 
-                  {error && <p className="text-sm text-destructive mb-4">{error}</p>}
+                  {error && <p className="text-sm text-destructive mb-4 [overflow-wrap:anywhere]">{error}</p>}
 
                   <Button
                     onClick={handle2faVerify}

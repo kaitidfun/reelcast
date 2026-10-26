@@ -428,7 +428,7 @@ const Distribution = () => {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">{d.reel_name || d.reel_prompt || "(reel)"}</p>
-                      <p className="flex items-center gap-1 break-words text-xs text-muted-foreground capitalize">
+                      <p className="flex items-center gap-1 [overflow-wrap:anywhere] text-xs text-muted-foreground capitalize">
                         <PlatformIcon platform={d.platform_name ?? ""} className="h-3 w-3 shrink-0" />
                         {platformLabel(d.platform_name)}
                         {d.error_message ? ` — ${d.error_message}` : ""}

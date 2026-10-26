@@ -798,9 +798,9 @@ const CreateReelContent = () => {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-foreground truncate">{selectedProduct.name}</p>
                     <p className="text-[11px] text-muted-foreground line-clamp-1">{selectedProduct.highlights}</p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">📁 {selectedProduct.campaignName}</p>
+                    <p title={selectedProduct.campaignName} className="truncate text-[10px] text-muted-foreground/60 mt-0.5">📁 {selectedProduct.campaignName}</p>
                   </div>
-                  <button type="button" onClick={() => setSelectedProduct(null)} className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" aria-label="Remove product">
+                  <button type="button" onClick={() => setSelectedProduct(null)} className="shrink-0 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" aria-label="Remove product">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </div>

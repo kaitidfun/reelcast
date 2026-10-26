@@ -299,7 +299,7 @@ const Register = () => {
                 </span>
               </div>
 
-              {error && <p className="text-xs text-destructive">{error}</p>}
+              {error && <p className="text-xs text-destructive [overflow-wrap:anywhere]">{error}</p>}
 
               <Button
                 type="submit"

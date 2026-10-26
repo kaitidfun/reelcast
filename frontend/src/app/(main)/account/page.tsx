@@ -303,7 +303,7 @@ const Account = () => {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingAvatar}
-                className="group relative cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-full"
+                className="group relative shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-full"
                 aria-label="Change profile picture"
               >
                 <Avatar className="h-16 w-16 ring-2 ring-primary/30 transition-all group-hover:ring-primary/60">
@@ -324,9 +324,9 @@ const Account = () => {
                   )}
                 </div>
               </button>
-              <div className="flex-1">
-                <CardTitle className="text-lg">{user.displayName}</CardTitle>
-                <CardDescription>{user.email}</CardDescription>
+              <div className="min-w-0 flex-1">
+                <CardTitle className="text-lg [overflow-wrap:anywhere]">{user.displayName}</CardTitle>
+                <CardDescription className="[overflow-wrap:anywhere]">{user.email}</CardDescription>
                 <div className="mt-2 flex items-center gap-2">
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Calendar className="h-3 w-3" /> Joined {new Date(user.joinedAt).toLocaleDateString("en-US")}
@@ -585,7 +585,7 @@ const Account = () => {
                 <p className="text-xs text-green-500 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Passwords match</p>
               )}
             </div>
-            {changePasswordError && <p className="text-sm text-destructive">{changePasswordError}</p>}
+            {changePasswordError && <p className="text-sm text-destructive [overflow-wrap:anywhere]">{changePasswordError}</p>}
             <Button className="w-full gradient-primary text-primary-foreground shadow-glow" onClick={handleChangePassword} disabled={changingPassword || !currentPassword || !newPassword || !confirmNewPassword}>
               {changingPassword ? <><Loader2 className="h-4 w-4 animate-spin" /> Changing...</> : "Change Password"}
             </Button>

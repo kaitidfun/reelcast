@@ -185,7 +185,7 @@ const DistributionCard = ({ item, onChanged }: { item: DistributionItem; onChang
       {/* Failed — error + retry */}
       {item.status === "Failed" && (
         <div className="space-y-2">
-          {item.error_message && <p className="text-xs text-destructive/90">{item.error_message}</p>}
+          {item.error_message && <p className="text-xs text-destructive/90 [overflow-wrap:anywhere]">{item.error_message}</p>}
           {(item.scheduled_time || item.created_at) && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Clock className="h-3.5 w-3.5" />
@@ -297,7 +297,7 @@ const DistributeStatusContent = () => {
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-4 flex min-w-0 items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/distribute")} aria-label="Back to Distribute">
+        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => router.push("/distribute")} aria-label="Back to Distribute">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="min-w-0">

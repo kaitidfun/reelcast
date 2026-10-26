@@ -171,12 +171,12 @@ const ProductReels = () => {
       </Breadcrumb>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted text-4xl ring-1 ring-border">
+        <div className="flex min-w-0 flex-1 items-center gap-4">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-muted text-4xl ring-1 ring-border">
             {product.thumbnail ? <LoadingImage src={product.thumbnail} alt={product.name} className="h-full w-full object-cover rounded-lg" /> : <Package className="h-10 w-10 text-muted-foreground/30" />}
           </div>
-          <div>
-            <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">
+          <div className="min-w-0 flex-1">
+            <h1 title={product.name} className="line-clamp-2 font-display text-2xl sm:text-3xl font-bold text-foreground [overflow-wrap:anywhere]">
               {product.name}
             </h1>
             <p className="mt-1 text-muted-foreground">
@@ -186,7 +186,7 @@ const ProductReels = () => {
         </div>
         <Button
           onClick={handleCreateReel}
-          className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto"
+          className="gradient-primary shrink-0 gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto"
         >
           <Sparkles className="h-4 w-4" />
           Create Reel

@@ -152,7 +152,7 @@ type DropdownOption = { id: string; name: string; icon?: LucideIcon; platform?: 
 
 function DropdownLabel({ icon: Icon, label, platform }: { icon: LucideIcon; label: string; platform?: string }) {
   return (
-    <span className="flex min-w-0 items-center gap-2">
+    <span className="flex w-full min-w-0 items-center gap-2">
       <span aria-hidden="true" className="flex shrink-0 items-center">
         {platform
           ? <PlatformIcon platform={platform} className={`h-4 w-4 ${PLATFORM_OPTIONS.find(item => item.name === platform)?.color || "text-muted-foreground"}`} />
@@ -178,13 +178,17 @@ function ScopeSelect({ label, value, onChange, options, placeholder, icon: Icon,
     <div className={`grid min-w-0 gap-2 ${className}`}>
       {showLabel && <p className="text-xs font-medium text-muted-foreground">{label}</p>}
       <Select value={value || "__all__"} onValueChange={selected => onChange(selected === "__all__" ? "" : selected)}>
-        <SelectTrigger aria-label={label} className="h-10 w-full bg-card [&>span]:min-w-0">
+        <SelectTrigger
+          aria-label={label}
+          title={options.find(option => option.id === value)?.name || placeholder}
+          className="h-10 w-full bg-card"
+        >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
           {allowAll && <SelectItem value="__all__" textValue={placeholder}><DropdownLabel icon={Icon} label={placeholder} /></SelectItem>}
           {options.map(option => (
-            <SelectItem key={option.id} value={option.id} textValue={option.name || "Untitled"}>
+            <SelectItem key={option.id} value={option.id} textValue={option.name || "Untitled"} title={option.name || "Untitled"}>
               <DropdownLabel icon={option.icon || Icon} label={option.name || "Untitled"} platform={option.platform} />
             </SelectItem>
           ))}
@@ -406,7 +410,7 @@ function PeriodComparison({ options }: { options: TrackingFilterOptions }) {
           <Button className={`${primaryButtonClass} w-full sm:w-auto`} disabled={busy || loading || invalidPeriodOrder || hasFutureDate} onClick={applyFilters}><ArrowLeftRight className="h-4 w-4" aria-hidden="true" />Compare periods</Button>
         </div>
       </div>
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {error && <p role="alert" className="text-sm text-destructive [overflow-wrap:anywhere]">{error}</p>}
       {pending && <span role="status" className="sr-only">{pending}</span>}
       {loading && <LoadingState label="Comparing periods…" />}
       {invalidPeriodOrder && <p role="alert" className="text-sm text-destructive">Period B must start after Period A ends.</p>}
@@ -569,7 +573,7 @@ export default function Tracking() {
     {sync.error && <p role="alert" className="text-sm text-destructive">{sync.error}</p>}
     {pending && <span role="status" className="sr-only">{pending}</span>}
     {loading && dashboard && <LoadingState label="Refreshing tracking data…" />}
-    {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+    {error && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive [overflow-wrap:anywhere]">{error}</p>}
     {dashboard && (
       <div className="space-y-2">
         <Link

@@ -639,7 +639,7 @@ const ContentLibrary = () => {
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.3),transparent_60%)]" />
               {cBannerImage && <div className="absolute inset-0 bg-black/30" />}
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="font-display text-lg font-semibold text-white drop-shadow">
+                <span title={cName.trim() || "Campaign Banner"} className="max-w-full truncate px-4 font-display text-lg font-semibold text-white drop-shadow">
                   {cName.trim() || "Campaign Banner"}
                 </span>
               </div>
@@ -1060,15 +1060,15 @@ const ContentLibrary = () => {
       </Breadcrumb>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground">
+        <div className="min-w-0 flex-1">
+          <h1 title={currentCampaign.name} className="line-clamp-2 font-display text-2xl sm:text-3xl font-bold text-foreground [overflow-wrap:anywhere]">
             {currentCampaign.name}
           </h1>
-          <p className="mt-1 text-muted-foreground">{currentCampaign.description}</p>
+          <p className="mt-1 text-muted-foreground [overflow-wrap:anywhere]">{currentCampaign.description}</p>
         </div>
         {currentCampaign.products.length > 0 && <Button
           onClick={openAddDialog}
-          className="gradient-primary gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto"
+          className="gradient-primary shrink-0 gap-2 text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300 w-full sm:w-auto"
         >
           <Plus className="h-4 w-4" />
           Add Product

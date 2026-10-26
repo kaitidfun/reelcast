@@ -31,11 +31,11 @@ export default function DistributedProductReelsPage() {
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-6 flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/distribute")} aria-label="Back to Distribute">
+        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => router.push("/distribute")} aria-label="Back to Distribute">
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div>
-          <h1 className="font-display text-xl font-bold text-foreground sm:text-2xl">{productName || "Product"}</h1>
+        <div className="min-w-0 flex-1">
+          <h1 title={productName || "Product"} className="line-clamp-2 font-display text-xl font-bold text-foreground sm:text-2xl [overflow-wrap:anywhere]">{productName || "Product"}</h1>
           <p className="text-xs text-muted-foreground sm:text-sm">Recently distributed reels.</p>
         </div>
       </div>

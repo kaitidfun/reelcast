@@ -82,11 +82,11 @@ export default function DistributedCampaignProductsPage() {
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-6 flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/distribute")} aria-label="Back to Distribute">
+        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => router.push("/distribute")} aria-label="Back to Distribute">
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div>
-          <h1 className="font-display text-xl font-bold text-foreground sm:text-2xl">{campaignName || "Campaign"}</h1>
+        <div className="min-w-0 flex-1">
+          <h1 title={campaignName || "Campaign"} className="line-clamp-2 font-display text-xl font-bold text-foreground sm:text-2xl [overflow-wrap:anywhere]">{campaignName || "Campaign"}</h1>
           <p className="text-xs text-muted-foreground sm:text-sm">Products with recently distributed reels.</p>
         </div>
       </div>

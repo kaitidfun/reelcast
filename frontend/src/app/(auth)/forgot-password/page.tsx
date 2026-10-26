@@ -139,7 +139,7 @@ const ForgotPassword = () => {
                 </div>
 
                 {error && (
-                  <p className="text-sm text-destructive">{error}</p>
+                  <p className="text-sm text-destructive [overflow-wrap:anywhere]">{error}</p>
                 )}
 
                 <Button

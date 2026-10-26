@@ -83,7 +83,7 @@ export default function Home() {
         className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6"
       >
         <div className="min-w-0">
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground tracking-tight [overflow-wrap:anywhere]">
             Welcome back, {firstName}!
           </h1>
           <p className="text-sm text-muted-foreground mt-1">{isStudioEmpty ? "Your space to create, organize and share." : "Here's what's happening in your studio today."}</p>
