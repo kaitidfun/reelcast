@@ -218,6 +218,8 @@ def test_comparison_exports_preserve_api_summary(data, a_clicks, b_clicks, parti
     comparison = comparison_response.json()
     assert comparison['a']['clicks'] == a_clicks and comparison['b']['clicks'] == b_clicks
     assert comparison['a']['complete'] is not partial
+    assert comparison['coverage_start'] == link.created_at.replace(tzinfo=timezone.utc).isoformat()
+    assert comparison['limitation']
     assert comparison['difference'] == b_clicks - a_clicks
     assert comparison['percentage_change'] == (None if not a_clicks else round((b_clicks-a_clicks)/a_clicks*100, 2))
     assert response.content.startswith(b'\xef\xbb\xbf')
@@ -369,6 +371,7 @@ def test_api_export_ownership_thai_formula_safety_and_redirect(data):
     assert client.get('/api/tracking/dashboard?start=2026-02-01&end=2026-01-01').status_code == 422
     response = client.get('/api/tracking/export?format=csv')
     assert response.status_code == 200 and response.content.startswith(b'\xef\xbb\xbf')
+    assert response.headers['content-disposition'] == 'attachment; filename="reelcast-tracking.csv"'
     rows = list(csv.DictReader(io.StringIO(response.content.decode('utf-8-sig'))))
     assert len(rows) == 1
     assert list(rows[0]) == ['Reel / Platform', 'Views', 'Likes', 'Comments', 'Shares', 'Affiliate Link Clicks', 'Observed At (Asia/Bangkok)']
@@ -381,6 +384,7 @@ def test_api_export_ownership_thai_formula_safety_and_redirect(data):
                             'Observed At (Asia/Bangkok)': row['observed_at'] or 'Unavailable'}
                             for index, row in enumerate(analysis['rows'], 1)]
     xlsx = client.get('/api/tracking/export?format=xlsx')
+    assert xlsx.headers['content-disposition'] == 'attachment; filename="reelcast-tracking.xlsx"'
     with ZipFile(io.BytesIO(xlsx.content)) as archive:
         for name in archive.namelist():
             ElementTree.fromstring(archive.read(name))

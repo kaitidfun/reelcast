@@ -1,0 +1,96 @@
+# F5 test plan traceability
+
+Source: [ReelCastTestPlan_v1.4.0, 28 October 2026](https://docs.google.com/document/d/1ZaudJzIc5iYOl3A_aJED3SmxXUqGKcA_qF_j96cS2SU/edit).
+
+Case references are comments beside the corresponding tests. A parametrized
+test or a workflow test can cover several document cases; collected test counts
+therefore differ from the number of document case IDs.
+
+## Unit tests
+
+Paths below are relative to `backend/tests/unit/`.
+
+| Document cases | Executable coverage |
+| --- | --- |
+| F5-UTC01-TC01–TC07 | `test_tracking_plan.py`: manual sync response, duplicate run, malformed UUID; `test_tracking_sync_jobs.py`: finished-account reuse, ownership/latest, durable broker failure |
+| F5-UTC02-TC01–TC04 | `test_tracking_plan.py::test_scheduled_sync` executes the Beat task and durable dispatcher for multiple owners, no accounts, active run, broker failure; `test_tracking_sync_jobs.py` checks the active-account unique constraint |
+| F5-UTC03-TC01–TC10 | `test_tracking_sync_jobs.py`: commit, claim, stale lease, 429 delay, missing metrics, checkpoint retry, exhausted retries, atomic rollback, token rotation, deadline |
+| F5-UTC04-TC01–TC04 | `test_tracking_plan.py::test_create_link_contract`: destination, reuse, ownership and invalid destination |
+| F5-UTC05-TC01–TC06 | `test_tracking_plan.py::test_public_redirect_contract`: public GET/repeat/HEAD/bot/prefetch/unknown code and exact persisted click counts |
+| F5-UTC06-TC01–TC06 | `test_tracking.py`: latest observation, date/member filters, Bangkok midnight, daily platform clicks, top-five versus all details |
+| F5-UTC06-TC07–TC10 | `test_tracking_plan.py`: unsupported platform, reversed dates, unowned scope, empty report |
+| F5-UTC07-TC01–TC05 | `test_tracking.py::test_ranking_metrics_and_exports`: views/likes/zero comments/unavailable shares/zero clicks |
+| F5-UTC07-TC06–TC07 | `test_tracking_plan.py::test_invalid_reporting_contracts`: unsupported level and metric |
+| F5-UTC08-TC01–TC02, TC08 | `test_tracking.py::test_comparison_exports_preserve_api_summary`: 3 versus 6 clicks, zero baseline, partial coverage and exported summary |
+| F5-UTC08-TC03–TC06 | `test_tracking.py`: overlapping/ordered periods, equal start/end, Bangkok future dates |
+| F5-UTC08-TC07 | `test_tracking_plan.py::test_incomplete_comparison_range`: incomplete range on comparison and export |
+| F5-UTC09-TC01–TC04 | `test_tracking.py`: CSV BOM/columns/text safety, XLSX sheets/frozen header/filter/no formulas, ranking equality, comparison A/B and summary |
+| F5-UTC09-TC05–TC07 | `test_tracking_plan.py`: no rows, unowned scope and unsupported format |
+
+The dashboard observation fixture deliberately upserts 10 → 12 within the same
+Bangkok day and then stores 20 on the next day. Its three stored rows comprise
+two rows for Member A and one row for Member B; they are not three snapshots
+for Member A. This follows the per-day observation uniqueness rule.
+
+## System tests
+
+These tests use the real frontend, authenticated backend and PostgreSQL.
+Reporting fixtures insert only data owned by disposable test members and delete
+those members on teardown. They do not intercept tracking API responses.
+Database fixture setup does not claim to test live provider synchronization.
+
+| Document cases | File and coverage |
+| --- | --- |
+| STC-F5-01-TC-01–TC-03 | `tests/system/tracking-sync.system.spec.ts`: actual OAuth/worker sync, duplicate request, page reopen and durable run restore (`@external`) |
+| STC-F5-01-TC-04 | Same file: separately prepared revoked-token member, failed/partial run, reconnect message, old metrics retained (`@external`) |
+| STC-F5-01-TC-05 | Same file: disconnected member, empty screen and no latest run |
+| STC-F5-01-TC-06–TC-09 | `tests/system/tracking.system.spec.ts`: real public redirect endpoint, unchanged affiliate destination, repeat/nonqualifying/unknown-code requests |
+| STC-F5-02-TC-01–TC-05 | Same file: latest totals, unavailable comments, seven detail rows/top five, connected empty state, two members with independent data |
+| STC-F5-03-TC-01–TC-03 | Same file: ranking values, zero versus unavailable, unavailable sorted last, empty ranking |
+| STC-F5-03-TC-04–TC-06 | Same file: 3/6 clicks, zero baseline, partial coverage |
+| STC-F5-03-TC-07–TC-09 | Same file: overlapping, future and one-day periods; no comparison request sent |
+| STC-F5-04-TC-01–TC-06 | Same file: downloaded CSV/XLSX bytes, filenames, text/formula safety, ranking order, comparison summary, no-data message without download |
+
+The existing Vitest tests for `tracking/page.test.tsx` and
+`useTrackingSync.test.tsx` additionally identify the STC behavior they isolate.
+They supplement the system suite and do not replace it.
+
+## Run
+
+Backend, from `backend/`:
+
+```powershell
+.\venv\Scripts\python.exe -m pytest tests/unit/test_tracking_plan.py tests/unit/test_tracking.py tests/unit/test_tracking_sync_jobs.py tests/unit/test_tracking_adapter_errors.py -q -p no:cacheprovider
+```
+
+Frontend, from `frontend/`:
+
+```powershell
+npm test -- "src/app/(main)/tracking/page.test.tsx" src/hooks/useTrackingSync.test.tsx
+```
+
+System, from `e2e/`, with the frontend/backend running and `.env.test` pointing
+to the same local database as the backend:
+
+```powershell
+npx playwright test tracking.system.spec.ts tracking-sync.system.spec.ts --project=system --grep-invert @external --workers=1
+```
+
+Use backend `REELCAST_TEST_MODE=true` for disposable registration fixtures.
+The XLSX system assertion reads ZIP/XML using the backend Python environment;
+set `TRACKING_TEST_PYTHON` if it is elsewhere.
+
+For external sync, run a real adapter, Redis, sync worker and Beat. Prepare two
+dedicated members with Published YouTube distributions and affiliate products:
+one with valid credentials and existing metrics, one with revoked credentials
+and previously stored metrics. Provide the following environment variables
+locally, without committing credentials:
+
+- `TRACKING_E2E_SUCCESS_EMAIL`, `TRACKING_E2E_SUCCESS_PASSWORD`
+- `TRACKING_E2E_REVOKED_EMAIL`, `TRACKING_E2E_REVOKED_PASSWORD`
+
+```powershell
+npx playwright test tracking-sync.system.spec.ts --project=system --grep @external --workers=1
+```
+
+External cases skip explicitly when their account configuration is absent.

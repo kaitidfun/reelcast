@@ -76,6 +76,7 @@ def test_endpoint_accepts_without_provider_calls_and_hides_other_members(data, m
     assert client.get('/api/tracking/sync/latest').json()['job_id'] == run_id
     app.dependency_overrides[get_current_user] = lambda: users[1]
     assert client.get('/api/tracking/sync/'+run_id).status_code == 404
+    assert client.get('/api/tracking/sync/'+run_id).json()['detail'] == 'Sync job not found'
     assert client.get('/api/tracking/sync/latest').json() is None
 
 
@@ -86,6 +87,7 @@ def test_checkpoint_commits_once_and_new_runs_can_refresh(data):
     assert jobs.finish_batch(db, job.job_id, token, result()) is False
     assert not jobs.finish_batch(db, job.job_id, token, result())
     assert db.query(TrackingObservation).count() == 1
+    assert db.query(TrackingObservation).one().views == 12
     assert accounts[0].last_synced_at is not None
     assert jobs.run_status(db, run_id, users[0].user_id)['status'] == 'done'
     assert jobs.enqueue_member(db, users[0].user_id) != run_id
@@ -136,6 +138,7 @@ def test_invalid_batch_is_atomic_and_missing_metrics_keep_honest_timestamp(data)
     old_time = datetime(2026, 10, 1, tzinfo=timezone.utc)
     metrics = AdapterMetrics([{'external_ref': 'youtube:same', 'views': 8, 'shares': 2}])
     jobs.finish_batch(db, job.job_id, token, (metrics, old_time, None, None))
+    previous_sync = accounts[0].last_synced_at
     new_run = jobs.enqueue_member(db, users[0].user_id)
     new_job = db.query(Job).filter(Job.status == 'queued').one()
     token = jobs.claim(db, new_job.job_id)
@@ -145,6 +148,7 @@ def test_invalid_batch_is_atomic_and_missing_metrics_keep_honest_timestamp(data)
     assert jobs.aware(previous.observed_at) == old_time
     assert jobs.run_status(db, new_run, users[0].user_id)['status'] == 'partial'
     assert jobs.aware(accounts[0].last_synced_at) < jobs.now()
+    assert accounts[0].last_synced_at == previous_sync
 
 
 # F5-UTC03-TC06
