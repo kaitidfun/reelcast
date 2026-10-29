@@ -173,6 +173,8 @@ export async function downloadTrackingExport(format: "csv" | "xlsx", filters: Tr
   const url = URL.createObjectURL(await response.blob());
   const reportName = filters.a_start ? "comparison"
     : filters.level ? `ranking-${filters.level}-${filters.metric || "views"}` : "details";
-  const anchor = document.createElement("a"); anchor.href = url; anchor.download = `reelcast-tracking-${reportName}.${format}`;
+  // STC-F5-04-TC-01, STC-F5-04-TC-02: details use the documented filename.
+  const filename = reportName === "details" ? `reelcast-tracking.${format}` : `reelcast-tracking-${reportName}.${format}`;
+  const anchor = document.createElement("a"); anchor.href = url; anchor.download = filename;
   anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
