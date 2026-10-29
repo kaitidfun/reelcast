@@ -91,7 +91,9 @@ def _comparison(db, user_id, filters, a_start, a_end, b_start, b_end, *, include
 
 
 @router.get('/comparison')
-def compareTrackingPeriods(a_start: date, a_end: date, b_start: date, b_end: date,
+# F5-UTC08-TC07: use the same incomplete-range error as comparison exports.
+def compareTrackingPeriods(a_start: date | None = None, a_end: date | None = None,
+                          b_start: date | None = None, b_end: date | None = None,
                           filters: dict = Depends(tracking_filters), db: Session = Depends(get_db),
                           current_user: User = Depends(get_current_user)):
     return _comparison(db, current_user.user_id, filters, a_start, a_end, b_start, b_end)

@@ -119,6 +119,7 @@ def test_regeneration_claim_prevents_caption_and_video_from_overwriting_each_oth
     db.refresh(reel)
     assert reel.prompt_text == 'New prompt' and reel.retry_count == 1 and reel.status == 'Generating'
 
+# F5-UTC06-TC01, F5-UTC06-TC02, F5-UTC06-TC03
 def test_snapshots_are_idempotent_and_members_isolated(data):
     db, users, accounts, _ = data
     observe(db, users[0], accounts[0], 10, 1)
@@ -137,6 +138,7 @@ def test_snapshots_are_idempotent_and_members_isolated(data):
     ('views', 'Views', 20), ('likes', 'Likes', 4), ('comments', 'Comments', 0),
     ('shares', 'Shares', None), ('clicks', 'Affiliate Link Clicks', 0),
 ])
+# F5-UTC07-TC01, F5-UTC07-TC02, F5-UTC07-TC03, F5-UTC07-TC04, F5-UTC07-TC05
 def test_ranking_metrics_and_exports(data, metric, title, expected):
     db, users, accounts, _ = data
     service.record_metric(db, user_id=users[0].user_id, social_account_id=accounts[0].account_id,
@@ -191,6 +193,7 @@ def test_redirect_click_rules_period_boundaries_and_missing_coverage(data):
     (3, 6, False, '2026-01-15'),
 ])
 @pytest.mark.parametrize('include_dashboard_dates', [False, True])
+# F5-UTC08-TC01, F5-UTC08-TC02, F5-UTC08-TC08; F5-UTC09-TC04
 def test_comparison_exports_preserve_api_summary(data, a_clicks, b_clicks, partial, b_end, include_dashboard_dates):
     db, users, _, distributions = data
     link = service.ensure_tracking_link(db, user_id=users[0].user_id, distribution_id=distributions[0].distribution_id)
@@ -352,6 +355,7 @@ def test_comparison_overview_uses_latest_social_observation_in_each_period(data)
         assert all(empty[period]['social'][metric] == 0 for metric in service.SOCIAL_METRICS)
 
 
+# F5-UTC09-TC01, F5-UTC09-TC02, F5-UTC09-TC03
 def test_api_export_ownership_thai_formula_safety_and_redirect(data):
     db, users, accounts, distributions = data
     observe(db, users[0], accounts[0], 10, 1)
@@ -423,6 +427,7 @@ async def test_partial_account_failure_rolls_back_and_continues(data):
     assert db.query(TrackingObservation).count() == 0 and accounts[0].last_synced_at is None
 
 @pytest.mark.parametrize('b_start,b_end', [('2026-01-07', '2026-01-14'), ('2026-01-02', '2026-01-03'), ('2025-12-31', '2026-01-01')])
+# F5-UTC08-TC03, F5-UTC08-TC04
 def test_comparison_and_export_reject_overlapping_inclusive_periods(data, b_start, b_end):
     db, users, _, _ = data
     app = FastAPI(); app.include_router(router)
@@ -442,6 +447,7 @@ def test_comparison_and_export_reject_overlapping_inclusive_periods(data, b_star
 
 
 @pytest.mark.parametrize('period', ['a', 'b'])
+# F5-UTC08-TC05
 def test_comparison_and_export_require_end_strictly_after_start(data, period):
     db, users, _, _ = data
     app = FastAPI(); app.include_router(router)
@@ -454,6 +460,7 @@ def test_comparison_and_export_require_end_strictly_after_start(data, period):
         assert client.get('/api/tracking/' + endpoint, params=params).status_code == 422
 
 
+# F5-UTC08-TC06
 def test_comparison_and_export_reject_future_dates_using_bangkok_today(data):
     db, users, _, _ = data
     app = FastAPI(); app.include_router(router)
@@ -492,6 +499,7 @@ def test_filter_options_include_only_owned_published_distribution_relations(data
     assert result['products'] == [{'id': str(reel.product_id), 'name': reel.product.product_name}]
 
 
+# F5-UTC06-TC06
 def test_all_filtered_details_export_and_invalid_destinations(data):
     db, users, accounts, distributions = data
     original = distributions[0].reel
@@ -514,6 +522,7 @@ def test_all_filtered_details_export_and_invalid_destinations(data):
     with pytest.raises(ValueError):
         service.ensure_tracking_link(db, user_id=users[0].user_id, distribution_id=distributions[0].distribution_id)
 
+# F5-UTC06-TC04
 def test_observations_across_bangkok_midnight_do_not_overwrite_previous_day(data):
     db, users, accounts, _ = data
     for hour, views in ((16,10),(18,20)):
@@ -525,6 +534,7 @@ def test_observations_across_bangkok_midnight_do_not_overwrite_previous_day(data
     assert service.dashboard(db, user_id=users[0].user_id, start=date(2026,1,1), end=date(2026,1,1))['totals']['views'] == 10
     assert service.dashboard(db, user_id=users[0].user_id, start=date(2026,1,2), end=date(2026,1,2))['totals']['views'] == 20
 
+# F5-UTC06-TC05
 def test_daily_click_chart_separates_platforms_and_keeps_owner_and_date_filters(data):
     db, users, accounts, distributions = data
     facebook = SocialAccount(account_id=uuid4(), user_id=users[0].user_id, platform_name='facebook', access_token='encrypted')

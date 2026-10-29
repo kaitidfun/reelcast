@@ -73,6 +73,7 @@ it('animates only the selected export group and clears progress after failure', 
   expect(screen.getByRole('alert')).toHaveTextContent('Export unavailable');
 });
 
+// F5-UTC08-TC06; STC-F5-03-TC-08 (isolated UI behavior).
 it('limits all comparison dates to Bangkok today and blocks manually entered future dates', async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
   // Bangkok has reached January 15 while UTC is still January 14.
@@ -115,6 +116,7 @@ it('shows unavailable social counters and zero clicks without commerce claims', 
   expect(await screen.findByRole('alert')).toHaveTextContent('Start date must be before end date');
 });
 
+// STC-F5-01-TC-05 (isolated UI behavior).
 it('guides a new member without rendering empty charts or unusable reporting controls', async () => {
   const dashboard = await api.fetchTrackingDashboard();
   vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, has_data: false });
@@ -131,6 +133,7 @@ it('guides a new member without rendering empty charts or unusable reporting con
   expect(screen.queryByRole('button', { name: 'CSV' })).not.toBeInTheDocument();
 });
 
+// STC-F5-02-TC-04 (isolated UI behavior).
 it('lets a connected member sync from the empty state and reveals the dashboard when data arrives', async () => {
   const dashboard = await api.fetchTrackingDashboard();
   vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, has_data: false, accounts: [
@@ -244,6 +247,7 @@ it('cascades distributed scope options and resets descendants when a parent chan
   expect(screen.queryByRole('option', { name: 'Campaign One' })).not.toBeInTheDocument();
 });
 
+// F5-UTC08-TC03; STC-F5-03-TC-07 (isolated UI behavior).
 it('blocks overlapping periods including a shared boundary day and permits adjacent periods', async () => {
   render(<Tracking />);
   await screen.findByText('Tracking details');
@@ -264,6 +268,7 @@ it('blocks overlapping periods including a shared boundary day and permits adjac
   expect(screen.getByRole('button', { name: 'Compare periods' })).toBeDisabled();
 });
 
+// F5-UTC08-TC05; STC-F5-03-TC-09 (isolated UI behavior).
 it('requires end dates strictly after start dates for both periods', async () => {
   render(<Tracking />);
   await screen.findByText('Tracking details');
@@ -281,6 +286,7 @@ it('requires end dates strictly after start dates for both periods', async () =>
   expect(api.fetchTrackingComparison).not.toHaveBeenCalled();
 });
 
+// STC-F5-04-TC-05 (isolated UI behavior).
 it('exports the compared periods even if draft dates change afterward', async () => {
   const dashboard = await api.fetchTrackingDashboard();
   vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, has_data: true });
@@ -394,6 +400,7 @@ it('isolates comparison loading, errors, exports and reset from dashboard, ranki
 });
 
 
+// STC-F5-03-TC-06 (isolated UI behavior).
 it('shows a comparison overview with honest social observations and partial coverage', async () => {
   const social = { views: 100, likes: 0, comments: 2, shares: null, engagement: null, partial_metrics: ['shares', 'engagement'] };
   vi.mocked(api.fetchTrackingComparison).mockResolvedValue({
@@ -471,6 +478,7 @@ it('resets ranking results and choices without clearing comparison draft dates',
   expect(screen.getByLabelText('Start date')).toHaveValue('2026-01-01');
 });
 
+// STC-F5-01-TC-04 (isolated UI behavior).
 it('offers reauthorization for expired tokens through the existing connection flow', async () => {
   const dashboard = await api.fetchTrackingDashboard();
   vi.mocked(api.fetchTrackingDashboard).mockResolvedValue({ ...dashboard, accounts: [{
@@ -504,6 +512,7 @@ it('validates both periods in the comparison filters before making a comparison 
   expect(api.fetchTrackingComparison).not.toHaveBeenCalled();
 });
 
+// STC-F5-02-TC-03 (isolated UI behavior).
 it('paginates tracking details by 25, exports the full scope, and resets after refresh', async () => {
   const dashboard = await api.fetchTrackingDashboard();
   const details = Array.from({ length: 51 }, (_, index) => ({

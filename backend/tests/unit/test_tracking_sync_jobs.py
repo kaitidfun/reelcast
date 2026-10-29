@@ -27,6 +27,7 @@ def result(ref='youtube:same', **kwargs):
     return AdapterMetrics([dict(external_ref=ref, views=12, **kwargs)]), jobs.now(), None, None
 
 
+# F5-UTC01-TC02; F5-UTC03-TC02
 def test_duplicate_clicks_share_run_and_account_job(data):
     db, users, _, run, job = prepare(data)
     assert jobs.enqueue_member(db, users[0].user_id) == run
@@ -37,6 +38,7 @@ def test_duplicate_clicks_share_run_and_account_job(data):
     assert jobs.enqueue_member(db, users[0].user_id) == run
 
 
+# F5-UTC02-TC03
 def test_database_rejects_duplicate_active_account(data):
     db, users, accounts, _, job = prepare(data)
     db.add(Job(user_id=users[0].user_id, account_id=accounts[0].account_id, platform='youtube',
@@ -46,6 +48,7 @@ def test_database_rejects_duplicate_active_account(data):
     db.rollback()
 
 
+# F5-UTC01-TC03
 def test_repeated_click_does_not_restart_accounts_that_already_finished_in_active_run(data):
     db, users, accounts, _ = data
     account = SocialAccount(account_id=uuid4(), user_id=users[0].user_id, platform_name='facebook', access_token='test')
@@ -59,6 +62,7 @@ def test_repeated_click_does_not_restart_accounts_that_already_finished_in_activ
     assert db.query(Job).count() == 2
 
 
+# F5-UTC01-TC04, F5-UTC01-TC05
 def test_endpoint_accepts_without_provider_calls_and_hides_other_members(data, monkeypatch):
     db, users, _, _, _ = prepare(data)
     monkeypatch.setattr(jobs, 'publish', lambda *args: None)
@@ -75,6 +79,7 @@ def test_endpoint_accepts_without_provider_calls_and_hides_other_members(data, m
     assert client.get('/api/tracking/sync/latest').json() is None
 
 
+# F5-UTC03-TC01
 def test_checkpoint_commits_once_and_new_runs_can_refresh(data):
     db, users, accounts, run_id, job = prepare(data)
     token = jobs.claim(db, job.job_id)
@@ -86,6 +91,7 @@ def test_checkpoint_commits_once_and_new_runs_can_refresh(data):
     assert jobs.enqueue_member(db, users[0].user_id) != run_id
 
 
+# F5-UTC03-TC03
 def test_stale_worker_cannot_commit_after_reclaim(data):
     db, users, accounts, _, job = prepare(data)
     old = jobs.claim(db, job.job_id)
@@ -110,6 +116,7 @@ def test_platform_gate_limits_across_users_and_preserves_other_platforms(data, m
     assert jobs.claim(db, other.job_id) is None
 
 
+# F5-UTC03-TC04
 def test_rate_limit_defers_and_does_not_erase_previous_batches(data):
     db, users, _, run_id, job = prepare(data)
     token = jobs.claim(db, job.job_id)
@@ -122,6 +129,7 @@ def test_rate_limit_defers_and_does_not_erase_previous_batches(data):
     assert jobs.run_status(db, run_id, users[0].user_id)['active']
 
 
+# F5-UTC03-TC05
 def test_invalid_batch_is_atomic_and_missing_metrics_keep_honest_timestamp(data):
     db, users, accounts, _, job = prepare(data)
     token = jobs.claim(db, job.job_id)
@@ -139,6 +147,7 @@ def test_invalid_batch_is_atomic_and_missing_metrics_keep_honest_timestamp(data)
     assert jobs.aware(accounts[0].last_synced_at) < jobs.now()
 
 
+# F5-UTC03-TC06
 def test_completed_batch_survives_later_failure_and_retry_resumes(data):
     db, users, _, _, job = prepare(data)
     job.platform = 'facebook'; job.post_ids = ['same', '2', '3', '4', '5']; db.commit()
@@ -158,6 +167,7 @@ def test_completed_batch_survives_later_failure_and_retry_resumes(data):
     assert job.status == 'partial'  # first batch explicitly lacked 3 requested posts
 
 
+# F5-UTC03-TC10
 def test_deadline_settles_pending_jobs_and_retains_completed_count(data):
     db, users, _, run, job = prepare(data)
     job.created_at = jobs.now() - timedelta(hours=2); job.metrics = 4; db.commit()
@@ -167,6 +177,7 @@ def test_deadline_settles_pending_jobs_and_retains_completed_count(data):
     assert jobs.enqueue_member(db, users[0].user_id) != run
 
 
+# F5-UTC01-TC07
 def test_broker_failure_leaves_durable_outbox(data, monkeypatch):
     db, users, _, run, job = prepare(data)
     from app.worker import celery_app
@@ -207,6 +218,7 @@ def test_discovery_cursor_is_checkpointed_instead_of_rereading_the_first_page(da
     assert db.query(TrackingObservation).count() == 2
 
 
+# F5-UTC03-TC07
 def test_exhausted_provider_retry_is_not_multiplied_by_worker(data):
     db, _, _, _, job = prepare(data)
     token = jobs.claim(db, job.job_id)
@@ -215,6 +227,7 @@ def test_exhausted_provider_retry_is_not_multiplied_by_worker(data):
     assert job.status == 'failed' and job.failed_batches == 1
 
 
+# F5-UTC03-TC08
 def test_malformed_later_metric_rolls_back_the_entire_batch(data):
     db, _, _, _, job = prepare(data)
     job.post_ids = ['same', 'other']; db.commit()
@@ -228,6 +241,7 @@ def test_malformed_later_metric_rolls_back_the_entire_batch(data):
 
 
 @pytest.mark.asyncio
+# F5-UTC03-TC09
 async def test_rotated_tokens_survive_a_later_metrics_failure(data, monkeypatch):
     db, users, accounts, _, job = prepare(data)
     engine = db.get_bind()

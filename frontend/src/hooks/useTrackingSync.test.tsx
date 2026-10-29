@@ -18,6 +18,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
+// F5-UTC01-TC02; STC-F5-01-TC-01, STC-F5-01-TC-03 (isolated UI behavior).
 it('accepts once, polls to completion and refreshes once', async () => {
   const completed = vi.fn();
   const { result } = renderHook(() => useTrackingSync(completed));
@@ -32,6 +33,7 @@ it('accepts once, polls to completion and refreshes once', async () => {
   expect(api.fetchTrackingSyncStatus).toHaveBeenCalledTimes(1);
 });
 
+// STC-F5-01-TC-02 (isolated restore/polling behavior).
 it('recovers an existing job without enqueuing another and aborts on cleanup', async () => {
   vi.mocked(api.fetchLatestTrackingSync).mockResolvedValue(active);
   vi.mocked(api.fetchTrackingSyncStatus).mockImplementation(() => new Promise(() => {}));
