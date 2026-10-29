@@ -27,30 +27,30 @@ Copy from `backend/.env.example` and fill in the values:
 cp backend/.env.example backend/.env
 ```
 
-| Variable                 | Description                                       |
-| ------------------------ | ------------------------------------------------- |
-| `SECRET_KEY`             | Secret key for JWT sessions                       |
-| `GOOGLE_CLIENT_ID`       | Google OAuth Client ID                            |
-| `GOOGLE_CLIENT_SECRET`   | Google OAuth Client Secret                        |
-| `FACEBOOK_CLIENT_ID`     | Facebook App ID                                   |
-| `FACEBOOK_CLIENT_SECRET` | Facebook App Secret                               |
-| `SMTP_SERVER`            | SMTP server (e.g. smtp.gmail.com)                 |
-| `SMTP_PORT`              | SMTP port (e.g. 587)                              |
-| `SMTP_USERNAME`          | Email for sending verification                    |
-| `SMTP_PASSWORD`          | App Password for email                            |
-| `R2_ACCESS_KEY_ID`       | Cloudflare R2 Access Key ID                       |
-| `R2_SECRET_ACCESS_KEY`   | Cloudflare R2 Secret Access Key                   |
-| `R2_ENDPOINT_URL`        | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`   |
-| `R2_BUCKET_NAME`         | Cloudflare R2 bucket name                         |
-| `R2_PUBLIC_URL`          | (Optional) Custom domain for R2 bucket            |
-| `GOOGLE_AI_API_KEY`      | Google AI API key (Requires Billing enabled)      |
-| `FAL_KEY`                | fal.ai API key for LTX Video 2.3 video generation |
-| `DATABASE_URL`           | PostgreSQL connection string                      |
-| `TOKEN_ENCRYPTION_KEY`   | (Feature 3) Encrypts SocialAccount tokens at rest — optional locally, has a dev-only fallback |
-| `BACKEND_URL`            | (Feature 3) Base URL for OAuth redirect URIs — see note below before testing Connect Account |
-| `TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET` | (Feature 3) TikTok Content Posting API app credentials |
-| `META_APP_ID` / `META_APP_SECRET`            | (Feature 3) Meta app credentials — covers both Facebook and Instagram |
-| `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET`| (Feature 3) Google Cloud OAuth client for YouTube uploads |
+| Variable                                      | Description                                                                                   |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `SECRET_KEY`                                  | Secret key for JWT sessions                                                                   |
+| `GOOGLE_CLIENT_ID`                            | Google OAuth Client ID                                                                        |
+| `GOOGLE_CLIENT_SECRET`                        | Google OAuth Client Secret                                                                    |
+| `FACEBOOK_CLIENT_ID`                          | Facebook App ID                                                                               |
+| `FACEBOOK_CLIENT_SECRET`                      | Facebook App Secret                                                                           |
+| `SMTP_SERVER`                                 | SMTP server (e.g. smtp.gmail.com)                                                             |
+| `SMTP_PORT`                                   | SMTP port (e.g. 587)                                                                          |
+| `SMTP_USERNAME`                               | Email for sending verification                                                                |
+| `SMTP_PASSWORD`                               | App Password for email                                                                        |
+| `R2_ACCESS_KEY_ID`                            | Cloudflare R2 Access Key ID                                                                   |
+| `R2_SECRET_ACCESS_KEY`                        | Cloudflare R2 Secret Access Key                                                               |
+| `R2_ENDPOINT_URL`                             | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`                                               |
+| `R2_BUCKET_NAME`                              | Cloudflare R2 bucket name                                                                     |
+| `R2_PUBLIC_URL`                               | (Optional) Custom domain for R2 bucket                                                        |
+| `GOOGLE_AI_API_KEY`                           | Google AI API key (Requires Billing enabled)                                                  |
+| `FAL_KEY`                                     | fal.ai API key for LTX Video 2.3 video generation                                             |
+| `DATABASE_URL`                                | PostgreSQL connection string                                                                  |
+| `TOKEN_ENCRYPTION_KEY`                        | (Feature 3) Encrypts SocialAccount tokens at rest — optional locally, has a dev-only fallback |
+| `BACKEND_URL`                                 | (Feature 3) Base URL for OAuth redirect URIs — see note below before testing Connect Account  |
+| `TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET`  | (Feature 3) TikTok Content Posting API app credentials                                        |
+| `META_APP_ID` / `META_APP_SECRET`             | (Feature 3) Meta app credentials — covers both Facebook and Instagram                         |
+| `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` | (Feature 3) Google Cloud OAuth client for YouTube uploads                                     |
 
 > **Note:** `GOOGLE_AI_API_KEY` must be from a Google Cloud Project with Billing enabled.  
 > Free Tier will result in Error 429 RESOURCE_EXHAUSTED.
@@ -243,14 +243,14 @@ Verify: Open [http://localhost:3000](http://localhost:3000)
 
 ## Port Summary
 
-| Service       | URL                          |
-| ------------- | ----------------------------- |
-| Frontend      | http://localhost:3000        |
-| Backend API   | http://localhost:8000        |
-| API Docs      | http://localhost:8000/docs   |
-| Tracking Adapter      | http://localhost:9000        |
-| Tracking Adapter Docs | http://localhost:9000/docs   |
-| Redis         | localhost:6379                |
+| Service               | URL                        |
+| --------------------- | -------------------------- |
+| Frontend              | http://localhost:3000      |
+| Backend API           | http://localhost:8000      |
+| API Docs              | http://localhost:8000/docs |
+| Tracking Adapter      | http://localhost:9000      |
+| Tracking Adapter Docs | http://localhost:9000/docs |
+| Redis                 | localhost:6379             |
 
 ---
 
@@ -337,7 +337,7 @@ bun install
 ```bash
 # Check which ports are currently open
 netstat -ano | findstr "8000 3000 6379"
-
+''
 # Check Docker containers
 docker ps
 
@@ -411,7 +411,7 @@ ReelCast Member when supplied.
       "views": 1200,
       "clicks": 48,
       "orders": 3,
-      "revenue": 1290.00
+      "revenue": 1290.0
     }
   ]
 }
@@ -547,14 +547,14 @@ See [PERFORMANCE.md](PERFORMANCE.md) for the optimization changes, worker startu
 
 ## Troubleshooting
 
-| Issue                        | Cause / Solution                                            |
-| ---------------------------- | ----------------------------------------------------------- |
-| Celery not receiving tasks   | Start every dedicated worker; see `PERFORMANCE.md` for queue names                           |
-| Celery crashes on Windows    | Must use `--pool=solo` (prevents WinError 5)                |
-| Error 429 RESOURCE_EXHAUSTED | GOOGLE_AI_API_KEY requires a Billing project, not Free Tier |
-| Celery executing old tasks   | Must restart Celery whenever task signatures are modified   |
-| Scheduled Distribution stuck on `Pending` past its `scheduled_time` | Celery Beat (STEP 4) isn't running — it's a separate process from the Worker. Publish Now still works without it; only the 60s auto-publish check needs Beat. |
-| YouTube publish fails with `401 Unauthorized` | The connected account's access token expired (~1h) and had never been refreshed before this was fixed — should no longer happen; if it does, reconnect the account |
+| Issue                                                               | Cause / Solution                                                                                                                                                   |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Celery not receiving tasks                                          | Start every dedicated worker; see `PERFORMANCE.md` for queue names                                                                                                 |
+| Celery crashes on Windows                                           | Must use `--pool=solo` (prevents WinError 5)                                                                                                                       |
+| Error 429 RESOURCE_EXHAUSTED                                        | GOOGLE_AI_API_KEY requires a Billing project, not Free Tier                                                                                                        |
+| Celery executing old tasks                                          | Must restart Celery whenever task signatures are modified                                                                                                          |
+| Scheduled Distribution stuck on `Pending` past its `scheduled_time` | Celery Beat (STEP 4) isn't running — it's a separate process from the Worker. Publish Now still works without it; only the 60s auto-publish check needs Beat.      |
+| YouTube publish fails with `401 Unauthorized`                       | The connected account's access token expired (~1h) and had never been refreshed before this was fixed — should no longer happen; if it does, reconnect the account |
 
 ---
 
