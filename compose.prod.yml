@@ -1,8 +1,95 @@
 name: reelcast-prod
 
-# Infrastructure first. Application services will join this project's network.
 # Run with: docker compose --env-file backend/.env.prod -f compose.prod.yml up -d
+x-backend: &backend
+  image: reelcast-backend:prod
+  build: ./backend
+  env_file: ./backend/.env.prod
+  restart: unless-stopped
+  init: true
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    tracking-provider-adapter:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
+  logging: &logging
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 services:
+  migrate:
+    image: reelcast-backend:prod
+    build: ./backend
+    env_file: ./backend/.env.prod
+    restart: "no"
+    command: [python, scripts/migrate_tracking_sync.py]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
+  backend:
+    <<: *backend
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  worker-generation:
+    <<: *backend
+    command: [celery, -A, app.worker.celery_app, worker, --loglevel=info, --hostname=generation@%h, --queues=generation-queue,main-queue,celery, --concurrency=1]
+    stop_grace_period: 10m
+
+  worker-caption:
+    <<: *backend
+    command: [celery, -A, app.worker.celery_app, worker, --loglevel=info, --hostname=caption@%h, --queues=caption-queue, --concurrency=1]
+    stop_grace_period: 2m
+
+  worker-publish:
+    <<: *backend
+    command: [celery, -A, app.worker.celery_app, worker, --loglevel=info, --hostname=publish@%h, --queues=publish-queue, --concurrency=1]
+    stop_grace_period: 5m
+
+  worker-sync:
+    <<: *backend
+    command: [celery, -A, app.worker.celery_app, worker, --loglevel=info, --hostname=sync@%h, --queues=sync-queue, --pool=threads, --concurrency=4]
+    stop_grace_period: 5m
+
+  worker-scheduler:
+    <<: *backend
+    command: [celery, -A, app.worker.celery_app, worker, --loglevel=info, --hostname=scheduler@%h, --queues=scheduler-queue, --concurrency=1]
+
+  beat:
+    <<: *backend
+    profiles: [scheduled]
+    command: [celery, -A, app.worker.celery_app, beat, --loglevel=info, --schedule=/home/reelcast/beat/celerybeat-schedule]
+    volumes:
+      - beat_data:/home/reelcast/beat
+
+  tracking-provider-adapter:
+    image: reelcast-tracking-adapter:prod
+    build: ./tracking-provider-adapter
+    env_file: ./tracking-provider-adapter/.env.prod
+    restart: unless-stopped
+    init: true
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/health', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    logging: *logging
+
   postgres:
     image: postgres:18
     restart: unless-stopped
@@ -45,3 +132,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  beat_data:

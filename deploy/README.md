@@ -1,7 +1,9 @@
-# EC2 infrastructure: PostgreSQL and Redis
+# EC2 services: PostgreSQL, Redis, backend and workers
 
-This stage starts PostgreSQL 18 and Redis only. It does not deploy the web app,
-create application tables, restore data, run workers, or configure HTTPS.
+This Compose file includes PostgreSQL 18, Redis, the API, tracking adapter,
+five dedicated workers and optional Celery Beat. Frontend and HTTPS are a later
+stage. Backend port 8000 binds only to the EC2 loopback interface; the adapter,
+database and Redis have no host ports.
 
 Use `compose.prod.yml` alone; do not merge it with the local `docker-compose.yml`,
 which publishes Redis on the host. Production infrastructure publishes no ports.
@@ -55,7 +57,7 @@ and transfer the private environment separately. Never push the environment file
 cd ~/reelcast
 chmod 600 backend/.env.prod
 sudo docker compose --env-file backend/.env.prod -f compose.prod.yml config --quiet
-sudo docker compose --env-file backend/.env.prod -f compose.prod.yml up -d --wait
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml up -d --wait postgres redis
 sudo docker compose --env-file backend/.env.prod -f compose.prod.yml ps
 sudo docker compose --env-file backend/.env.prod -f compose.prod.yml exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT current_database();"'
 sudo docker compose --env-file backend/.env.prod -f compose.prod.yml exec redis redis-cli ping
@@ -64,6 +66,91 @@ sudo docker compose --env-file backend/.env.prod -f compose.prod.yml exec redis 
 Expect both services to be healthy, database `reel_cast`, and Redis `PONG`.
 The next stage is restoring a fresh local dump and checking the imported schema
 before starting any workers or Celery Beat.
+
+## Deploy application services after the database restore
+
+Do not restore the dump again. Keep the existing project and volume names.
+The backend and adapter images copy only application code and dependencies;
+local environment files, certificates and virtual environments are excluded.
+All containers run the Python application as a non-root user.
+
+Prepare and upload from **Windows PowerShell**:
+
+```powershell
+cd D:\Code\ReelCast\reelcastcast
+& .\deploy\prepare-upload.ps1
+scp -i "C:\.ssh\reelcast-prod.pem" .\.artifacts\deploy\reelcast-services.tar.gz ubuntu@54.253.117.147:~/reelcast/
+scp -i "C:\.ssh\reelcast-prod.pem" .\backend\.env.prod ubuntu@54.253.117.147:~/reelcast/backend/
+```
+
+In the **Ubuntu SSH tab**, prepare the adapter directory:
+
+```bash
+mkdir -p ~/reelcast/tracking-provider-adapter
+chmod 700 ~/reelcast/tracking-provider-adapter
+```
+
+Back in **Windows PowerShell**, transfer the adapter's private environment:
+
+```powershell
+scp -i "C:\.ssh\reelcast-prod.pem" .\tracking-provider-adapter\.env.prod ubuntu@54.253.117.147:~/reelcast/tracking-provider-adapter/
+```
+
+Then in the **Ubuntu SSH tab**:
+
+```bash
+cd ~/reelcast
+tar -xzf reelcast-services.tar.gz
+chmod 600 backend/.env.prod tracking-provider-adapter/.env.prod
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml config --quiet
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml build backend tracking-provider-adapter
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml up -d --wait backend tracking-provider-adapter
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml exec backend python scripts/check_deployment.py
+```
+
+The one-shot `migrate` service completes the existing tracking schema migration
+before API/workers start. The read-only deployment check verifies model columns,
+DB connectivity, both Redis connections and adapter health. If a check fails,
+inspect the error and correct it before starting workers. It does not modify
+imported data or call a social provider. Adapter key pairs must match the backend;
+the prepared production files have been checked locally for all four platforms.
+Backend tracking URLs use `http://tracking-provider-adapter:9000/sync/<platform>`.
+
+After checks pass, start all five workers:
+
+```bash
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml up -d worker-generation worker-caption worker-publish worker-sync worker-scheduler
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml ps -a
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml logs --tail=50 backend worker-generation worker-caption worker-publish worker-sync worker-scheduler
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml exec worker-generation celery -A app.worker.celery_app inspect ping --timeout=10
+curl -fsS http://127.0.0.1:8000/api/health
+```
+
+Expect `migrate` to exit with code 0, backend/adapter healthy, workers running,
+and five worker replies to Celery ping. This is not yet a public web deployment.
+
+### Scheduled publishing and periodic tracking
+
+Beat is behind the `scheduled` profile so the initial startup can be checked
+before processing imported schedules. Once started, it queues **every Pending
+distribution with no scheduled time or a scheduled time in the past**, including
+old imported rows. Review them first (read-only):
+
+```bash
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml exec postgres psql -U reelcast -d reel_cast -c "SELECT distribution_id, scheduled_time FROM distributions WHERE status = 'Pending' AND (scheduled_time IS NULL OR scheduled_time <= now());"
+```
+
+After reviewing the rows and deciding they should be published, start Beat:
+
+```bash
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml --profile scheduled up -d beat
+```
+
+Run only one Beat instance for this production DB/broker. Its scheduler state
+persists in `beat_data`; `restart: unless-stopped` restarts services after reboot.
+Use `logs --tail=100 <service>` for failures. Dependency versions are bounded in
+the existing requirements but are not fully locked; builds may resolve newer
+compatible versions. Build verification must complete on EC2 before rollout.
 
 ## Data and credentials
 
