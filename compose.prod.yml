@@ -23,6 +23,41 @@ x-backend: &backend
       max-file: "3"
 
 services:
+  frontend:
+    image: reelcast-frontend:prod
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: https://api.reelcast.stream/api
+        NEXT_PUBLIC_OAUTH_API_URL: https://api.reelcast.stream/api
+        NEXT_PUBLIC_SITE_URL: https://reelcast.stream
+    restart: unless-stopped
+    init: true
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    logging: *logging
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    logging: *logging
+
   migrate:
     image: reelcast-backend:prod
     build: ./backend
@@ -36,6 +71,9 @@ services:
 
   backend:
     <<: *backend
+    environment:
+      # Backend port is loopback-only; public traffic arrives through Caddy.
+      FORWARDED_ALLOW_IPS: "*"
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:
@@ -133,3 +171,5 @@ volumes:
   postgres_data:
   redis_data:
   beat_data:
+  caddy_data:
+  caddy_config:
