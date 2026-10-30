@@ -47,7 +47,7 @@ services:
 
   worker-generation:
     <<: *backend
-    command: [celery, -A, app.worker.celery_app, worker, --loglevel=info, --hostname=generation@%h, --queues=generation-queue,main-queue,celery, --concurrency=1]
+    command: [celery, -A, app.worker.celery_app, worker, --loglevel=info, --hostname=generation@%h, "--queues=generation-queue,main-queue,celery", --concurrency=1]
     stop_grace_period: 10m
 
   worker-caption:
