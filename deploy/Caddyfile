@@ -1,0 +1,13 @@
+reelcast.stream {
+    encode zstd gzip
+    reverse_proxy frontend:3000
+}
+
+www.reelcast.stream {
+    redir https://reelcast.stream{uri} permanent
+}
+
+api.reelcast.stream {
+    encode zstd gzip
+    reverse_proxy backend:8000
+}

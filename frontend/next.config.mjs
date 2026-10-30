@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Add any initial configuration here
+  output: "standalone",
+  // Allows an isolated build check while the local dev server uses .next.
+  distDir: process.env.REELCAST_BUILD_DIR || ".next",
 };
 
 export default nextConfig;

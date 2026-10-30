@@ -1,8 +1,8 @@
 # EC2 services: PostgreSQL, Redis, backend and workers
 
 This Compose file includes PostgreSQL 18, Redis, the API, tracking adapter,
-five dedicated workers and optional Celery Beat. Frontend and HTTPS are a later
-stage. Backend port 8000 binds only to the EC2 loopback interface; the adapter,
+five dedicated workers, optional Celery Beat, Next.js and Caddy HTTPS.
+Backend port 8000 binds only to the EC2 loopback interface; the adapter,
 database and Redis have no host ports.
 
 Use `compose.prod.yml` alone; do not merge it with the local `docker-compose.yml`,
@@ -151,6 +151,72 @@ persists in `beat_data`; `restart: unless-stopped` restarts services after reboo
 Use `logs --tail=100 <service>` for failures. Dependency versions are bounded in
 the existing requirements but are not fully locked; builds may resolve newer
 compatible versions. Build verification must complete on EC2 before rollout.
+
+## Frontend and public HTTPS
+
+The web archive updates only Compose, Caddy configuration and frontend source.
+It contains no environments or database data. Preserve the existing backend,
+adapter and named volumes. Do not use `down` or `down -v` for this step.
+
+In Windows PowerShell:
+
+```powershell
+cd D:\Code\ReelCast\reelcastcast
+& .\deploy\prepare-web-upload.ps1
+scp -i "C:\.ssh\reelcast-prod.pem" .\.artifacts\deploy\reelcast-web.tar.gz ubuntu@54.253.117.147:~/reelcast/
+```
+
+Then in the Ubuntu SSH tab:
+
+```bash
+cd ~/reelcast
+tar -xzf reelcast-web.tar.gz
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml config --quiet
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml build frontend
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml up -d --wait frontend
+```
+
+Public API/site URLs are Docker build arguments using production domains;
+rebuild to change them. Local environment files are excluded. Google HTML
+verification defaults to empty; existing DNS verification remains usable.
+The image uses the committed npm lockfile with `--legacy-peer-deps` for current
+React 19/older UI peer ranges. Google Fonts must be reachable during the build
+for the existing Inter font. Runtime uses Next standalone output as user `node`.
+
+Confirm EC2 inbound TCP 80 and 443 are allowed. For initial certificate issuance,
+temporarily set Cloudflare records `@`, `api` and `www` to **DNS only**, keeping
+the same A/CNAME targets. Wait until public DNS resolves apex/API to
+`54.253.117.147`. Set Cloudflare SSL/TLS encryption mode to **Full (strict)**.
+Caddy issues public certificates automatically using working DNS and ports
+80/443; no Cloudflare API key or manual certificate upload is required.
+
+Validate Caddy, then start it and apply proxy-header support to the API:
+
+```bash
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml up -d --wait backend caddy
+sudo docker compose --env-file backend/.env.prod -f compose.prod.yml logs --tail=80 caddy
+```
+
+Once logs show certificate issuance succeeded, test from Ubuntu:
+
+```bash
+curl --fail --show-error -I https://reelcast.stream
+curl --fail --show-error https://api.reelcast.stream/api/health
+curl --fail --show-error -I https://www.reelcast.stream
+```
+
+Expect frontend success, API health JSON and a www-to-apex redirect. Certificates
+persist in `caddy_data` and renew automatically. After direct checks pass,
+re-enable Cloudflare **Proxied** for all three records and retain **Full (strict)**.
+Repeat the checks through Cloudflare and open the site in a browser. For issuance
+errors inspect Caddy logs, DNS and inbound ports before retrying.
+
+Finally verify login, an authenticated API call, media and a tracking sync in
+the UI. Provider consoles must allow the production OAuth callback URLs formed
+from `BACKEND_URL=https://api.reelcast.stream`; health checks alone do not prove
+provider permissions or refresh tokens work. The adapter stays internal without
+DNS or public port 9000. Keep only one production Beat instance.
 
 ## Data and credentials
 

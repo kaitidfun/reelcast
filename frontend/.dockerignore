@@ -1,0 +1,10 @@
+node_modules
+.next
+.next-deploy-check
+.git
+.env*
+*.log
+*.tsbuildinfo
+*.pem
+.lovable
+coverage
