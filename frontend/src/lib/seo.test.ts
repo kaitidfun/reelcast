@@ -2,20 +2,28 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); });
 
-async function setup(mode: string, url: string) {
+async function setup(mode: string, url: string | undefined) {
   vi.stubEnv('NODE_ENV', mode);
   vi.stubEnv('NEXT_PUBLIC_SITE_URL', url);
   vi.resetModules();
   return Promise.all([import('@/app/robots'), import('@/app/sitemap'), import('./seo')]);
 }
 
-it('keeps local and unconfigured sites out of search results', async () => {
+it('keeps local and explicitly disabled sites out of search results', async () => {
   for (const [mode, url] of [['development', 'https://reelcast.example'], ['production', '']]) {
     const [robots, sitemap, seo] = await setup(mode, url);
     expect(seo.canIndex).toBe(false);
     expect(robots.default()).toEqual({ rules: { userAgent: '*', disallow: '/' } });
     expect(sitemap.default()).toEqual([]);
   }
+});
+
+it('uses reelcast.stream by default for production SEO', async () => {
+  const [robots, sitemap, seo] = await setup('production', undefined);
+  expect(seo.siteUrl?.href).toBe('https://reelcast.stream/');
+  expect(seo.canIndex).toBe(true);
+  expect(robots.default().sitemap).toBe('https://reelcast.stream/sitemap.xml');
+  expect(sitemap.default()).toEqual(['/about', '/privacy', '/terms', '/support'].map(path => ({ url: `https://reelcast.stream${path}` })));
 });
 
 it('indexes only public content using the configured production domain', async () => {
